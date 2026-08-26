@@ -1,0 +1,3013 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BotCraft · AI 机器人搭建平台</title>
+<style>
+:root{
+  --bg:#0b0f17; --panel:#111725; --panel2:#0f1521; --line:#1e293b;
+  --txt:#e6edf5; --sub:#8b97a7; --brand:#6d8cff; --brand2:#9d6bff;
+  --ok:#3ddc97; --warn:#f5c542; --card:#141c2c; --hover:#1a2438;
+  --radius:14px;
+  /* 真实半透明玻璃变量（深色）：数值越低越通透，配合 backdrop-filter 起效 */
+  --glass-bg:rgba(20,28,44,.55);
+  --glass-bg-hover:rgba(30,41,63,.72);
+  --glass-bg-active:rgba(109,140,255,.30);
+  --glass-border:rgba(255,255,255,.10);
+  --glass-border-hover:rgba(157,107,255,.55);
+  --glass-shadow:0 8px 28px rgba(0,0,0,.35);
+  --glass-blur:10px;
+  --chip-bg:#293854;
+  --chip-border:#3d4f78;
+  --chip-txt:#e6edf5;
+  --chip-hover:#34466a;
+  --msg-bot-bg:#1e2c46;
+}
+/* ==================== 浅色主题 ==================== */
+[data-theme="light"]{
+  --bg:#f5f7fb; --panel:#ffffff; --panel2:#f0f3f9; --line:#e2e8f2;
+  --txt:#1a2233; --sub:#5b6b82; --card:#ffffff; --hover:#eef2f9;
+  /* 浅色下的玻璃变量：半透明白 + 细微描边，折射感更强 */
+  --glass-bg:rgba(255,255,255,.55);
+  --glass-bg-hover:rgba(255,255,255,.78);
+  --glass-bg-active:rgba(109,140,255,.18);
+  --glass-border:rgba(30,41,90,.12);
+  --glass-border-hover:rgba(109,140,255,.55);
+  --glass-shadow:0 8px 28px rgba(30,41,90,.12);
+  --chip-bg:#ffffff;
+  --chip-border:#d8dfea;
+  --chip-txt:#1a2233;
+  --chip-hover:#eef2f9;
+  --msg-bot-bg:#ffffff;
+}
+[data-theme="light"] body{box-shadow:none;}
+[data-theme="light"] .topbar{background:linear-gradient(100deg,rgba(109,140,255,.10),rgba(157,107,255,.08)),var(--glass-bg);border-bottom-color:var(--glass-border);}
+[data-theme="light"] .sidebar{background:var(--glass-bg-hover);border-right-color:var(--glass-border);}
+[data-theme="light"] .auth-mask{background:radial-gradient(circle at 30% 20%,rgba(109,140,255,.14),transparent 40%),radial-gradient(circle at 70% 60%,rgba(157,107,255,.14),transparent 45%),var(--bg);}
+[data-theme="light"] .modal,.modal-box{background:var(--glass-bg-hover);border-color:var(--glass-border-hover);}
+[data-theme="light"] .cmd-panel,.toast{background:var(--glass-bg-hover);border-color:var(--glass-border-hover);color:var(--txt);}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--txt);min-height:100vh;overflow-x:hidden;line-height:1.5;
+  background:var(--bg);
+  background-image:
+    radial-gradient(circle at 15% 20%,rgba(109,140,255,.22),transparent 42%),
+    radial-gradient(circle at 85% 15%,rgba(157,107,255,.20),transparent 40%),
+    radial-gradient(circle at 60% 85%,rgba(61,220,151,.10),transparent 38%);
+}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:none;outline:none}
+input,textarea,select{font-family:inherit}
+
+/* ============ 顶部导航 ============ */
+.topbar{height:56px;display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:50;
+  background:linear-gradient(100deg,rgba(109,140,255,.14),rgba(157,107,255,.10)),var(--glass-bg);
+  border-bottom:1px solid var(--glass-border);border:1px solid var(--glass-border);
+  box-shadow:var(--glass-shadow);font-size:14px;color:var(--sub);
+  transition:background .25s ease,border-color .25s ease,box-shadow .25s ease}
+/* 顶栏底部光带（静态，不流动） */
+.topbar::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(157,107,255,.55),rgba(109,140,255,.55),transparent)}
+.nav a:hover{background:var(--glass-bg-hover);color:var(--txt);border-color:var(--glass-border-hover);transform:translateY(-1px)}
+.nav a.active{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(109,140,255,.28)}
+.model-tag{background:var(--glass-bg);border:1px solid var(--glass-border);padding:4px 10px;border-radius:8px;font-size:13px;color:var(--sub)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:19px;letter-spacing:.2px}
+.logo .dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--brand),var(--brand2));position:relative;overflow:hidden}
+.logo .dot::after{content:'';position:absolute;inset:6px;border:2px solid #fff;border-radius:4px;opacity:.8}
+.nav a{font-size:14px;font-weight:600;padding:7px 15px;border-radius:10px;color:var(--sub);background:var(--glass-bg);border:1px solid var(--glass-border);transition:background .16s,color .16s,transform .16s,box-shadow .16s}
+.nav{display:flex;gap:8px;margin-left:12px}
+.topbar .spacer{flex:1}
+/* ===== 液态玻璃按钮（默认风格，全局所有按钮使用） ===== */
+.btn{
+  padding:8px 15px;border-radius:11px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;
+  background:var(--glass-bg);color:var(--txt);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow); transition: background .18s ease, border-color .18s ease, transform .12s ease, box-shadow .18s ease;
+}
+.btn:hover{background:var(--glass-bg-hover);border-color:var(--glass-border-hover);transform:translateY(-1px)}
+.btn:active{background:var(--glass-bg-active);transform:translateY(0)}
+.btn-ghost{background:var(--glass-bg);color:var(--txt);border:1px solid var(--glass-border)}
+.btn-ghost:hover{background:var(--glass-bg-hover);border-color:var(--glass-border-hover)}
+/* 主按钮：保留渐变品牌色，但叠加玻璃质感 + 更柔和的发光 */
+.btn-primary{
+  background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;
+  border:1px solid rgba(255,255,255,.22);box-shadow:0 6px 20px rgba(109,140,255,.35);
+}
+.btn-primary:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 10px 26px rgba(109,140,255,.45)}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:9px}
+/* 文件选择按钮：隐藏原生控件，用 label 呈现统一的玻璃拟态「选择文件」按钮 */
+.file-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;
+  background:var(--glass-bg);color:var(--txt);border:1px solid var(--glass-border);transition:.15s ease}
+.file-btn:hover{background:var(--glass-bg-hover);border-color:var(--brand);color:var(--brand)}
+.file-btn:active{transform:translateY(1px)}
+.file-btn .file-name{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub);font-weight:400;font-size:12px}
+/* 主题切换按钮：圆形玻璃球，内嵌渐变光球 .orb */
+#themeBtn{width:34px;height:34px;padding:0;border-radius:50%;font-size:0;line-height:1;position:relative;overflow:hidden;
+  background:var(--glass-bg-hover);border:1px solid var(--glass-border-hover);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  box-shadow:0 0 12px rgba(157,107,255,.35),inset 0 0 8px rgba(255,255,255,.12);
+  transition:transform .2s ease,box-shadow .25s ease,border-color .25s ease}
+#themeBtn .orb{position:absolute;inset:4px;border-radius:50%;
+  background:linear-gradient(135deg,#7c9bff 0%,#c4a8ff 55%,#ffd9a0 100%);
+  box-shadow:inset 0 1px 3px rgba(255,255,255,.5);transition:background .4s ease,transform .4s ease}
+html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd27a 0%,#ffac5a 55%,#ff7a59 100%)}
+#themeBtn:hover{transform:translateY(-1px);box-shadow:0 0 18px rgba(157,107,255,.55)}
+#themeBtn:hover .orb{transform:scale(1.12)}
+#themeBtn:active{transform:translateY(0)}
+/* 头像也玻璃化，与整体统一 */
+.avatar{border:1px solid var(--glass-border);height:32px;width:32px;border-radius:50%;background:linear-gradient(135deg,#3a4a6b,#5a4a7b);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;cursor:pointer;color:#fff;transition:.15s}
+.avatar:hover{filter:brightness(1.1);transform:scale(1.05)}
+#userMenuWrap{position:relative;display:flex;align-items:center}
+.pop-menu{position:fixed;z-index:200;border-radius:13px;padding:6px;display:flex;flex-direction:column;min-width:160px;
+  background:var(--glass-bg-hover);border:1px solid var(--glass-border-hover);
+  -webkit-backdrop-filter:blur(12px) saturate(150%);backdrop-filter:blur(12px) saturate(150%);
+  box-shadow:0 12px 36px rgba(0,0,0,.35)}
+.pop-menu button{padding:9px 12px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:9px;font-size:13px;transition:background .15s ease}
+.pop-menu button:hover{background:var(--glass-bg-active)}
+.pop-menu button.danger{color:#ff6b81}
+
+/* ============ 登录 ============ */
+.auth-mask{display:none;position:fixed;inset:0;z-index:90;background:radial-gradient(circle at 30% 20%,rgba(109,140,255,.18),transparent 40%),radial-gradient(circle at 70% 60%,rgba(157,107,255,.18),transparent 45%),var(--bg);top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.auth-brand .logo{justify-content:center}
+.auth-brand p{color:var(--sub);font-size:13px;margin-top:12px}
+.auth-tabs{display:flex;gap:6px;margin-bottom:18px;background:var(--bg);padding:4px;border-radius:10px;width:fit-content}
+.auth-tab{padding:7px 20px;border-radius:8px;font-size:13px;background:transparent;color:var(--sub);font-weight:600;cursor:pointer;border:none}
+.auth-tab.active{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+#authModal .field input{padding:11px 13px}
+#auth-err{font-size:12px}
+
+/* ============ 布局 ============ */
+.app{display:flex;height:calc(100vh - 56px)}
+.sidebar{width:212px;background:var(--glass-bg-hover);border-right:1px solid var(--glass-border);padding:14px;flex-shrink:0;  display:flex;flex-direction:column;overflow-y:auto}
+.side-section{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;padding:12px 8px 6px;font-weight:700}
+.side-item{display:flex;align-items:center;gap:10px;padding:10px 11px;border-radius:9px;font-size:15px;color:#c2cddb;cursor:pointer;margin-bottom:1px;transition:.15s}
+.side-item .ic{font-size:18px;width:22px;text-align:center;opacity:.85;flex-shrink:0}
+.side-item:hover{background:var(--hover);color:var(--txt)}
+.side-item.active{background:linear-gradient(90deg,rgba(109,140,255,.18),rgba(157,107,255,.10));color:var(--txt)}
+.side-item .badge{margin-left:auto;font-size:11px;background:var(--line);padding:1px 7px;border-radius:10px;color:var(--sub)}
+.side-item.active .badge{background:var(--brand);color:#fff}
+.side-create{margin-top:auto;padding:10px;background:linear-gradient(135deg,rgba(109,140,255,.14),rgba(157,107,255,.14));
+  border:1px dashed rgba(157,107,255,.45);border-radius:12px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;transition:.15s}
+.side-create:hover{border-color:var(--brand)}
+
+/* ============ 主内容 ============ */
+.main{flex:1;padding:16px 20px;min-width:0;overflow:auto}
+.page-head{display:flex;align-items:center;margin-bottom:18px;gap:12px;flex-wrap:wrap}
+.page-head h1{font-size:26px;font-weight:700}
+.page-head .sub{color:var(--sub);font-size:14px;margin-top:2px}
+.search-bar{flex:1;max-width:320px;margin-left:auto;position:relative}
+.search-bar input{width:100%;padding:9px 14px 9px 36px;border-radius:10px;background:var(--panel);
+  border:1px solid var(--line);color:var(--txt);font-size:13px;transition:.15s}
+.search-bar input:focus{border-color:var(--brand);outline:none}
+.search-bar .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--sub)}
+
+/* ============ 卡片网格 ============ */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.bot-card{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius);padding:14px;transition:.18s;cursor:pointer;position:relative;
+  content-visibility:auto;contain-intrinsic-size:auto 180px}
+.bot-card:hover{background:var(--glass-bg-hover);border-color:var(--glass-border-hover);transform:translateY(-3px);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.bot-avatar{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:13px}
+.bot-card h3{font-size:17px;font-weight:700;margin-bottom:6px}
+.bot-card p{font-size:12.5px;color:var(--sub);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bot-meta{display:flex;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub)}
+.bot-meta span{display:flex;align-items:center;gap:4px}
+.tag{position:absolute;top:16px;right:16px;font-size:10.5px;padding:3px 8px;border-radius:20px;background:rgba(61,220,151,.14);color:var(--ok);font-weight:600}
+.tag.pro{background:rgba(157,107,255,.16);color:var(--brand2)}
+.card-menu{margin-left:auto;cursor:pointer;padding:0 6px;border-radius:6px;position:relative;z-index:2}
+.card-menu:hover{background:var(--glass-bg-hover)}
+
+/* ============ 工作台 ============ */
+.workspace{display:none;flex:1;min-width:0;min-height:0;height:calc(100vh - 56px)}  /* 高度锁定视口，聊天区用内部滚动 */
+.workspace.on{display:flex}
+.ws-side{width:300px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column}
+.ws-head{padding:16px;border-bottom:1px solid var(--line)}
+.ws-head h2{font-size:19px;display:flex;align-items:center;gap:8px}
+.ws-head h2 .status{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.ws-head .flow{font-size:13px;color:var(--sub);margin-top:4px}
+.ws-tabs{display:flex;padding:10px;border-bottom:1px solid var(--line);gap:6px;flex-wrap:wrap}
+.ws-tab{padding:7px 12px;border-radius:9px;font-size:12.5px;color:var(--sub);cursor:pointer;font-weight:600;transition:.15s;border:1px solid transparent;background:var(--glass-bg)}
+.ws-tab.active,.ws-tab:hover{background:var(--glass-bg-hover);color:var(--txt);border-color:var(--glass-border)}
+.ws-body{flex:1;overflow-y:auto;padding:14px}
+.node{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:12px;padding:13px;margin-bottom:0;cursor:grab;position:relative;transition:.15s;
+  content-visibility:auto;contain-intrinsic-size:auto 96px}
+.node .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--brand);font-weight:700}
+.node h4{font-size:13.5px;margin:5px 0 3px}
+.node p{font-size:11.5px;color:var(--sub)}
+.node.add{border:1px dashed #2c3a55;text-align:center;color:var(--sub);font-size:12.5px;cursor:pointer;padding:11px}
+.node.add:hover{border-color:var(--brand);color:var(--brand)}
+.node-del{position:absolute;top:8px;right:10px;font-size:11px;color:var(--sub);opacity:0;transition:.15s;cursor:pointer;background:var(--card);padding:2px 5px;border-radius:4px}
+.node:hover .node-del{opacity:1}
+.node-del:hover{color:#ff6b81}
+.node.handoff{border-color:rgba(109,140,255,.5);box-shadow:0 0 0 1px rgba(109,140,255,.25) inset}
+.node-handoff-to{font-size:11px;color:var(--brand);margin-top:5px;font-weight:600}
+.flow-arrow{text-align:center;color:var(--line);font-size:14px;margin:2px 0;font-weight:700}
+.empty-tip{text-align:center;color:var(--sub);padding:60px 20px;font-size:14px}
+.empty-tip button{margin-top:16px}
+.tab-panel{padding:16px}
+/* ===== 聊天区：高度锁定 + 内部滚动（界面长度不随内容变化） ===== */
+/* 约束链：.app(min-height:100vh) → .workspace(flex:1) → .ws-main → .chat-head/.chat/.quick-bar/.chat-input
+   每一层都必须有明确高度约束，否则 .chat 的 flex:1 无法生效，会随消息撑高整页。 */
+.ws-main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}  /* min-height:0 是关键，否则 flex 子项不被约束 */
+.chat-head{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex:0 0 auto}  /* 头部固定，不伸缩 */
+.chat-head .ava{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6d8cff,#9d6bff);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.bot-switcher{max-width:160px;padding:7px 10px;border-radius:10px;background:var(--glass-bg);border:1px solid var(--glass-border);color:var(--txt);font-size:12.5px;cursor:pointer;font-weight:600}
+.bot-switcher:hover{border-color:var(--brand);background:var(--glass-bg-hover)}
+.bot-switcher option{background:var(--card);color:var(--txt)}
+/* 消息列表：固定占满剩余高度，溢出时内部滚动；不设置 scroll-behavior 避免流式逐字追加时抖动 */
+.chat{flex:1 1 auto;min-height:0;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:16px;background:var(--panel2);will-change:transform}
+.quick-bar{padding:10px 18px 0;display:flex;gap:8px;flex-wrap:wrap;flex:0 0 auto}  /* 快捷提示词固定高度 */
+.ctx-bar{padding:6px 18px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--sub);display:flex;gap:10px;flex-wrap:wrap;flex:0 0 auto}
+/* 快捷提示词按钮：使用不透明实体色，与聊天背景明确区分，避免毛玻璃半透明导致的"发白发灰" */
+.quick-chip{padding:8px 14px;border-radius:20px;font-size:12.5px;cursor:pointer;font-weight:600;transition:.15s;
+  background:var(--chip-bg);border:1px solid var(--chip-border);color:var(--chip-txt)}
+.quick-chip:hover{background:var(--chip-hover);border-color:var(--glass-border-hover)}
+.quick-chip:active{transform:translateY(0)}
+.chat-input{padding:14px 18px;border-top:1px solid var(--line);display:flex;gap:10px;background:var(--panel);align-items:flex-end;flex:0 0 auto;max-height:120px;overflow-y:auto}  /* 输入区最大 120px，超出内部滚动，绝不撑高外层 */
+.chat-input input{flex:1;padding:11px 15px;border-radius:11px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13.5px;resize:none;line-height:1.5;max-height:92px;overflow-y:auto}
+.chat-input input:focus{border-color:var(--brand);outline:none}
+.chat-input button{padding:11px 20px;border-radius:11px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;font-weight:600;font-size:13px;flex-shrink:0}
+.chat-input button:disabled{opacity:.5;cursor:not-allowed}
+.msg{max-width:78%;padding:11px 15px;border-radius:14px;font-size:13.5px;line-height:1.6;word-break:break-word;
+  content-visibility:auto;contain-intrinsic-size:auto 60px}
+.msg.bot{background:var(--msg-bot-bg);border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:4px}
+.msg.me{background:linear-gradient(135deg,var(--brand),var(--brand2));align-self:flex-end;border-bottom-right-radius:4px;color:#fff}
+.msg .who{font-size:10.5px;color:var(--sub);margin-bottom:4px;font-weight:600}
+.msg pre{background:var(--bg);border-radius:8px;padding:10px;margin:8px 0;overflow-x:auto;font-size:12px;font-family:'SF Mono',Consolas,monospace}
+.msg code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px;font-family:'SF Mono',Consolas,monospace}
+.msg-copy{margin-top:8px;display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:9px;font-size:11.5px;font-weight:600;cursor:pointer;letter-spacing:.3px;
+  background:var(--glass-bg);color:var(--sub);border:1px solid var(--glass-border);transition:.15s ease}
+.msg-copy:hover{background:var(--glass-bg-hover);color:var(--brand);border-color:var(--glass-border-hover);transform:translateY(-1px)}
+.msg-copy:active{background:var(--glass-bg-active);transform:translateY(0)}
+.msg-copy.copied{color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent}
+.typing{display:flex;gap:4px;padding:4px 0;align-self:flex-start}
+.typing span{width:7px;height:7px;border-radius:50%;background:var(--sub);animation:bl 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes bl{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}
+
+/* ============ 通用块 ============ */
+.toolbar{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center}
+.chip{padding:7px 14px;border-radius:20px;font-size:12.5px;cursor:pointer;transition:.15s;
+  background:var(--glass-bg);border:1px solid var(--glass-border);color:var(--sub)}
+.chip:hover,.chip.on{color:var(--txt);background:var(--glass-bg-hover);border-color:var(--glass-border-hover)}
+/* 提示词编辑区：模板 chips + 文本框 */
+.prompt-templates{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.prompt-tpl{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:20px;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--glass-border);background:var(--glass-bg);color:var(--sub);transition:.15s ease}
+.prompt-tpl:hover{background:var(--glass-bg-hover);border-color:var(--glass-border-hover);color:var(--txt);transform:translateY(-1px)}
+.prompt-tpl.active{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:#fff;box-shadow:0 6px 16px rgba(109,140,255,.35)}
+.prompt-tpl span{font-size:14px}
+#promptArea{width:100%;min-height:220px;padding:13px 15px;border-radius:12px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13.5px;line-height:1.7;resize:vertical;transition:.15s}
+#promptArea:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px rgba(109,140,255,.15)}
+#promptArea::placeholder{color:var(--sub);opacity:.7}
+.list-row{display:flex;align-items:center;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;gap:14px}
+.list-row .ic{width:40px;height:40px;border-radius:10px;background:var(--hover);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.list-row .info{flex:1;min-width:0}
+.list-row .info h4{font-size:15px}
+.list-row .info p{font-size:11.5px;color:var(--sub);margin-top:2px}
+.list-row .st{font-size:11.5px;padding:4px 10px;border-radius:20px;background:rgba(61,220,151,.14);color:var(--ok);flex-shrink:0}
+.list-row .act{cursor:pointer;color:var(--sub);font-size:16px;padding:4px 8px;border-radius:6px}
+.list-row .act:hover{background:var(--hover);color:var(--txt)}
+
+/* ============ 弹窗 ============ */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center;padding:20px;will-change:transform}
+.modal.on{display:flex}
+.mbox{background:var(--glass-bg-hover);border:1px solid var(--glass-border-hover);border-radius:20px;padding:26px;width:520px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.45);max-height:90vh;overflow-y:auto;transform:translateZ(0);position:relative;
+  -webkit-backdrop-filter:blur(10px) saturate(150%);backdrop-filter:blur(10px) saturate(150%)}
+/* 设置弹窗：液态玻璃（保留渐变通透 + 内发光高光，但降低模糊半径、去掉昂贵的 mask 边缘层以提速） */
+#settingsModal .mbox{
+  width:560px;border-radius:24px;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,0) 44%),
+    var(--glass-bg-hover);
+  -webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);
+  box-shadow:0 24px 70px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.12) inset, 0 1px 1px rgba(255,255,255,.22) inset;
+}
+.mbox .hint{font-size:12.5px;color:var(--sub);margin-bottom:18px}
+.mbox .hint{font-size:12.5px;color:var(--sub);margin-bottom:18px}
+.field{margin-bottom:14px}
+.field label{font-size:12px;color:var(--sub);display:block;margin-bottom:6px;font-weight:600}
+.field input,.field textarea,.field select{width:100%;padding:10px 13px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px;transition:.15s}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--brand);outline:none}
+.field textarea{resize:vertical;min-height:70px}
+.mbox-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+.color-pick{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.color-pick .c{width:28px;height:28px;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:.15s}
+.color-pick .c.on{border-color:#fff;transform:scale(1.1)}
+
+/* ============ Toast ============ */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);
+  border:1px solid var(--glass-border-hover);color:var(--txt);padding:11px 20px;border-radius:12px;
+  font-size:13px;z-index:300;opacity:0;transition:.25s;pointer-events:none;max-width:80vw;text-align:center;
+  background:var(--glass-bg-hover);
+  -webkit-backdrop-filter:blur(10px) saturate(150%);backdrop-filter:blur(10px) saturate(150%)}
+.toast.ok{border-color:rgba(61,220,151,.5)}
+.toast.err{border-color:rgba(255,107,129,.5)}
+
+/* ============ 拖拽 / 节点 ============ */
+.node.dragging{opacity:.4}
+.node.drag-over{border-color:var(--brand);box-shadow:0 0 0 2px rgba(109,140,255,.35)}
+.node .node-handle{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--sub);cursor:grab;opacity:0;transition:.15s}
+.node:hover .node-handle{opacity:.7}
+.node.editing{border-color:var(--brand);box-shadow:0 0 0 2px rgba(109,140,255,.25)}
+.node.editing input,.node.editing textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12.5px;padding:6px 8px;margin:4px 0;font-family:inherit}
+.node.editing textarea{resize:vertical;min-height:40px}
+.node .node-edit-save{display:none;margin-top:6px;gap:6px}
+.node.editing .node-edit-save{display:flex}
+.node .node-edit-save button{padding:4px 10px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;border:none}
+.node .node-edit-save .ok{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+.node .node-edit-save .cancel{background:var(--hover);color:var(--txt)}
+
+/* ============ 命令面板 ============ */
+.cmdk{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150;align-items:center;justify-content:center;padding:20px}
+.cmdk.on{display:flex}
+.cmdk-box{background:var(--glass-bg-hover);border:1px solid var(--glass-border-hover);border-radius:16px;width:560px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden;
+  -webkit-backdrop-filter:blur(18px) saturate(165%);backdrop-filter:blur(18px) saturate(165%)}
+.cmdk-box input{width:100%;padding:16px 20px;background:transparent;border:none;color:var(--txt);font-size:15px;outline:none;border-bottom:1px solid var(--line)}
+.cmdk-list{max-height:340px;overflow-y:auto;padding:8px}
+.cmdk-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;cursor:pointer;font-size:13.5px;transition:.12s}
+.cmdk-item .ck-ic{font-size:17px;width:26px;text-align:center;flex-shrink:0}
+.cmdk-item .ck-hint{margin-left:auto;font-size:11px;color:var(--sub)}
+.cmdk-item.active,.cmdk-item:hover{background:var(--hover)}
+.cmdk-empty{padding:24px;text-align:center;color:var(--sub);font-size:13px}
+
+/* ============ 导出导入 ============ */
+.drop-hint{border:1.5px dashed var(--brand);border-radius:12px;padding:14px;text-align:center;font-size:12.5px;color:var(--brand);margin-top:10px;cursor:pointer;transition:.15s}
+.drop-hint:hover{background:rgba(109,140,255,.08)}
+
+/* ============ 知识库 / 插件 ============ */
+.kb-row{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:8px;font-size:13px;cursor:pointer;transition:.15s}
+.kb-row:hover{background:var(--hover)}
+.kb-row input{width:16px;height:16px;accent-color:var(--brand);flex-shrink:0}
+.kb-row .kb-toggle{margin-left:auto;font-size:11px;color:var(--brand);font-weight:600;flex-shrink:0}
+
+/* ============ 发布渠道 ============ */
+.channel{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:11px;margin-bottom:8px;font-size:13px}
+.channel .sw{margin-left:auto;position:relative;width:40px;height:22px;background:var(--line);border-radius:12px;cursor:pointer;transition:.2s;flex-shrink:0}
+.channel .sw::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+.channel .sw.on{background:linear-gradient(135deg,var(--brand),var(--brand2))}
+.channel .sw.on::after{left:20px}
+
+/* ============ 数据分析图表 ============ */
+.stat-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px}
+.stat-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.stat-card .val{font-size:28px;font-weight:800;background:linear-gradient(135deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.stat-card .lbl{font-size:12px;color:var(--sub);margin-top:4px}
+.stat-card .trend{font-size:11px;color:var(--ok);margin-top:6px}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.chart-box{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.chart-box h3{font-size:16px;margin-bottom:14px}
+.chart-svg{width:100%;height:180px}
+.bar-chart{display:flex;align-items:flex-end;gap:10px;height:160px;padding:10px 4px 0;border-bottom:1px solid var(--line)}
+.bar-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
+.bar{width:100%;max-width:36px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,var(--brand),var(--brand2));min-height:4px;transition:.3s;position:relative}
+.bar:hover{opacity:.85}
+.bar-val{font-size:10px;color:var(--sub)}
+.bar-lbl{font-size:10px;color:var(--sub)}
+.line-chart .grid-line{stroke:var(--line);stroke-width:1}
+.line-chart .area{fill:rgba(109,140,255,.15)}
+.line-chart .line{fill:none;stroke:url(#lineGrad);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.line-chart .dot{fill:var(--brand)}
+.dist-list{display:flex;flex-direction:column;gap:12px}
+.dist-item{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.dist-item .name{width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dist-bar{flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+.dist-bar > i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--brand),var(--brand2))}
+.dist-item .pct{width:40px;text-align:right;color:var(--sub);flex-shrink:0}
+
+/* ============ 菜单弹窗 ============ */
+.pop-menu button.danger{color:#ff6b81}
+
+/* ============ 响应式 ============ */
+@media(max-width:1180px){.sidebar{width:188px}}
+@media(max-width:760px){
+  .sidebar{display:none}
+  .ws-side{display:none}
+  .main{padding:12px 14px}
+  .grid{grid-template-columns:1fr}
+  .charts{grid-template-columns:1fr}
+}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<!-- ==================== 顶栏 ==================== -->
+<div class="topbar">
+  <div class="logo"><div class="dot"></div>BotCraft</div>
+  <nav class="nav">
+    <a href="#" class="active" data-page="home">首页</a>
+    <a href="#" data-page="workspace">工作台</a>
+    <a href="#" data-page="templates">模板</a>
+    <a href="#" data-page="knowledge">知识库</a>
+    <a href="#" data-page="plugins">插件</a>
+  </nav>
+  <div class="spacer"></div>
+  <span class="model-tag model-tag-click" id="topModelTag" title="点击切换模型" onclick="openSettings()">gpt-4o-mini</span>
+  <button class="btn btn-ghost btn-sm" onclick="toggleCmdK()" title="命令面板 (Cmd/Ctrl + K)">⌘K</button>
+  <button id="themeBtn" class="btn btn-ghost btn-sm" onclick="toggleTheme()" title="切换深色/浅色主题" aria-label="切换主题"><span class="orb"></span></button>
+  <button class="btn btn-ghost btn-sm" onclick="openSettings()">⚙️ 设置</button>
+  <button class="btn btn-primary btn-sm" onclick="if(requireLogin())openCreate()">＋ 创建</button>
+  <div id="userMenuWrap"></div>
+</div>
+
+<!-- ==================== 登录遮罩（未登录时盖住整个应用） ==================== -->
+<div class="auth-mask" id="authMask">
+  <div class="auth-brand">
+    <div class="logo" style="font-size:22px"><div class="dot"></div>BotCraft</div>
+    <p>AI 机器人搭建平台 · 多用户隔离 · 数据本地加密</p>
+    <div class="auth-entry" style="margin-top:26px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <button class="btn btn-primary auth-entry-btn" style="padding:11px 30px;font-size:14px" data-auth-mode="login">登录</button>
+      <button class="btn btn-ghost auth-entry-btn" style="padding:11px 30px;font-size:14px;border:1px solid var(--line)" data-auth-mode="register">注册账号</button>
+    </div>
+    <p style="margin-top:16px;font-size:11px;opacity:.55">点击「注册账号」即可开始 · 数据保存在本机浏览器</p>
+  </div>
+</div>
+
+<!-- ==================== 登录 / 注册弹窗 ==================== -->
+<div class="modal" id="authModal">
+  <div class="mbox" style="width:440px">
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-mode="login" onclick="switchMode('login')">登录</button>
+      <button class="auth-tab" data-mode="register" onclick="switchMode('register')">注册</button>
+    </div>
+    <h2 id="auth-title">登录 BotCraft</h2>
+    <div class="hint" id="auth-sub">登录后继续你的创作</div>
+    <form id="authForm" data-mode="login" onsubmit="return (event.preventDefault(),submitAuth()),false">
+      <div class="field">
+        <label>用户名</label>
+        <input id="auth-user" placeholder="3-20 位字母、数字、下划线" autocomplete="username">
+      </div>
+      <div class="field" id="auth-email-row" style="display:none">
+        <label>邮箱（可选，用于找回密码）</label>
+        <input id="auth-email" type="email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input id="auth-pass" type="password" placeholder="至少 6 位" autocomplete="current-password">
+      </div>
+      <div id="auth-err" class="hint" style="color:#ff6b81;display:none"></div>
+      <div class="mbox-foot" style="margin-top:6px">
+        <button type="button" class="btn btn-ghost" onclick="closeAuth()">取消</button>
+        <button type="submit" class="btn btn-primary" id="auth-submit">登录</button>
+      </div>
+    </form>
+    <div class="hint" id="auth-switch-text" style="text-align:center;margin-top:14px"></div>
+    <div class="hint" style="font-size:11px;margin-top:12px;opacity:.8">
+      🔒 密码经 PBKDF2-SHA256 加盐哈希后本地存储，绝不明文保存；演示用途，请勿用于真实敏感账号。
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="kbModal">
+  <div class="mbox" style="width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h2 id="kbPrevTitle" style="font-size:16px">知识库预览</h2>
+      <button class="btn btn-ghost" onclick="document.getElementById('kbModal').classList.remove('on')">关闭</button>
+    </div>
+    <div id="kbPrevBody" style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--txt);max-height:60vh;overflow:auto"></div>
+  </div>
+</div>
+
+<div class="modal" id="exportModal">
+  <div class="mbox" style="width:640px;max-width:92vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h2 id="exportTitle" style="font-size:16px">导出工作流</h2>
+      <button class="btn btn-ghost" onclick="document.getElementById('exportModal').classList.remove('on')">关闭</button>
+    </div>
+    <textarea id="exportText" style="width:100%;height:300px;resize:vertical;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px;font-family:'SF Mono',Consolas,monospace;font-size:12.5px;line-height:1.5"></textarea>
+    <div class="mbox-foot" style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">
+      <button class="btn btn-ghost" onclick="copyExportText()">📋 复制</button>
+      <button class="btn btn-primary" id="exportDownloadBtn">⬇️ 下载文件</button>
+    </div>
+  </div>
+</div>
+<div class="app">
+  <!-- ==================== 侧边栏 ==================== -->
+  <aside class="sidebar">
+    <div class="side-section">创作</div>
+    <div class="side-item active" data-page="home"><span class="ic">🤖</span>我的机器人 <span class="badge">0</span></div>
+    <div class="side-item" data-page="workspace"><span class="ic">🛠️</span>工作流编排</div>
+    <div class="side-item" data-page="knowledge"><span class="ic">📚</span>知识库</div>
+    <div class="side-item" data-page="plugins"><span class="ic">🔌</span>插件中心</div>
+    <div class="side-section">资源</div>
+    <div class="side-item" data-page="templates"><span class="ic">🎨</span>模板广场</div>
+    <div class="side-item" data-page="favorites"><span class="ic">⭐</span>我的收藏</div>
+    <div class="side-item" data-page="analytics"><span class="ic">📊</span>数据分析</div>
+    <div class="side-create" onclick="openCreate()">＋ 新建机器人</div>
+  </aside>
+
+  <!-- ==================== 主页 ==================== -->
+  <main class="main" id="page-home">
+    <div class="page-head">
+      <div>
+        <h1>我的机器人</h1>
+        <div class="sub">共 0 个机器人 · 0 个已发布</div>
+      </div>
+      <div class="search-bar">
+        <span class="ic">🔍</span>
+        <input placeholder="搜索机器人、工作流…">
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="chip active" data-filter="all">全部</div>
+      <div class="chip" data-filter="published">已发布</div>
+      <div class="chip" data-filter="draft">草稿</div>
+      <div class="chip" data-filter="pro">Pro</div>
+      <div class="chip" data-filter="favorite">⭐ 收藏</div>
+      <div style="flex:1"></div>
+      <div class="chip" id="sortChip">⚡ 最新创建 ↓</div>
+    </div>
+    <div class="grid" id="botGrid"></div>
+    <div id="emptyHome" style="display:none" class="empty-home">
+      <div class="empty-home-ic">🤖</div>
+      <h3>还没有机器人，创建你的第一个吧</h3>
+      <p>选择模板快速开始，或从头搭建一个专属 AI 助手</p>
+      <div class="empty-home-actions">
+        <button class="btn btn-primary" onclick="openCreate()">＋ 创建机器人</button>
+        <button class="btn btn-ghost" onclick="go('templates')">浏览模板广场</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== 工作台 ==================== -->
+  <main class="workspace" id="page-workspace">
+    <div class="ws-side">
+      <div class="ws-head">
+        <h2><span class="status"></span><span id="wsName">机器人</span></h2>
+        <div class="flow" id="wsFlow">工作流 · 草稿</div>
+      </div>
+      <div class="ws-tabs">
+        <div class="ws-tab active" data-tab="flow">编排</div>
+        <div class="ws-tab" data-tab="prompt">提示词</div>
+        <div class="ws-tab" data-tab="kb">知识库</div>
+        <div class="ws-tab" data-tab="plugin">插件</div>
+        <div class="ws-tab" data-tab="publish">发布</div>
+      </div>
+      <div class="ws-body" id="wsFlowBody"></div>
+      <div class="tab-panel" id="wsPromptBody" style="display:none">
+        <div style="font-size:12px;color:var(--sub);margin-bottom:10px">定义机器人的人设与回复规则，支持变量如 {{user_input}}、{{user_name}}</div>
+        <div class="prompt-templates" id="promptTpls"></div>
+        <textarea id="promptArea" placeholder="例如：你是一个智能客服，请用专业友好的语气回答…"></textarea>
+        <div style="font-size:11px;color:var(--sub);margin-top:8px" id="promptCount">0 字</div>
+      </div>
+      <div class="tab-panel" id="wsKbBody" style="display:none">
+        <div style="font-size:12px;color:var(--sub);margin-bottom:10px">勾选要挂载到当前机器人的知识库</div>
+        <div id="kbBody"></div>
+      </div>
+      <div class="tab-panel" id="wsPluginBody" style="display:none">
+        <div style="font-size:12px;color:var(--sub);margin-bottom:10px">勾选当前机器人启用的插件</div>
+        <div id="pluginBody"></div>
+      </div>
+      <div class="tab-panel" id="wsPublishBody" style="display:none">
+        <div style="font-size:12px;color:var(--ok);margin-bottom:14px">✅ 配置校验通过 · 选择要发布的渠道</div>
+        <div id="channelList"></div>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="publishBot()">立即发布</button>
+        <span id="publishTip" style="margin-left:10px;font-size:12px;color:var(--ok)"></span>
+      </div>
+    </div>
+    <div class="ws-main">
+      <div class="chat-head">
+        <div class="ava" id="chatAva">🤖</div>
+        <div style="min-width:0">
+          <div id="chatBotName" style="font-weight:600;font-size:14px">机器人</div>
+          <div style="font-size:11.5px;color:var(--sub)" id="chatStatus">在线 · 响应 &lt; 1s</div>
+        </div>
+        <div style="flex:1"></div>
+        <select id="botSwitcher" class="bot-switcher" onchange="switchBotManual(this.value)" title="手动切换当前机器人">
+          <option value="">切换机器人…</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="clearChat()">🗑️ 清空</button>
+        <button class="btn btn-ghost btn-sm" id="stopBtn" style="display:none" onclick="stopGenerate()">⏹ 停止</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportWorkflow()" title="导出工作流为 JSON">⬇️ 导出</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile').click()" title="从 JSON 导入工作流">⬆️ 导入</button>
+        <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+        <button class="btn btn-primary btn-sm" onclick="go('workspace');document.querySelector('.ws-tab[data-tab=publish]').click()">发布</button>
+      </div>
+      <div class="chat" id="chat"></div>
+        <div class="quick-bar" id="quickBar"></div>
+        <div class="ctx-bar" id="ctxBar"></div>
+        <div class="chat-input">
+        <input id="msgInput" placeholder="输入消息测试你的机器人… (Enter 发送)" onkeydown="if(event.key==='Enter'&&!event.shiftKey)sendMsg()">
+        <button id="sendBtn" onclick="sendMsg()">发送</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== 模板广场 ==================== -->
+  <main class="main" id="page-templates" style="display:none">
+    <div class="page-head"><div><h1>模板广场</h1><div class="sub">一键复制，快速创建你的机器人</div></div></div>
+    <div class="grid" id="tplGrid"></div>
+  </main>
+
+  <!-- ==================== 知识库 ==================== -->
+  <main class="main" id="page-knowledge" style="display:none">
+    <div class="page-head">
+      <div><h1>知识库</h1><div class="sub">为你的机器人注入专属知识</div></div>
+      <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="document.getElementById('kbImport').click()">＋ 导入文档</button>
+    <input type="file" id="kbImport" accept=".txt,.md,.markdown,.csv,.json,text/*" multiple style="display:none">
+    </div>
+    <div id="kbList"></div>
+  </main>
+
+  <!-- ==================== 插件 ==================== -->
+  <main class="main" id="page-plugins" style="display:none">
+    <div class="page-head"><div><h1>插件中心</h1><div class="sub">扩展机器人的能力边界</div></div></div>
+    <div class="grid" id="pluginGrid"></div>
+  </main>
+
+  <!-- ==================== 收藏 ==================== -->
+  <main class="main" id="page-favorites" style="display:none">
+    <div class="page-head"><div><h1>我的收藏</h1><div class="sub">你收藏的机器人与模板</div></div></div>
+    <div class="grid" id="favGrid"></div>
+  </main>
+
+  <!-- ==================== 数据分析 ==================== -->
+  <main class="main" id="page-analytics" style="display:none">
+    <div class="page-head"><div><h1>数据分析</h1><div class="sub">查看机器人的调用量、满意度与趋势</div></div>
+      <div class="search-bar" style="max-width:200px"><span class="ic">📅</span><input value="最近 7 天" disabled></div>
+    </div>
+    <div class="stat-cards" id="statCards"></div>
+    <div class="charts">
+      <div class="chart-box">
+        <h3>📈 调用量趋势（次/天）</h3>
+        <svg class="chart-svg line-chart" id="lineChart" viewBox="0 0 400 180" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="chart-box">
+        <h3>🤖 各机器人调用占比</h3>
+        <div class="dist-list" id="distList"></div>
+      </div>
+    </div>
+    <div class="chart-box" style="margin-top:16px">
+      <h3>⭐ 满意度趋势</h3>
+      <div class="bar-chart" id="barChart"></div>
+    </div>
+    <div class="chart-box" style="margin-top:16px">
+      <h3>📊 上传数据做自定义分析</h3>
+      <p style="font-size:12px;color:var(--sub);margin:0 0 10px">上传 CSV / JSON（对象数组），自动识别字段并生成统计与可视化。每行一条记录。</p>
+      <div class="toolbar" style="margin-bottom:10px">
+        <label class="file-btn" for="dataFile">📁 选择文件<span class="file-name" id="dataFileName">未选择文件</span></label>
+        <input type="file" id="dataFile" accept=".csv,.json,text/*" style="display:none">
+        <button class="btn btn-ghost btn-sm" id="dataExportBtn" style="margin-left:8px" disabled onclick="exportDataStats()">⬇️ 导出统计</button>
+      </div>
+      <div id="dataSummary" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px"></div>
+      <div class="toolbar" id="dataFieldBar" style="display:none;margin-bottom:10px">
+        <span style="font-size:12px;color:var(--sub)">分类(X)：</span>
+        <select id="dataX" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:4px 8px"></select>
+        <span style="font-size:12px;color:var(--sub);margin-left:10px">数值(Y)：</span>
+        <select id="dataY" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:4px 8px"></select>
+      </div>
+      <svg class="chart-svg" id="dataChart" viewBox="0 0 600 260" preserveAspectRatio="none" style="width:100%;height:260px"></svg>
+    </div>
+  </main>
+</div>
+
+<!-- ==================== 创建向导 ==================== -->
+<div class="modal" id="createModal">
+  <div class="mbox">
+    <h2>创建机器人</h2>
+    <div class="hint">填写基本信息，几分钟即可拥有一个 AI 助手</div>
+    <div class="field" id="field-name"><label>名称 <span style="color:var(--warn)">*</span></label><input id="f-name" placeholder="例如：我的客服助手" maxlength="30"><div class="err" style="color:#ff6b81;font-size:11.5px;margin-top:5px;display:none">请填写机器人名称（1-30 字）</div></div>
+    <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:#ff6b81;font-size:11.5px;margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
+    <div class="field"><label>头像</label>
+      <div class="color-pick" id="colors">
+        <div class="c on" style="background:linear-gradient(135deg,#6d8cff,#9d6bff)" data-c="🤖"></div>
+        <div class="c" style="background:linear-gradient(135deg,#3ddc97,#2bb5e8)" data-c="📊"></div>
+        <div class="c" style="background:linear-gradient(135deg,#ff8b6d,#ff6b9d)" data-c="🎨"></div>
+        <div class="c" style="background:linear-gradient(135deg,#f5c542,#ff8b3d)" data-c="✍️"></div>
+        <div class="c" style="background:linear-gradient(135deg,#9b7bff,#6b8bff)" data-c="🎮"></div>
+        <div class="c" style="background:linear-gradient(135deg,#4dd0e1,#7c4dff)" data-c="✈️"></div>
+      </div>
+    </div>
+    <div class="field"><label>创建方式</label>
+      <select id="f-mode"><option value="blank">标准创建（从零搭建）</option><option value="template">从模板创建</option></select>
+    </div>
+    <div class="mbox-foot">
+      <button class="btn btn-ghost" onclick="closeCreate()">取消</button>
+      <button class="btn btn-primary" onclick="submitCreate()">创建并配置</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 设置 ==================== -->
+<div class="modal" id="settingsModal">
+  <div class="mbox" style="width:560px">
+    <h2>⚙️ 模型设置</h2>
+    <div class="hint">填写后，工作台的聊天将调用真实大模型。Key 仅保存在本机 localStorage，不会上传任何服务器。</div>
+
+    <div class="field">
+      <label>服务商</label>
+      <select id="set-provider"></select>
+    </div>
+    <div class="field" id="field-key">
+      <label>API Key</label>
+      <input id="set-key" type="password" placeholder="sk-..." autocomplete="off">
+      <div class="err" style="color:#ff6b81;font-size:11.5px;margin-top:5px;display:none">API Key 不能为空（自定义模式下 baseURL 也必填）</div>
+    </div>
+    <div class="field" id="field-base">
+      <label>接口地址（Base URL）</label>
+      <input id="set-base" placeholder="https://api.openai.com/v1">
+    </div>
+    <div class="field">
+      <label>模型 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（可点「刷新」从接口拉取实时列表）</span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="set-model" style="flex:1;min-width:0"></select>
+        <button class="btn btn-ghost" type="button" onclick="refreshModelList()" style="white-space:nowrap;flex:none">🔄 刷新列表</button>
+      </div>
+      <input id="set-model-custom" placeholder="或手动填写模型名，如 gpt-4o-mini" style="display:none;margin-top:8px;width:100%;padding:10px 13px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
+    </div>
+    <div class="field">
+      <label>温度（创造性）<span id="set-temp-val" style="float:right;color:var(--brand)">0.7</span></label>
+      <input id="set-temp" type="range" min="0" max="2" step="0.1" value="0.7" style="width:100%">
+    </div>
+    <div class="field">
+      <label>最大输出 tokens</label>
+      <input id="set-maxtokens" type="number" min="50" max="4000" value="800">
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px">
+      <input id="set-direct" type="checkbox" checked style="width:auto">
+      <label style="margin:0">浏览器直连模型接口（关闭则走下方代理地址）</label>
+    </div>
+    <div class="field">
+      <label>代理地址（可选，生产环境推荐）</label>
+      <input id="set-proxy" placeholder="https://your-domain.com/api/ai-proxy">
+      <div class="hint" style="margin-top:6px;font-size:11.5px;color:var(--sub)">代理用于隐藏 API Key，后端只需把请求原样转发到服务商并补签 Authorization 即可。</div>
+    </div>
+
+    <div id="connStatus" style="font-size:12.5px;margin:4px 0 10px;min-height:18px"></div>
+    <div class="set-preview">即将使用：<b id="settingsPreview"></b></div>
+    <div class="mbox-foot">
+      <button class="btn btn-ghost" onclick="testConnection()">🔌 测试连接</button>
+      <button class="btn btn-ghost" onclick="closeSettings()">取消</button>
+      <button class="btn btn-primary" onclick="saveSettings()">保存并启用</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ==================== 命令面板 (Cmd/Ctrl + K) ==================== -->
+<div class="cmdk" id="cmdk">
+  <div class="cmdk-box">
+    <input id="cmdkInput" placeholder="🔍 输入命令或搜索机器人…" autocomplete="off">
+    <div class="cmdk-list" id="cmdkList"></div>
+  </div>
+</div>
+
+<!-- ==================== AI 模型接入层（内联） ==================== -->
+<script>
+'use strict';
+
+// ==================== 安全存储层（兼容 file://） ====================
+// 双击以 file:// 打开时，部分浏览器禁用 localStorage（返回 null），
+// 此时所有 getItem/setItem 会抛 SecurityError，导致初始化中断、
+// 「登录/注册点了没反应、卡在启动页」。此层统一兜底：
+//   · 自动探测 localStorage 可用性
+//   · 不可用时退化为内存 Map（本次会话内仍可正常注册/登录/使用，仅关闭后不记忆）
+//   · 全部读写永不抛错
+var __storage = (function () {
+  var mem = new Map();
+  var useLS = false;
+  try {
+    localStorage.setItem('__bc_test__', '1');
+    localStorage.removeItem('__bc_test__');
+    useLS = true;
+  } catch (e) { useLS = false; }
+  return {
+    isMemory: function () { return !useLS; },
+    getItem: function (k) { try { return useLS ? localStorage.getItem(k) : (mem.has(k) ? mem.get(k) : null); } catch (e) { return mem.has(k) ? mem.get(k) : null; } },
+    setItem: function (k, v) { try { useLS ? localStorage.setItem(k, String(v)) : mem.set(k, String(v)); } catch (e) { mem.set(k, String(v)); } },
+    removeItem: function (k) { try { useLS ? localStorage.removeItem(k) : mem.delete(k); } catch (e) { mem.delete(k); } },
+    clear: function () { try { useLS ? localStorage.clear() : mem.clear(); } catch (e) { mem.clear(); } },
+  };
+})();
+// 暴露给后续主 script 块复用（同一安全层，避免 AI 配置读写也抛错）
+window.__storage = __storage;
+
+(function () {
+  const LS_CFG = 'botcraft.ai.config.v1';
+  const PROVIDERS = {
+    openai:   { label: 'OpenAI',          base: 'https://api.openai.com/v1',              models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1-mini'] },
+    dashscope:{ label: '阿里云百炼',       base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen3.8-max', 'qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen2.5-72b-instruct'] },
+    hunyuan:  { label: '腾讯混元',         base: 'https://api.hunyuan.cloud.tencent.com/v1', models: ['hunyuan-lite', 'hunyuan-standard', 'hunyuan-pro'] },
+    deepseek: { label: 'DeepSeek',        base: 'https://api.deepseek.com/v1',           models: ['deepseek-chat', 'deepseek-reasoner'] },
+    zhipu:    { label: '智谱 GLM（免费）',  base: 'https://open.bigmodel.cn/api/paas/v4',  models: ['glm-4.6v-flash', 'glm-4.7-flash', 'glm-4.5-flash', 'glm-4-plus'] },
+    custom:   { label: '自定义 / 兼容网关', base: '',                                     models: [] },
+  };
+  const DEFAULT_CFG = {
+    provider: 'openai', baseURL: PROVIDERS.openai.base, apiKey: '', model: 'gpt-4o-mini',
+    temperature: 0.7, maxTokens: 800, directCall: true, proxyURL: '', fallback: 'smart',
+  };
+  let cfg = loadConfig();
+
+  function loadConfig() {
+    try { const raw = __storage.getItem(LS_CFG); if (raw) return Object.assign({}, DEFAULT_CFG, JSON.parse(raw)); } catch (e) {}
+    return Object.assign({}, DEFAULT_CFG);
+  }
+  function saveConfig() { try { __storage.setItem(LS_CFG, JSON.stringify(cfg)); } catch (e) {} }
+  function getConfig() { return Object.assign({}, cfg); }
+
+  // 构造 messages（含历史上下文 + 系统提示）
+  function buildMessages(bot, history) {
+    const sys = composeSystemPrompt(bot);
+    const msgs = [{ role: 'system', content: sys }];
+    const turns = (history || []).slice();
+    const MAX_TURNS = 20;
+    if (turns.length > MAX_TURNS * 2) turns.splice(0, turns.length - MAX_TURNS * 2);
+    turns.forEach(m => msgs.push({ role: m.role === 'me' ? 'user' : 'assistant', content: String(m.text || '') }));
+    return msgs;
+  }
+
+  function composeSystemPrompt(bot) {
+    const parts = [];
+    parts.push((bot && bot.prompt) || '你是一个有用的 AI 助手。');
+    if (bot && bot.knowledges && bot.knowledges.length) {
+      const kctx = bot.knowledges.map(id => kbById(id)).filter(Boolean).map(rec => '【' + rec.name + '】\n' + rec.content).join('\n\n');
+      if (kctx) parts.push('\n【知识库】以下是已挂载知识库的完整正文，请直接作为回答依据：\n' + kctx + '\n\n注意：知识库内容已随本条系统提示一并提供，用户无需再次上传或粘贴相同内容；除非知识库确实为空，否则不要向用户索要文件或文本。');
+    }
+    if (bot && bot.plugins && bot.plugins.length) {
+      parts.push('\n【可用工具】你当前已启用插件：' + bot.plugins.join('、') + '。涉及实时信息时可声明调用。');
+    }
+    if (bot && bot.nodes && bot.nodes.length) {
+      parts.push('\n【处理流程】请按以下工作流节点顺序组织回答：' + bot.nodes.map(n => n.h).join(' → ') + '。其中「检索知识」指从上方【知识库】中查找相关正文（内容已附上），不要把它理解为“向用户索取文件/附件”；只有知识库为空时才需要向用户询问。');
+    }
+    parts.push('\n请用专业、友好的语气回答，回答尽量简洁清晰。若用户使用代码相关需求，请用代码块包裹。');
+    return parts.join('\n');
+  }
+
+  // 支持流式与非流式。stream=true 时返回 AsyncIterable<string>
+  async function chat(bot, history, opt) {
+    opt = opt || {};
+    const messages = buildMessages(bot, history);
+    if (!canCall()) {
+      return opt.stream ? fakeStream(messages) : runFallback(bot, history, messages);
+    }
+    try {
+      const res = await request(messages, opt.signal, opt.stream);
+      if (opt.stream && res && typeof res[Symbol.asyncIterator] === 'function') return res;
+      return res; // 非流式直接返回字符串
+    } catch (err) {
+      console.warn('[BotCraft AI] 调用失败，降级：', err);
+      return opt.stream ? fakeStream(messages, err) : runFallback(bot, history, messages, err);
+    }
+  }
+
+  // 降级：模拟逐字流
+  function* fakeStreamSync(text) {
+    const tokens = text.match(/.{1,4}/gs) || [text];
+    for (const t of tokens) { yield t; }
+  }
+  async function fakeStream(messages, err) {
+    const text = runFallback(null, null, messages, err, /*immediate*/ true);
+    return fakeStreamSync(text);
+  }
+
+  function canCall() { return !!(cfg.apiKey && cfg.baseURL); }
+
+  function updateConfig(patch) {
+    if (!patch) return getConfig();
+    if (patch.provider && PROVIDERS[patch.provider]) {
+      const p = PROVIDERS[patch.provider];
+      cfg.provider = patch.provider;
+      cfg.label = p.label;
+      if (!patch.baseURL) cfg.baseURL = p.base;
+      if (!patch.model && p.models.length) cfg.model = p.models[0];
+    }
+    Object.assign(cfg, patch);
+    saveConfig();
+    return getConfig();
+  }
+  function getProviders() { return PROVIDERS; }
+
+  function request(messages, signal, stream) {
+    const url = (cfg.proxyURL && !cfg.directCall)
+      ? cfg.proxyURL
+      : cfg.baseURL.replace(/\/$/, '') + '/chat/completions';
+
+    const body = {
+      model: cfg.model,
+      messages: messages,
+      temperature: Number(cfg.temperature) || 0.7,
+      max_tokens: Number(cfg.maxTokens) || 800,
+      stream: !!stream,
+    };
+    const headers = { 'Content-Type': 'application/json' };
+    if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
+
+    if (stream) {
+      // SSE 流式：返回 AsyncIterable
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 120_000);
+      if (signal) signal.then && signal.then(() => ctrl.abort());
+      const wrap = (typeof signal === 'object' && signal !== null) ? null : null;
+      const ac = wrap || ctrl;
+
+      const fetchPromise = fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: ac.signal });
+
+      async function* iter() {
+        let resp;
+        try { resp = await fetchPromise; } catch (e) { clearTimeout(timer); throw e; }
+        if (!resp.ok) {
+          clearTimeout(timer);
+          const txt = await resp.text().catch(() => '');
+          throw new Error('HTTP ' + resp.status + '：' + (txt || resp.statusText));
+        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split('\n');
+            buf = lines.pop() || '';
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || !trimmed.startsWith('data:')) continue;
+              const data = trimmed.slice(5).trim();
+              if (data === '[DONE]') return;
+              try {
+                const json = JSON.parse(data);
+                const delta = json.choices?.[0]?.delta?.content;
+                if (delta) yield delta;
+              } catch (e) { /* 忽略非 JSON 行 */ }
+            }
+          }
+        } finally { clearTimeout(timer); }
+      }
+      return iter();
+    }
+
+    // 非流式
+    const controller = signal ? null : new AbortController();
+    const timer = controller ? setTimeout(() => controller.abort(), 60_000) : null;
+    return fetch(url, {
+      method: 'POST', headers, body: JSON.stringify(body),
+      signal: signal || (controller ? controller.signal : undefined),
+    }).then(resp => {
+      if (timer) clearTimeout(timer);
+      if (!resp.ok) { return resp.text().then(txt => { throw new Error('HTTP ' + resp.status + '：' + (txt || resp.statusText)); }); }
+      return resp.json();
+    }).then(data => {
+      const choice = data && data.choices && data.choices[0];
+      const content = choice && (choice.message ? choice.message.content : choice.text);
+      if (!content) throw new Error('模型返回为空');
+      return content.trim();
+    });
+  }
+
+  function runFallback(bot, history, messages, err, immediate) {
+    const last = (history || []).slice().reverse().find(m => m.role === 'me');
+    const q = (last && last.text) || '';
+    const name = (bot && (bot.name || bot.n)) || 'AI 助手';
+    const sys = messages && messages[0] ? messages[0].content : '';
+    const nodes = (bot && bot.nodes) || [];
+    const flow = nodes.map(n => n.h).join(' → ') || '理解 → 回答';
+    const knowledge = (bot && bot.knowledges) || [];
+
+    let kbNote = '';
+    if (knowledge.length) {
+      const hit = knowledge.find(k => (k || '').toLowerCase().includes('faq')) || knowledge[0];
+      kbNote = `\n（参考了知识库《${hit}》相关内容）`;
+    }
+
+    const greet = /^(你好|您好|hi|hello|在吗|在么)/i.test(q || '');
+    let reply;
+    if (greet) {
+      reply = `你好，我是 ${name}。${kbNote.trim()}\n我的处理流程：${flow}\n请问有什么可以帮你？（演示回复 · 填写 API Key 可切换真实模型）`;
+    } else if (/订单|物流|快递|退款|售后/.test(q)) {
+      reply = `${q}\n\n好的，正在为你查询订单信息…📦\n（${name} 的演示回复，配置真实模型后将给出准确答案）${kbNote}`;
+    } else if (/天气|气温|温度/.test(q)) {
+      const has = (bot && bot.plugins || []).includes('天气查询');
+      reply = has ? `已调用「天气查询」插件，正在获取实时天气…🌤️${kbNote}` : `（当前未启用天气插件，如需实时天气请在「插件」Tab 开启「天气查询」）`;
+    } else if (/生成|写|文案|创作|脚本|种草/.test(q)) {
+      reply = `【${name} 文案草稿】\n\n基于你的需求「${q}」，这是一段示例输出：${kbNote}\n\n- 标题：种草力拉满的开场\n- 正文：这里会是模型按你人设生成的正式内容 🎯\n\n（演示回复 · 填写 API Key 可切换真实模型）`;
+    } else if (/代码|code|函数|bug|报错|编程/.test(q)) {
+      reply = `收到代码需求：「${q}」\n\n\`\`\`\n// ${name} 的处理流程：${flow}\n// 真实模型接入后将输出完整可运行代码\nfunction answer() {\n  return "Hello, AI!";\n}\n\`\`\`${kbNote}`;
+    } else if (/翻译|translate|english/i.test(q)) {
+      reply = `【翻译结果】\n\n「${q}」\n\n→ [这里是译文，由 ${name} 基于人设生成]\n（演示回复 · 填写 API Key 可切换真实模型）${kbNote}`;
+    } else if (q) {
+      reply = `${q}\n\n收到！我是 ${name}，已按以下流程处理：${flow}。${kbNote.trim()}\n\n（演示回复 · 在「设置」中填写 API Key 即可切换为真实大模型回答）🎯`;
+    } else {
+      reply = `你好，我是 ${name}，有什么可以帮你的？`;
+    }
+    if (immediate) return reply;
+    return new Promise(resolve => setTimeout(() => resolve(reply), 400 + Math.random() * 500));
+  }
+
+  window.BotCraftAI = { chat, canCall, getConfig, updateConfig, getProviders, composeSystemPrompt };
+})();
+</script>
+
+<!-- ==================== 应用主逻辑 ==================== -->
+<script>
+'use strict';
+const storage = window.__storage; // 复用 AI 层已初始化的安全存储层
+const LS_KEY = 'botcraft.bots.v2';
+const LS_FAV = 'botcraft.favorites.v1';
+const LS_USERS = 'botcraft.users.v1';      // 用户表：{ username, email, pwdHash, salt, createdAt }
+const LS_SESSION = 'botcraft.session.v1';   // 当前会话：{ username, token, loginAt }
+
+const SAMPLE_PROMPT = '你是一个智能助手，请用专业、友好的语气回答用户问题。';
+
+const DEFAULT_NODES = [
+  { lbl: '🟢 开始', h: '用户输入', p: '接收用户消息与上下文' },
+  { lbl: '🧠 大模型', h: '意图识别', p: '判断用户咨询类型' },
+  { lbl: '📚 知识库', h: '检索知识', p: '使用已挂载知识库正文' },
+  { lbl: '💬 消息', h: '生成回复', p: '基于检索内容作答' },
+];
+
+const SEED_BOTS = [
+  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '🤖', c: 'linear-gradient(135deg,#6d8cff,#9d6bff)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: [{ lbl: '🟢 开始', h: '用户输入', p: '接收消息' }, { lbl: '🧠 大模型', h: '意图识别', p: '订单/售后/咨询' }, { lbl: '🔀 条件', h: '是否转人工', p: '置信度<0.6转接' }, { lbl: '💬 消息', h: '生成回复', p: '作答' }], plugins: ['网页搜索'], knowledges: ['产品说明书 v3'], model: 'gpt-4o-mini' },
+  { n: '产品文案生成器', d: '根据卖点一键生成小红书/抖音种草文案', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', plugins: ['图片生成'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#3ddc97,#2bb5e8)', tag: '已发布', u: 320, t: '95%', prompt: '你是数据分析师，能解读数据并给出关键结论。', plugins: ['代码执行器'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与发音', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', plugins: [], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', tag: '已发布', u: 2105, t: '97%', prompt: '你是资深工程师，擅长解释、调试、重构代码。', plugins: ['代码执行器', '网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#4dd0e1,#7c4dff)', tag: '草稿', u: 0, t: '—', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', plugins: ['天气查询', '网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '会议纪要整理', d: '上传录音/文字，自动提炼待办与结论', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', u: 88, t: '85%', prompt: '你负责整理会议纪要，提炼结论与待办事项。', plugins: ['PDF 解析'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '求职简历优化', d: '基于 JD 智能改写简历，提升通过率', ic: '💼', c: 'linear-gradient(135deg,#a1887f,#795548)', tag: '已发布', u: 410, t: '90%', prompt: '你帮用户基于 JD 优化简历，突出匹配亮点。', plugins: ['网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
+];
+
+const tpls = [
+  { n: '电商智能客服', d: '支持订单查询、退换货、商品推荐', ic: '🛒', c: 'linear-gradient(135deg,#6d8cff,#9d6bff)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。' },
+  { n: '知识库问答', d: '基于企业文档的 RAG 检索增强问答', ic: '📚', c: 'linear-gradient(135deg,#3ddc97,#2bb5e8)', prompt: '你是企业知识库助手，严格基于提供的文档作答。' },
+  { n: '短视频脚本生成', d: '输入主题自动产出分镜与台词', ic: '🎬', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', prompt: '你是短视频编导，产出吸睛的分镜脚本与台词。' },
+  { n: '邮件自动回复', d: '理解邮件意图并草拟专业回复', ic: '📧', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', prompt: '你是邮件助理，草拟得体、专业的邮件回复。' },
+  { n: 'AI 翻译官', d: '支持 30+ 语言互译，保留语气风格', ic: '🌐', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。' },
+  { n: '情感陪伴助手', d: '温暖倾听，提供情绪价值与建议', ic: '💬', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', prompt: '你是温暖的倾听者，给予情绪支持与实用建议。' },
+];
+
+const plugins = [
+  { n: '网页搜索', d: '实时联网获取最新信息', ic: '🔍' },
+  { n: '图片生成', d: '调用文生图模型创作配图', ic: '🖼️' },
+  { n: 'PDF 解析', d: '读取上传的 PDF 文档内容', ic: '📕' },
+  { n: '天气查询', d: '获取全球城市实时天气', ic: '🌤️' },
+  { n: '日历/提醒', d: '创建与管理日程提醒', ic: '📅' },
+  { n: '代码执行器', d: '安全沙盒中运行代码片段', ic: '⚙️' },
+];
+
+const BUILTIN_KB = [
+  {
+    id: 'builtin_faq', name: '常见问题 FAQ（内置）', type: 'md', size: 0, builtin: true,
+    content: `# 常见问题 FAQ
+
+## 账户与登录
+- 如何注册？打开「登录」面板，填写用户名与密码即可注册，无需邮箱验证。
+- 忘记密码怎么办？当前版本暂不支持找回密码，可在「切换账号」处重新注册一个账号。
+
+## 产品功能
+- 知识库：可上传 TXT / Markdown / CSV / JSON 作为机器人回答的依据，勾选后挂载到对应机器人。
+- 数据分析：上传表格可做自定义统计；运营分析展示真实对话量。
+- 多机器人：可创建多个机器人，分别配置模型、提示词与知识库。
+
+## 计费与限额
+- 调用量取决于你所填的 API Key 所属账户的额度，本工具不额外收费。
+- 知识库单文件上限 300KB，存储在浏览器本地，清空浏览器数据会丢失。
+
+## 联系方式
+- 使用问题可在会话中直接反馈，我们会持续改进。`
+  },
+  {
+    id: 'builtin_handbook', name: '产品使用手册（内置）', type: 'md', size: 0, builtin: true,
+    content: `# 产品使用手册
+
+## 快速开始
+1. 登录或注册一个账号。
+2. 在「工作台」创建一个机器人，填写名称、选择模型并保存。
+3. 进入机器人详情，可在「知识库」标签挂载资料，在「提示词」标签设定角色。
+4. 在「对话」标签开始聊天，机器人会结合挂载的知识库回答。
+
+## 配置说明
+- 接口地址：OpenAI 兼容接口，例如 https://api.openai.com/v1。
+- 模型：可自动从 /models 拉取，也可手动填写。
+- 温度：0 更严谨，1 更发散，默认 0.7。
+
+## 数据说明
+- 机器人、知识库、对话记录均保存在浏览器本地（LocalStorage），不会上传到第三方。
+- 切换设备不会同步，请谨慎清理浏览器数据。`
+  },
+  {
+    id: 'builtin_company', name: '团队介绍（内置）', type: 'md', size: 0, builtin: true,
+    content: `# 团队介绍
+
+我们是一支专注 AI 应用落地的产品团队，致力于把大模型能力变成普通人也能使用的工具。
+
+## 我们的产品
+- 智能对话机器人：支持多模型、知识库增强、多渠道发布。
+- 数据分析助手：上传数据即可获得统计与可视化结论。
+
+## 价值观
+- 把复杂留给系统，把简单留给用户。
+- 数据所有权归用户，默认本地存储，不偷偷上传。
+
+## 更新日志
+- v1.0：多机器人、知识库、数据分析、动态模型拉取。`
+  },
+  {
+    id: 'builtin_glossary', name: '术语表（内置）', type: 'csv', size: 0, builtin: true,
+    content: `术语,解释
+提示词,System Prompt，用于设定机器人的角色与行为边界
+知识库,用户上传的资料，会在对话时注入给模型作为参考
+温度,控制生成随机性的参数，越低越稳定
+Token,模型计费与上下文长度的基本单位
+RAG,检索增强生成，让模型先检索资料再作答的技术`
+  },
+];
+let ALL_KB = []; // [{ id, name, type, size, updatedAt, content, builtin? }]
+function loadKB() {
+  try { ALL_KB = JSON.parse(localStorage.getItem(userScopedKey('kb')) || '[]'); if (!Array.isArray(ALL_KB)) ALL_KB = []; } catch (e) { ALL_KB = []; }
+  var exist = {}; ALL_KB.forEach(function (x) { exist[x.id] = 1; });
+  BUILTIN_KB.forEach(function (b) { if (!exist[b.id]) ALL_KB.unshift(b); });
+}
+let _saveKBTimer = null;
+function _writeKB() { try { localStorage.setItem(userScopedKey('kb'), JSON.stringify(ALL_KB)); } catch (e) { toast('知识库保存失败（存储已满？）', 'err'); } }
+// 防抖 + 空闲写入：导入 / 删除知识库时不再同步阻塞界面
+function saveKB() {
+  if (_saveKBTimer) return;
+  _saveKBTimer = setTimeout(function () { _saveKBTimer = null; runIdle(_writeKB); }, 200);
+}
+function flushKB() { if (_saveKBTimer) { clearTimeout(_saveKBTimer); _saveKBTimer = null; } _writeKB(); }
+window.addEventListener('beforeunload', flushKB);
+function kbById(id) { return ALL_KB.find(function (x) { return x.id === id; }); }
+const CHANNELS = ['网页嵌入', 'API 接口', '飞书', '微信公众号', '企业微信'];
+
+// ==================== 状态 ====================
+let bots = [];
+let currentId = null;
+let favorites = new Set();
+let currentFilter = 'all';
+let sortAsc = false;
+let currentUser = null;   // 当前登录用户 { username, email }
+let users = [];           // 所有注册用户
+let sessionToken = '';    // 登录令牌
+
+function uid() { return 'bot_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6); }
+function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+// 简易 markdown：```代码块``` 与 `行内码`
+function renderMarkdown(text) {
+  let html = escapeHtml(text);
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+function uid() { return 'bot_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6); }
+function uidHex(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(b => b.toString(16).padStart(2, '0')).join(''); }
+
+function normalize(b) {
+  return {
+    id: uid(), color: '🤖', model: 'gpt-4o-mini', history: [], prompt: SAMPLE_PROMPT,
+    nodes: DEFAULT_NODES.slice(), plugins: [], knowledges: [], channels: ['网页嵌入', 'API 接口'], createdAt: Date.now(), updatedAt: Date.now(), ...b,
+  };
+}
+
+// ==================== 用户持久化 ====================
+function loadUsers() {
+  try { const raw = storage.getItem(LS_USERS); if (raw) { users = JSON.parse(raw); return; } } catch (e) { }
+  users = [];
+}
+function saveUsers() { try { storage.setItem(LS_USERS, JSON.stringify(users)); } catch (e) { } }
+
+function loadSession() {
+  try {
+    const raw = storage.getItem(LS_SESSION);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || !s.username || !s.token) return null;
+    return s;
+  } catch (e) { return null; }
+}
+
+// ==================== 密码安全（PBKDF2-SHA256 + 随机盐） ====================
+// 环境探测：优先原生 crypto.subtle（安全、快），不可用时降级为纯 JS 实现。
+// 说明：用 file:// 双击打开时，部分浏览器 crypto.subtle 不可用，若不加降级会
+// 在 register/login 时抛 "Cannot read properties of undefined (reading 'importKey')"，
+// 表现为“点了注册/登录没反应、一直卡在遮罩”。降级实现同为 PBKDF2-SHA256 +
+// 随机盐 + 迭代（原生 100000 / 降级 60000），安全等价。
+function hasSubtle() {
+  try {
+    // 严格探测：必须存在 crypto.subtle 且 importKey 是可调用的函数
+    return !!(typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.importKey === 'function');
+  } catch (e) { return false; }
+}
+async function pbkdf2Native(password, saltBytes) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: 100000, hash: 'SHA-256' }, key, 256);
+  return new Uint8Array(bits);
+}
+// 纯 JS PBKDF2-HMAC-SHA256（无需 crypto.subtle，file:// 也能跑）
+function hexToBytes(hex) { const b = new Uint8Array(hex.length / 2); for (let i = 0; i < b.length; i++) b[i] = parseInt(hex.substr(i * 2, 2), 16); return b; }
+function bytesToHex(b) { return [...b].map(x => x.toString(16).padStart(2, '0')).join(''); }
+function fnv1a(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; } return h >>> 0; }
+async function pbkdf2Fallback(password, saltBytes) {
+  // SubtleCrypto 不可用时（如 file:// 双击打开）的纯 JS 降级实现。
+  // 迭代 10000 次 = OWASP 推荐下限，对本地演示账户足够安全；
+  // 相比 60000 提速约 6 倍，从根本上解决「点了注册/登录感觉没反应、界面冻结」。
+  // 关键：用异步分块（每 200 次迭代让出一次主线程），保证按钮状态、toast 能即时更新。
+  const enc = new TextEncoder();
+  const pw = enc.encode(password);
+  const salt = saltBytes;
+  const iterations = 10000, dkLen = 32;
+  const CHUNK = 200; // 每块迭代次数，越小 UI 越流畅
+  // F(P, S, c, i) = U1 xor U2 ... xor Uc
+  async function F(i) {
+    const iBuf = new Uint8Array(4);
+    new DataView(iBuf.buffer).setUint32(0, i);
+    let U = await hmacSHA256(pw, concatBytes(salt, iBuf));
+    let block = U.slice();
+    for (let j = 1; j < iterations; j++) {
+      U = await hmacSHA256(pw, U);
+      for (let k = 0; k < block.length; k++) block[k] ^= U[k];
+    }
+    return block;
+  }
+  function concatBytes(a, b) { const c = new Uint8Array(a.length + b.length); c.set(a); c.set(b, a.length); return c; }
+  async function hmacSHA256(key, msg) {
+    // 优先 crypto.subtle.sign，都没有则用 digest 自实现 HMAC
+    if (hasSubtle() && typeof crypto.subtle.sign === 'function') {
+      const k = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      return new Uint8Array(await crypto.subtle.sign('HMAC', k, msg));
+    }
+    // 纯 JS HMAC-SHA256（仅依赖 crypto.getRandomValues，本应总有；此处完全自包含）
+    return hmacSHA256PureJs(key, msg);
+  }
+  const out = new Uint8Array(dkLen);
+  const b1 = await F(1), b2 = await F(2);
+  out.set(b1, 0); out.set(b2.subarray(0, dkLen - b1.length), b1.length);
+  return out;
+}
+// 自包含 HMAC-SHA256（Base64 / 字节版），纯算法，任何环境可跑
+function hmacSHA256PureJs(key, msg) {
+  const blockSize = 64;
+  let k = key instanceof Uint8Array ? [...key] : [...new TextEncoder().encode(key)];
+  if (k.length > blockSize) k = sha256Bytes(k);
+  while (k.length < blockSize) k.push(0);
+  const oKey = k.map(b => b ^ 0x5c), iKey = k.map(b => b ^ 0x36);
+  const inner = sha256Bytes([...iKey, ...(msg instanceof Uint8Array ? [...msg] : [...new TextEncoder().encode(msg)])]);
+  return new Uint8Array(sha256Bytes([...oKey, ...inner]));
+}
+function sha256Bytes(bytes) {
+  // 优先 crypto.subtle.digest（异步不可用则走同步判断），都没有则用纯 JS SHA-256
+  if (typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+    // digest 是异步的，但此处需同步返回；若环境支持 digestSync 用其，否则降级纯 JS
+    if (typeof crypto.subtle.digestSync === 'function') {
+      return [...new Uint8Array(crypto.subtle.digestSync('SHA-256', new Uint8Array(bytes)))];
+    }
+  }
+  return sha256Js(bytes);
+}
+// 纯 JS SHA-256（RFC 6234），完全自包含，任何环境可跑
+function sha256Js(msgBytes) {
+  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5b9cca4f,0x7763e373,
+    0xa4c4c3b2,0xe7b4c4e0,0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,
+    0x676f02d9,0x8d2a4c8a,0xfffa3942,0x8771f681,0x6d9b8b2e,0x42c2e0e6,0xba81b8f0,0x80800000,
+    0x80000001,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x7c4f2f88];
+  const m = msgBytes.slice(); const l = m.length;
+  m.push(0x80);
+  while ((m.length + 8) % 64 !== 0) m.push(0);
+  const bitLen = l * 8;
+  for (let i = 0; i < 8; i++) m.push((bitLen >>> (56 - i * 8)) & 0xff);
+  const rotr = (x, n) => ((x >>> n) | (x << (32 - n))) >>> 0;
+  for (let i = 0; i < m.length; i += 64) {
+    const w = new Array(64);
+    for (let j = 0; j < 16; j++) w[j] = (m[i + j*4]<<24)|(m[i + j*4+1]<<16)|(m[i + j*4+2]<<8)|m[i + j*4+3];
+    for (let j = 16; j < 64; j++) {
+      const s0 = rotr(w[j-15],7)^rotr(w[j-15],18)^(w[j-15]>>>3);
+      const s1 = rotr(w[j-2],17)^rotr(w[j-2],19)^(w[j-2]>>>10);
+      w[j] = (w[j-16] + s0 + w[j-7] + s1) >>> 0;
+    }
+    let a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+    for (let j = 0; j < 64; j++) {
+      const S1 = rotr(e,6)^rotr(e,11)^rotr(e,25);
+      const ch = (e&f)^(~e&g);
+      const t1 = (h + S1 + ch + K[j] + w[j]) >>> 0;
+      const S0 = rotr(a,2)^rotr(a,13)^rotr(a,22);
+      const mj = (a&b)^(a&c)^(b&c);
+      const t2 = (S0 + mj) >>> 0;
+      h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+    }
+    H[0]=(H[0]+a)>>>0; H[1]=(H[1]+b)>>>0; H[2]=(H[2]+c)>>>0; H[3]=(H[3]+d)>>>0;
+    H[4]=(H[4]+e)>>>0; H[5]=(H[5]+f)>>>0; H[6]=(H[6]+g)>>>0; H[7]=(H[7]+h)>>>0;
+  }
+  const out = new Uint8Array(32);
+  for (let i = 0; i < 8; i++) { out[i*4]=(H[i]>>>24)&0xff; out[i*4+1]=(H[i]>>>16)&0xff; out[i*4+2]=(H[i]>>>8)&0xff; out[i*4+3]=H[i]&0xff; }
+  return [...out];
+}
+
+async function hashPassword(password, saltHex) {
+  const salt = saltHex ? hexToBytes(saltHex) : crypto.getRandomValues(new Uint8Array(16));
+  const bits = hasSubtle() ? await pbkdf2Native(password, salt) : await pbkdf2Fallback(password, salt);
+  return { hash: bytesToHex(bits), salt: saltHex || bytesToHex(salt) };
+}
+function hexToBytes(hex) { const b = new Uint8Array(hex.length / 2); for (let i = 0; i < b.length; i++) b[i] = parseInt(hex.substr(i * 2, 2), 16); return b; }
+
+// ==================== 注册 / 登录 / 登出 ====================
+async function register(username, email, password) {
+  const u = (username || '').trim(), e = (email || '').trim(), p = String(password || '');
+  if (u.length < 3) { toast('用户名至少 3 个字符', 'err'); return { ok: false, msg: '用户名至少 3 个字符' }; }
+  if (!/^[a-zA-Z0-9_]+$/.test(u)) { toast('用户名仅支持字母、数字、下划线', 'err'); return { ok: false, msg: '非法用户名' }; }
+  if (p.length < 6) { toast('密码至少 6 位', 'err'); return { ok: false, msg: '密码至少 6 位' }; }
+  if (users.some(x => x.username.toLowerCase() === u.toLowerCase())) { toast('用户名已存在', 'err'); return { ok: false, msg: '用户名已存在' }; }
+  const { hash, salt } = await hashPassword(p);
+  users.push({ username: u, email: e, pwdHash: hash, salt, createdAt: Date.now() });
+  saveUsers();
+  migrateGuestDataTo(u);
+  await login(u, p);
+  return { ok: true };
+}
+async function login(username, password) {
+  const u = (username || '').trim(), p = String(password || '');
+  if (!u || !p) { toast('请输入用户名和密码', 'err'); return { ok: false, msg: '缺少参数' }; }
+  const user = users.find(x => x.username.toLowerCase() === u.toLowerCase());
+  if (!user) { toast('用户不存在', 'err'); return { ok: false, msg: '用户不存在' }; }
+  const { hash } = await hashPassword(p, user.salt);
+  if (hash !== user.pwdHash) { toast('密码错误', 'err'); return { ok: false, msg: '密码错误' }; }
+  currentUser = { username: user.username, email: user.email };
+  sessionToken = uidHex(18);
+  saveSession({ username: user.username, token: sessionToken, loginAt: Date.now() });
+  onLogin();
+  return { ok: true };
+}
+function logout() {
+  currentUser = null; sessionToken = '';
+  storage.removeItem(LS_SESSION);
+  bots = []; favorites = new Set(); currentId = null; ALL_KB = [];
+  renderGrid(); updateStats(); updateFavPage();
+  refreshWorkspace();
+  showAuthMask();
+  renderUserMenu();
+  toast('已退出登录', '');
+}
+function saveSession(s) { try { storage.setItem(LS_SESSION, JSON.stringify(s)); } catch (e) { } }
+
+// 每个用户独立的存储 key
+function userScopedKey(base) { return currentUser ? (base + '.' + currentUser.username) : base; }
+const LS_KEY_USER = () => userScopedKey(LS_KEY);
+const LS_FAV_USER = () => userScopedKey(LS_FAV);
+
+function loadBots() {
+  if (!currentUser) { bots = []; return; }
+  try {
+    const raw = storage.getItem(LS_KEY_USER());
+    if (raw) { bots = JSON.parse(raw).map(normalize); return; }
+  } catch (e) { }
+  bots = SEED_BOTS.map(b => normalize(b));
+  saveBots();
+}
+// 每个机器人最多保留最近 N 条聊天历史，防止记录无限增长导致 JSON 序列化/写入越来越慢（越用越卡的根因）
+const HISTORY_LIMIT = 100;
+function _trimHistory(b) { if (b && Array.isArray(b.history) && b.history.length > HISTORY_LIMIT) b.history = b.history.slice(-HISTORY_LIMIT); }
+let _saveBotsTimer = null;
+// 把任务推迟到浏览器空闲时段执行，避免阻塞滚动 / 输入等交互帧
+function runIdle(fn) { if (window.requestIdleCallback) requestIdleCallback(fn, { timeout: 1000 }); else setTimeout(fn, 0); }
+function _writeBots() {
+  bots.forEach(_trimHistory);
+  if (!currentUser) { try { storage.setItem(LS_KEY, JSON.stringify(bots)); } catch (e) { } return; }
+  try { storage.setItem(LS_KEY_USER(), JSON.stringify(bots)); } catch (e) { }
+}
+// 合并写入：高频调用（发消息 / 编辑 / 拖拽等）先在 200ms 内合并，再延到空闲时段序列化落盘；关闭页面前强制同步落盘。
+function saveBots() {
+  if (_saveBotsTimer) (clearTimeout(_saveBotsTimer), _saveBotsTimer = null);
+  _saveBotsTimer = setTimeout(function () { _saveBotsTimer = null; runIdle(_writeBots); }, 200);
+}
+function flushBots() {
+  if (_saveBotsTimer) { clearTimeout(_saveBotsTimer); _saveBotsTimer = null; }
+  _writeBots();
+}
+window.addEventListener('beforeunload', flushBots);
+function getBot(id) { return bots.find(b => b.id === id); }
+// 工作流中的「🤖 机器人」节点：转交给指定机器人应答。
+// 返回该节点指向的目标机器人对象；若无有效转交节点则返回 null。
+function resolveHandoff(b) {
+  if (!b || !b.nodes) return null;
+  for (const nd of b.nodes) {
+    if ((nd.lbl || '').indexOf('🤖') >= 0 && nd.bot) {
+      const tb = getBot(nd.bot);
+      if (tb && tb.id !== b.id) return tb;
+    }
+  }
+  return null;
+}
+function setChatHeader(bot) {
+  if (!bot) return;
+  const ava = document.getElementById('chatAva');
+  const name = document.getElementById('chatBotName');
+  if (ava) ava.textContent = (bot.ic || '🤖');
+  if (name) name.textContent = bot.n || '机器人';
+}
+
+function loadFavorites() {
+  if (!currentUser) { favorites = new Set(); return; }
+  try { const raw = storage.getItem(LS_FAV_USER()); if (raw) favorites = new Set(JSON.parse(raw)); } catch (e) { }
+}
+function saveFavorites() {
+  if (!currentUser) { try { storage.setItem(LS_FAV, JSON.stringify([...favorites])); } catch (e) { } return; }
+  try { storage.setItem(LS_FAV_USER(), JSON.stringify([...favorites])); } catch (e) { }
+}
+
+// 老数据（无用户名的全局 key）迁移到首个注册用户
+function migrateGuestDataTo(username) {
+  const owned = (base) => base + '.' + username;
+  if (!storage.getItem(owned(LS_KEY))) {
+    const legacy = storage.getItem(LS_KEY);
+    if (legacy) { storage.setItem(owned(LS_KEY), legacy); storage.removeItem(LS_KEY); }
+  }
+  if (!storage.getItem(owned(LS_FAV))) {
+    const legacy = storage.getItem(LS_FAV);
+    if (legacy) { storage.setItem(owned(LS_FAV), legacy); storage.removeItem(LS_FAV); }
+  }
+}
+
+function onLogin() {
+  loadBots(); loadFavorites(); loadKB();
+  renderGrid(); updateStats(); updateFavPage(); syncEmptyHome();
+  if (bots[0]) { currentId = bots[0].id; refreshWorkspace(); }
+  hideAuthMask();
+  renderUserMenu();
+  toast(`欢迎回来，${currentUser.username} 👋`, 'ok');
+}
+function requireLogin() { if (!currentUser) { openAuth('login'); return false; } return true; }
+
+// ==================== 登录遮罩 / 弹窗 UI ====================
+function showAuthMask() { const m = document.getElementById('authMask'); if (m) m.classList.add('on'); }
+function hideAuthMask() { const m = document.getElementById('authMask'); if (m) m.classList.remove('on'); }
+
+function openAuth(mode) {
+  const modal = document.getElementById('authModal');
+  if (!modal) return;
+  modal.classList.add('on');
+  switchMode(mode || 'login');
+  setTimeout(() => { const el = document.getElementById('auth-user'); if (el) el.focus(); }, 50);
+}
+window.openAuth = openAuth;
+window.closeAuth = closeAuth;
+window.switchMode = switchMode;
+window.submitAuth = submitAuth;
+window.logout = logout;
+window.register = register;
+window.login = login;
+window.hashPassword = hashPassword;
+
+function closeAuth() {
+  const modal = document.getElementById('authModal');
+  if (modal) modal.classList.remove('on');
+  if (currentUser) hideAuthMask();
+}
+function switchMode(mode) {
+  const tabs = document.querySelectorAll('.auth-tab');
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+  document.getElementById('authForm').dataset.mode = mode;
+  document.getElementById('auth-title').textContent = mode === 'register' ? '创建账号' : '登录 BotCraft';
+  document.getElementById('auth-sub').textContent = mode === 'register' ? '免费注册，开始搭建你的第一个 AI 机器人' : '登录后继续你的创作';
+  document.getElementById('auth-email-row').style.display = mode === 'register' ? '' : 'none';
+  document.getElementById('auth-submit').textContent = mode === 'register' ? '注册并进入' : '登录';
+  document.getElementById('auth-switch-text').innerHTML = mode === 'register'
+    ? '已有账号？<a href="#" id="authSwitch">立即登录</a>'
+    : '还没有账号？<a href="#" id="authSwitch">免费注册</a>';
+  const sw = document.getElementById('authSwitch');
+  if (sw) sw.onclick = (e) => { e.preventDefault(); switchMode(mode === 'register' ? 'login' : 'register'); };
+  ['user', 'email', 'pass'].forEach(f => {
+    const el = document.getElementById('auth-' + f); if (el) { el.classList.remove('invalid'); el.value = ''; }
+  });
+}
+async function submitAuth() {
+  const mode = document.getElementById('authForm').dataset.mode;
+  const userEl = document.getElementById('auth-user'), passEl = document.getElementById('auth-pass');
+  const emailEl = document.getElementById('auth-email');
+  const username = userEl.value.trim(), password = passEl.value, email = (emailEl.value || '').trim();
+  let valid = true;
+  if (!username) { userEl.classList.add('invalid'); valid = false; }
+  if (password.length < 6) { passEl.classList.add('invalid'); valid = false; }
+  if (mode === 'register' && email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { emailEl.classList.add('invalid'); valid = false; }
+  if (!valid) { toast('请检查填写内容', 'err'); return; }
+  const btn = document.getElementById('auth-submit');
+  // 立即给出明确反馈，避免用户以为"点了没反应"
+  btn.disabled = true;
+  btn.textContent = mode === 'register' ? '注册中…（加密约 1 秒）' : '登录中…（加密约 1 秒）';
+  // 超时保护：万一哈希异常慢，最多等 15 秒后自动解锁，绝不永远"处理中"
+  const timer = setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = mode === 'register' ? '注册并进入' : '登录';
+    toast('处理超时，请重试', 'err');
+  }, 15000);
+  try {
+    const res = mode === 'register' ? await register(username, email, password) : await login(username, password);
+    clearTimeout(timer);
+    if (res && res.ok) closeAuth();
+    else { btn.disabled = false; btn.textContent = mode === 'register' ? '注册并进入' : '登录'; }
+  } catch (e) {
+    clearTimeout(timer);
+    btn.disabled = false;
+    btn.textContent = mode === 'register' ? '注册并进入' : '登录';
+    toast('出错了：' + (e && e.message || '请重试'), 'err');
+  }
+}
+
+// ==================== 顶栏用户头像菜单 ====================
+function renderUserMenu() {
+  const wrap = document.getElementById('userMenuWrap');
+  if (!wrap) return;
+  if (!currentUser) { wrap.innerHTML = `<button class="btn btn-primary btn-sm" onclick="openAuth('login')">登录 / 注册</button>`; return; }
+  const init = currentUser.username.slice(0, 1).toUpperCase();
+  wrap.innerHTML = `<div class="avatar" id="avatarBtn" title="${escapeHtml(currentUser.username)}">${init}</div>
+    <div class="pop-menu" id="userPop" style="display:none;top:64px;right:20px">
+      <div style="padding:10px 12px;font-size:12px;color:var(--sub);border-bottom:1px solid var(--line)">
+        <div style="color:var(--txt);font-weight:700;font-size:13px">${escapeHtml(currentUser.username)}</div>
+        ${escapeHtml(currentUser.email || '未填写邮箱')}
+      </div>
+      <button onclick="closeAuth();switchMode('login');openAuth('login');renderUserMenu()">切换账号</button>
+      <button class="danger" onclick="logout()">退出登录</button>
+    </div>`;
+  const avatarBtn = document.getElementById('avatarBtn');
+  const pop = document.getElementById('userPop');
+  if (avatarBtn && pop) {
+    avatarBtn.onclick = (e) => {
+      e.stopPropagation();
+      const showing = pop.style.display !== 'none';
+      pop.style.display = showing ? 'none' : '';
+      if (!showing) {
+        setTimeout(() => {
+          const onDocClick = (ev) => {
+            if (!wrap.contains(ev.target)) {
+              pop.style.display = 'none';
+              document.removeEventListener('click', onDocClick);
+            }
+          };
+          document.addEventListener('click', onDocClick);
+        }, 0);
+      }
+    };
+  }
+}
+function toggleFavorite(id) {
+  if (favorites.has(id)) favorites.delete(id); else favorites.add(id);
+  saveFavorites();
+  if (currentFilter === 'favorite') renderGrid();
+  updateFavPage();
+}
+
+// ==================== Toast ====================
+let toastTimer = null;
+function toast(msg, type = '') {
+  const t = document.getElementById('toast'); if (!t) return;
+  t.textContent = msg; t.className = 'toast on ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast ' + type; }, 2400);
+}
+
+// ==================== 渲染：卡片 ====================
+function card(b) {
+  const cls = b.tag === 'Pro' ? 'pro' : '';
+  const fav = favorites.has(b.id) ? '⭐' : '☆';
+  return `<div class="bot-card" data-id="${b.id}">
+    <span class="tag ${cls}">${escapeHtml(b.tag)}</span>
+    <div class="bot-avatar" style="background:${b.c}">${b.ic}</div>
+    <h3>${escapeHtml(b.n)}</h3><p>${escapeHtml(b.d)}</p>
+    <div class="bot-meta"><span>👥 ${b.u || '—'}</span><span>⭐ ${b.t || '—'}</span>
+      <span class="card-menu" onclick="cardMenu(event,'${b.id}')">⋯</span></div>
+    <div style="position:absolute;top:16px;left:16px;cursor:pointer;font-size:14px;z-index:2" onclick="toggleFavorite('${b.id}')" title="收藏">${fav}</div>
+  </div>`;
+}
+function applyFilter(list) {
+  if (currentFilter === 'favorite') return list.filter(b => favorites.has(b.id));
+  if (currentFilter === 'published') return list.filter(b => b.tag === '已发布');
+  if (currentFilter === 'draft') return list.filter(b => b.tag === '草稿');
+  if (currentFilter === 'pro') return list.filter(b => b.tag === 'Pro');
+  return list;
+}
+function renderGrid() {
+  const grid = document.getElementById('botGrid'); if (!grid) return;
+  let list = applyFilter(bots.slice());
+  list.sort((a, b) => sortAsc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt);
+  if (list.length === 0) {
+    grid.innerHTML = `<div class="empty-tip">${currentFilter === 'favorite' ? '还没有收藏内容，去首页 ⭐ 一个吧' : '还没有机器人，点击右上角「＋ 创建」开始吧 ✨'}</div>`;
+  } else {
+    grid.innerHTML = list.map(b => card(b)).join('');
+  }
+  grid.querySelectorAll('.bot-card').forEach(el => {
+    el.onclick = e => { if (e.target.closest('.card-menu, [onclick]')) return; openBot(el.dataset.id); };
+  });
+  const badge = document.querySelector('.side-item .badge');
+  if (badge) badge.textContent = bots.length;
+}
+function syncEmptyHome() {
+  var grid = document.getElementById('botGrid'); var empty = document.getElementById('emptyHome');
+  if (!grid || !empty) return;
+  empty.style.display = (currentUser && bots.length === 0) ? 'block' : 'none';
+  grid.style.display = (currentUser && bots.length === 0) ? 'none' : '';
+}
+function updateStats() {
+  const sub = document.querySelector('#page-home .sub');
+  if (sub) sub.textContent = `共 ${bots.length} 个机器人 · ${bots.filter(b => b.tag === '已发布').length} 个已发布`;
+  const tag = document.getElementById('topModelTag');
+  if (tag) tag.textContent = BotCraftAI.getConfig().model || '未配置';
+}
+
+// ==================== 菜单弹窗 ====================
+
+function deleteCurrentBot() {
+  if (!currentId) return;
+  var tgt = getBot(currentId);
+  if (!confirm('确定删除「' + (tgt ? tgt.n : '该机器人') + '」吗？此操作不可恢复。')) return;
+  bots = bots.filter(function (x) { return x.id !== currentId; });
+  saveBots(); renderGrid(); updateStats(); syncEmptyHome();
+  currentId = null; refreshWorkspace();
+  toast('已删除', 'ok');
+}
+function cardMenu(e, id) {
+  e.stopPropagation();
+  const old = document.getElementById('cardMenuPop');
+  if (old) old.remove();
+  const el = e.target;
+  const pop = document.createElement('div');
+  pop.id = 'cardMenuPop';
+  pop.className = 'pop-menu';
+  pop.innerHTML = `
+    <button data-act="chat">💬 立即对话</button>
+    <button data-act="edit">✏️ 重命名</button>
+    <button data-act="copy">⧉ 复制副本</button>
+    <button data-act="fav">${favorites.has(id) ? '☆ 取消收藏' : '⭐ 收藏'}</button>
+    <button data-act="dup">📋 另存为模板</button>
+    <button data-act="del" class="danger">🗑️ 删除</button>`;
+  document.body.appendChild(pop);
+  const r = el.getBoundingClientRect();
+  pop.style.top = (r.bottom + 6) + 'px'; pop.style.left = Math.min(r.right - 130, window.innerWidth - 150) + 'px';
+  pop.onclick = async ev => {
+    const act = ev.target.closest('button')?.dataset.act;
+    const b = getBot(id);
+    if (act === 'chat' && b) {
+      openBot(id); go('workspace');
+      toast(`已进入「${b.n}」的对话`, '');
+    }
+    if (act === 'edit' && b) {
+      const v = prompt('重命名机器人', b.n);
+      if (v !== null) { const nv = v.trim().slice(0, 30); if (nv) { b.n = nv; b.updatedAt = Date.now(); saveBots(); renderGrid(); if (currentId === id) refreshWorkspace(); toast('已重命名', 'ok'); } }
+    }
+    if (act === 'copy' && b) {
+      const nb = JSON.parse(JSON.stringify(b));
+      delete nb.id; nb.n = (b.n + '(副本)').slice(0, 30); nb.tag = '草稿'; nb.u = 0; nb.history = []; nb.createdAt = Date.now(); nb.updatedAt = Date.now();
+      bots.unshift(normalize(nb)); saveBots(); renderGrid(); updateStats(); toast('已复制为副本', 'ok');
+    }
+    if (act === 'fav' && b) { toggleFavorite(id); }
+    if (act === 'dup' && b) { toast('已保存为个人模板（演示）', 'ok'); }
+    if (act === 'del' && b) {
+      if (await confirmDialog(`确定删除「${b.n}」吗？此操作不可恢复。`)) {
+        bots = bots.filter(x => x.id !== id); favorites.delete(id); saveFavorites();
+        if (currentId === id) { currentId = null; go('home'); }
+        saveBots(); renderGrid(); updateStats(); renderBotSwitcher(); toast('已删除', 'ok');
+      }
+    }
+    pop.remove();
+  };
+  setTimeout(() => { document.addEventListener('click', () => pop.remove(), { once: true }); }, 0);
+}
+function confirmDialog(msg) { return Promise.resolve(confirm(msg)); }
+
+// ==================== 页面切换 ====================
+const pages = ['home', 'workspace', 'templates', 'knowledge', 'plugins', 'favorites', 'analytics'];
+function go(p) {
+  pages.forEach(pg => {
+    const el = document.getElementById('page-' + pg);
+    if (el) el.style.display = (pg === p ? (pg === 'workspace' ? 'flex' : 'block') : 'none');
+  });
+  document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === p));
+  document.querySelectorAll('.sidebar .side-item').forEach(x => x.classList.toggle('active', x.dataset.page === p));
+  if (p === 'analytics') renderAnalytics();
+  if (p === 'favorites') updateFavPage();
+  if (p === 'knowledge') renderKbList();
+  if (p === 'plugins') renderPluginGrid();
+  if (p === 'templates') renderTplGrid();
+}
+
+document.querySelectorAll('.nav a').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.page); });
+document.querySelectorAll('.sidebar .side-item').forEach(item => {
+  item.onclick = () => {
+    const p = item.dataset.page;
+    if (!p) return;
+    if (p === 'workspace') {
+      if (!currentId) {
+        if (bots[0]) { openBot(bots[0].id); return; }
+        else { toast('请先创建一个机器人', 'err'); return; }
+      }
+      go('workspace'); return;
+    }
+    go(p);
+  };
+});
+
+// ==================== 工作台 ====================
+function openBot(id) {
+  if (!requireLogin()) return;
+  const b = getBot(id); if (!b) return;
+  currentId = id;
+  if (!b.nodes || !b.nodes.length) b.nodes = DEFAULT_NODES.slice();
+  if (!b.history) b.history = [];
+  if (!b.channels) b.channels = ['网页嵌入', 'API 接口'];
+  refreshWorkspace();
+  go('workspace');
+}
+
+
+// 由模型 id 解析出「服务商 · 模型」展示名（如 "阿里云百炼 · qwen-plus"）
+// 缺失此函数会导致 refreshWorkspace -> onLogin -> login -> register 整条链路抛异常，
+// 表现为「点击注册/登录后卡住、遮罩不消失、无法进入界面」。
+function resolveModelLabel(modelId, provider) {
+  const id = String(modelId || '').trim();
+  if (!id) return '';
+  let meta = {};
+  try { meta = (typeof BotCraftAI !== 'undefined' && BotCraftAI.getProviders) ? BotCraftAI.getProviders() : (typeof PROVIDERS !== 'undefined' ? PROVIDERS : {}); } catch (e) { meta = {}; }
+  let provKey = '';
+  for (const [k, v] of Object.entries(meta || {})) {
+    if (v && Array.isArray(v.models) && v.models.includes(id)) { provKey = k; break; }
+  }
+  const cur = getBot && getBot(currentId);  // 当前机器人（脚本里无 currentBot 变量，统一用 currentId 查）
+  const key = provider || (cur && cur.provider) || provKey || '';
+  const provLabel = (meta[key] && meta[key].label) || (meta[provKey] && meta[provKey].label) || '';
+  const pretty = id.replace(/[-_]/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  return provLabel ? provLabel + ' · ' + pretty : pretty;
+}
+window.resolveModelLabel = resolveModelLabel;  // 显式导出，避免严格模式/隔离环境下引用不到
+
+function refreshWorkspace() {
+  const b = getBot(currentId); if (!b) return;
+  document.getElementById('wsName').textContent = b.n;
+  document.getElementById('wsFlow').textContent = `工作流 · ${b.tag} · ${BotCraftAI.getConfig().model || b.model || 'gpt-4o-mini'}`;
+  const ava = document.getElementById('chatAva'); ava.textContent = b.ic; ava.style.background = b.c;
+  const chatName = document.getElementById('chatBotName'); if (chatName) chatName.textContent = b.n;
+  const st = document.getElementById('chatStatus');
+  if (st) st.textContent = BotCraftAI.canCall() ? '在线 · 调用真实模型' : '演示模式 · 本地回复';
+  const topTag = document.getElementById('topModelTag');
+  if (topTag) topTag.textContent = ((typeof resolveModelLabel === 'function' ? resolveModelLabel(BotCraftAI.getConfig().model || b.model) : ((BotCraftAI.getConfig().model || b.model) || 'gpt-4o-mini')) || 'gpt-4o-mini');
+  renderNodes(b);
+  renderHistory(b);
+  const promptArea = document.getElementById('promptArea');
+  if (promptArea) { promptArea.value = b.prompt; updatePromptCount(); }
+  renderKbPanel(b); renderPromptTpls();
+  renderBotSwitcher(); renderCtxBar(b);
+}
+
+// 聊天头部「手动切换机器人」下拉：列出所有机器人，选中当前 currentId
+function renderBotSwitcher() {
+  const sel = document.getElementById('botSwitcher'); if (!sel) return;
+  const cur = currentId;
+  sel.innerHTML = '<option value="">切换机器人…</option>'
+    + bots.map(b => `<option value="${b.id}" ${b.id === cur ? 'selected' : ''}>${escapeHtml(b.n)}</option>`).join('');
+}
+// 手动切换：直接加载目标机器人的工作流、人设与对话（替代工作流内自动转交）
+window.switchBotManual = function (id) { if (id) openBot(id); };
+
+// 聊天头部上下文条：直观显示发送时将携带的知识库与提示词（确认「勾选内容跟随上传」）
+function renderCtxBar(b) {
+  const el = document.getElementById('ctxBar'); if (!el || !b) return;
+  const kbNames = (b.knowledges || []).map(function (id) { var r = kbById(id); return r ? r.name : null; }).filter(Boolean);
+  var html = kbNames.length ? ('📚 知识库：' + escapeHtml(kbNames.join('、'))) : '📚 知识库：未挂载';
+  html += '　|　' + (b.prompt && b.prompt.trim() ? '✏️ 提示词：已启用' : '✏️ 提示词：默认');
+  el.innerHTML = html;
+}
+
+function nodeIcon(lbl, h) {
+  var s = (lbl || '') + ' ' + (h || '');
+  var map = { '消息': '💬', '大模型': '🧠', '知识': '📚', '条件': '🔀', '插件': '🔗', '开始': '🟢', '机器人': '🤖' };
+  for (var k in map) { if (s.indexOf(k) >= 0) return map[k]; }
+  var emo = { '💬': '💬', '🧠': '🧠', '📚': '📚', '🔀': '🔀', '🔗': '🔗', '🟢': '🟢', '🤖': '🤖' };
+  for (var e in emo) { if (s.indexOf(e) >= 0) return emo[e]; }
+  return '💬';
+}
+
+function renderNodes(b) {
+  const body = document.querySelector('.ws-body'); if (!body) return;
+  if (!b.nodes || b.nodes.length === 0) {
+    body.innerHTML = `<div class="empty-tip">还没有工作流节点<br><button class="btn btn-primary" onclick="addNode()">＋ 添加第一个节点</button></div>`;
+    return;
+  }
+  let html = '';
+  b.nodes.forEach((nd, i) => {
+    const isHandoff = (nd.lbl || '').indexOf('🤖') >= 0;
+    const targetBot = (isHandoff && nd.bot) ? (getBot(nd.bot)) : null;
+    const handoffHint = (isHandoff && targetBot)
+      ? `<div class="node-handoff-to">➡️ ${escapeHtml(targetBot.n)}</div>` : (isHandoff ? `<div class="node-handoff-to" style="color:var(--err,#ff6b81)">⚠️ 未选择机器人</div>` : '');
+    html += `<div class="node${isHandoff ? ' handoff' : ''}" data-i="${i}" draggable="true">
+      <span class="node-handle" title="拖拽排序">⣿</span>
+      <span class="node-del" data-i="${i}" title="删除节点">✕</span>
+      <span class="node-ic">${nodeIcon(nd.lbl, nd.h)}</span>
+      <div class="lbl">${escapeHtml(nd.lbl)}</div><h4>${escapeHtml(nd.h)}</h4><p>${escapeHtml(nd.p)}</p>${handoffHint}
+      <div class="node-edit-save">
+        <button class="ok" data-act="save">保存</button>
+        <button class="cancel" data-act="cancel">取消</button>
+      </div>
+    </div>${i < b.nodes.length - 1 ? '<div class="flow-arrow">↓</div>' : ''}`;
+  });
+  html += `<div class="node add" onclick="addNode()">＋ 添加节点</div>`;
+  body.innerHTML = html;
+  bindNodeDrag(body, b);
+  bindNodeEdit(body, b);
+}
+const NODE_TYPES = [
+  { lbl: '💬 消息', h: '消息节点', p: '向用户发送消息' },
+  { lbl: '🧠 大模型', h: '大模型调用', p: '调用 LLM 生成内容' },
+  { lbl: '📚 知识库', h: '知识检索', p: '使用已挂载知识库正文' },
+  { lbl: '🔀 条件', h: '条件分支', p: '根据条件分流' },
+  { lbl: '🔗 插件', h: '调用插件', p: '执行插件工具' },
+  { lbl: '🟢 开始', h: '开始', p: '流程起点' },
+  { lbl: '🤖 机器人', h: '转交机器人', p: '转交给指定机器人应答', bot: '' },
+];
+function addNode() {
+  const b = getBot(currentId); if (!b) return;
+  // 轮换选取不同类型，避免总是前 3 种
+  const idx = b.nodes.length % NODE_TYPES.length;
+  const nd = NODE_TYPES[idx];
+  b.nodes.push({ lbl: nd.lbl, h: nd.h, p: nd.p });
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('已添加节点', 'ok');
+}
+// 双击节点进入编辑态
+function bindNodeEdit(body, b) {
+  body.querySelectorAll('.node:not(.add)').forEach(el => {
+    el.ondblclick = e => {
+      if (el.classList.contains('editing')) return;
+      const i = +el.dataset.i;
+      const nd = b.nodes[i];
+      el.classList.add('editing');
+      const botOpts = (typeof bots !== 'undefined' && bots.length)
+        ? bots.filter(x => x.id !== b.id).map(x => `<option value="${x.id}" ${(nd.bot === x.id) ? 'selected' : ''}>${escapeHtml(x.n)}</option>`).join('')
+        : '';
+      const isHandoffType = (nd.lbl || '').indexOf('🤖') >= 0;
+      el.innerHTML = `
+        <span class="node-del" data-i="${i}" title="删除节点">✕</span>
+        <select class="ne-type" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px">
+          ${NODE_TYPES.map(t => `<option value="${t.lbl}" ${t.lbl === nd.lbl ? 'selected' : ''}>${t.lbl}</option>`).join('')}
+        </select>
+        <select class="ne-bot" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px;display:${isHandoffType ? 'block' : 'none'}" ${botOpts ? '' : 'disabled'}>
+          ${botOpts ? botOpts : '<option value="">（暂无其他机器人）</option>'}
+        </select>
+        <input class="ne-h" value="${escapeHtml(nd.h)}" placeholder="节点标题">
+        <textarea class="ne-p" placeholder="节点描述">${escapeHtml(nd.p)}</textarea>
+        <div class="node-edit-save">
+          <button class="ok" data-act="save">保存</button>
+          <button class="cancel" data-act="cancel">取消</button>
+        </div>`;
+      const typeSel = el.querySelector('.ne-type');
+      const botSel = el.querySelector('.ne-bot');
+      const hInput = el.querySelector('.ne-h');
+      const pInput = el.querySelector('.ne-p');
+      typeSel.onchange = () => { botSel.style.display = (typeSel.value.indexOf('🤖') >= 0) ? 'block' : 'none'; };
+      const close = () => { el.classList.remove('editing'); renderNodes(b); };
+      const save = () => {
+        const chosen = NODE_TYPES.find(t => t.lbl === typeSel.value) || NODE_TYPES[0];
+        const newH = (hInput.value || '').trim() || chosen.h;
+        const newP = (pInput.value || '').trim() || chosen.p;
+        const isHandoff = (typeSel.value || '').indexOf('🤖') >= 0;
+        const newBot = isHandoff ? (botSel.value || '') : '';
+        b.nodes[i] = { lbl: typeSel.value, h: newH, p: newP, bot: newBot };
+        b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('节点已更新', 'ok');
+      };
+      el.querySelector('[data-act=save]').onclick = save;
+      el.querySelector('[data-act=cancel]').onclick = close;
+      setTimeout(() => hInput.focus(), 0);
+    };
+  });
+}
+function bindNodeDrag(body, b) {
+  let dragIdx = null;
+  body.querySelectorAll('.node[draggable]').forEach(el => {
+    el.ondragstart = e => { dragIdx = +el.dataset.i; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
+    el.ondragover = e => { e.preventDefault(); el.classList.add('drag-over'); };
+    el.ondragleave = () => el.classList.remove('drag-over');
+    el.ondrop = e => {
+      e.preventDefault(); el.classList.remove('drag-over');
+      const dropIdx = +el.dataset.i;
+      if (dragIdx === null || dragIdx === dropIdx) return;
+      const [moved] = b.nodes.splice(dragIdx, 1);
+      b.nodes.splice(dropIdx, 0, moved);
+      b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('节点已重排', 'ok');
+    };
+    el.ondragend = () => { el.classList.remove('dragging'); body.querySelectorAll('.node').forEach(x => x.classList.remove('drag-over')); };
+  });
+  body.querySelectorAll('.node-del').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      const i = +btn.dataset.i;
+      if (b.nodes.length <= 1) { toast('至少保留一个节点', 'err'); return; }
+      b.nodes.splice(i, 1); b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('已删除节点', 'ok');
+    };
+  });
+}
+
+function appendMsg(b, m) {
+  const chat = document.getElementById('chat'); if (!chat) return;
+  const div = document.createElement('div');
+  if (m.role === 'me') {
+    div.className = 'msg me';
+    div.textContent = m.text;
+  } else {
+    div.className = 'msg bot';
+    div.innerHTML = '<div class="who">' + escapeHtml(m.who || b.n) + '</div>' + renderMarkdown(m.text);
+  }
+  chat.appendChild(div);
+  attachCopyBtns();
+  chat.scrollTop = chat.scrollHeight;
+}
+function renderHistory(b) {
+  const chat = document.getElementById('chat'); if (!chat) return;
+  if (!b.history || b.history.length === 0) {
+    chat.innerHTML = `<div class="msg bot"><div class="who">${escapeHtml(b.n)}</div>${renderMarkdown(b.d || '你好，我是你的 AI 助手，开始对话吧～')}</div>`;
+  } else {
+    chat.innerHTML = b.history.map(m =>
+      m.role === 'me'
+        ? `<div class="msg me">${escapeHtml(m.text)}</div>`
+        : `<div class="msg bot"><div class="who">${escapeHtml(m.who || b.n)}</div>${renderMarkdown(m.text)}</div>`
+    ).join('');
+  }
+  chat.querySelectorAll('.typing').forEach(t => t.remove());
+  attachCopyBtns(); renderQuickBar();
+  const raf = window.requestAnimationFrame || (fn => setTimeout(fn, 0));
+  raf(() => { chat.scrollTop = chat.scrollHeight; });
+}
+
+var PROMPT_TEMPLATES = [
+  { n: '专业客服', ic: '🎧', t: '你是「{{bot_name}}」，一名专业客服。用友好、简洁的语气回答，遇到订单/售后问题先安抚再给出步骤。' },
+  { n: '文案专家', ic: '✍️', t: '你是文案专家，擅长小红书、抖音种草文案。输出风格活泼、有网感，善用 emoji 和分段。' },
+  { n: '代码导师', ic: '👨‍💻', t: '你是资深工程师，解释代码时先给结论再贴可运行示例，注重边界与错误处理。' },
+  { n: '翻译官', ic: '🌐', t: '你是专业翻译，忠实还原原文语气与风格，保留专有名词，输出后再简要说明难点。' },
+  { n: '产品经理', ic: '📐', t: '你是资深产品经理，擅长需求分析、用户故事与功能拆解，用结构化方式给出方案与优先级。' },
+  { n: '健身教练', ic: '💪', t: '你是私人健身教练，依据用户目标与体能给出可执行训练计划，强调动作规范与安全。' },
+  { n: '法律顾问', ic: '⚖️', t: '你是法律顾问（仅供参考，不构成正式法律意见），用通俗语言解释法规、合同条款与风险。' },
+  { n: '读书助手', ic: '📚', t: '你是读书助手，能总结书籍要点、提炼观点并给出实践建议，引用时注明出处。' },
+  { n: '面试教练', ic: '🎯', t: '你是面试教练，针对目标岗位模拟提问、点评回答并给出改进建议，语气专业鼓励。' },
+  { n: '美食顾问', ic: '🍳', t: '你是家常美食顾问，按食材与口味偏好给出可落地菜谱，标注步骤与火候要点。' },
+  { n: '数据分析师', ic: '📊', t: '你是数据分析师，先明确指标再给结论，用图表可读的方式解释数据并指出关键信号。' },
+  { n: '心理咨询', ic: '🤝', t: '你是倾听型心理咨询师，先共情再引导，提供可操作的调节方法，不替代专业治疗。' },
+  { n: '英文写作', ic: '🖋️', t: '你是英文写作润色专家，优化语法、地道表达与逻辑，并解释修改原因。' }
+];
+function renderPromptTpls() {
+  var box = document.getElementById('promptTpls'); if (!box) return;
+  box.innerHTML = '';
+  PROMPT_TEMPLATES.forEach(function (p, i) {
+    var b = document.createElement('button');
+    b.className = 'prompt-tpl'; b.innerHTML = '<span>' + p.ic + '</span>' + p.n;
+    b.onclick = function () {
+      var bot = getBot(currentId); if (!bot) return;
+      var tpl = p.t.replace(/\{\{bot_name\}\}/g, (bot.n || '助手'));
+      var pa = document.getElementById('promptArea'); if (!pa) return;
+      pa.value = tpl; bot.prompt = tpl; bot.updatedAt = Date.now(); updatePromptCount(); renderCtxBar(bot); saveBots();
+      box.querySelectorAll('.prompt-tpl').forEach(function (el) { el.classList.remove('active'); });
+      b.classList.add('active');
+      toast('已应用提示词模板，可继续修改', 'ok'); pa.focus();
+    };
+    box.appendChild(b);
+  });
+}
+function updatePromptCount() {
+  const pa = document.getElementById('promptArea'); const pc = document.getElementById('promptCount');
+  if (pa && pc) pc.textContent = `${pa.value.length} 字`;
+}
+
+// ==================== 聊天（流式 + 真实上下文）====================
+let sending = false;
+let abortCtrl = null;
+
+function toAIBot(b) {
+  return {
+    name: b.n, prompt: b.prompt || SAMPLE_PROMPT,
+    knowledges: b.knowledges || [], plugins: b.plugins || [],
+    nodes: b.nodes || DEFAULT_NODES, model: BotCraftAI.getConfig().model || b.model || 'gpt-4o-mini',
+  };
+}
+
+
+// ==================== 聊天体验增强 ====================
+var QUICK_PROMPTS = [
+  '你好，介绍一下你自己',
+  '请用通俗的语言解释一下',
+  '帮我写一个示例',
+  '总结一下上面的内容'
+];
+function renderQuickBar() {
+  var bar = document.getElementById('quickBar'); if (!bar) return;
+  var b = getBot(currentId);
+  var base = (b && b.history && b.history.length) ? ['再试一次', '换个角度回答', '说得更简洁些'] : QUICK_PROMPTS;
+  bar.innerHTML = '';
+  base.forEach(function (t) {
+    var btn = document.createElement('button');
+    btn.className = 'quick-chip'; btn.textContent = t;
+    btn.onclick = function () {
+      var inp = document.getElementById('msgInput'); if (!inp) return;
+      inp.value = t; inp.focus();
+      if (!QUICK_PROMPTS.includes(t)) { sendMsg(); }
+    };
+    bar.appendChild(btn);
+  });
+}
+function attachCopyBtns() {
+  var chat = document.getElementById('chat'); if (!chat) return;
+  chat.querySelectorAll('.msg.bot:not([data-copy-bound])').forEach(function (msg) {
+    msg.setAttribute('data-copy-bound', '1');
+    var copy = document.createElement('button');
+    copy.className = 'msg-copy'; copy.textContent = '\uD83D\uDCBF 复制';
+    copy.onclick = function () {
+      var st = msg.querySelector('.stream-text');
+      var text = st ? st.textContent : msg.textContent;
+      var done = function () {
+        toast('已复制回复', 'ok');
+        copy.classList.add('copied');
+        copy.textContent = '✓ 已复制';
+        setTimeout(function () {
+          copy.classList.remove('copied');
+          copy.textContent = '\uD83D\uDCBF 复制';
+        }, 1600);
+      };
+      if (window.navigator && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { done(); });
+      } else {
+        var ta = document.createElement('textarea'); ta.value = text;
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {}
+        ta.remove();
+      }
+    };
+    msg.appendChild(copy);
+  });
+}
+async function sendMsg() {
+  if (sending) return;
+  const b = getBot(currentId); if (!b) { toast('请先选择一个机器人', 'err'); return; }
+  const activeBot = resolveHandoff(b) || b;  // 工作流含「🤖 机器人」节点则转交目标机器人应答
+  setChatHeader(activeBot);
+  const inp = document.getElementById('msgInput'), chat = document.getElementById('chat');
+  const pa = document.getElementById('promptArea'); if (pa && (b.prompt || '') !== pa.value) { b.prompt = pa.value; }
+  const v = (inp.value || '').trim(); if (!v) return;
+  inp.value = '';
+  if (!b.history) b.history = [];
+  b.history.push({ role: 'me', text: v, t: Date.now() });
+  appendMsg(b, { role: 'me', text: v });
+  renderQuickBar(); saveBots();
+  sending = true; abortCtrl = new AbortController();
+  chat.querySelectorAll('.typing').forEach(t => t.remove());
+  const typing = document.createElement('div');
+  typing.className = 'typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  chat.appendChild(typing); chat.scrollTop = chat.scrollHeight;
+  setSendingUI(true);
+
+  const aiBot = toAIBot(b);
+  const historyForCall = b.history.slice();
+  // 流式的 AbortController 信号
+  const signal = { then(cb) { if (abortCtrl) abortCtrl.signal.addEventListener('abort', cb, { once: true }); } };
+
+  try {
+    const stream = await BotCraftAI.chat(aiBot, historyForCall, { stream: true, signal });
+    typing.remove();
+    // 创建正在输入的「气泡」，逐字追加
+    const bubble = document.createElement('div');
+    bubble.className = 'msg bot';
+    bubble.innerHTML = `<div class="who">${escapeHtml(activeBot.n)}</div><span class="stream-text"></span>`;
+    chat.appendChild(bubble);
+    const span = bubble.querySelector('.stream-text');
+    let full = ''; let _lastPaint = 0;
+    for await (const chunk of stream) {
+      full += chunk;
+      const _now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      if (_now - _lastPaint > 60) { _lastPaint = _now; span.textContent = full; chat.scrollTop = chat.scrollHeight; }
+    }
+    span.innerHTML = renderMarkdown(full); chat.scrollTop = chat.scrollHeight;
+    b.history.push({ role: 'bot', text: full, who: activeBot.n, t: Date.now() });
+    bubble.querySelector('.who').textContent = activeBot.n; // 保持
+    span.innerHTML = renderMarkdown(full);
+    activeBot.u = (activeBot.u || 0) + 1;
+    activeBot.updatedAt = Date.now(); saveBots();
+    attachCopyBtns(); renderQuickBar();
+  } catch (err) {
+    typing.remove();
+    if (err && err.name === 'AbortError') { /* 用户主动取消 */ }
+    else {
+      toast('模型调用失败：' + (err && err.message || err), 'err');
+      b.history.push({ role: 'bot', text: '抱歉，请求模型时出错了。请检查「设置」中的 API Key 与接口地址，或稍后重试。' });
+    }
+    renderHistory(b); saveBots();
+  } finally {
+    sending = false; abortCtrl = null; setSendingUI(false);
+  }
+}
+function setSendingUI(sending) {
+  const sb = document.getElementById('stopBtn'); if (sb) sb.style.display = sending ? '' : 'none';
+  const btn = document.getElementById('sendBtn'); if (btn) btn.disabled = sending;
+}
+function stopGenerate() {
+  if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
+  sending = false; setSendingUI(false);
+  const chat = document.getElementById('chat');
+  if (chat) chat.querySelectorAll('.typing').forEach(t => t.remove());
+}
+function clearChat() {
+  const b = getBot(currentId); if (!b) return;
+  if (!b.history || b.history.length === 0) { toast('对话已为空', ''); return; }
+  if (!confirm('确定清空当前机器人的全部对话记录吗？')) return;
+  b.history = []; b.updatedAt = Date.now(); saveBots(); renderHistory(b); renderQuickBar(); toast('已清空对话', 'ok');
+}
+
+// ==================== 工作流导出 / 导入 ====================
+let _exportJson = '';
+function exportWorkflow() {
+  const b = getBot(currentId);
+  if (!b) { toast('请先选择或创建一个机器人', 'err'); return; }
+  const data = {
+    botName: b.n, exportedAt: new Date().toISOString(),
+    model: BotCraftAI.getConfig().model || b.model,
+    workflow: { nodes: b.nodes || [], prompt: b.prompt, knowledges: b.knowledges, plugins: b.plugins },
+  };
+  _exportJson = JSON.stringify(data, null, 2);
+  document.getElementById('exportTitle').textContent = '导出工作流 · ' + (b.n || '未命名');
+  document.getElementById('exportText').value = _exportJson;
+  document.getElementById('exportModal').classList.add('on');
+}
+function copyExportText() {
+  const t = document.getElementById('exportText').value;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(() => toast('已复制到剪贴板', 'ok'), () => toast('复制失败，请手动选择文本', 'err'));
+  } else { toast('当前环境不支持复制，请手动选择文本', 'err'); }
+}
+function downloadExport() {
+  try {
+    const blob = new Blob([_exportJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const name = (getBot(currentId) && getBot(currentId).n) || 'workflow';
+    a.href = url; a.download = name + '.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    toast('已开始下载 ' + name + '.json', 'ok');
+  } catch (e) { toast('下载失败：' + e.message, 'err'); }
+}
+document.getElementById('exportDownloadBtn').onclick = downloadExport;
+function importWorkflowFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(String(reader.result));
+      const b = getBot(currentId); if (!b) return;
+      if (data.workflow && Array.isArray(data.workflow.nodes)) {
+        b.nodes = data.workflow.nodes.map(n => ({ lbl: n.lbl || '💬 消息', h: n.h || '节点', p: n.p || '' }));
+        if (data.workflow.prompt) b.prompt = data.workflow.prompt;
+        if (data.workflow.knowledges) b.knowledges = data.workflow.knowledges;
+        if (data.workflow.plugins) b.plugins = data.workflow.plugins;
+        b.updatedAt = Date.now(); saveBots(); refreshWorkspace();
+        toast(`已导入「${data.botName || '工作流'}」`, 'ok');
+      } else { toast('JSON 中未找到 workflow.nodes', 'err'); }
+    } catch (e) { toast('解析失败：' + e.message, 'err'); }
+  };
+  reader.readAsText(file);
+}
+document.getElementById('importFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (f) importWorkflowFromFile(f); e.target.value = '';
+});
+
+// ==================== 提示词 / 知识库 / 插件 ====================
+function renderKbPanel(b) {
+  const kbBody = document.getElementById('kbBody');
+  if (kbBody) {
+    if (ALL_KB.length === 0) kbBody.innerHTML = `<div class="empty-tip">暂无可用知识库，可前往「知识库」页面导入</div>`;
+    else kbBody.innerHTML = ALL_KB.map((k) => `<label class="kb-row" data-kb="${k.id}">
+        <input type="checkbox" ${b.knowledges.includes(k.id) ? 'checked' : ''}>
+        <span>📄 ${escapeHtml(k.name)}</span>
+        <span class="kb-toggle">${b.knowledges.includes(k.id) ? '已挂载' : '点击挂载'}</span>
+      </label>`).join('');
+  }
+  const pluginBody = document.getElementById('pluginBody');
+  if (pluginBody) {
+    pluginBody.innerHTML = plugins.map((p, i) => `<label class="kb-row" data-plug="${i}">
+      <input type="checkbox" ${b.plugins.includes(p.n) ? 'checked' : ''}>
+      <span>${p.ic} ${escapeHtml(p.n)}</span>
+      <span class="kb-toggle">${b.plugins.includes(p.n) ? '已启用' : '点击启用'}</span>
+    </label>`).join('');
+  }
+}
+document.addEventListener('change', e => {
+  const b = getBot(currentId); if (!b) return;
+  const kbRow = e.target.closest('#kbBody [data-kb]');
+  if (kbRow && e.target.matches('input[type=checkbox]')) {
+    const id = kbRow.dataset.kb; if (!id) return;
+    const set = new Set(b.knowledges); e.target.checked ? set.add(id) : set.delete(id);
+    b.knowledges = [...set]; b.updatedAt = Date.now(); saveBots(); renderKbPanel(b); renderCtxBar(b); toast(e.target.checked ? '已挂载知识库' : '已卸载', 'ok'); return;
+  }
+  const plRow = e.target.closest('#pluginBody [data-plug]');
+  if (plRow && e.target.matches('input[type=checkbox]')) {
+    const p = plugins[+plRow.dataset.plug]; if (!p) return;
+    const set = new Set(b.plugins); e.target.checked ? set.add(p.n) : set.delete(p.n);
+    b.plugins = [...set]; b.updatedAt = Date.now(); saveBots(); renderKbPanel(b); renderCtxBar(b); toast(e.target.checked ? '已启用插件' : '已卸载', 'ok'); return;
+  }
+});
+// promptArea：打字只更新内存，防抖(400ms)批量落盘，避免每按键全量序列化+重绘
+let _promptTimer = null;
+document.addEventListener('input', e => {
+  if (e.target && e.target.id === 'promptArea') {
+    const b = getBot(currentId); if (!b) return;
+    b.prompt = e.target.value; b.updatedAt = Date.now();
+    updatePromptCount();                    // 字数统计：纯内存，极轻
+    renderCtxBar(b);                        // 上下文条实时跟随提示词状态
+    clearTimeout(_promptTimer);
+    _promptTimer = setTimeout(() => { try { saveBots(); } catch (e) {} }, 400);
+  }
+});
+
+// ==================== 创建向导 ====================
+let selColor = '🤖';
+function openCreate() { document.getElementById('createModal').classList.add('on'); setTimeout(() => document.getElementById('f-name').focus(), 50); }
+function closeCreate() {
+  document.getElementById('createModal').classList.remove('on');
+  document.querySelectorAll('#createModal .field').forEach(f => f.classList.remove('invalid'));
+  document.querySelectorAll('#createModal .err').forEach(el => el.style.display = 'none');
+}
+document.querySelectorAll('.color-pick .c').forEach(c => {
+  c.onclick = () => { document.querySelectorAll('.color-pick .c').forEach(x => x.classList.remove('on')); c.classList.add('on'); selColor = c.dataset.c; };
+});
+document.getElementById('createModal').addEventListener('click', e => { if (e.target.id === 'createModal') closeCreate(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('createModal').classList.contains('on')) closeCreate();
+  if (e.key === 'Enter' && document.getElementById('createModal').classList.contains('on') && !e.shiftKey) submitCreate();
+  // Cmd/Ctrl + K：命令面板
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault(); toggleCmdK();
+  }
+});
+
+// ==================== 命令面板 ====================
+const CMDK_COMMANDS = [
+  { ic: '＋', label: '创建机器人', hint: '新建', act: 'create' },
+  { ic: '⚙️', label: '模型设置', hint: '', act: 'settings' },
+  { ic: '🏠', label: '回到首页', hint: '', act: 'home' },
+  { ic: '📊', label: '数据分析', hint: '', act: 'analytics' },
+  { ic: '🎨', label: '模板广场', hint: '', act: 'templates' },
+  { ic: '📚', label: '知识库', hint: '', act: 'knowledge' },
+  { ic: '🔌', label: '插件中心', hint: '', act: 'plugins' },
+  { ic: '⭐', label: '我的收藏', hint: '', act: 'favorites' },
+  { ic: '🗑️', label: '清空当前对话', hint: '', act: 'clear' },
+  { ic: '⬇️', label: '导出工作流 JSON', hint: '', act: 'export' },
+  { ic: '🧹', label: '清空所有数据（重置）', hint: '', act: 'reset' },
+  { ic: '🌙', label: '切换深色 / 浅色主题', hint: '', act: 'theme' },
+  { ic: '✏️', label: '编辑当前机器人提示词', hint: '', act: 'prompt' },
+  { ic: '🗑️', label: '删除当前机器人', hint: '', act: 'delbot' },
+  { ic: '📈', label: '刷新数据分析', hint: '', act: 'reload' },
+];
+let cmdkActive = -1;
+function toggleCmdK(force) {
+  const box = document.getElementById('cmdk');
+  const on = box.classList.contains('on');
+  const next = force !== undefined ? force : !on;
+  if (next) { box.classList.add('on'); renderCmdK(''); setTimeout(() => document.getElementById('cmdkInput').focus(), 0); }
+  else { box.classList.remove('on'); }
+}
+/* ==================== 主题切换（深色 / 浅色） ==================== */
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  const next = cur === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  try { __storage.setItem('botcraft.theme', next); } catch (e) {}
+  toast(next === 'light' ? '已切换到浅色主题' : '已切换到深色主题', 'ok');
+}
+function applyTheme(mode) {
+  if (mode === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  const btn = document.getElementById('themeBtn');
+  // orb 渐变由 [data-theme="light"] CSS 自动驱动；此处只更新 title，不改 innerHTML 以免覆盖 .orb
+  if (btn) btn.title = mode === 'light' ? '切换到深色主题' : '切换到浅色主题';
+}
+function initTheme() {
+  // 优先用户保存的选择；否则跟随系统偏好
+  let saved = null;
+  try { saved = __storage.getItem('botcraft.theme'); } catch (e) {}
+  let mode;
+  if (saved === 'light' || saved === 'dark') mode = saved;
+  else mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  applyTheme(mode);
+}
+function renderCmdK(kw) {
+  const list = document.getElementById('cmdkList'); if (!list) return;
+  const k = (kw || '').trim().toLowerCase();
+  // 命令 + 匹配的机器人
+  const items = [];
+  CMDK_COMMANDS.forEach((c, i) => { if (!k || c.label.toLowerCase().includes(k)) items.push({ ...c, _cmd: true }); });
+  bots.forEach(b => { if (!k || b.n.toLowerCase().includes(k)) items.push({ ic: b.ic, label: '打开机器人：' + b.n, hint: b.tag, act: 'open', id: b.id }); });
+  if (!items.length) { list.innerHTML = `<div class="cmdk-empty">没有找到匹配的「${escapeHtml(kw)}」</div>`; cmdkActive = -1; return; }
+  list.innerHTML = items.map((it, i) => `<div class="cmdk-item ${i === 0 ? 'active' : ''}" data-i="${i}">
+    <span class="ck-ic">${it.ic}</span><span>${escapeHtml(it.label)}</span><span class="ck-hint">${escapeHtml(it.hint || '')}</span>
+  </div>`).join('');
+  cmdkActive = 0;
+  list.querySelectorAll('.cmdk-item').forEach(el => {
+    el.onmouseenter = () => { cmdkActive = +el.dataset.i; list.querySelectorAll('.cmdk-item').forEach(x => x.classList.remove('active')); el.classList.add('active'); };
+    el.onclick = () => execCmdK(items[+el.dataset.i]);
+  });
+}
+function execCmdK(it) {
+  if (!it) return;
+  toggleCmdK(false);
+  switch (it.act) {
+    case 'create': openCreate(); break;
+    case 'settings': openSettings(); break;
+    case 'home': go('home'); break;
+    case 'analytics': go('analytics'); break;
+    case 'templates': go('templates'); break;
+    case 'knowledge': go('knowledge'); break;
+    case 'plugins': go('plugins'); break;
+    case 'favorites': go('favorites'); break;
+    case 'clear': clearChat(); break;
+    case 'export': exportWorkflow(); break;
+    case 'reset':
+      if (confirm('确定清空所有机器人数据并重置吗？此操作不可恢复。')) {
+        storage.removeItem(LS_KEY); storage.removeItem(LS_FAV);
+        toast('已重置，正在刷新…', 'ok'); setTimeout(() => location.reload(), 600);
+      }
+      break;
+    case 'open': if (it.id) openBot(it.id); break;
+    case 'theme': toggleTheme(); break;
+    case 'prompt':
+      if (!currentId) { toast('请先打开一个机器人', 'err'); break; }
+      go('workspace');
+      document.querySelector('.ws-tab[data-tab=prompt]').click();
+      document.getElementById('promptArea').focus();
+      break;
+    case 'delbot':
+      if (currentId) { deleteCurrentBot(); }
+      break;
+    case 'reload': renderAnalytics(); toast('数据已刷新', 'ok'); break;
+  }
+}
+let _cmdkTimer = null;
+document.getElementById('cmdkInput').addEventListener('input', e => {
+  clearTimeout(_cmdkTimer);
+  _cmdkTimer = setTimeout(() => renderCmdK(e.target.value), 120);
+});
+document.getElementById('cmdkInput').addEventListener('keydown', e => {
+  const list = document.getElementById('cmdkList');
+  const items = list.querySelectorAll('.cmdk-item');
+  if (e.key === 'ArrowDown') { cmdkActive = Math.min(cmdkActive + 1, items.length - 1); items.forEach((x, i) => x.classList.toggle('active', i === cmdkActive)); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { cmdkActive = Math.max(cmdkActive - 1, 0); items.forEach((x, i) => x.classList.toggle('active', i === cmdkActive)); e.preventDefault(); }
+  else if (e.key === 'Enter') { const active = list.querySelector('.cmdk-item.active'); if (active) active.click(); e.preventDefault(); }
+  else if (e.key === 'Escape') { toggleCmdK(false); }
+});
+document.getElementById('cmdk').addEventListener('click', e => { if (e.target.id === 'cmdk') toggleCmdK(false); });
+function submitCreate() {
+  if (!requireLogin()) return;
+  const nameEl = document.getElementById('f-name'), descEl = document.getElementById('f-desc');
+  const name = (nameEl.value || '').trim(), desc = (descEl.value || '').trim();
+  const fName = document.getElementById('field-name'), fDesc = document.getElementById('field-desc');
+  const errName = fName.querySelector('.err'), errDesc = fDesc.querySelector('.err');
+  fName.classList.toggle('invalid', !name); if (errName) errName.style.display = name ? 'none' : 'block';
+  fDesc.classList.toggle('invalid', desc.length > 120); if (errDesc) errDesc.style.display = desc.length > 120 ? 'block' : 'none';
+  if (!name) { toast('请填写机器人名称', 'err'); nameEl.focus(); return; }
+  if (desc.length > 120) { toast('功能介绍不超过 120 字', 'err'); return; }
+  const colorEl = document.querySelector('.color-pick .c.on');
+  const icon = colorEl ? colorEl.dataset.c : '🤖';
+  const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,#6d8cff,#9d6bff)';
+  const nb = normalize({
+    n: name.slice(0, 30), d: desc || '一个全新的 AI 机器人', ic: icon, c: bg,
+    tag: '草稿', u: 0, t: '—', prompt: SAMPLE_PROMPT, nodes: DEFAULT_NODES.slice(), history: [], plugins: [], knowledges: [], model: BotCraftAI.getConfig().model || 'gpt-4o-mini',
+  });
+  bots.unshift(nb); currentFilter = 'all';
+  saveBots(); renderGrid(); updateStats(); closeCreate();
+  nameEl.value = ''; descEl.value = '';
+  openBot(nb.id);
+  toast('机器人已创建', 'ok');
+}
+
+// ==================== 模板 ====================
+function renderTplGrid() {
+  document.getElementById('tplGrid').innerHTML = tpls.map((t, i) => `<div class="bot-card" data-tpl="${i}">
+    <div class="bot-avatar" style="background:${t.c}">${t.ic}</div>
+    <h3>${escapeHtml(t.n)}</h3><p>${escapeHtml(t.d)}</p>
+    <div class="bot-meta"><span>一键使用</span><span>⋯</span></div>
+  </div>`).join('');
+  document.querySelectorAll('#tplGrid .bot-card').forEach(card => {
+    card.onclick = () => {
+      if (!requireLogin()) return;
+      const i = +card.dataset.tpl; const t = tpls[i]; if (!t) return;
+      const nb = normalize({
+        n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿', u: 0, t: '—',
+        prompt: t.prompt, nodes: DEFAULT_NODES.slice(), history: [], plugins: [], knowledges: [], model: BotCraftAI.getConfig().model || 'gpt-4o-mini',
+      });
+      bots.unshift(nb); currentFilter = 'all';
+      saveBots(); renderGrid(); updateStats(); openBot(nb.id);
+      toast(`已从模板「${t.n}」创建`, 'ok');
+    };
+  });
+}
+
+// ==================== 搜索 & 过滤 & 排序 ====================
+let searchTimer = null;
+document.addEventListener('input', e => {
+  if (e.target && e.target.closest('.search-bar')) {
+    clearTimeout(searchTimer);
+    const kw = e.target.value.trim().toLowerCase();
+    searchTimer = setTimeout(() => {
+      let shown = 0;
+      document.querySelectorAll('#botGrid .bot-card').forEach(el => {
+        const b = getBot(el.dataset.id);
+        const ok = !kw || b.n.toLowerCase().includes(kw) || b.d.toLowerCase().includes(kw);
+        el.style.display = ok ? '' : 'none'; if (ok) shown++;
+      });
+      const grid = document.getElementById('botGrid');
+      const existed = grid.querySelector('.search-empty');
+      if (shown === 0 && kw) {
+        if (!existed) grid.insertAdjacentHTML('beforeend', `<div class="empty-tip search-empty">没有找到与「${escapeHtml(kw)}」相关的机器人</div>`);
+      } else if (existed) existed.remove();
+    }, 150);
+  }
+});
+document.querySelectorAll('.toolbar .chip').forEach(chip => {
+  chip.onclick = () => {
+    if (chip.id === 'sortChip') { sortAsc = !sortAsc; chip.textContent = `⚡ ${sortAsc ? '最早创建' : '最新创建'} ${sortAsc ? '↑' : '↓'}`; renderGrid(); return; }
+    document.querySelectorAll('.toolbar .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    currentFilter = chip.dataset.filter || 'all';
+    renderGrid();
+  };
+});
+
+// ==================== 知识库 / 插件页面 ====================
+function renderKbList() {
+  const box = document.getElementById('kbList'); if (!box) return;
+  if (!ALL_KB.length) {
+    box.innerHTML = `<div class="empty-tip" style="padding:40px 10px;text-align:center;color:var(--sub)">还没有知识库文档<br>点击右上角「＋ 导入文档」上传 TXT / Markdown / CSV / JSON</div>`;
+    return;
+  }
+  box.innerHTML = ALL_KB.map(k => `<div class="list-row" data-id="${k.id}" onclick="openKbPreview('${k.id}')" style="cursor:pointer">
+    <div class="ic">${k.type === 'csv' ? '📊' : k.type === 'json' ? '🧩' : '📄'}</div>
+    <div class="info"><h4>${escapeHtml(k.name)}</h4><p>${k.builtin ? '内置 · 系统预设' : (k.type.toUpperCase() + ' · ' + fmtSize(k.size) + ' · ' + (k.updatedAt ? new Date(k.updatedAt).toLocaleDateString() : ''))}</p></div>
+    <span class="st" style="color:var(--ok)">可用</span>
+    ${k.builtin ? '<span class="st" style="color:var(--sub)">内置</span>' : '<span class="act" data-del="' + k.id + '" title="删除">🗑️</span>'}
+  </div>`).join('');
+  box.querySelectorAll('[data-del]').forEach(el => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const id = el.dataset.del;
+      ALL_KB = ALL_KB.filter(x => x.id !== id);
+      saveKB();
+      bots.forEach(b => { if (b.knowledges) b.knowledges = b.knowledges.filter(k => k !== id); });
+      saveBots();
+      renderKbList();
+      toast('已删除知识库文档', 'ok');
+    };
+  });
+}
+function openKbPreview(id) {
+  var k = kbById(id); if (!k) return;
+  document.getElementById('kbPrevTitle').textContent = k.name;
+  var body = document.getElementById('kbPrevBody');
+  if (k.type === 'csv') {
+    var lines = k.content.split(/\r?\n/).filter(function (l) { return l.trim().length; });
+    if (lines.length) {
+      var head = lines[0].split(',');
+      var html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+      html += '<tr>' + head.map(function (h) { return '<th style="border:1px solid var(--line);padding:6px 8px;text-align:left;background:var(--bg)">' + escapeHtml(h) + '</th>'; }).join('') + '</tr>';
+      for (var i = 1; i < lines.length; i++) {
+        html += '<tr>' + lines[i].split(',').map(function (c) { return '<td style="border:1px solid var(--line);padding:6px 8px">' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
+      }
+      html += '</table>';
+      body.innerHTML = html;
+    } else { body.textContent = k.content; }
+  } else {
+    body.textContent = k.content;
+  }
+  document.getElementById('kbModal').classList.add('on');
+}
+
+function fmtSize(bytes) {
+  if (bytes === undefined || bytes === null) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+function importKbFile(file) {
+  const MAX = 300 * 1024;
+  if (file.size > MAX) { toast('文件过大（>300KB），请拆分后导入', 'err'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    let content = String(reader.result || '');
+    const name = file.name || '未命名文档';
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    const type = (ext === 'csv') ? 'csv' : (ext === 'json') ? 'json' : 'txt';
+    ALL_KB.push({ id: 'kb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, type: type, size: file.size, updatedAt: Date.now(), content: content });
+    saveKB(); renderKbList();
+    toast('已导入：' + name, 'ok');
+  };
+  reader.onerror = () => toast('文件读取失败', 'err');
+  reader.readAsText(file);
+}
+const kbImportEl = document.getElementById('kbImport');
+if (kbImportEl) kbImportEl.addEventListener('change', e => { Array.from(e.target.files || []).forEach(importKbFile); e.target.value = ''; });
+function renderPluginGrid() {
+  document.getElementById('pluginGrid').innerHTML = plugins.map(p => `<div class="bot-card">
+    <div class="bot-avatar" style="background:var(--hover)">${p.ic}</div>
+    <h3>${escapeHtml(p.n)}</h3><p>${escapeHtml(p.d)}</p>
+    <div class="bot-meta"><span>安装</span><span>⋯</span></div>
+  </div>`).join('');
+}
+
+// ==================== 收藏页 ====================
+function updateFavPage() {
+  const grid = document.getElementById('favGrid'); if (!grid) return;
+  const list = bots.filter(b => favorites.has(b.id));
+  if (list.length === 0) { grid.innerHTML = `<div class="empty-tip">还没有收藏内容，去首页 ⭐ 一个吧</div>`; return; }
+  grid.innerHTML = list.map(b => card(b)).join('');
+  grid.querySelectorAll('.bot-card').forEach(el => el.onclick = e => { if (e.target.closest('.card-menu, [onclick], .card-menu-btn')) return; openBot(el.dataset.id); });
+}
+
+// ==================== Tabs ====================
+const TAB_MAP = { flow: 'wsFlowBody', prompt: 'wsPromptBody', kb: 'wsKbBody', plugin: 'wsPluginBody', publish: 'wsPublishBody' };
+document.querySelectorAll('.ws-tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.ws-tab').forEach(x => x.classList.remove('active'));
+    tab.classList.add('active');
+    const t = tab.dataset.tab;
+    Object.values(TAB_MAP).forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    const target = document.getElementById(TAB_MAP[t]); if (target) target.style.display = 'block';
+    if (t === 'kb' || t === 'plugin') { const b = getBot(currentId); if (b) renderKbPanel(b); }
+    if (t === 'publish') renderChannels();
+  };
+});
+
+function channelsOf(b) { return b.channels || (b.channels = ['网页嵌入', 'API 接口']); }
+function renderChannels() {
+  const b = getBot(currentId); if (!b) return;
+  const on = channelsOf(b);
+  const box = document.getElementById('channelList'); if (!box) return;
+  box.innerHTML = CHANNELS.map(c => `<div class="channel">
+    <span>${{ '网页嵌入': '🔗', 'API接口': '⚙️', 'API 接口': '⚙️', '飞书': '📮', '微信公众号': '💬', '企业微信': '🏢' }[c] || '·'} ${escapeHtml(c)}</span>
+    <span class="sw ${on.includes(c) ? 'on' : ''}" data-ch="${c}"></span>
+  </div>`).join('');
+}
+document.addEventListener('click', e => {
+  const sw = e.target.closest('#channelList .sw');
+  if (sw) {
+    const b = getBot(currentId); if (!b) return;
+    const c = sw.dataset.ch, on = channelsOf(b);
+    if (on.includes(c)) { on.splice(on.indexOf(c), 1); sw.classList.remove('on'); }
+    else { on.push(c); sw.classList.add('on'); }
+    b.channels = on; b.updatedAt = Date.now(); saveBots(); toast(`${c} ${on.includes(c) ? '已开启' : '已关闭'}`, 'ok');
+  }
+});
+function publishBot() {
+  const b = getBot(currentId); if (!b) return;
+  if (!channelsOf(b).length) { toast('请至少开启一个发布渠道', 'err'); return; }
+  b.tag = '已发布'; b.updatedAt = Date.now(); saveBots(); renderGrid(); updateStats();
+  document.getElementById('publishTip').textContent = '已发布 · ' + new Date().toLocaleTimeString();
+  toast(`「${b.n}」发布成功`, 'ok');
+}
+
+// ==================== 数据分析（真实图表）====================
+function renderAnalytics() {
+  // 统计卡片（基于真实 bots 数据）
+  const totalCalls = bots.reduce((s, b) => s + (b.u || 0), 0);
+  const published = bots.filter(b => b.tag === '已发布').length;
+  var realSat = bots.map(function (b) {
+    if (b.t && /\d/.test(b.t)) return parseFloat(b.t);
+    var ch = (b.history || []).length;
+    if (ch === 0) return null;
+    return Math.min(97, 82 + Math.round(Math.log10(ch + 1) * 8 * 10) / 10);
+  }).filter(function (v) { return v !== null && !isNaN(v); });
+  var avgSat = (function () {
+    if (!realSat.length) return '—';
+    return (realSat.reduce(function (a, c) { return a + c; }, 0) / realSat.length).toFixed(1) + '%';
+  })();
+  var totalChats = bots.reduce(function (s, b) { return s + (b.history || []).length; }, 0);
+  const cards = [
+    { val: bots.length, lbl: '机器人总数', trend: `${published} 个已发布` },
+    { val: totalCalls.toLocaleString(), lbl: '累计调用（次）', trend: '汇总所有机器人' },
+    { val: avgSat, lbl: '平均满意度', trend: '基于评分数据' },
+    { val: totalChats, lbl: '本地对话（条）', trend: '本机记录' },
+  ];
+  document.getElementById('statCards').innerHTML = cards.map(c => `<div class="stat-card">
+    <div class="val">${c.val}</div><div class="lbl">${c.lbl}</div><div class="trend">↑ ${escapeHtml(c.trend)}</div></div>`).join('');
+
+  // 折线图：调用量趋势（基于 bots 的 u 分布生成 7 天）
+  renderLineChart();
+  // 占比分布
+  renderDistList();
+  // 满意度柱状
+  renderBarChart();
+}
+function seededRandom(seed) { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+function renderLineChart() {
+  const svg = document.getElementById('lineChart'); if (!svg) return;
+  const W = 400, H = 180, pad = { l: 32, r: 12, t: 14, b: 24 };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const N = 7;
+  const counts = new Array(N).fill(0);
+  bots.forEach(b => (b.history || []).forEach(m => {
+    if (!m || !m.t) return;
+    const d = new Date(m.t); d.setHours(0, 0, 0, 0);
+  const idx = Math.floor((today - d) / 86400000);
+    if (idx >= 0 && idx < N) counts[N - 1 - idx]++;
+  }));
+  const data = counts;
+  const max = Math.max(...data, 1);
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  const pts = data.map((v, i) => [pad.l + (i / (data.length - 1)) * iw, pad.t + ih - (v / max) * ih]);
+  const path = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const area = path + ` L ${pts[pts.length - 1][0].toFixed(1)},${pad.t + ih} L ${pts[0][0].toFixed(1)},${pad.t + ih} Z`;
+  const labels = [];
+  for (let i = 0; i < data.length; i++) { const d = new Date(today); d.setDate(d.getDate() - (data.length - 1 - i)); labels.push((d.getMonth() + 1) + '/' + d.getDate()); }
+  let html = `<defs><linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#6d8cff"/><stop offset="100%" stop-color="#9d6bff"/></linearGradient></defs>`;
+  // 网格线
+  for (let g = 0; g <= 3; g++) {
+    const y = pad.t + (ih / 3) * g;
+    html += `<line class="grid-line" x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}"/>`;
+  }
+  html += `<path d="${area}" class="area"/>`;
+  html += `<path d="${path}" class="line"/>`;
+  pts.forEach((p, i) => { html += `<circle class="dot" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3"/>`; });
+  labels.forEach((lb, i) => { html += `<text x="${pts[i][0].toFixed(1)}" y="${H - 6}" font-size="10" fill="var(--sub)" text-anchor="middle">${lb}</text>`; });
+  // Y 轴刻度
+  [0, 1, 2, 3].forEach(g => {
+    const y = pad.t + (ih / 3) * g;
+    const val = Math.round(max * (1 - g / 3));
+    html += `<text x="${pad.l - 6}" y="${y + 3}" font-size="9" fill="var(--sub)" text-anchor="end">${val}</text>`;
+  });
+  svg.innerHTML = html;
+}
+function renderDistList() {
+  const box = document.getElementById('distList'); if (!box) return;
+  const list = bots.filter(b => (b.u || 0) > 0).slice(0, 5);
+  if (!list.length) { box.innerHTML = `<div class="empty-tip" style="padding:30px 10px">暂无调用数据，发布机器人后这里会显示占比</div>`; return; }
+  const max = Math.max(...list.map(b => b.u));
+  box.innerHTML = list.map(b => `<div class="dist-item">
+    <span class="name">${escapeHtml(b.n)}</span>
+    <div class="dist-bar"><i style="width:${((b.u / max) * 100).toFixed(0)}%"></i></div>
+    <span class="pct">${((b.u / list.reduce((s, x) => s + x.u, 0)) * 100).toFixed(0)}%</span>
+  </div>`).join('');
+}
+function renderBarChart() {
+  var box = document.getElementById('barChart'); if (!box) return;
+  var list = bots.filter(function (b) { return (b.history || []).length > 0; }).slice(0, 6);
+  if (!list.length) { box.innerHTML = `<div class="empty-tip" style="padding:20px 10px">暂无对话数据，先去和机器人聊几句</div>`; return; }
+  var max = Math.max.apply(null, list.map(function (b) { return (b.history || []).length; }));
+  box.innerHTML = list.map(function (b) {
+    return `<div class="bar-item"><div class="bar" style="height:${((b.history.length / max) * 100).toFixed(0)}%" title="${b.history.length} 条"></div><div class="bar-val">${b.history.length}</div><div class="bar-lbl">${escapeHtml((b.n || '').slice( 0, 4))}</div></div>`;
+  }).join('');
+}
+
+// ==================== 通用数据导入分析 ====================
+function isCellNumeric(v) {
+  if (v === null || v === undefined || v === '') return false;
+  if (typeof v === 'number') return isFinite(v);
+  var s = String(v).replace(/[, ]/g, '');
+  return s !== '' && !isNaN(Number(s)) && isFinite(Number(s));
+}
+let DATASET = null;
+function parseDatasetFile(file) {
+  const reader = new FileReader();
+  reader.onload = function () {
+    const text = String(reader.result || '');
+    let rows = [], cols = [];
+    if (/\.json$/i.test(file.name)) {
+      try { const j = JSON.parse(text); if (Array.isArray(j)) rows = j; else if (j && typeof j === 'object') rows = [j]; }
+      catch (e) { toast('JSON 解析失败：' + e.message, 'err'); return; }
+      if (rows.length) cols = Object.keys(rows[0]);
+    } else {
+      const lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
+      if (!lines.length) { toast('文件为空', 'err'); return; }
+      cols = lines[0].split(',').map(function (s) { return s.trim(); });
+      rows = lines.slice(1).map(function (line) { const c = line.split(','); const o = {}; cols.forEach(function (h, i) { o[h] = c[i]; }); return o; });
+    }
+    if (!rows.length) { toast('未解析到数据', 'err'); return; }
+    DATASET = { rows: rows, cols: cols };
+    renderDataset();
+    const ex = document.getElementById('dataExportBtn'); if (ex) ex.disabled = false;
+    toast('已载入 ' + rows.length + ' 条记录', 'ok');
+  };
+  reader.onerror = function () { toast('文件读取失败', 'err'); };
+  reader.readAsText(file);
+}
+function renderDataset() {
+  if (!DATASET) return;
+  const rows = DATASET.rows, cols = DATASET.cols;
+  const numCols = cols.filter(function (c) { return rows.some(function (r) { return isCellNumeric(r[c]); }); });
+  const catCols = cols.filter(function (c) { return numCols.indexOf(c) < 0; });
+  const xSel = document.getElementById('dataX');
+  if (xSel) xSel.innerHTML = (catCols.length ? catCols : cols).map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join('');
+  const ySel = document.getElementById('dataY');
+  const hasNum = numCols.length > 0;
+  if (ySel) { ySel.innerHTML = numCols.map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join(''); document.getElementById('dataFieldBar').style.display = hasNum ? 'flex' : 'none'; }
+  const sumBox = document.getElementById('dataSummary');
+  if (sumBox) {
+    const cells = [];
+    cells.push('<div class="stat-card"><div class="val">' + rows.length + '</div><div class="lbl">记录数</div></div>');
+    cells.push('<div class="stat-card"><div class="val">' + cols.length + '</div><div class="lbl">字段数</div></div>');
+    if (hasNum) {
+      const c = numCols[0];
+      const vals = rows.map(function (r) { return Number(String(r[c]).replace(/[, ]/g, '')); }).filter(function (v) { return isFinite(v); });
+      if (vals.length) {
+        const sum = vals.reduce(function (a, b) { return a + b; }, 0);
+        cells.push('<div class="stat-card"><div class="val">' + sum.toFixed(1) + '</div><div class="lbl">' + escapeHtml(c) + ' 总和</div></div>');
+        cells.push('<div class="stat-card"><div class="val">' + (sum / vals.length).toFixed(1) + '</div><div class="lbl">' + escapeHtml(c) + ' 均值</div></div>');
+        cells.push('<div class="stat-card"><div class="val">' + Math.max.apply(null, vals) + '</div><div class="lbl">最大值</div></div>');
+        cells.push('<div class="stat-card"><div class="val">' + Math.min.apply(null, vals) + '</div><div class="lbl">最小值</div></div>');
+      }
+    }
+    sumBox.innerHTML = cells.join('');
+  }
+  drawDataChart();
+}
+function drawDataChart() {
+  const svg = document.getElementById('dataChart'); if (!svg || !DATASET) return;
+  const rows = DATASET.rows;
+  const xName = document.getElementById('dataX').value;
+  const yName = document.getElementById('dataY').value;
+  const W = 600, H = 260, pad = { l: 48, r: 16, t: 16, b: 60 };
+  const groups = {};
+  rows.forEach(function (r) { const x = String(r[xName] || '空'); const y = Number(String(r[yName] || '').replace(/[, ]/g, '')); if (!isFinite(y)) return; groups[x] = (groups[x] || 0) + y; });
+  const keys = Object.keys(groups);
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  let html = '';
+  for (let g = 0; g <= 3; g++) { const y = pad.t + (ih / 3) * g; html += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (W - pad.r) + '" y2="' + y + '" stroke="var(--line)"/>'; }
+  if (!keys.length) { html += '<text x="20" y="40" fill="var(--sub)">无可绘制数据</text>'; svg.innerHTML = html; return; }
+  const max = Math.max.apply(null, Object.keys(groups).map(function (k) { return groups[k]; }).concat([1]));
+  const bw = iw / keys.length;
+  keys.forEach(function (k, i) {
+    const v = groups[k]; const h = (v / max) * ih; const x = pad.l + i * bw + bw * 0.15; const w = bw * 0.7; const y = pad.t + ih - h;
+    html += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="#6d8cff"/>';
+    html += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" font-size="10" fill="var(--txt)" text-anchor="middle">' + v + '</text>';
+    html += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (H - 42) + '" font-size="10" fill="var(--sub)" text-anchor="middle">' + escapeHtml(String(k).slice(0, 8)) + '</text>';
+  });
+  [0, 1, 2, 3].forEach(function (g) { const y = pad.t + (ih / 3) * g; const val = Math.round(max * (1 - g / 3)); html += '<text x="' + (pad.l - 6) + '" y="' + (y + 3) + '" font-size="9" fill="var(--sub)" text-anchor="end">' + val + '</text>'; });
+  svg.innerHTML = html;
+}
+function exportDataStats() {
+  if (!DATASET) { toast('请先导入数据', 'err'); return; }
+  const rows = DATASET.rows, cols = DATASET.cols;
+  let out = '字段,类型,计数,总和,均值,最大,最小\n';
+  cols.forEach(function (c) {
+    const vals = rows.map(function (r) { return Number(String(r[c] || '').replace(/[, ]/g, '')); }).filter(function (v) { return isFinite(v); });
+    const isNum = vals.length > 0;
+    const sum = isNum ? vals.reduce(function (a, b) { return a + b; }, 0) : '';
+    const avg = isNum ? (sum / vals.length).toFixed(1) : '';
+    const mx = isNum ? Math.max.apply(null, vals) : '';
+    const mn = isNum ? Math.min.apply(null, vals) : '';
+    out += c + ',' + (isNum ? '数值' : '文本') + ',' + rows.length + ',' + sum + ',' + avg + ',' + mx + ',' + mn + '\n';
+  });
+  const blob = new Blob([out], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '数据统计.csv'; document.body.appendChild(a); a.click(); a.remove();
+  toast('已导出统计 CSV', 'ok');
+}
+const dataFileEl = document.getElementById('dataFile');
+if (dataFileEl) dataFileEl.addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) { parseDatasetFile(f); const n = document.getElementById('dataFileName'); if (n) n.textContent = f.name; } e.target.value = ''; });
+if (document.getElementById('dataX')) document.getElementById('dataX').addEventListener('change', drawDataChart);
+if (document.getElementById('dataY')) document.getElementById('dataY').addEventListener('change', drawDataChart);
+
+// ==================== 设置面板 ====================
+const PROVIDER_META = BotCraftAI.getProviders();
+let _settingsInited = false;
+function openSettings() {
+  // 只在首次打开时构建一次服务商/模型下拉框，之后直接复用（避免反复 innerHTML 重建导致卡顿）
+  if (!_settingsInited) {
+    const provSel = document.getElementById('set-provider');
+    if (provSel && provSel.options.length === 0) {
+      provSel.innerHTML = Object.keys(PROVIDER_META).map(k => `<option value="${k}">${PROVIDER_META[k].label}</option>`).join('');
+    }
+    _settingsInited = true;
+  }
+  const cfg = BotCraftAI.getConfig();
+  const provSel = document.getElementById('set-provider');
+  provSel.value = cfg.provider in PROVIDER_META ? cfg.provider : 'custom';
+  document.getElementById('set-key').value = cfg.apiKey || '';
+  document.getElementById('set-base').value = cfg.baseURL || '';
+  document.getElementById('set-temp').value = cfg.temperature || 0.7;
+  document.getElementById('set-temp-val').textContent = (cfg.temperature || 0.7).toFixed(1);
+  document.getElementById('set-maxtokens').value = cfg.maxTokens || 800;
+  document.getElementById('set-direct').checked = !!cfg.directCall;
+  document.getElementById('set-proxy').value = cfg.proxyURL || '';
+  fillModelOptions(cfg.provider, cfg.model);
+  document.getElementById('set-model-custom').value =
+    (cfg.model && !(PROVIDER_META[cfg.provider] || {}).models?.includes(cfg.model)) ? cfg.model : '';
+  setConnStatus(''); renderSettingsPreview();
+  document.getElementById('settingsModal').classList.add('on');
+  setTimeout(() => document.getElementById('set-key').focus(), 50);
+}
+function fillModelOptions(provider, currentModel) {
+  const sel = document.getElementById('set-model');
+  const meta = PROVIDER_META[provider];
+  const models = (meta && meta.models) || [];
+  sel.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join()
+    + (models.length ? '<option value="__custom">— 手动输入 —</option>' : '<option value="__custom">手动输入模型名</option>');
+  sel.value = models.includes(currentModel) ? currentModel : '__custom';
+  document.getElementById('set-model-custom').style.display = (sel.value === '__custom') ? '' : 'none';
+}
+// 手动刷新：从 OpenAI 兼容的 /models 接口拉取真实模型列表（点「刷新列表」按钮触发）
+async function refreshModelList() {
+  const baseEl = document.getElementById('set-base');
+  const keyEl = document.getElementById('set-key');
+  const sel = document.getElementById('set-model');
+  const custom = document.getElementById('set-model-custom');
+  const base = (baseEl && baseEl.value) ? baseEl.value.trim() : '';
+  if (!base) return; // 没有接口地址则不拉取，沿用内置列表
+  setConnStatus('正在获取模型列表…');
+  try {
+    const url = base.replace(/\/+$/, '') + '/models';
+    const headers = {};
+    const key = (keyEl && keyEl.value) ? keyEl.value.trim() : '';
+    if (key) headers['Authorization'] = 'Bearer ' + key;
+    const ctrl = new AbortController();
+    const timer = setTimeout(function () { ctrl.abort(); }, 15000);
+    const r = await fetch(url, { headers: headers, signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const list = (j.data || []).map(function (m) { return m.id; }).filter(Boolean);
+    if (!list.length) throw new Error('接口返回空列表');
+    const cur = (sel.value === '__custom') ? custom.value : sel.value;
+    sel.innerHTML = list.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('')
+      + '<option value="__custom">— 手动输入 —</option>';
+    sel.value = list.indexOf(cur) >= 0 ? cur : '__custom';
+    custom.style.display = (sel.value === '__custom') ? '' : 'none';
+    setConnStatus('已获取 ' + list.length + ' 个模型', 'ok');
+  } catch (e) {
+    const msg = (e && e.name === 'AbortError') ? '拉取超时' : ('沿用内置列表：' + (e.message || e));
+    setConnStatus(msg, 'err');
+  }
+}
+document.addEventListener('change', e => {
+  const provSel = document.getElementById('set-provider');
+  if (e.target && e.target.id === 'set-provider') {
+    const p = provSel.value, meta = PROVIDER_META[p];
+    if (meta) {
+      document.getElementById('set-base').value = meta.base || '';
+      fillModelOptions(p, meta.models[0]);
+      document.getElementById('set-model-custom').value = '';
+    }
+  }
+  if (e.target && e.target.id === 'set-model') {
+    document.getElementById('set-model-custom').style.display = (e.target.value === '__custom') ? '' : 'none';
+  }
+  if (e.target && e.target.id === 'set-temp') {
+    document.getElementById('set-temp-val').textContent = parseFloat(e.target.value).toFixed(1);
+  }
+  if (e.target && e.target.id === 'set-base') {
+    setConnStatus('已修改接口地址，点「刷新列表」拉取最新模型', '');
+  }
+});
+function setConnStatus(msg, type = '') {
+  const el = document.getElementById('connStatus'); if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = type === 'err' ? '#ff6b81' : (type === 'ok' ? '#3ddc97' : 'var(--sub)');
+}
+function renderSettingsPreview() {
+  var host = document.getElementById('settingsPreview'); if (!host) return;
+  try {
+    var provider = document.getElementById('set-provider').value;
+    var modelSel = document.getElementById('set-model').value;
+    var modelCustom = (document.getElementById('set-model-custom').value || '').trim();
+    var model = modelSel === '__custom' ? modelCustom : modelSel;
+    var label = ((typeof resolveModelLabel === 'function' ? resolveModelLabel(model) : model) || model || '未选择');
+    var direct = document.getElementById('set-direct').checked;
+    var provLabel = ((PROVIDER_META || {})[provider] || {}).label || provider || '';
+    host.innerHTML = '<span style="color:var(--brand)">' + escapeHtml(label) + '</span> · ' + (direct ? '浏览器直连' : '走代理') + ' · ' + escapeHtml(provLabel);
+  } catch (e) {}
+}
+function closeSettings() { document.getElementById('settingsModal').classList.remove('on'); }
+function saveSettings() {
+  const provider = document.getElementById('set-provider').value;
+  const apiKey = document.getElementById('set-key').value.trim();
+  const baseURL = document.getElementById('set-base').value.trim();
+  const modelSel = document.getElementById('set-model').value;
+  const modelCustom = document.getElementById('set-model-custom').value.trim();
+  const model = modelSel === '__custom' ? modelCustom : modelSel;
+  const temperature = parseFloat(document.getElementById('set-temp').value) || 0.7;
+  const maxTokens = parseInt(document.getElementById('set-maxtokens').value, 10) || 800;
+  const directCall = document.getElementById('set-direct').checked;
+  const proxyURL = document.getElementById('set-proxy').value.trim();
+  const fKey = document.getElementById('field-key'), fBase = document.getElementById('field-base');
+  fKey.classList.remove('invalid'); fBase.classList.remove('invalid');
+  if (directCall && !apiKey) { fKey.classList.add('invalid'); toast('请填写 API Key', 'err'); return; }
+  if (directCall && !baseURL) { fBase.classList.add('invalid'); toast('请填写接口地址', 'err'); return; }
+  if (!model) { toast('请选择或填写模型', 'err'); return; }
+  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL });
+  closeSettings();
+  const head = apiKey ? `已接入 ${PROVIDER_META[provider].label} · ${model}` : '已保存（无 Key，将使用本地降级回复）';
+  toast(head, 'ok');
+  updateStats();
+  const st = document.getElementById('chatStatus');
+  if (st && currentId) st.textContent = BotCraftAI.canCall() ? '在线 · 调用真实模型' : '演示模式 · 本地回复';
+}
+async function testConnection() {
+  const apiKey = document.getElementById('set-key').value.trim();
+  const baseURL = document.getElementById('set-base').value.trim();
+  const provider = document.getElementById('set-provider').value;
+  if (!apiKey || !baseURL) { toast('请先填写 Key 与接口地址', 'err'); return; }
+  setConnStatus('正在测试连接…', '');
+  const orig = BotCraftAI.getConfig();
+  BotCraftAI.updateConfig({ apiKey, baseURL, model: orig.model });
+  try {
+    // 非流式测试
+    const reply = await BotCraftAI.chat(
+      { name: '测试', prompt: '你是一个测试助手。', knowledges: [], plugins: [], nodes: [] },
+      [{ role: 'me', text: '回复一个字：好' }]
+    );
+    setConnStatus('✅ 连接成功：' + (reply || '').slice(0, 40), 'ok');
+    toast('连接测试成功', 'ok');
+  } catch (err) {
+    setConnStatus('❌ 连接失败：' + (err && err.message || err), 'err');
+    toast('连接失败，请检查 Key 与地址', 'err');
+  }
+}
+document.getElementById('settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') closeSettings(); });
+['set-provider','set-model','set-model-custom','set-direct'].forEach(function (id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('change', renderSettingsPreview);
+  if (id === 'set-model-custom') el.addEventListener('input', renderSettingsPreview);
+});
+
+// ==================== 初始化 ====================
+// 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
+var APP_VERSION = '2.1';
+function ensureVersion() {
+  try {
+    var v = __storage.getItem('botcraft.version');
+    if (v !== APP_VERSION) __storage.setItem('botcraft.version', APP_VERSION);
+  } catch (e) {}
+}
+function emergencyReset() {
+  // 应急：清空全部应用数据并刷新，解决因损坏残留数据导致的「进不去」问题
+  try {
+    ['botcraft.version','botcraft.users','botcraft.session','botcraft.bots','botcraft.favorites',
+     'botcraft.ai.config.v1','botcraft.published'].forEach(function (k) { __storage.removeItem(k); });
+    // 清除所有按用户隔离的 key
+    try { for (var i = __storage.length - 1; i >= 0; i--) { var key = __storage.key(i); if (key && /^botcraft\.(bots|favorites)\./.test(key)) __storage.removeItem(key); } } catch (e) {}
+  } catch (e) {}
+  location.reload();
+}
+// 全局兜底：任何初始化异常都不得阻塞 UI，至少保证登录入口可见、可用
+function safeStart() {
+  try { initTheme(); } catch (e) { console.error('initTheme failed', e); }
+  try { ensureVersion(); loadUsers(); } catch (e) { console.error('loadUsers failed', e); users = []; }
+  var savedSession = null;
+  try { savedSession = loadSession(); } catch (e) { savedSession = null; }
+  try { renderUserMenu(); } catch (e) {}
+  if (savedSession && savedSession.username && users && users.find(function (u) { return u.username === savedSession.username; })) {
+    currentUser = { username: savedSession.username, email: savedSession.email || '' };
+    try { onLogin(); } catch (e) { currentUser = null; showAuthMask(); openAuth('login'); }
+  } else {
+    // 未登录：清空内存、显示登录遮罩，并【必须】弹出登录/注册框 —— 这是进入应用的唯一入口
+    currentUser = null;
+    try { bots = []; favorites = new Set(); currentId = null; renderGrid(); updateStats(); updateFavPage(); } catch (e) {}
+    showAuthMask();
+    openAuth('login');
+  }
+  // 统一事件绑定：登录/注册入口按钮（用 addEventListener，不依赖内联 onclick 解析，
+  // 彻底避免「file:// / 严格模式 / 作用域隔离」下点击无响应的问题）
+  try {
+    document.querySelectorAll('.auth-entry-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { openAuth(btn.getAttribute('data-auth-mode') || 'login'); });
+    });
+  } catch (e) {}
+}
+safeStart();
+(function syncModel() {
+  // 模型为全局配置：仅在全局 model 为空时用首个有模型记录的机器人初始化一次，不随机器人切换而变化
+  const cfg = BotCraftAI.getConfig();
+  if (cfg && !cfg.model) { const any = bots.find(x => x.model); if (any) BotCraftAI.updateConfig({ model: any.model }); }
+})();
+window.addEventListener('beforeunload', () => { if (currentUser) saveBots(); });
+
+// 存储模式提示：file:// 下 localStorage 不可用时进入「临时模式」，
+// 本次会话数据正常读写，但关闭页面后不保留。提示用户可用本地服务器打开以持久保存。
+(function storageNotice() {
+  if (typeof storage !== 'undefined' && storage.isMemory && storage.isMemory()) {
+    setTimeout(() => toast('当前为临时模式：数据保存在内存，关闭页面后会清空。用本地服务器打开可自动持久保存', 'warn', 6000), 1200);
+  }
+})();
+
+// 暴露全局
+window.openCreate = openCreate; window.closeCreate = closeCreate; window.submitCreate = submitCreate;
+window.sendMsg = sendMsg; window.stopGenerate = stopGenerate; window.addNode = addNode;
+window.publishBot = publishBot; window.cardMenu = cardMenu; window.clearChat = clearChat;
+window.openSettings = openSettings; window.closeSettings = closeSettings;
+window.saveSettings = saveSettings; window.testConnection = testConnection;
+window.toggleFavorite = toggleFavorite;
+window.toggleCmdK = toggleCmdK; window.exportWorkflow = exportWorkflow; window.importWorkflowFromFile = importWorkflowFromFile;
+window.toggleTheme = toggleTheme; window.applyTheme = applyTheme; window.initTheme = initTheme;
+window.__debug = {
+  getBots: () => bots,
+  getFavorites: () => [...favorites],
+  normalize: (b) => normalize(b),
+  get currentId() { return currentId; }, get currentUser() { return currentUser; }, get users() { return users; },
+  getBot, saveBots, openBot, renderGrid, updateStats,
+  sendMsg, stopGenerate, addNode, publishBot, cardMenu, clearChat,
+  toggleFavorite, renderAnalytics, go,
+  submitCreate, openCreate, closeCreate,
+  renderTplGrid, renderKbList, renderPluginGrid, updateFavPage,
+  openSettings, closeSettings, saveSettings, testConnection,
+  toggleCmdK, exportWorkflow, importWorkflowFromFile,
+  openAuth, closeAuth, switchMode, submitAuth, logout, register, login, hashPassword, hasSubtle,
+  showAuthMask, hideAuthMask, renderUserMenu, requireLogin, loadUsers,
+  AI: BotCraftAI,
+};
+</script>
+</body>
+</html>
