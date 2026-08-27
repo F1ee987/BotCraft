@@ -1,53 +1,83 @@
 # BotCraft
 
-AI 机器人搭建平台（前端单文件 SPA）——在浏览器内可视化创建、测试、导入/导出与发布机器人工作流，支持多家大模型服务或自定义代理。
+AI 机器人搭建平台 —— **单文件**前端 SPA，在浏览器内可视化创建、测试、编排与发布机器人工作流。全部 UI、样式与逻辑内嵌于 `BotCraft.html`（约 360 KB，零构建、零依赖），双击即可运行，也适合静态托管分发。
 
 ---
 
 ## 主要特性
-- 单文件应用：全部 UI、样式和逻辑内嵌在 `BotCraft.html` 中，方便快速预览与分发。  
-- 工作流编排：可视化节点式流程、提示词模板、知识库挂载、插件启用与发布渠道。  
-- 模型接入层：支持 OpenAI、阿里云百炼、腾讯混元、智谱等多家提供商与自定义 baseURL；支持流式（SSE）与非流式调用。  
-- 本地存储与演示账号：使用 localStorage（对 file:// 做兼容退化为内存）保存配置与数据，内置本地注册/登录用于演示。  
-- 导入/导出：支持 JSON 导入/导出工作流；知识库支持常见文本/CSV/JSON 导入。  
-- UI 丰富：主题切换、命令面板 (Cmd/Ctrl+K)、拖拽节点、导出/下载、图表分析等。
+
+**搭建与编排**
+- 单文件应用：HTML/CSS/JS 全部内嵌，`BotCraft.html` 一个文件带走即用。
+- 多机器人管理：内置 8 个示例机器人 + 自定义机器人；支持从模板一键创建副本、批量管理（勾选后批量复制 / 发布 / 删除）。
+- 串行工作流引擎：可视化节点式流程，每个节点独立角色（开始 / 意图识别 / 检索 / 撰写 / 审核 / 去 AI 腔 / 人工审核），独立调用模型、上一步输出自动注入下一步；支持**流式逐字输出**与实时进度显示。
+- 知识库 TF-IDF 检索：自动切块、向量化、余弦相似度召回 Top-5，按节点角色智能注入上下文。
+- 长期记忆：对话后自动提炼用户偏好/事实写入记忆，支持**三层去重**（归一化精确 + 语义 + 手动判重），切换机器人时记忆跟随刷新；无 API Key 时为演示模式不自动记忆。
+
+**对话体验**
+- Markdown 富文本：标题 / 列表 / 任务列表 / 表格 / 引用 / 代码块（带语言标签 + 单独复制按钮）/ 行内码，链接做了 XSS 过滤。
+- 输入自适应：聊天输入框随内容动态增高（封顶 160px 内部滚动），Enter 发送、Shift+Enter 换行。
+- 文体模板：内置 10 种风格（小红书 / 知乎 / 新闻 / 学术 / 口语 / 幽默 / 官方 / 文艺 / 电商 / 公众号），可一键应用、预览、取消。
+- 真实工具执行：联网检索（DuckDuckGo 即时答案，免 Key）、天气查询（open-meteo，免 Key）、日历提醒（到点 Toast）、代码执行器（沙盒试运行）。
+- 执行日志面板：右下角浮窗实时显示每个工作流节点的角色 / 输出 / 耗时；可拖动、**拖到屏幕边缘收成 46px 小条（贴左/右边缘垂直居中）**、原位展开；支持浅色「阳光模式」跟随主题。
+
+**账号与数据**
+- 本地登录：注册 / 登录 / 多账号，密码 PBKDF2-SHA256 本地哈希；顶栏头像下拉一键切换已认证账号（免重输密码）；登录失败有明确提示（密码错误红字等）；访客模式兜底保证进得去应用。
+- 跨源备份迁移：导出 / 导入全部配置（机器人 / 知识库 / 收藏 / 设置），解决 file:// 与 localhost 源隔离导致数据互不可见的问题。
+
+**发布与嵌入**
+- 发布渠道：网页嵌入（生成 `<iframe>` + 独立嵌入页，带 `?botcfg=` 深链）、API 接口（拼好 system 提示词的 fetch / cURL 片段）、飞书 / 微信公众号 / 企业微信（Webhook / 回调地址）。
+- 模板广场：把本地机器人发布成可复用模板，按名称去重、与内置模板混排。
+
+**界面与适配**
+- 玻璃拟态 UI、深 / 浅主题切换（日志面板等内联样式用 CSS 变量实时跟随）。
+- 侧边栏可收展，折叠态悬停图标显示名称 tooltip。
+- 命令面板（Ctrl / Cmd + K）、机器人切换下拉（搜索 + 头像 + 已发布徽标）。
+- 移动端适配（≤760px 汉堡菜单 + 单列布局），嵌入模式（`?botcfg=`）只显示聊天区。
+- 桌面图标 `botcraft.ico`（玻璃拟态机器人），并提供 `.url` 快捷方式入口。
+
+**模型接入**
+- 支持 OpenAI、阿里云百炼、腾讯混元、智谱等多家提供商与自定义 baseURL；支持流式（SSE）与非流式调用；浏览器直连或用后端代理转发以隐藏 Key。
 
 ---
 
 ## 文件说明
-- BotCraft.html — 主应用（HTML/CSS/JS 全部内嵌）。  
-- LICENSE — MIT 许可证（允许商用、修改、分发）。
+- `BotCraft.html` — 主应用（HTML/CSS/JS 全部内嵌，约 360 KB）。
+- `botcraft.ico` — 项目图标（多尺寸玻璃拟态机器人），用于桌面快捷方式与仓库标识。
+- `LICENSE` — MIT 许可证（允许商用、修改、分发）。
+- `README.md` — 本文件。
+
+> 桌面 `.url` 快捷方式（`BotCraft AI.url`）不在仓库内，需在本机生成：指向 `file:///.../BotCraft.html`，`IconFile` 指向本仓库的 `botcraft.ico`，`IconIndex=0`。`.ico` 切勿移动，否则 `.url` 图标失效。
 
 ---
 
 ## 快速开始
 
-1. 克隆仓库或下载文件：
-   - 直接打开：双击在浏览器中打开 `BotCraft.html`（注意：某些浏览器下 file:// 会对 fetch/localStorage 有限制，脚本中做了部分兼容处理，但网络请求可能被 CORS 限制）。
-   - 推荐使用静态服务器（更可靠）：
-     - Python：在项目目录运行：
-       ```bash
-       python -m http.server 8000
-       ```
-       然后访问 http://localhost:8000/BotCraft.html
-     - 或使用 Node 的简单静态服务器：
-       ```bash
-       npx serve .
-       ```
+1. 获取文件：
+   - 直接打开：双击在浏览器中打开 `BotCraft.html`。部分浏览器对 `file://` 的 fetch / localStorage 有限制，脚本已做兼容（localStorage 不可用时退化为内存模式），但网络请求可能受 CORS 限制。
+   - 推荐用静态服务器（更可靠）：
+     ```bash
+     # Python
+     python -m http.server 8000
+     # 然后访问 http://localhost:8000/BotCraft.html
+     ```
+     ```bash
+     # Node
+     npx serve .
+     ```
 
 2. 创建并测试机器人：
-   - 点击「＋ 创建机器人」 -> 填写名称与描述 -> 进入工作台进行编排与提示词配置。
-   - 在聊天区可直接输入消息测试（如果未配置真实 API Key，则会使用内置演示回复降级）。
+   - 点「＋ 创建机器人」→ 填名称与描述 → 进入工作台编排节点、配置提示词与知识库。
+   - 聊天区直接输入测试；未配置真实 API Key 时走内置演示回复降级（不报错不白屏）。
 
 3. 接入真实大模型：
-   - 打开「设置」填入服务商、API Key、Base URL 与模型，或填写代理地址（proxyURL）并关闭“浏览器直连”以保护 Key。
-   - 填写后可「测试连接」并保存。保存后工作台的聊天会调真实模型。
+   - 打开「设置」填服务商、API Key、Base URL 与模型；可填代理地址（proxyURL）并关闭「浏览器直连」以保护 Key。
+   - 点「测试连接」保存后，聊天即调真实模型。
 
 ---
 
 ## 配置说明（重要字段）
-- 本地配置存储键：`botcraft.ai.config.v1`（保存在 localStorage 或内存回退）。  
-- 主要配置项示例：
+- 本地配置键：`botcraft.ai.config.v1`（存于 localStorage 或内存回退）。
+- 示例：
 
 ```json
 {
@@ -62,24 +92,23 @@ AI 机器人搭建平台（前端单文件 SPA）——在浏览器内可视化�
 }
 ```
 
-- directCall = true：浏览器直接请求模型接口（需要在浏览器中暴露 API Key —— 不安全）。  
-- 推荐做法：directCall = false 并配置 proxyURL，将请求由后端转发并在后端补上 Authorization，从而隐藏 Key。
+- `directCall = true`：浏览器直接请求模型接口（需在浏览器暴露 API Key，不安全）。
+- 推荐：`directCall = false` 并配 `proxyURL`，由后端转发并在后端补 `Authorization`，隐藏 Key。
 
 ---
 
 ## 示例：简单代理（Node.js + Express）
-（演示用途，请在生产中加认证、速率限制与日志等）
+> 演示用途，生产环境请加认证、限流与日志。
 
 ```js
 const express = require('express');
 const fetch = require('node-fetch');
 const app = express();
 app.use(express.json());
-const TARGET = 'https://api.openai.com/v1/chat/completions'; // 或根据 provider 动态决定
+const TARGET = 'https://api.openai.com/v1/chat/completions';
 
 app.post('/api/ai-proxy', async (req, res) => {
   try {
-    // 从安全存储（环境变量）读取 API KEY
     const OPENAI_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_KEY) return res.status(500).json({ error: 'No API key configured' });
     const resp = await fetch(TARGET, {
@@ -90,7 +119,6 @@ app.post('/api/ai-proxy', async (req, res) => {
       },
       body: JSON.stringify(req.body)
     });
-    // 将原样响应转发回客户端（注意流式 SSE 场景需要转发流）
     const data = await resp.text();
     res.status(resp.status).send(data);
   } catch (err) {
@@ -102,46 +130,35 @@ app.post('/api/ai-proxy', async (req, res) => {
 app.listen(3000, () => console.log('Proxy listening on :3000'));
 ```
 
-- 部署后在 BotCraft 的设置中填入 proxy 地址（例如 `https://your-domain.com/api/ai-proxy`），并关闭 directCall。
+部署后在设置中填入代理地址（如 `https://your-domain.com/api/ai-proxy`）并关闭 directCall。
 
 ---
 
 ## 安全与隐私提示
-- 当前实现将 API Key 保存在浏览器 localStorage（或内存回退），不安全用于生产多用户场景。切勿在公共环境或生产部署中直接把 Key 暴露给浏览器。  
-- 建议在生产中：使用后端代理（如上示例），并在后端实现认证、审计、限流与 Key 管理。  
-- 演示账号与密码使用 PBKDF2-SHA256 本地哈希（仅限演示），不要用于真实敏感账号。  
-- 注意 CORS 策略：若使用浏览器直连且 Base URL 不允许跨域访问，请使用代理转发。
-
----
-
-## 开发者建议（若要推进成可维护项目）
-- 将单文件拆分为标准前端项目（HTML/CSS/JS 分离），使用构建工具（Vite/webpack）便于模块化、依赖管理与测试。  
-- 增加后端示例：认证、持久化（数据库）、用户隔离与 API Key 安全存储。  
-- 加入单元测试与集成测试、Lint、CI（GitHub Actions）。  
-- 强化错误上报与埋点，加入后端限流与审计以防滥用。  
-- 为插件与模板系统设计安全沙箱与权限模型，避免任意脚本注入与越权访问。
+- API Key 保存在浏览器 localStorage（或内存回退），不安全用于多用户生产场景。**「导出全部配置」会包含明文 API Key，请勿外传。**
+- 生产建议：用后端代理（如上示例），后端实现认证、审计、限流与 Key 管理。
+- 演示账号密码为 PBKDF2-SHA256 本地哈希（仅演示），勿用于真实敏感账号。
+- CORS：浏览器直连且 Base URL 不允许跨域时，请改用代理转发。
+- 单文件应用无后端，「代码执行器 / PDF 解析 / 图片生成」中需外部 API 的部分仅为能力提示或沙盒试运行，无法在本地真正运行（图片生成需配文生图 Key / 图床）。
 
 ---
 
 ## 已知限制
-- 单文件结构便于演示但不利于长期维护。  
-- 无后端持久化，所有数据均保存在本地（localStorage 或内存回退）。  
-- CORS 与浏览器安全策略会限制直接使用某些模型提供商的接口。
+- 单文件结构便于演示但不利于长期维护。
+- 无后端持久化，数据均保存在本地（localStorage 或内存回退）；换浏览器 / 换 origin / 清缓存会读不到，需用「💾 备份」导出导入迁移。
+- CORS 与浏览器安全策略会限制部分模型直连。
+- 部分 UI 文案含 emoji，个别场景显示依赖系统字体。
 
 ---
 
 ## 贡献
-欢迎提交 issue 或 PR。建议先打开 issue 讨论主要设计变更或大型重构计划。
+欢迎提交 issue 或 PR。建议先开 issue 讨论主要设计变更或大型重构。
 
-建议贡献流程（示例）
-1. Fork 仓库并新建 feature 分支。  
-2. 提交清晰的变更说明与测试用例。  
-3. 发起 Pull Request 并在 PR 描述里写明变更动机与兼容注意事项。
+1. Fork 仓库并新建 feature 分支。
+2. 提交清晰的变更说明（本项目主文件为单文件 `BotCraft.html`，改动请保持 3 个 `<script>` 块作用域不相互污染）。
+3. 发起 Pull Request 并写明变更动机与兼容注意事项。
 
 ---
 
 ## 许可证
 MIT License — 请参见仓库中的 LICENSE 文件。
-
----
-
