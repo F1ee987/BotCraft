@@ -576,6 +576,23 @@ body.embed-mode #wsName{font-size:15px}
 .mem-del:hover{color:#ff6b81;border-color:var(--warn)}
 .mem-add{flex:1;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--txt);font-size:12.5px;font-family:inherit}
 .mem-add:focus{outline:none;border-color:var(--brand)}
+.mem-search{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--txt);font-size:12.5px;font-family:inherit;margin-bottom:8px}
+.mem-search:focus{outline:none;border-color:var(--brand)}
+.mem-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.mem-chip{font-size:11px;padding:3px 10px;border-radius:20px;background:var(--card);border:1px solid var(--line);color:var(--sub);cursor:pointer;user-select:none;transition:.12s}
+.mem-chip:hover{border-color:var(--brand);color:var(--txt)}
+.mem-chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.mem-type{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:20px;flex-shrink:0;align-self:flex-start;margin-top:7px;font-weight:600;white-space:nowrap}
+.mem-type-偏好{background:rgba(109,140,255,.18);color:#6d8cff;border:1px solid rgba(109,140,255,.4)}
+.mem-type-事实{background:rgba(61,220,151,.16);color:#2fb574;border:1px solid rgba(61,220,151,.4)}
+.mem-type-身份{background:rgba(157,107,255,.18);color:#9d6bff;border:1px solid rgba(157,107,255,.4)}
+.mem-type-项目{background:rgba(255,159,67,.18);color:#ff9f43;border:1px solid rgba(255,159,67,.4)}
+.mem-type-禁忌{background:rgba(255,107,129,.18);color:#ff6b81;border:1px solid rgba(255,107,129,.4)}
+.mem-type-术语{background:rgba(45,206,211,.18);color:#2dced3;border:1px solid rgba(45,206,211,.4)}
+.mem-type-约定{background:rgba(241,196,15,.2);color:#d4a017;border:1px solid rgba(241,196,15,.45)}
+.mem-type-其他{background:rgba(150,160,180,.18);color:var(--sub);border:1px solid var(--line)}
+.mem-type-sel{padding:9px 8px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--txt);font-size:12.5px;font-family:inherit;flex-shrink:0}
+.mem-type-sel:focus{outline:none;border-color:var(--brand)}
 
 /* ============ 发布渠道 ============ */
 .channel{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:11px;margin-bottom:8px;font-size:13px}
@@ -1260,7 +1277,10 @@ window.__storage = __storage;
     if (bot && bot.memory && bot.memory.enabled && bot.memory.items && bot.memory.items.length) {
       var mem = bot.memory.items.filter(function (it) { return it && it.text && it.text.trim(); });
       if (mem.length) {
-        parts.push('\n【长期记忆】以下是你长期记住的关于该用户的关键信息，请在回答时自然运用（不必刻意说「我记得」）：\n' + mem.map(function (it, i) { return (i + 1) + '. ' + it.text; }).join('\n'));
+        var lastMe = (history || []).slice().reverse().find(function (m) { return m.role === 'me'; });
+        var memSel = selectRelevantMemories(mem, lastMe ? lastMe.text : '', 12);
+        var memNote = (mem.length > memSel.length) ? ('（共 ' + mem.length + ' 条记忆，已挑选最相关的 ' + memSel.length + ' 条注入）') : '';
+        parts.push('\n【长期记忆】以下是你长期记住的关于该用户的关键信息，请在回答时自然运用（不必刻意说「我记得」）：' + memNote + '\n' + memSel.map(function (it, i) { return (i + 1) + '. [' + (it.type || '其他') + '] ' + it.text; }).join('\n'));
       }
     }
     if (bot && bot.nodes && bot.nodes.length) {
@@ -1292,25 +1312,81 @@ window.__storage = __storage;
     s = String(s).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '');
     var i = s.indexOf('['), j = s.lastIndexOf(']');
     if (i >= 0 && j > i) s = s.slice(i, j + 1);
+    var out = [];
     try {
       var a = JSON.parse(s);
-      if (Array.isArray(a)) return a.filter(function (x) { return typeof x === 'string' && x.trim(); });
+      if (Array.isArray(a)) {
+        a.forEach(function (x) {
+          if (typeof x === 'string' && x.trim()) out.push({ text: x.trim(), type: '其他' });
+          else if (x && typeof x === 'object' && x.text && String(x.text).trim()) out.push({ text: String(x.text).trim(), type: normMemType(x.type) });
+        });
+        if (out.length) return out;
+      }
     } catch (e) { /* 退化按行 */ }
     var lines = s.split(/\n|;|；/).map(function (x) { return x.replace(/^[\d\.\)\-\s、]+/, '').trim(); }).filter(Boolean);
-    return lines.length ? lines : null;
+    return lines.length ? lines.map(function (t) { return { text: t, type: '其他' }; }) : null;
   }
   function normMemKey(s) {
     // 归一化：小写 + 仅留 字母/数字/中文 + 去首尾空 → 让「标点/空格/大小写/全角」差异不再造成伪重复
     return (s || '').toLowerCase().replace(/[^a-z0-9一-龥]/g, '').trim();
+  }
+  // 记忆类别（自动提炼 / 手动添加共用）。用于着色与筛选
+  var MEM_TYPES = ['偏好', '事实', '身份', '项目', '禁忌', '术语', '约定', '其他'];
+  function normMemType(t) {
+    t = (t || '').trim();
+    if (MEM_TYPES.indexOf(t) >= 0) return t;
+    if (/偏好|喜欢|讨厌|习惯|风格|倾向/.test(t)) return '偏好';
+    if (/身份|职业|姓名|年龄|城市|公司|角色|职位/.test(t)) return '身份';
+    if (/项目|任务|目标|计划|需求/.test(t)) return '项目';
+    if (/禁忌|不要|禁止|避免|别|拒绝/.test(t)) return '禁忌';
+    if (/术语|名词|缩写|黑话|简称/.test(t)) return '术语';
+    if (/约定|规则|协议|约定俗成|规矩/.test(t)) return '约定';
+    if (/事实|信息|资料|数据|情况/.test(t)) return '事实';
+    return '其他';
   }
   function dedupeMemoryItems(items) {
     var seen = {}, out = [];
     (items || []).forEach(function (it) {
       var text = (it && it.text) || '';
       var k = normMemKey(text);
-      if (text.trim() && k && !seen[k]) { seen[k] = 1; out.push(it); }
+      if (text.trim() && k && !seen[k]) {
+        seen[k] = 1;
+        out.push({ text: text, type: (it && it.type) || '其他', t: (it && it.t) || Date.now(), count: (it && it.count) || 0 });
+      }
     });
     return out;
+  }
+  // 轻量相关度：中文按 2-gram、英文/数字按词切分，Jaccard 重叠度（0~1）
+  function memoryTokens(s) {
+    s = (s || '').toLowerCase();
+    var toks = [];
+    var en = s.match(/[a-z0-9]+/g); if (en) toks = toks.concat(en);
+    var cn = s.replace(/[^一-龥]/g, '');
+    if (cn.length === 1) toks.push(cn);
+    for (var i = 0; i < cn.length - 1; i++) toks.push(cn.substr(i, 2));
+    return toks;
+  }
+  function memoryScore(memText, qToks) {
+    if (!qToks || !qToks.length) return 0;
+    var mt = memoryTokens(memText); if (!mt.length) return 0;
+    var setM = {}, setQ = {};
+    mt.forEach(function (x) { setM[x] = 1; });
+    qToks.forEach(function (x) { setQ[x] = 1; });
+    var inter = 0;
+    for (var k in setM) if (setQ[k]) inter++;
+    var uni = Object.keys(setM).length + Object.keys(setQ).length - inter;
+    return uni ? inter / uni : 0;
+  }
+  // 记忆较多时，只注入与当前问题最相关的若干条，避免无关记忆干扰模型、并节省 token
+  function selectRelevantMemories(items, query, maxN) {
+    items = (items || []).filter(function (it) { return it && it.text && it.text.trim(); });
+    maxN = maxN || 12;
+    if (!query || !query.trim() || items.length <= 8) return items.slice();
+    var qToks = memoryTokens(query);
+    var scored = items.map(function (it) { return { it: it, s: memoryScore(it.text, qToks) }; });
+    if (!scored.some(function (x) { return x.s > 0; })) return items.slice(); // 全无相关，稳妥全注入
+    scored.sort(function (a, b) { return b.s - a.s; });
+    return scored.slice(0, maxN).map(function (x) { return x.it; });
   }
   function doMemoryUpdate(b) {
     if (!b || !b.memory || !b.memory.enabled) return;
@@ -1320,12 +1396,12 @@ window.__storage = __storage;
     b.memory.pending = true; renderMemoryPanelIfOpen(b);
     var convo = recent.map(function (m) { return (m.role === 'me' ? '用户' : '助手') + '：' + (m.text || ''); }).join('\n');
     var existing = (b.memory.items || []).map(function (it) { return it.text; }).join('\n');
-    var sys = '你是记忆管理员。阅读对话与已有记忆，产出【更新后的长期记忆清单】。规则：1) 只保留长期有用、跨会话稳定的用户事实（偏好/身份/项目/禁忌/常用术语/约定），丢弃临时闲聊；2) 合并重复、修正过期信息；3) 用简洁中文条目，每条 ≤ 40 字；4) 直接输出 JSON 数组，形如 ["条目1","条目2"]，不要任何解释或 markdown 代码块；5) 逐条比对【已有记忆】，若新条目与某条语义几乎相同（只是措辞/标点/语序不同），只保留一条，绝不要重复列出相同事实，已有记忆里的信息也不要再以新条目重复出现。';
-    var userMsg = '【已有记忆】\n' + (existing || '（无）') + '\n\n【最近对话】\n' + convo + '\n\n请输出更新后的记忆 JSON 数组。';
+    var sys = '你是记忆管理员。阅读对话与已有记忆，产出【更新后的长期记忆清单】。规则：1) 只保留长期有用、跨会话稳定的用户事实（偏好/身份/项目/禁忌/常用术语/约定），丢弃临时闲聊；2) 合并重复、修正过期信息；3) 用简洁中文条目，每条 ≤ 40 字；4) 直接输出 JSON 数组，每条形如 {"text":"条目内容","type":"类别"}，type 只能从 [偏好,事实,身份,项目,禁忌,术语,约定,其他] 中选一个最贴切的；不要任何解释或 markdown 代码块；5) 逐条比对【已有记忆】，若新条目与某条语义几乎相同（只是措辞/标点/语序不同），只保留一条，绝不要重复列出相同事实，已有记忆里的信息也不要再以新条目重复出现。';
+    var userMsg = '【已有记忆】\n' + (existing || '（无）') + '\n\n【最近对话】\n' + convo + '\n\n请输出更新后的记忆 JSON 数组（每条带 type 类别）。';
     BotCraftAI.request([{ role: 'system', content: sys }, { role: 'user', content: userMsg }]).then(function (out) {
       var arr = parseMemoryJSON(out);
       if (arr && arr.length) {
-        var merged = (b.memory.items || []).concat(arr.map(function (t) { return { text: t, t: Date.now() }; }));
+        var merged = (b.memory.items || []).concat(arr.map(function (t) { return { text: t.text, type: t.type || '其他', t: Date.now(), count: 0 }; }));
         merged = dedupeMemoryItems(merged); // 归一化精确去重（合并「标点/空格/大小写/全角」差异造成的伪重复）
         if (merged.length > 50) merged = merged.slice(-50);
         b.memory.items = merged;
@@ -1345,29 +1421,61 @@ window.__storage = __storage;
   }
   var _memSaveT = null;
   function _memSaveDebounce(b) { if (_memSaveT) clearTimeout(_memSaveT); _memSaveT = setTimeout(function () { saveBots(); }, 400); }
+  var _memFilter = { q: '', type: '全部' };
+  function renderMemList(b) {
+    var listEl = document.getElementById('memList'); if (!listEl) return;
+    var items = (b.memory && b.memory.items) || [];
+    var f = _memFilter;
+    var view = items.filter(function (it) {
+      if (f.type !== '全部' && (it.type || '其他') !== f.type) return false;
+      if (f.q && (it.text || '').toLowerCase().indexOf(f.q.toLowerCase()) < 0) return false;
+      return true;
+    });
+    var html = '';
+    if (items.length && !view.length) html = '<div class="empty-tip">没有匹配的记忆。</div>';
+    else if (view.length) {
+      html = view.map(function (it) {
+        var gi = items.indexOf(it);
+        return '<div class="mem-item"><span class="mem-type mem-type-' + (it.type || '其他') + '">' + (it.type || '其他') + '</span><textarea class="mem-text" data-mi="' + gi + '" rows="2">' + escapeHtml(it.text) + '</textarea><button class="mem-del" data-del="' + gi + '" title="删除">✕</button></div>';
+      }).join('');
+    } else {
+      html = '<div class="empty-tip">还没有记忆。多聊几句，或手动添加一条。</div>';
+    }
+    listEl.innerHTML = html;
+    listEl.querySelectorAll('.mem-del').forEach(function (el) { el.onclick = function () { b.memory.items.splice(+el.dataset.del, 1); saveBots(); renderMemList(b); renderCtxBar(b); }; });
+    listEl.querySelectorAll('.mem-text').forEach(function (el) { el.oninput = function () { var i = +el.dataset.mi; if (b.memory.items[i]) { b.memory.items[i].text = el.value; b.memory.items[i].t = Date.now(); _memSaveDebounce(b); } }; });
+  }
   function renderMemoryPanel(b) {
     var box = document.getElementById('wsMemoryBody'); if (!box) return;
     if (!b.memory) b.memory = { enabled: true, items: [], lastUpdate: 0, _seenLen: 0, pending: false };
     var m = b.memory, items = m.items || [];
+    var f = _memFilter;
     var html = '';
-    html += '<div style="font-size:12px;color:var(--sub);margin-bottom:10px">开启后，AI 会自动从对话中提炼关于你的长期记忆，并在后续对话里运用。也可手动添加。</div>';
+    html += '<div style="font-size:12px;color:var(--sub);margin-bottom:10px">开启后，AI 会自动从对话中提炼关于你的长期记忆（含类别），并在后续对话里按相关性智能运用。也可手动添加。</div>';
     html += '<label class="kb-row" style="margin-bottom:10px"><input type="checkbox" id="memEnable" ' + (m.enabled ? 'checked' : '') + '> <span>🧠 启用长期记忆</span><span class="kb-toggle">' + (m.enabled ? '已开启' : '已关闭') + '</span></label>';
-    html += '<div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="updateMemoryNow()">⚡ 立即更新</button><button class="btn btn-ghost btn-sm" onclick="clearMemory()">🗑 清空</button></div>';
+    html += '<div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn btn-primary btn-sm" onclick="updateMemoryNow()">⚡ 立即更新</button><button class="btn btn-ghost btn-sm" onclick="clearMemory()">🗑 清空</button></div>';
+    if (items.length) {
+      html += '<input id="memSearch" class="mem-search" placeholder="🔍 搜索记忆…" value="' + escapeHtml(f.q) + '">';
+      html += '<div class="mem-chips">';
+      html += '<span class="mem-chip' + (f.type === '全部' ? ' on' : '') + '" data-type="全部">全部</span>';
+      MEM_TYPES.forEach(function (tp) { html += '<span class="mem-chip mem-chip-' + tp + (f.type === tp ? ' on' : '') + '" data-type="' + tp + '">' + tp + '</span>'; });
+      html += '</div>';
+    }
     var canCall = !!(window.BotCraftAI && BotCraftAI.canCall && BotCraftAI.canCall());
     var status = '共 ' + items.length + ' 条' + (m.pending ? ' · <span style="color:var(--brand)">更新中…</span>' : '') + (m.lastUpdate ? (' · 更新于 ' + new Date(m.lastUpdate).toLocaleString()) : '');
     if (!canCall) status += ' · <span style="color:var(--warn)">演示模式：未配置 Key，不自动记忆</span>';
-    html += '<div style="font-size:11px;color:var(--sub);margin-bottom:8px">' + status + '</div>';
-    if (items.length) {
-      html += items.map(function (it, i) { return '<div class="mem-item"><textarea class="mem-text" data-mi="' + i + '" rows="2">' + escapeHtml(it.text) + '</textarea><button class="mem-del" data-del="' + i + '" title="删除">✕</button></div>'; }).join('');
-    } else {
-      html += '<div class="empty-tip">还没有记忆。多聊几句，或手动添加一条。</div>';
-    }
-    html += '<div style="margin-top:12px;display:flex;gap:8px"><input id="memAddInput" class="mem-add" placeholder="手动添加一条记忆，如：用户偏好简洁的回答"><button class="btn btn-ghost btn-sm" onclick="addMemoryItem()">＋ 添加</button></div>';
+    html += '<div style="font-size:11px;color:var(--sub);margin:8px 0">' + status + '</div>';
+    html += '<div id="memList"></div>';
+    html += '<div style="margin-top:12px;display:flex;gap:8px"><select id="memTypeSel" class="mem-type-sel">';
+    MEM_TYPES.forEach(function (tp) { html += '<option value="' + tp + '">' + tp + '</option>'; });
+    html += '</select><input id="memAddInput" class="mem-add" placeholder="手动添加一条记忆，如：用户偏好简洁的回答"><button class="btn btn-ghost btn-sm" onclick="addMemoryItem()">＋ 添加</button></div>';
     box.innerHTML = html;
     var en = document.getElementById('memEnable');
     if (en) en.onchange = function () { b.memory.enabled = en.checked; saveBots(); renderMemoryPanel(b); renderCtxBar(b); if (en.checked) scheduleMemoryUpdate(b); };
-    box.querySelectorAll('.mem-del').forEach(function (el) { el.onclick = function () { b.memory.items.splice(+el.dataset.del, 1); saveBots(); renderMemoryPanel(b); renderCtxBar(b); }; });
-    box.querySelectorAll('.mem-text').forEach(function (el) { el.oninput = function () { var i = +el.dataset.mi; if (b.memory.items[i]) { b.memory.items[i].text = el.value; b.memory.items[i].t = Date.now(); _memSaveDebounce(b); } }; });
+    var sc = document.getElementById('memSearch');
+    if (sc) sc.oninput = function () { f.q = sc.value; renderMemList(b); };
+    box.querySelectorAll('.mem-chip').forEach(function (el) { el.onclick = function () { f.type = el.dataset.type; renderMemoryPanel(b); }; });
+    renderMemList(b);
   }
   function updateMemoryNow() {
     var b = getBot(currentId); if (!b || !b.memory) return;
@@ -1379,13 +1487,14 @@ window.__storage = __storage;
   function addMemoryItem() {
     var b = getBot(currentId); if (!b || !b.memory) return;
     var inp = document.getElementById('memAddInput'); if (!inp) return;
+    var sel = document.getElementById('memTypeSel');
     var t = (inp.value || '').trim(); if (!t) return;
     var k = normMemKey(t);
     if ((b.memory.items || []).some(function (it) { return normMemKey(it.text) === k; })) {
       toast('该记忆已存在，未重复添加', '');
       inp.value = ''; return;
     }
-    b.memory.items.push({ text: t, t: Date.now() });
+    b.memory.items.push({ text: t, type: (sel ? sel.value : '其他'), t: Date.now(), count: 0 });
     inp.value = ''; saveBots(); renderMemoryPanel(b); renderCtxBar(b);
     toast('已添加 1 条记忆', 'ok');
   }
@@ -5261,10 +5370,13 @@ window.__debug = {
       if (kbCtx) sys += '\n' + kbCtx;
       // 文体注入：去AI腔/润色节点套用所选写作风格
       if ((role === 'review' || role === 'generate') && bot.styleText) sys += '\n\n【写作风格】请按以下文体要求输出：' + bot.styleText;
-      // 长期记忆注入
+      // 长期记忆注入（按相关性智能挑选，避免无关记忆干扰）
       if (bot.memory && bot.memory.enabled && bot.memory.items && bot.memory.items.length) {
         var mem = bot.memory.items.filter(function (it2) { return it2 && it2.text && it2.text.trim(); });
-        if (mem.length) sys += '\n\n【长期记忆】你长期记住的关于该用户的关键信息，请自然运用：\n' + mem.map(function (it2, i2) { return (i2 + 1) + '. ' + it2.text; }).join('\n');
+        if (mem.length) {
+          var memSel = selectRelevantMemories(mem, userMsg, 12);
+          sys += '\n\n【长期记忆】你长期记住的关于该用户的关键信息，请自然运用：\n' + memSel.map(function (it2, i2) { return (i2 + 1) + '. [' + (it2.type || '其他') + '] ' + it2.text; }).join('\n');
+        }
       }
       sys += '\n\n请只输出本步骤成果，不要解释流程。';
       var messages = [{ role: 'system', content: sys }, { role: 'user', content: ctx }];
