@@ -905,6 +905,11 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none;
     <div class="field"><label>创建方式</label>
       <select id="f-mode"><option value="blank">标准创建（从零搭建）</option><option value="template">从模板创建</option></select>
     </div>
+    <div class="field" id="tplPickField" style="display:none">
+      <label>选择模板 <span style="color:var(--warn)">*</span></label>
+      <div id="tplPick" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px"></div>
+      <div class="err" id="tplErr" style="color:#ff6b81;font-size:11.5px;margin-top:5px;display:none">请选择一个模板</div>
+    </div>
     <div class="mbox-foot">
       <button class="btn btn-ghost" onclick="closeCreate()">取消</button>
       <button class="btn btn-primary" onclick="submitCreate()">创建并配置</button>
@@ -3339,16 +3344,49 @@ function toggleSidebar() {
     }
   } catch (e) {}
 })();
+let selTpl = null;
 function openCreate() { document.getElementById('createModal').classList.add('on'); setTimeout(() => document.getElementById('f-name').focus(), 50); }
 function closeCreate() {
   document.getElementById('createModal').classList.remove('on');
   document.querySelectorAll('#createModal .field').forEach(f => f.classList.remove('invalid'));
   document.querySelectorAll('#createModal .err').forEach(el => el.style.display = 'none');
+  selTpl = null;
+  const tpf = document.getElementById('tplPickField'); if (tpf) tpf.style.display = 'none';
+  const tpe = document.getElementById('tplErr'); if (tpe) tpe.style.display = 'none';
+  document.querySelectorAll('#tplPick .tpl-card').forEach(x => { x.classList.remove('on'); x.style.borderColor = ''; x.style.boxShadow = ''; });
 }
 document.querySelectorAll('.color-pick .c').forEach(c => {
   c.onclick = () => { document.querySelectorAll('.color-pick .c').forEach(x => x.classList.remove('on')); c.classList.add('on'); selColor = c.dataset.c; };
 });
 document.getElementById('createModal').addEventListener('click', e => { if (e.target.id === 'createModal') closeCreate(); });
+// 创建方式切换：选「从模板创建」时渲染模板列表，让用户真正选一个模板
+const _fModeEl = document.getElementById('f-mode');
+if (_fModeEl) _fModeEl.addEventListener('change', () => {
+  const tpf = document.getElementById('tplPickField');
+  if (_fModeEl.value === 'template') { if (tpf) tpf.style.display = ''; renderTplPick(); }
+  else { if (tpf) tpf.style.display = 'none'; selTpl = null; const e2 = document.getElementById('tplErr'); if (e2) e2.style.display = 'none'; document.querySelectorAll('#tplPick .tpl-card').forEach(x => { x.classList.remove('on'); x.style.borderColor = ''; x.style.boxShadow = ''; }); }
+});
+function renderTplPick() {
+  const box = document.getElementById('tplPick'); if (!box) return;
+  const list = [
+    ...tpls.map(t => ({ n: t.n, d: t.d, ic: t.ic, c: t.c, prompt: t.prompt, nodes: undefined, plugins: [], knowledges: [], model: undefined, src: '内置' })),
+    ...getPubTpls().map(t => ({ n: t.n, d: t.d, ic: t.ic || '🤖', c: t.c || 'var(--brand)', prompt: t.prompt || '', nodes: t.nodes || undefined, plugins: t.plugins || [], knowledges: t.knowledges || [], model: t.model || undefined, src: '已发布' })),
+  ];
+  box.innerHTML = list.map((t, i) => `<div class="tpl-card" data-i="${i}" style="display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--glass-bg-hover);transition:.15s">
+    <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:${t.c}">${t.ic}</div>
+    <div style="min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.n)}</div><div style="font-size:11.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.d || '')}</div></div>
+  </div>`).join('');
+  box.querySelectorAll('.tpl-card').forEach(el => {
+    el.onclick = () => {
+      box.querySelectorAll('.tpl-card').forEach(x => { x.classList.remove('on'); x.style.borderColor = ''; x.style.boxShadow = ''; });
+      el.classList.add('on'); el.style.borderColor = 'var(--brand)'; el.style.boxShadow = '0 0 0 2px rgba(109,140,255,.35)';
+      const t = list[+el.dataset.i]; selTpl = t;
+      const e3 = document.getElementById('tplErr'); if (e3) e3.style.display = 'none';
+      const nEl = document.getElementById('f-name'); if (nEl && !nEl.value.trim()) nEl.value = t.n;
+      const dEl = document.getElementById('f-desc'); if (dEl && !dEl.value.trim()) dEl.value = t.d || '';
+    };
+  });
+}
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('createModal').classList.contains('on')) closeCreate();
   if (e.key === 'Enter' && document.getElementById('createModal').classList.contains('on') && !e.shiftKey) submitCreate();
@@ -3479,20 +3517,36 @@ function submitCreate() {
   const name = (nameEl.value || '').trim(), desc = (descEl.value || '').trim();
   const fName = document.getElementById('field-name'), fDesc = document.getElementById('field-desc');
   const errName = fName.querySelector('.err'), errDesc = fDesc.querySelector('.err');
-  fName.classList.toggle('invalid', !name); if (errName) errName.style.display = name ? 'none' : 'block';
+  const modeEl = document.getElementById('f-mode');
+  const mode = modeEl ? modeEl.value : 'blank';
+  const tpl = (mode === 'template') ? selTpl : null;
+  if (mode === 'template' && !selTpl) {
+    const tpe = document.getElementById('tplErr'); if (tpe) tpe.style.display = 'block';
+    toast('请选择一个模板', 'err'); return;
+  }
+  fName.classList.toggle('invalid', !name && !tpl); if (errName) errName.style.display = (name || tpl) ? 'none' : 'block';
   fDesc.classList.toggle('invalid', desc.length > 120); if (errDesc) errDesc.style.display = desc.length > 120 ? 'block' : 'none';
-  if (!name) { toast('请填写机器人名称', 'err'); nameEl.focus(); return; }
+  if (!name && !tpl) { toast('请填写机器人名称', 'err'); nameEl.focus(); return; }
   if (desc.length > 120) { toast('功能介绍不超过 120 字', 'err'); return; }
   const colorEl = document.querySelector('.color-pick .c.on');
   const icon = colorEl ? colorEl.dataset.c : '🤖';
   const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,#6d8cff,#9d6bff)';
-  const modeEl = document.getElementById('f-mode');
-  const mode = modeEl ? modeEl.value : 'blank';
-  const nb = normalize({
-    n: name.slice(0, 30), d: desc || '一个全新的 AI 机器人', ic: icon, c: bg,
-    tag: '草稿', u: 0, t: '—', prompt: SAMPLE_PROMPT, nodes: DEFAULT_NODES.slice(), history: [], plugins: [], knowledges: [], model: BotCraftAI.getConfig().model || 'gpt-4o-mini',
-    fromTemplate: mode === 'template',
-  });
+  const finalName = name || (tpl ? tpl.n : '');
+  const prompt = tpl ? (tpl.prompt || SAMPLE_PROMPT) : SAMPLE_PROMPT;
+  const base = {
+    n: finalName.slice(0, 30), d: desc || '一个全新的 AI 机器人', ic: icon, c: bg,
+    tag: '草稿', u: 0, t: '—', prompt: prompt, history: [], plugins: [], knowledges: [],
+    model: BotCraftAI.getConfig().model || 'gpt-4o-mini', fromTemplate: !!tpl,
+  };
+  if (mode !== 'template') { base.nodes = DEFAULT_NODES.slice(); }
+  else if (tpl && tpl.nodes && tpl.nodes.length) { base.nodes = tpl.nodes; }
+  else { base.nodes = DEFAULT_NODES.slice(); }
+  if (mode === 'template' && tpl) {
+    if (Array.isArray(tpl.plugins) && tpl.plugins.length) base.plugins = tpl.plugins.slice();
+    if (Array.isArray(tpl.knowledges) && tpl.knowledges.length) base.knowledges = tpl.knowledges.slice();
+    if (tpl.model) base.model = tpl.model;
+  }
+  const nb = normalize(base);
   bots.unshift(nb); currentFilter = 'all';
   saveBots(); renderGrid(); updateStats(); closeCreate();
   nameEl.value = ''; descEl.value = '';
