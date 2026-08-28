@@ -12,19 +12,22 @@
   --ok:#3ddc97; --warn:#f5c542; --card:#141c2c; --hover:#1a2438;
   --radius:14px;
   /* 真实半透明玻璃变量（深色）：数值越低越通透，配合 backdrop-filter 起效 */
-  --glass-bg:rgba(20,28,44,.55);
-  --glass-bg-hover:rgba(30,41,63,.72);
+  --glass-bg:rgba(20,28,44,.50);
+  --glass-bg-hover:rgba(30,41,63,.66);
   --glass-bg-active:rgba(109,140,255,.30);
-  --glass-border:rgba(255,255,255,.10);
+  --glass-border:rgba(255,255,255,.16);
   --glass-border-hover:rgba(157,107,255,.55);
-  --glass-shadow:0 8px 28px rgba(0,0,0,.35);
-  --glass-blur:10px;
+  --glass-shadow:0 12px 38px rgba(0,0,0,.42);
+  --glass-blur:20px;
+  --glass-sat:175%;
+  --glass-filter:blur(20px) saturate(175%);
+  --glass-ridge:inset 0 1px 1px rgba(255,255,255,.35), inset 0 -1px 1px rgba(0,0,0,.12);
   --chip-bg:#293854;
   --chip-border:#3d4f78;
   --chip-txt:#e6edf5;
   --chip-hover:#34466a;
-  --msg-bot-bg:#1e2c46;
-  --log-bg:rgba(20,22,34,.92); --log-head-bg:rgba(20,22,34,.96);
+  --msg-bot-bg:rgba(30,44,70,.60);
+  --log-bg:rgba(20,22,34,.82); --log-head-bg:rgba(20,22,34,.90);
   --log-border:rgba(255,255,255,.12); --log-fg:#e8eaf2;
   --log-item-bg:rgba(255,255,255,.04); --log-item-border:rgba(255,255,255,.1);
   --log-item-fg:#aab; --log-ms:#8a8; --log-shadow:0 12px 40px rgba(0,0,0,.4);
@@ -34,18 +37,19 @@
   --bg:#f5f7fb; --panel:#ffffff; --panel2:#f0f3f9; --line:#e2e8f2;
   --txt:#0b1220; --sub:#3c4a61; --card:#ffffff; --hover:#eef2f9;
   /* 浅色下的玻璃变量：半透明白 + 细微描边，折射感更强 */
-  --glass-bg:rgba(255,255,255,.7);
-  --glass-bg-hover:rgba(255,255,255,.9);
+  --glass-bg:rgba(255,255,255,.64);
+  --glass-bg-hover:rgba(255,255,255,.82);
   --glass-bg-active:rgba(109,140,255,.18);
-  --glass-border:rgba(30,41,90,.12);
+  --glass-border:rgba(30,41,90,.16);
   --glass-border-hover:rgba(109,140,255,.55);
-  --glass-shadow:0 8px 28px rgba(30,41,90,.12);
+  --glass-shadow:0 12px 38px rgba(30,41,90,.16);
+  --glass-ridge:inset 0 1px 1px rgba(255,255,255,.85), inset 0 -1px 1px rgba(30,41,90,.05);
   --chip-bg:#ffffff;
   --chip-border:#d8dfea;
   --chip-txt:#0b1220;
   --chip-hover:#eef2f9;
-  --msg-bot-bg:#ffffff;
-  --log-bg:rgba(255,255,255,.92); --log-head-bg:rgba(255,255,255,.96);
+  --msg-bot-bg:rgba(255,255,255,.72);
+  --log-bg:rgba(255,255,255,.82); --log-head-bg:rgba(255,255,255,.90);
   --log-border:rgba(30,41,90,.12); --log-fg:#0b1220;
   --log-item-bg:rgba(30,41,90,.04); --log-item-border:rgba(30,41,90,.1);
   --log-item-fg:#3c4a61; --log-ms:#2f8f5b; --log-shadow:0 12px 40px rgba(30,41,90,.18);
@@ -61,6 +65,17 @@
 [data-theme="light"] .modal,.modal-box{background:var(--glass-bg-hover);border-color:var(--glass-border-hover);}
 [data-theme="light"] .cmd-panel,.toast{background:var(--glass-bg-hover);border-color:var(--glass-border-hover);color:var(--txt);}
 *{box-sizing:border-box;margin:0;padding:0}
+/* ============ 液态玻璃：全局统一质感（模糊 + 内高光 + 高光描边） ============ */
+body .topbar, body .sidebar, body .mbox, body .toast, body .cmd-panel, body .bot-card, body .ws-tab,
+body .chat-input, body .file-btn, body .chip, body .btn, body .btn-ghost, body .btn-primary,
+body .modal-x, body .mini-x, body .side-create, body .side-toggle, body .color-pick .c,
+body .msg.bot, body .msg.me, body .pop-menu{
+  backdrop-filter: var(--glass-filter) !important;
+  -webkit-backdrop-filter: var(--glass-filter) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--glass-ridge), var(--glass-shadow) !important;
+}
+body .topbar{background:var(--glass-bg-hover) !important;}
 html,body{height:100%}
 body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
   color:var(--txt);min-height:100vh;overflow-x:hidden;line-height:1.5;
@@ -311,7 +326,7 @@ body.embed-mode #wsName{font-size:15px}
   background:var(--chip-bg);border:1px solid var(--chip-border);color:var(--chip-txt)}
 .quick-chip:hover{background:var(--chip-hover);border-color:var(--glass-border-hover)}
 .quick-chip:active{transform:translateY(0)}
-.chat-input{padding:14px 18px;border-top:1px solid var(--line);display:flex;gap:10px;background:var(--panel);align-items:flex-end;flex:0 0 auto}  /* 输入区随内容增高，由 textarea 自身 max-height 控制滚动 */
+.chat-input{padding:14px 18px;border-top:1px solid var(--line);display:flex;gap:10px;background:var(--glass-bg);align-items:flex-end;flex:0 0 auto}  /* 输入区随内容增高，由 textarea 自身 max-height 控制滚动 */
 .chat-input textarea{flex:1;width:100%;box-sizing:border-box;padding:11px 15px;border-radius:11px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13.5px;resize:none;line-height:1.5;min-height:44px;max-height:160px;overflow-y:auto;font-family:inherit}
 .chat-input textarea:focus{border-color:var(--brand);outline:none}
 .chat-input button{padding:11px 20px;border-radius:11px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;font-weight:600;font-size:13px;flex-shrink:0}
@@ -5184,7 +5199,7 @@ window.__debug = {
     if (document.getElementById('runLogPanel')) return;
     var panel = document.createElement('div');
     panel.id = 'runLogPanel';
-    panel.style.cssText = 'position:fixed;right:18px;bottom:18px;width:360px;max-height:60vh;overflow:auto;z-index:60;background:var(--log-bg);backdrop-filter:blur(10px);border:1px solid var(--log-border);border-radius:14px;box-shadow:var(--log-shadow);color:var(--log-fg);font-size:12px;display:none';
+    panel.style.cssText = 'position:fixed;right:18px;bottom:18px;width:360px;max-height:60vh;overflow:auto;z-index:60;background:var(--log-bg);backdrop-filter:var(--glass-filter);-webkit-backdrop-filter:var(--glass-filter);border:1px solid var(--log-border);border-radius:14px;box-shadow:var(--glass-ridge),var(--log-shadow);color:var(--log-fg);font-size:12px;display:none';
     panel.innerHTML = '<div id="runLogHead" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--log-border);font-weight:600;position:sticky;top:0;background:var(--log-head-bg);cursor:move;user-select:none;white-space:nowrap"><span class="rl-grip" title="拖动我" style="opacity:.55;margin-right:5px">⠿</span><span style="font-size:14px;line-height:1">🪵</span><span class="rl-title" style="margin-left:6px">执行日志</span><span id="runLogMin" class="rl-min" style="cursor:pointer;opacity:.7;padding:0 6px;margin-left:auto" title="收起 / 展开">—</span><span id="runLogClose" class="rl-close" style="cursor:pointer;opacity:.7;padding:0 6px;margin-left:6px">✕</span></div><div id="runLogBody" style="padding:10px 14px"></div>';
     document.body.appendChild(panel);
     var close = document.getElementById('runLogClose');
