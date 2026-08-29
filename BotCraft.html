@@ -1064,10 +1064,15 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none;
 
 <!-- ==================== 人工审核弹窗 ==================== -->
 <div class="modal" id="humanApprovalModal">
-  <div class="mbox" style="width:600px">
-    <h2 id="humanApprovalTitle">🧑‍⚖️ 人工审核</h2>
-    <div class="hint" style="margin-bottom:10px">工作流已暂停在此节点。可查看 / 修改下方草稿，确认后继续，或驳回重新执行整条工作流。</div>
-    <textarea id="humanApprovalText" style="width:100%;min-height:220px;background:var(--bg);border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
+  <div class="mbox" style="width:640px">
+    <h2 id="humanApprovalTitle">🧑‍⚖️ 审批</h2>
+    <div class="hint" style="margin-bottom:10px">工作流已暂停在审批节点。可查看 / 修改下方草稿，确认后发出，或驳回重新执行整条工作流。</div>
+    <div id="humanApprovalNote" style="display:none;margin-bottom:10px;padding:9px 11px;border:1px dashed var(--glass-border);border-radius:9px;background:var(--glass-bg);font-size:12.5px;color:var(--txt);line-height:1.6"></div>
+    <textarea id="humanApprovalText" style="width:100%;min-height:200px;background:var(--bg);border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
+    <div id="humanApprovalPre" style="display:none;margin-top:10px">
+      <div style="font-size:12px;color:var(--sub);font-weight:600;margin-bottom:5px">🤖 AI 预审意见（复用质检逻辑）</div>
+      <div id="humanApprovalPreBody" style="white-space:pre-wrap;min-height:48px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:9px;font-size:12.5px;color:var(--txt);line-height:1.6"></div>
+    </div>
     <div class="mbox-foot" style="margin-top:12px;gap:10px">
       <button class="btn btn-primary" id="humanApprovalPass" style="background:linear-gradient(135deg,#3ddc97,#2bb5e8)">✅ 通过并继续</button>
       <button class="btn btn-ghost" id="humanApprovalReject" style="border:1px solid var(--warn);color:var(--warn)">🔄 驳回重跑</button>
@@ -1691,12 +1696,14 @@ const DEFAULT_NODES = [
   { lbl: '💬 消息', h: '生成回复', p: '基于检索内容作答', role: 'generate' },
 ];
 
-// 预置四步管线：澄清 → 正文 → 去AI腔 → 成品。创建机器人未指定 nodes 时套用。
+// 预置四步管线：澄清 → 正文 → 去AI腔 → 审批。创建机器人未指定 nodes 时套用。
+// 「审批」节点为接单必备：交付前人工确认/修改，并默认开启 AI 预审（复用 review 质检逻辑）。
 const DEFAULT_WORKFLOW = [
   { lbl: '🟢 开始', h: '用户输入', p: '接收用户消息', role: 'start' },
   { lbl: '❓ 澄清', h: '需求澄清', p: 'role:clarify 列出平台/人群/卖点/风格/篇幅', role: 'clarify' },
   { lbl: '✍️ 撰写', h: '撰写正文', p: 'role:draft 生成完整草稿', role: 'draft' },
   { lbl: '✨ 去AI腔', h: '去AI腔润色', p: 'role:review 去AI腔、质检并输出最终成品', role: 'review' },
+  { lbl: '🧑‍⚖️ 审批', h: '人工审批', p: 'role:human 交付前暂停，人工确认/修改后再发出', role: 'human', note: '交付前请确认：无违规承诺、符合品牌调性、信息准确。', autoReview: true },
 ];
 
 const SEED_BOTS = [
@@ -2938,7 +2945,7 @@ const NODE_TYPES = [
   { lbl: '🔗 插件', h: '调用插件', p: '执行插件工具' },
   { lbl: '🟢 开始', h: '开始', p: '流程起点', role: 'start' },
   { lbl: '🤖 机器人', h: '转交机器人', p: '转交给指定机器人应答', bot: '' },
-  { lbl: '🧑‍⚖️ 人工审核', h: '人工审批', p: 'role:human 暂停并等待人工确认/修改后再继续', role: 'human' },
+  { lbl: '🧑‍⚖️ 审批', h: '人工审批', p: 'role:human 交付前暂停，人工确认/修改后再发出', role: 'human', note: '交付前请确认：无违规承诺、符合品牌调性、信息准确。', autoReview: true },
 ];
 function addNode() {
   const b = getBot(currentId); if (!b) return;
@@ -2960,6 +2967,7 @@ function bindNodeEdit(body, b) {
         ? bots.filter(x => x.id !== b.id).map(x => `<option value="${x.id}" ${(nd.bot === x.id) ? 'selected' : ''}>${escapeHtml(x.n)}</option>`).join('')
         : '';
       const isHandoffType = (nd.lbl || '').indexOf('🤖') >= 0;
+      const isAprType = (nd.role === 'human');
       el.innerHTML = `
         <span class="node-del" data-i="${i}" title="删除节点">✕</span>
         <select class="ne-type" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px">
@@ -2970,6 +2978,12 @@ function bindNodeEdit(body, b) {
         </select>
         <input class="ne-h" value="${escapeHtml(nd.h)}" placeholder="节点标题">
         <textarea class="ne-p" placeholder="节点描述">${escapeHtml(nd.p)}</textarea>
+        ${isAprType ? `
+        <div style="margin-top:6px">
+          <div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>
+          <textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical">${escapeHtml(nd.note || '')}</textarea>
+          <label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><input class="ne-autoreview" type="checkbox" ${nd.autoReview ? 'checked' : ''}> 启用 AI 预审（复用质检逻辑，发出前先出质检意见）</label>
+        </div>` : ''}
         <div class="node-edit-save">
           <button class="ok" data-act="save">保存</button>
           <button class="cancel" data-act="cancel">取消</button>
@@ -2978,7 +2992,20 @@ function bindNodeEdit(body, b) {
       const botSel = el.querySelector('.ne-bot');
       const hInput = el.querySelector('.ne-h');
       const pInput = el.querySelector('.ne-p');
-      typeSel.onchange = () => { botSel.style.display = (typeSel.value.indexOf('🤖') >= 0) ? 'block' : 'none'; };
+      typeSel.onchange = () => {
+        botSel.style.display = (typeSel.value.indexOf('🤖') >= 0) ? 'block' : 'none';
+        const willHuman = ((NODE_TYPES.find(t => t.lbl === typeSel.value) || {}).role === 'human');
+        var aprBox = el.querySelector('.apr-box');
+        if (!aprBox) {
+          aprBox = document.createElement('div'); aprBox.className = 'apr-box';
+          aprBox.style.marginTop = '6px';
+          aprBox.innerHTML = '<div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>' +
+            '<textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical"></textarea>' +
+            '<label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><input class="ne-autoreview" type="checkbox" checked> 启用 AI 预审（复用质检逻辑，发出前先出质检意见）</label>';
+          el.insertBefore(aprBox, el.querySelector('.node-edit-save'));
+        }
+        aprBox.style.display = willHuman ? 'block' : 'none';
+      };
       const close = () => { el.classList.remove('editing'); renderNodes(b); };
       const save = () => {
         const chosen = NODE_TYPES.find(t => t.lbl === typeSel.value) || NODE_TYPES[0];
@@ -2987,7 +3014,10 @@ function bindNodeEdit(body, b) {
         const isHandoff = (typeSel.value || '').indexOf('🤖') >= 0;
         const newBot = isHandoff ? (botSel.value || '') : '';
         const newRole = (NODE_TYPES.find(t => t.lbl === typeSel.value) || {}).role || '';
-        b.nodes[i] = { lbl: typeSel.value, h: newH, p: newP, bot: newBot, role: newRole };
+        const isHuman = (newRole === 'human');
+        const newNote = isHuman ? ((el.querySelector('.ne-note') || {}).value || '') : '';
+        const newAuto = isHuman ? !!(el.querySelector('.ne-autoreview') && el.querySelector('.ne-autoreview').checked) : false;
+        b.nodes[i] = { lbl: typeSel.value, h: newH, p: newP, bot: newBot, role: newRole, note: newNote, autoReview: newAuto };
         b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('节点已更新', 'ok');
       };
       el.querySelector('[data-act=save]').onclick = save;
@@ -3240,7 +3270,7 @@ async function sendMsg() {
       const result = await runWorkflow(b, v, function (st) {
         // 顶部总进度
         var txt = '🔄 工作流执行中（' + (st.done || 0) + '/' + (st.total || aiBot.nodes.length) + '）';
-        if (st.phase === 'human') txt = '⏸ 已暂停 · 等待人工审核（' + escapeHtml(st.curName || '人工审核') + '）— 请在弹窗中通过或驳回';
+        if (st.phase === 'human') txt = '⏸ 已暂停 · 等待人工审批（' + escapeHtml(st.curName || '审批') + '）— 请在弹窗中通过或驳回';
         else if (st.curName) txt += ' · 正在执行：' + escapeHtml(st.curName);
         else if (st.lastDone) txt += ' · ✅ 已完成：' + escapeHtml(st.lastDone);
         prog.innerHTML = '<div class="who">' + escapeHtml(activeBot.n) + '</div><div class="wf-progress">' + txt + '</div>';
@@ -5054,6 +5084,7 @@ window.__debug = {
     if (/意图|识别|分类|意图识别/.test(p)) return 'intent';
     if (/生成回复|最终回复|生成答案|直接回复|成品|应答/i.test(p)) return 'generate';
     if (/知识库|检索知识|搜索知识|知识检索|查资料|资料检索|召回|search|retrieve/i.test(p)) return 'retrieve';
+    if (/审批|人工审核|人工确认|待人工|人工审批/i.test(p)) return 'human';
     if (/去\s*ai\s*腔|去ai味|润色|打磨|质检|审核|审查|review|通顺|自然|成稿/i.test(p)) return 'review';
     if (/正文|撰写|写作|起草|创作|草稿|种草|文案|脚本|draft|write/i.test(p)) return 'draft';
     return 'step';
@@ -5263,15 +5294,45 @@ window.__debug = {
     return parts.join('\n\n');
   }
 
-  // ---------- 人工审核/审批：暂停工作流，等待人工确认 ----------
+  // ---------- 审批节点：暂停工作流，等待人工确认（含 AI 预审，复用 review 质检逻辑） ----------
   function waitHumanApproval(draft, node) {
     return new Promise(function (resolve) {
       var modal = document.getElementById('humanApprovalModal');
       if (!modal) { resolve({ text: draft, restart: false }); return; }
       var ta = document.getElementById('humanApprovalText');
       var title = document.getElementById('humanApprovalTitle');
-      if (title) title.textContent = '🧑‍⚖️ 人工审核 · ' + (node && node.h ? node.h : '审批节点');
+      var noteEl = document.getElementById('humanApprovalNote');
+      var preWrap = document.getElementById('humanApprovalPre');
+      var preBody = document.getElementById('humanApprovalPreBody');
+      if (title) title.textContent = '🧑‍⚖️ 审批 · ' + (node && node.h ? node.h : '审批节点');
+      if (noteEl) {
+        var note = (node && node.note) ? String(node.note).trim() : '';
+        if (note) { noteEl.style.display = 'block'; noteEl.textContent = '📋 审批说明：' + note; }
+        else { noteEl.style.display = 'none'; }
+      }
       if (ta) { ta.value = (draft || ''); try { ta.focus(); } catch (e) {} }
+      // AI 预审：复用 review 角色的质检逻辑，发出前先给审批人一份结论与要点
+      var canCall = (window.BotCraftAI && BotCraftAI.canCall) ? BotCraftAI.canCall() : false;
+      if (preWrap && preBody) {
+        if (node && node.autoReview && canCall) {
+          preWrap.style.display = 'block';
+          preBody.textContent = '🤖 AI 预审中…';
+          try {
+            BotCraftAI.request([
+              { role: 'system', content: (ROLE_SYSTEM.review || '') + '\n\n请以「审批/质检」视角对下方草稿给出结论：第一行列【通过】或【需修改】，随后用 3-5 条要点说明风险与改进点（违规承诺、事实错误、品牌调性、语气、完整性）。不要重写全文，只给结论与要点。' },
+              { role: 'user', content: (draft || '') }
+            ]).then(function (out) {
+              if (preBody) preBody.textContent = (out && out.trim()) ? out.trim() : '（无输出）';
+            }).catch(function (e) {
+              if (preBody) preBody.textContent = '⚠️ 预审失败：' + ((e && e.message) ? e.message : e);
+            });
+          } catch (e) {
+            if (preBody) preBody.textContent = '⚠️ 预审失败：' + ((e && e.message) ? e.message : e);
+          }
+        } else {
+          preWrap.style.display = 'none';
+        }
+      }
       var done = false;
       var finish = function (res) {
         if (done) return; done = true;
@@ -5307,19 +5368,27 @@ window.__debug = {
         logs.push({ i: i + 1, role: 'start', name: node.h || '用户输入', ms: 0, output: userMsg });
         flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: '开始', role: 'start', phase: 'done' }); continue;
       }
-      // 人工审核/审批节点：暂停并等待人工确认或修改
+      // 审批节点：暂停并等待人工确认或修改
       if (role === 'human') {
-        emit({ total: nodes.length, done: i, curName: (node.h || '人工审核'), role: 'human', phase: 'human' });
+        emit({ total: nodes.length, done: i, curName: (node.h || '审批'), role: 'human', phase: 'human' });
         var draft = prev && prev !== userMsg ? prev : finalText;
         var decision = await waitHumanApproval(draft, node);
+        var approver = (window.__curUser && window.__curUser.name) ? window.__curUser.name : '本机审批人';
+        if (!bot.approvals) bot.approvals = [];
         if (decision && decision.restart) {
-          logs.push({ i: i + 1, role: 'human', name: node.h || '人工审核', ms: 0, output: '[已驳回，重新执行工作流]' });
-          flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: '人工审核', role: 'human', phase: 'done' }); prev = ''; finalText = userMsg; i = -1; continue;
+          bot.approvals.push({ at: Date.now(), decision: 'reject', node: (node.h || '审批'), by: approver, note: (decision.text || '') });
+          if (bot.approvals.length > 200) bot.approvals = bot.approvals.slice(-200);
+          saveBots();
+          logs.push({ i: i + 1, role: 'human', name: node.h || '审批', ms: 0, output: '[已驳回，重新执行工作流] · 审批人：' + approver });
+          flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: '审批', role: 'human', phase: 'done' }); prev = ''; finalText = userMsg; i = -1; continue;
         }
         var approved = (decision && decision.text != null) ? decision.text : draft;
         approved = (approved || '').toString().trim();
-        logs.push({ i: i + 1, role: 'human', name: node.h || '人工审核', ms: 0, output: approved ? ('[人工已确认] ' + approved) : '[人工已通过]' });
-        flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: '人工审核', role: 'human', phase: 'done' }); prev = approved || draft; finalText = approved || draft;
+        bot.approvals.push({ at: Date.now(), decision: 'pass', node: (node.h || '审批'), by: approver, note: approved });
+        if (bot.approvals.length > 200) bot.approvals = bot.approvals.slice(-200);
+        saveBots();
+        logs.push({ i: i + 1, role: 'human', name: node.h || '审批', ms: 0, output: approved ? ('[已审批通过] ' + approved) : ('[已通过] · 审批人：' + approver) });
+        flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: '审批', role: 'human', phase: 'done' }); prev = approved || draft; finalText = approved || draft;
         continue;
       }
       // 按节点角色裁剪上下文：中间节点只拿它该看的信息，避免所有节点都生成最终回复
@@ -5573,7 +5642,7 @@ window.__debug = {
     if (!panel || !body) return;
     window.__runLogLast = logs || [];
     panel.style.display = 'block';
-    var roleLabel = { start: '开始', clarify: '澄清', outline: '大纲', draft: '撰写', review: '去AI腔', human: '人工审核', step: '步骤' };
+    var roleLabel = { start: '开始', clarify: '澄清', outline: '大纲', draft: '撰写', review: '去AI腔', human: '审批', step: '步骤' };
     body.innerHTML = (logs || []).map(function (l) {
       var o = (l.output || '').slice(0, 600);
       return '<div style="margin-bottom:12px;padding:8px 10px;border:1px solid var(--log-item-border);border-radius:10px;background:var(--log-item-bg)">' +
