@@ -433,7 +433,9 @@ body.embed-mode #wsName{font-size:15px}
 .chat-input button:disabled{opacity:.5;cursor:not-allowed}
 .msg{max-width:78%;padding:11px 15px;border-radius:14px;font-size:13.5px;line-height:1.6;word-break:break-word;
   content-visibility:auto;contain-intrinsic-size:auto 60px}
-.msg.bot{background:var(--msg-bot-bg);border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:4px}
+.msg.bot{background:var(--msg-bot-bg);border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:4px;display:flex;gap:10px;align-items:flex-start;max-width:82%}
+.msg.bot .msg-ava{flex:0 0 auto;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-top:1px;box-shadow:var(--glass-ridge);border:1px solid var(--glass-border)}
+.msg.bot .msg-body{flex:1;min-width:0}
 .msg.me{background:linear-gradient(135deg,var(--brand),var(--brand2));align-self:flex-end;border-bottom-right-radius:4px;color:#fff}
 .msg .who{font-size:10.5px;color:var(--sub);margin-bottom:4px;font-weight:600}
 .msg pre{background:var(--bg);border-radius:8px;padding:10px;margin:8px 0;overflow-x:auto;font-size:12px;font-family:'SF Mono',Consolas,monospace}
@@ -463,9 +465,12 @@ body.embed-mode #wsName{font-size:15px}
 .msg-copy:hover{background:var(--glass-bg-hover);color:var(--brand);border-color:var(--glass-border-hover);transform:translateY(-1px)}
 .msg-copy:active{background:var(--glass-bg-active);transform:translateY(0)}
 .msg-copy.copied{color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent}
-.typing{display:flex;gap:4px;padding:4px 0;align-self:flex-start}
-.typing span{width:7px;height:7px;border-radius:50%;background:var(--sub);animation:bl 1.2s infinite}
-.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+.typing{display:flex;gap:10px;align-items:flex-start;align-self:flex-start}
+.typing .msg-ava{flex:0 0 auto;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-top:1px;box-shadow:var(--glass-ridge);border:1px solid var(--glass-border)}
+.typing .msg-body{flex:1;min-width:0;display:flex;align-items:center}
+.typing .dots{display:flex;gap:4px;padding:6px 0}
+.typing .dots span{width:7px;height:7px;border-radius:50%;background:var(--sub);animation:bl 1.2s infinite}
+.typing .dots span:nth-child(2){animation-delay:.2s}.typing .dots span:nth-child(3){animation-delay:.4s}
 .wf-progress{padding:6px 2px;color:var(--sub);font-size:13px;line-height:1.6;display:flex;align-items:center;gap:8px}
 .wf-progress::before{content:'';width:14px;height:14px;border:2px solid var(--brand);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:0 0 auto}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -3071,6 +3076,8 @@ function scrollChatToBottom(force) {
   });
 }
 
+function _ava(b){var bg=(b&&b.c)?b.c:'var(--brand)';var ic=(b&&b.ic)?b.ic:'🤖';return '<div class="msg-ava" style="background:'+bg+'">'+ic+'</div>';}
+function _body(who,inner){return '<div class="msg-body"><div class="who">'+who+'</div>'+inner+'</div>';}
 function appendMsg(b, m) {
   const chat = document.getElementById('chat'); if (!chat) return;
   const div = document.createElement('div');
@@ -3079,7 +3086,7 @@ function appendMsg(b, m) {
     div.textContent = m.text;
   } else {
     div.className = 'msg bot';
-    div.innerHTML = '<div class="who">' + escapeHtml(m.who || b.n) + '</div>' + renderMarkdown(m.text);
+    div.innerHTML = _ava(b) + _body(escapeHtml(m.who || b.n), renderMarkdown(m.text));
   }
   chat.appendChild(div);
   attachCopyBtns();
@@ -3088,12 +3095,12 @@ function appendMsg(b, m) {
 function renderHistory(b) {
   const chat = document.getElementById('chat'); if (!chat) return;
   if (!b.history || b.history.length === 0) {
-    chat.innerHTML = `<div class="msg bot"><div class="who">${escapeHtml(b.n)}</div>${renderMarkdown(b.d || '你好，我是你的 AI 助手，开始对话吧～')}</div>`;
+    chat.innerHTML = `<div class="msg bot">${_ava(b)}${_body(escapeHtml(b.n), renderMarkdown(b.d || '你好，我是你的 AI 助手，开始对话吧～'))}</div>`;
   } else {
     chat.innerHTML = b.history.map(m =>
       m.role === 'me'
         ? `<div class="msg me">${escapeHtml(m.text)}</div>`
-        : `<div class="msg bot"><div class="who">${escapeHtml(m.who || b.n)}</div>${renderMarkdown(m.text)}</div>`
+        : `<div class="msg bot">${_ava(b)}${_body(escapeHtml(m.who || b.n), renderMarkdown(m.text))}</div>`
     ).join('');
   }
   chat.querySelectorAll('.typing').forEach(t => t.remove());
@@ -3238,7 +3245,7 @@ async function sendMsg() {
   chat.querySelectorAll('.typing').forEach(t => t.remove());
   const typing = document.createElement('div');
   typing.className = 'typing';
-  typing.innerHTML = '<span></span><span></span><span></span>';
+  typing.innerHTML = _ava(activeBot) + '<div class="msg-body"><span class="dots"><span></span><span></span><span></span></span></div>';
   chat.appendChild(typing); scrollChatToBottom();
   setSendingUI(true);
 
@@ -3256,13 +3263,13 @@ async function sendMsg() {
       // 实时进度气泡：替代静态转圈，明确显示「正在执行第几步 · 哪个节点」
       const prog = document.createElement('div');
       prog.className = 'msg bot';
-      prog.innerHTML = '<div class="who">' + escapeHtml(activeBot.n) + '</div><div class="wf-progress">🔄 工作流执行中（0/' + aiBot.nodes.length + '）…</div>';
+      prog.innerHTML = _ava(activeBot) + _body(escapeHtml(activeBot.n), '<div class="wf-progress">🔄 工作流执行中（0/' + aiBot.nodes.length + '）…</div>');
       chat.appendChild(prog); scrollChatToBottom();
       // 流式输出气泡：当前节点的模型回复逐字显示，避免「干等」
       const cur = document.createElement('div');
       cur.className = 'msg bot';
       cur.style.display = 'none';
-      cur.innerHTML = '<div class="who"></div><div class="wf-stream-body"></div>';
+      cur.innerHTML = _ava(activeBot) + _body('', '<div class="wf-stream-body"></div>');
       chat.appendChild(cur); scrollChatToBottom();
       const curWho = cur.querySelector('.who');
       const curBody = cur.querySelector('.wf-stream-body');
@@ -3273,7 +3280,7 @@ async function sendMsg() {
         if (st.phase === 'human') txt = '⏸ 已暂停 · 等待人工审批（' + escapeHtml(st.curName || '审批') + '）— 请在弹窗中通过或驳回';
         else if (st.curName) txt += ' · 正在执行：' + escapeHtml(st.curName);
         else if (st.lastDone) txt += ' · ✅ 已完成：' + escapeHtml(st.lastDone);
-        prog.innerHTML = '<div class="who">' + escapeHtml(activeBot.n) + '</div><div class="wf-progress">' + txt + '</div>';
+        prog.innerHTML = _ava(activeBot) + _body(escapeHtml(activeBot.n), '<div class="wf-progress">' + txt + '</div>');
         // 流式当前步
         if (st.phase === 'node' && st.role && st.role !== 'start' && st.role !== 'human') {
           cur.style.display = '';
@@ -3306,7 +3313,7 @@ async function sendMsg() {
     // 创建正在输入的「气泡」，逐字追加
     const bubble = document.createElement('div');
     bubble.className = 'msg bot';
-    bubble.innerHTML = `<div class="who">${escapeHtml(activeBot.n)}</div><span class="stream-text"></span>`;
+    bubble.innerHTML = _ava(activeBot) + _body(escapeHtml(activeBot.n), '<span class="stream-text"></span>');
     chat.appendChild(bubble);
     const span = bubble.querySelector('.stream-text');
     let full = ''; let _lastPaint = 0;
