@@ -1971,24 +1971,114 @@ const DEFAULT_WORKFLOW = [
   { lbl: '🧑‍⚖️ 审批', h: '人工审批', p: 'role:human 交付前暂停，人工确认/修改后再发出', role: 'human', note: '交付前请确认：无违规承诺、符合品牌调性、信息准确。', autoReview: true },
 ];
 
+// ==================== 每个机器人的专属编排（nodes） ====================
+// 集中维护，SEED_BOTS / tpls 通过 name 引用；normalize 兜底按 name 套用。
+// role 语义：start=用户输入 / intent=意图识别 / retrieve=检索知识 / clarify=需求澄清 /
+//           draft=撰写正文 / review=去AI腔·质检·纠错 / human=人工审批 / generate=生成回复
+const ORCH_BY_NAME = {
+  '智能客服助手': [
+    { lbl: '🟢 开始', h: '用户输入', p: '接收用户消息与上下文', role: 'start' },
+    { lbl: '🧠 大模型', h: '意图识别', p: '判断订单/售后/咨询类型', role: 'intent' },
+    { lbl: '📚 知识库', h: '检索知识', p: '查询产品说明书与订单状态', role: 'retrieve' },
+    { lbl: '💬 消息', h: '生成回复', p: '基于检索内容作答；低置信度转人工', role: 'generate' },
+  ],
+  '产品文案生成器': [
+    { lbl: '🟢 开始', h: '用户输入', p: '接收卖点与目标平台', role: 'start' },
+    { lbl: '❓ 澄清', h: '需求澄清', p: '确认平台/人群/风格/篇幅', role: 'clarify' },
+    { lbl: '✍️ 撰写', h: '撰写正文', p: '生成种草文案', role: 'draft' },
+    { lbl: '去AI腔', h: '去AI腔润色', p: '去AI腔、加网感、加钩子', role: 'review' },
+  ],
+  '数据报表分析师': [
+    { lbl: '🟢 开始', h: '上传数据', p: '接收表格或原始数据', role: 'start' },
+    { lbl: '📊 大模型', h: '解析数据', p: '理解字段口径与维度' },
+    { lbl: '🔍 分析', h: '指标分析', p: '计算关键指标与异常' },
+    { lbl: '📈 图表', h: '生成图表', p: '产出可视化图表' },
+    { lbl: '💡 结论', h: '输出结论', p: '提炼结论与行动建议', role: 'generate' },
+  ],
+  '英语口语陪练': [
+    { lbl: '🟢 开始', h: '情景对话', p: '进入对话情景', role: 'start' },
+    { lbl: '🗣️ 对话', h: '情景对话', p: '用英语互动练习' },
+    { lbl: '✅ 纠错', h: '即时纠错', p: '纠正语法与用词', role: 'review' },
+    { lbl: '💡 讲解', h: '要点讲解', p: '解释错误与改进方法' },
+  ],
+  '代码助手': [
+    { lbl: '🟢 开始', h: '问题描述', p: '接收代码或问题', role: 'start' },
+    { lbl: '🧠 理解', h: '理解需求', p: '定位意图与上下文' },
+    { lbl: '🔧 处理', h: '解释/调试/重构', p: '给出方案与代码' },
+    { lbl: '📝 说明', h: '补充说明', p: '解释原理与注意点', role: 'generate' },
+  ],
+  '旅行规划师': [
+    { lbl: '🟢 开始', h: '偏好收集', p: '接收目的地/预算/天数', role: 'start' },
+    { lbl: '❓ 澄清', h: '需求澄清', p: '确认偏好与约束', role: 'clarify' },
+    { lbl: '🌐 检索', h: '查资讯', p: '查天气/景点/交通', role: 'retrieve' },
+    { lbl: '🗺️ 行程', h: '生成行程', p: '排日程与预算', role: 'draft' },
+  ],
+  '会议纪要整理': [
+    { lbl: '🟢 开始', h: '上传记录', p: '接收录音或文字', role: 'start' },
+    { lbl: '📄 解析', h: '转写解析', p: '理清议题与发言' },
+    { lbl: '🎯 提炼', h: '提炼要点', p: '结论/决议/待办', role: 'generate' },
+    { lbl: '✅ 核对', h: '核对确认', p: '去重纠错', role: 'review' },
+  ],
+  '求职简历优化': [
+    { lbl: '🟢 开始', h: '提交材料', p: '接收简历与 JD', role: 'start' },
+    { lbl: '🔍 解析', h: '解析 JD', p: '提取岗位要求' },
+    { lbl: '✨ 优化', h: '匹配改写', p: '突出匹配亮点', role: 'draft' },
+    { lbl: '📋 审阅', h: '过关检查', p: '查硬伤与夸大', role: 'review' },
+  ],
+  '电商智能客服': [
+    { lbl: '🟢 开始', h: '用户输入', p: '接收咨询', role: 'start' },
+    { lbl: '🧠 意图', h: '意图识别', p: '订单/退换/推荐', role: 'intent' },
+    { lbl: '📚 检索', h: '查商品订单', p: '检索知识库', role: 'retrieve' },
+    { lbl: '💬 回复', h: '生成回复', p: '作答或转人工', role: 'generate' },
+  ],
+  '知识库问答': [
+    { lbl: '🟢 开始', h: '用户提问', p: '接收问题', role: 'start' },
+    { lbl: '📚 检索', h: '检索知识', p: '检索企业文档', role: 'retrieve' },
+    { lbl: '💬 回答', h: '严谨作答', p: '仅基于文档作答', role: 'generate' },
+  ],
+  '短视频脚本生成': [
+    { lbl: '🟢 开始', h: '主题输入', p: '接收主题与平台', role: 'start' },
+    { lbl: '❓ 澄清', h: '需求澄清', p: '确认风格与时长', role: 'clarify' },
+    { lbl: '🎬 分镜', h: '写分镜', p: '分镜与台词', role: 'draft' },
+    { lbl: '✨ 润色', h: '节奏打磨', p: '加钩子与转场', role: 'review' },
+  ],
+  '邮件自动回复': [
+    { lbl: '🟢 开始', h: '邮件输入', p: '接收邮件正文', role: 'start' },
+    { lbl: '🧠 意图', h: '理解意图', p: '判断回复策略', role: 'intent' },
+    { lbl: '✍️ 草拟', h: '草拟回复', p: '专业得体', role: 'draft' },
+    { lbl: '✅ 核对', h: '核对语气', p: '确认无误', role: 'review' },
+  ],
+  '翻译官': [
+    { lbl: '🟢 开始', h: '原文输入', p: '接收待译文本', role: 'start' },
+    { lbl: '🌐 识别', h: '识别语言', p: '判断语种与风格' },
+    { lbl: '🔁 翻译', h: '翻译', p: '准确传达语义', role: 'draft' },
+    { lbl: '✨ 校对', h: '母语润色', p: '自然流畅', role: 'review' },
+  ],
+  '情感陪伴助手': [
+    { lbl: '🟢 开始', h: '倾诉', p: '接收用户表达', role: 'start' },
+    { lbl: '💗 共情', h: '情绪回应', p: '倾听与共情' },
+    { lbl: '💡 建议', h: '提供建议', p: '实用可行动', role: 'generate' },
+  ],
+};
+
 const SEED_BOTS = [
-  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '', c: 'linear-gradient(135deg,#2f9e7a,#1f7d60)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: [{ lbl: '🟢 开始', h: '用户输入', p: '接收消息' }, { lbl: '🧠 大模型', h: '意图识别', p: '订单/售后/咨询' }, { lbl: '🔀 条件', h: '是否转人工', p: '置信度<0.6转接' }, { lbl: '💬 消息', h: '生成回复', p: '作答' }], plugins: ['网页搜索'], knowledges: ['产品说明书 v3'], model: 'gpt-4o-mini' },
-  { n: '产品文案生成器', d: '根据卖点一键生成小红书/抖音种草文案', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', plugins: ['图片生成'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#3ddc97,#2bb5e8)', tag: '已发布', u: 320, t: '95%', prompt: '你是数据分析师，能解读数据并给出关键结论。', plugins: ['代码执行器'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与发音', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', plugins: [], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', tag: '已发布', u: 2105, t: '97%', prompt: '你是资深工程师，擅长解释、调试、重构代码。', plugins: ['代码执行器', '网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#4dd0e1,#7c4dff)', tag: '草稿', u: 0, t: '—', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', plugins: ['天气查询', '网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '会议纪要整理', d: '上传录音/文字，自动提炼待办与结论', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', u: 88, t: '85%', prompt: '你负责整理会议纪要，提炼结论与待办事项。', plugins: ['PDF 解析'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '求职简历优化', d: '基于 JD 智能改写简历，提升通过率', ic: '💼', c: 'linear-gradient(135deg,#a1887f,#795548)', tag: '已发布', u: 410, t: '90%', prompt: '你帮用户基于 JD 优化简历，突出匹配亮点。', plugins: ['网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '', c: 'linear-gradient(135deg,#2f9e7a,#1f7d60)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['产品说明书 v3'], model: 'gpt-4o-mini' },
+  { n: '产品文案生成器', d: '根据卖点一键生成小红书/抖音种草文案', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#3ddc97,#2bb5e8)', tag: '已发布', u: 320, t: '95%', prompt: '你是数据分析师，能解读数据并给出关键结论。', nodes: ORCH_BY_NAME['数据报表分析师'], plugins: ['代码执行器'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与发音', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', tag: '已发布', u: 2105, t: '97%', prompt: '你是资深工程师，擅长解释、调试、重构代码。', nodes: ORCH_BY_NAME['代码助手'], plugins: ['代码执行器', '网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#4dd0e1,#7c4dff)', tag: '草稿', u: 0, t: '—', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', nodes: ORCH_BY_NAME['旅行规划师'], plugins: ['天气查询', '网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '会议纪要整理', d: '上传录音/文字，自动提炼待办与结论', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', u: 88, t: '85%', prompt: '你负责整理会议纪要，提炼结论与待办事项。', nodes: ORCH_BY_NAME['会议纪要整理'], plugins: ['PDF 解析'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '求职简历优化', d: '基于 JD 智能改写简历，提升通过率', ic: '💼', c: 'linear-gradient(135deg,#a1887f,#795548)', tag: '已发布', u: 410, t: '90%', prompt: '你帮用户基于 JD 优化简历，突出匹配亮点。', nodes: ORCH_BY_NAME['求职简历优化'], plugins: ['网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
 ];
 
 const tpls = [
-  { n: '电商智能客服', d: '支持订单查询、退换货、商品推荐', ic: '🛒', c: 'linear-gradient(135deg,#2f9e7a,#1f7d60)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。' },
-  { n: '知识库问答', d: '基于企业文档的 RAG 检索增强问答', ic: '📚', c: 'linear-gradient(135deg,#3ddc97,#2bb5e8)', prompt: '你是企业知识库助手，严格基于提供的文档作答。' },
-  { n: '短视频脚本生成', d: '输入主题自动产出分镜与台词', ic: '🎬', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', prompt: '你是短视频编导，产出吸睛的分镜脚本与台词。' },
-  { n: '邮件自动回复', d: '理解邮件意图并草拟专业回复', ic: '📧', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', prompt: '你是邮件助理，草拟得体、专业的邮件回复。' },
-  { n: '翻译官', d: '支持 30+ 语言互译，保留语气风格', ic: '🌐', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。' },
-  { n: '情感陪伴助手', d: '温暖倾听，提供情绪价值与建议', ic: '💬', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', prompt: '你是温暖的倾听者，给予情绪支持与实用建议。' },
+  { n: '电商智能客服', d: '支持订单查询、退换货、商品推荐', ic: '🛒', c: 'linear-gradient(135deg,#2f9e7a,#1f7d60)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。', nodes: ORCH_BY_NAME['电商智能客服'] },
+  { n: '知识库问答', d: '基于企业文档的 RAG 检索增强问答', ic: '📚', c: 'linear-gradient(135deg,#3ddc97,#2bb5e8)', prompt: '你是企业知识库助手，严格基于提供的文档作答。', nodes: ORCH_BY_NAME['知识库问答'] },
+  { n: '短视频脚本生成', d: '输入主题自动产出分镜与台词', ic: '🎬', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', prompt: '你是短视频编导，产出吸睛的分镜脚本与台词。', nodes: ORCH_BY_NAME['短视频脚本生成'] },
+  { n: '邮件自动回复', d: '理解邮件意图并草拟专业回复', ic: '📧', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', prompt: '你是邮件助理，草拟得体、专业的邮件回复。', nodes: ORCH_BY_NAME['邮件自动回复'] },
+  { n: '翻译官', d: '支持 30+ 语言互译，保留语气风格', ic: '🌐', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。', nodes: ORCH_BY_NAME['翻译官'] },
+  { n: '情感陪伴助手', d: '温暖倾听，提供情绪价值与建议', ic: '💬', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', prompt: '你是温暖的倾听者，给予情绪支持与实用建议。', nodes: ORCH_BY_NAME['情感陪伴助手'] },
 ];
 
 const plugins = [
@@ -2272,6 +2362,12 @@ function normalize(b) {
       return n;
     });
   }
+  // 编排兜底：若机器人仍采用默认工作流且名字命中专属编排，自动套用对应编排（让已有机器人也获得定制编排）
+  if (res.nodes && ORCH_BY_NAME[res.n] && JSON.stringify(res.nodes) === JSON.stringify(DEFAULT_WORKFLOW)) {
+    res.nodes = ORCH_BY_NAME[res.n].map(function (x) { return Object.assign({}, x); });
+  }
+  // 每个机器人独立持有 nodes 副本，避免共享 ORCH_BY_NAME / 模板引用导致互相污染
+  if (res.nodes) res.nodes = res.nodes.map(function (n) { return n ? Object.assign({}, n) : n; });
   return res;
 }
 
@@ -4666,7 +4762,7 @@ function renderTplGrid() {
       const i = +card.dataset.tpl; const t = tpls[i]; if (!t) return;
       const nb = normalize({
         n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿', u: 0, t: '—',
-        prompt: t.prompt, nodes: DEFAULT_NODES.slice(), history: [], plugins: [], knowledges: [], model: BotCraftAI.getConfig().model || 'gpt-4o-mini',
+        prompt: t.prompt, nodes: (t.nodes && t.nodes.length ? t.nodes : DEFAULT_NODES.slice()), history: [], plugins: [], knowledges: [], model: BotCraftAI.getConfig().model || 'gpt-4o-mini',
         fromTemplate: true,
       });
       bots.unshift(nb); currentFilter = 'all';
