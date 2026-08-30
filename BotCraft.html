@@ -4027,8 +4027,8 @@ async function sendMsg() {
   }
   b.history.push(entry);
   // 多模态提示：发送图片/视频帧时若当前模型可能不支持视觉，明确提醒（不阻止发送）
-  if ((imgs.length || vids.length || (entry.frames && entry.frames.length)) && !isLikelyVisionModel(cfg.model)) {
-    toast('当前模型「' + (cfg.model || '未设置') + '」可能不支持图片/视频识别，内容可能被忽略。建议改用视觉模型（如 gpt-4o / qwen-vl / glm-4v）', 'warn', 6000);
+  if ((imgs.length || vids.length || (entry.frames && entry.frames.length)) && !isLikelyVisionModel(BotCraftAI.getConfig().model || '')) {
+    toast('当前模型「' + (BotCraftAI.getConfig().model || '未设置') + '」可能不支持图片/视频识别，内容可能被忽略。建议改用视觉模型（如 gpt-4o / qwen-vl / glm-4v）', 'warn', 6000);
   }
   appendMsg(b, entry);
   pendingImages = []; renderImagePreview();
