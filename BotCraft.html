@@ -445,6 +445,9 @@ body.embed-mode #wsName{font-size:15px}
 .msg.bot table.md-table th,.msg.bot table.md-table td{border:1px solid var(--line);padding:5px 9px;text-align:left;vertical-align:top}
 .msg.bot table.md-table th{background:var(--bg);font-weight:700;color:var(--txt)}
 .msg.bot hr.md-hr{border:none;border-top:1px solid var(--line);margin:11px 0}
+.msg.bot img.md-img{max-width:100%;max-height:420px;border-radius:12px;margin:8px 0;display:block;box-shadow:0 2px 12px rgba(0,0,0,.08);background:var(--bg)}
+.msg.bot img.md-img.img-err{max-width:100%;padding:12px;border:1px dashed var(--line);border-radius:8px;background:var(--bg);color:var(--sub);font-size:12px;box-shadow:none}
+.msg.bot.img-tip .msg-body{font-style:italic;color:var(--sub);background:rgba(47,158,122,.08);border-left:3px solid var(--brand)}
 .msg.bot a{color:var(--brand);text-decoration:underline;text-underline-offset:2px}
 .msg.bot a:hover{opacity:.82}
 .msg.bot pre.md-code{position:relative;padding-top:34px}
@@ -1261,6 +1264,31 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none;
       <div class="hint" style="margin-top:6px;font-size:11.5px;color:var(--sub)">代理用于隐藏 API Key，后端只需把请求原样转发到服务商并补签 Authorization 即可。</div>
     </div>
 
+    <div style="margin:14px 0 6px;padding:10px 12px;border:1px dashed var(--glass-border);border-radius:10px;background:var(--glass-bg)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">🖼️ 文生图设置（可选）</div>
+      <div class="field">
+        <label>文生图接口地址（Base URL）</label>
+        <input id="set-img-base" placeholder="留空则使用免费默认图床 pollination.ai">
+      </div>
+      <div class="field">
+        <label>文生图 API Key</label>
+        <input id="set-img-key" type="password" placeholder="配置后走 OpenAI Images 兼容接口 /v1/images/generations" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>文生图模型与尺寸</label>
+        <div style="display:flex;gap:8px">
+          <input id="set-img-model" placeholder="dall-e-3" style="flex:1">
+          <select id="set-img-size" style="flex:1;min-width:0">
+            <option value="1024x1024">1024x1024</option>
+            <option value="1024x1792">1024x1792</option>
+            <option value="1792x1024">1792x1024</option>
+            <option value="512x512">512x512</option>
+            <option value="256x256">256x256</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <div id="connStatus" style="font-size:12.5px;margin:4px 0 10px;min-height:18px"></div>
     <div class="set-preview">即将使用：<b id="settingsPreview"></b></div>
     <div class="mbox-foot">
@@ -1341,6 +1369,7 @@ window.__storage = __storage;
   const DEFAULT_CFG = {
     provider: 'openai', baseURL: PROVIDERS.openai.base, apiKey: '', model: 'gpt-4o-mini',
     temperature: 0.7, maxTokens: 800, directCall: true, proxyURL: '', fallback: 'smart', fastReply: false,
+    imageBaseURL: '', imageAPIKey: '', imageModel: 'dall-e-3', imageSize: '1024x1024',
   };
   let cfg = loadConfig();
 
@@ -1436,11 +1465,12 @@ window.__storage = __storage;
       if (safeKctx) parts.push('\n【知识库】以下是已挂载知识库的完整正文，请直接作为回答依据：\n' + safeKctx + '\n\n注意：知识库内容已随本条系统提示一并提供，用户无需再次上传或粘贴相同内容；除非知识库确实为空，否则不要向用户索要文件或文本。');
     }
     if (bot && bot.plugins && bot.plugins.length) {
-      var realTools = ['网页搜索', '联网检索', '天气查询'];
+      var realTools = ['网页搜索', '联网检索', '天气查询', '图片生成'];
       var hasReal = bot.plugins.some(function (n) { return realTools.indexOf(n) >= 0; });
       var note = '\n【已启用插件】' + bot.plugins.join('、') + '。';
-      note += '其中「网页搜索 / 联网检索」「天气查询」是由系统在生成前自动执行的真实工具，其结果会出现在下方【工具结果】区块，请直接依据这些结果回答用户，无需自己编造，也不要假装这些工具没被调用；';
+      note += '其中「网页搜索 / 联网检索」「天气查询」「图片生成」是由系统在生成前自动执行的真实工具，其结果会出现在下方【工具结果】区块，请直接依据这些结果回答用户，无需自己编造，也不要假装这些工具没被调用；';
       note += '其余插件为能力偏好提示，请在其擅长方向上按该专长作答。';
+      note += '特别说明：当「图片生成」插件启用且用户需要配图时，系统会先调用文生图接口生成真实图片，并在聊天中直接展示；你只需在正文中说明「已为你生成配图」或简单引用，不要把图片 URL 当作纯文本重复输出。';
       parts.push(note);
     }
     // 真实工具执行结果（联网检索 / 天气查询等），由系统在调用模型前自动拉取并注入
@@ -2195,7 +2225,7 @@ const tpls = [
 
 const plugins = [
   { n: '网页搜索', d: '实时联网获取最新信息', ic: '🔍', c: 'linear-gradient(135deg,#4dd0e1,#2bb5e8)', cat: '联网', cap: '调用 DuckDuckGo 即时答案接口实时检索网页摘要与相关条目，让机器人回答包含最新资讯。开启后，工作流会在撰写/润色步骤自动注入联网检索片段（与工作台「🌐 联网检索」开关联动）。' },
-  { n: '图片生成', d: '调用文生图模型创作配图', ic: '🖼️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', cat: '内容', cap: '根据文本描述生成配图，适用于种草图文、海报、插画等场景。提示增强型：启用后会在系统提示中告知模型「可生成图片」，实际出图需在「设置」中接入支持的图像生成 API（如 OpenAI Images / 兼容网关）；未接入时模型会返回图像描述或提示词。' },
+  { n: '图片生成', d: '调用文生图模型创作配图', ic: '🖼️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', cat: '内容', cap: '根据文本描述生成真实配图，适用于种草图文、海报、插画等场景。启用后，当用户请求配图/生图时，系统会自动调用文生图接口生成图片并直接展示在聊天中；未配置专用接口时默认使用 pollinations.ai 免费图床（无需 Key），也可在「设置」中接入 OpenAI Images 兼容接口（如部分国内网关）获得更高质量。' },
   { n: 'PDF 解析', d: '读取上传的 PDF 文档内容', ic: '📕', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', cat: '文档', cap: '解析上传的 PDF 文档，提取正文与表格，供机器人基于文档内容问答、摘要、翻译。提示增强型：启用后模型会按「文档问答」方式组织回答；真正的 PDF 文本提取需在「设置」中接入 PDF 解析服务（当前为离线单文件，未内置 PDF.js）。' },
   { n: '天气查询', d: '获取全球城市实时天气', ic: '🌤️', c: 'linear-gradient(135deg,#7c4dff,#4dd0e1)', cat: '数据', cap: '调用天气接口，返回指定城市当前气温、天气、风力与未来预报，适合行程规划、生活助手类机器人。' },
   { n: '日历/提醒', d: '创建与管理日程提醒', ic: '📅', c: 'linear-gradient(135deg,#a1887f,#795548)', cat: '数据', cap: '创建提醒事项与日程，支持按时间触发，适合待办管理、日程助理类机器人。' },
@@ -2370,6 +2400,10 @@ function renderMarkdown(text) {
     s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, t, u) {
       if (/^(https?:|mailto:|\/|#)/i.test(u) && !/["'<>]/.test(u)) return '<a href="' + u + '" target="_blank" rel="noopener">' + t + '</a>';
+      return m;
+    });
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, u) {
+      if (/^(https?:|data:image|\/)/i.test(u) && !/["'<>]/.test(u)) return '<img src="' + u + '" alt="' + escapeHtml(alt) + '" class="md-img" onload="scrollChatToBottom()" onerror="this.classList.add(\'img-err\');this.alt=\'图片加载失败：\'+this.src">';
       return m;
     });
     return s;
@@ -4272,6 +4306,18 @@ async function sendMsg() {
   // 流式的 AbortController 信号
   const signal = { then(cb) { if (abortCtrl) abortCtrl.signal.addEventListener('abort', cb, { once: true }); } };
 
+  // 图片生成插件：若用户表达生图意图，并行启动文生图（不阻塞模型回复，生成完成后追加到聊天）
+  const wantsImage = ((aiBot.plugins || []).indexOf('图片生成') >= 0) && wantsImageGeneration(v);
+  let imagePromise = null;
+  if (wantsImage) {
+    imagePromise = window.generateImage(extractImagePrompt(v));
+    const imgTip = document.createElement('div');
+    imgTip.className = 'msg bot img-tip';
+    imgTip.id = 'imgTip_' + b.history.length;
+    imgTip.innerHTML = _body(escapeHtml(activeBot.n), '🎨 已接收到配图需求，正在生成图片，请稍候…');
+    chat.appendChild(imgTip); scrollChatToBottom();
+  }
+
   try {
     if (!BotCraftAI.getConfig().fastReply && aiBot.nodes && aiBot.nodes.length > 1) {
       // 多节点 → 走串行工作流引擎（逐步真实执行 + 执行日志 + 实时进度）
@@ -4322,6 +4368,17 @@ async function sendMsg() {
       activeBot.updatedAt = Date.now(); saveBots();
       attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b);
       scrollChatToBottom(true); // 所有 DOM 变更完成后统一落底
+      // 若已启动图片生成，完成后把图追加到聊天记录
+      if (imagePromise) {
+        try {
+          const imgUrl = await imagePromise;
+          if (imgUrl) {
+            document.querySelectorAll('.img-tip').forEach(el => el.remove());
+            b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
+            renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
+          } else { toast('图片生成失败：未返回图片地址', 'err'); }
+        } catch (e) { console.warn('[图片生成] 失败：', e); document.querySelectorAll('.img-tip').forEach(el => el.remove()); toast('图片生成失败：' + (e && e.message ? e.message : e), 'err'); }
+      }
     } else {
       // 普通对话：启用真实插件（联网检索 / 天气查询）时，先执行工具并把结果注入上下文
       let _toolCtx = '';
@@ -4355,6 +4412,17 @@ async function sendMsg() {
     activeBot.updatedAt = Date.now(); saveBots();
     attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b);
     scrollChatToBottom(true); // 复制按钮/快捷栏等所有 DOM 变更完成后再统一落底，避免分段跳动
+    // 若已启动图片生成，完成后把图追加到聊天记录
+    if (imagePromise) {
+      try {
+        const imgUrl = await imagePromise;
+        if (imgUrl) {
+          document.querySelectorAll('.img-tip').forEach(el => el.remove());
+          b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
+          renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
+        } else { toast('图片生成失败：未返回图片地址', 'err'); }
+      } catch (e) { console.warn('[图片生成] 失败：', e); document.querySelectorAll('.img-tip').forEach(el => el.remove()); toast('图片生成失败：' + (e && e.message ? e.message : e), 'err'); }
+    }
     }
   } catch (err) {
     typing.remove();
@@ -4397,6 +4465,21 @@ function setSendingUI(sending) {
     if (sending && serial) { inp.disabled = true; inp.style.opacity = '.5'; inp.style.cursor = 'not-allowed'; inp.placeholder = 'AI 回复中…（串行模式已锁定输入）'; }
     else { inp.disabled = false; inp.style.opacity = ''; inp.style.cursor = ''; inp.placeholder = '输入消息测试你的机器人… (Enter 发送)'; }
   }
+}
+function wantsImageGeneration(userMsg) {
+  if (!userMsg) return false;
+  var s = String(userMsg);
+  return /(生成|画|作|来|给|做|创建|绘制|产出|搞|弄)(一?[张幅个组份])?\s*(图片|图像|图|配图|海报|插画|封面|banner|宣传图|草图|写真|照片)|(图片|图像|图|配图|海报|插画|封面|宣传图)\s*(生成|绘制|创作|画|做|来)|配[一张]*图|来[一张]*图|画[一张]*图|生图|文生图/i.test(s);
+}
+function extractImagePrompt(userMsg) {
+  var s = String(userMsg || '');
+  // 去掉常见的动作前缀，保留描述主体
+  s = s.replace(/^(请|帮我|给我|帮我给|请帮我|请给我|给我来|我要|我想要|我想|需要|能否|能不能|可以|麻烦|顺便)\s*/i, '');
+  s = s.replace(/(生成|画|作|创建|绘制|产出|搞|弄)(一?[张幅个组份])?\s*(图片|图像|图|配图|海报|插画|封面|banner|宣传图|草图|写真|照片)?/i, '');
+  s = s.replace(/(图片|图像|图|配图|海报|插画|封面|宣传图)\s*(生成|绘制|创作|画|做)/i, '');
+  s = s.trim();
+  if (!s) s = userMsg;
+  return s;
 }
 function stopGenerate() {
   if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
@@ -5893,6 +5976,10 @@ function openSettings() {
   document.getElementById('set-direct').checked = !!cfg.directCall;
   document.getElementById('set-serial').checked = getSerialInput();
   document.getElementById('set-proxy').value = cfg.proxyURL || '';
+  document.getElementById('set-img-base').value = cfg.imageBaseURL || '';
+  document.getElementById('set-img-key').value = cfg.imageAPIKey || '';
+  document.getElementById('set-img-model').value = cfg.imageModel || 'dall-e-3';
+  document.getElementById('set-img-size').value = cfg.imageSize || '1024x1024';
   fillModelOptions(cfg.provider, cfg.model);
   document.getElementById('set-model-custom').value =
     (cfg.model && !(PROVIDER_META[cfg.provider] || {}).models?.includes(cfg.model)) ? cfg.model : '';
@@ -5991,13 +6078,17 @@ function saveSettings() {
   const maxTokens = parseInt(document.getElementById('set-maxtokens').value, 10) || 800;
   const directCall = document.getElementById('set-direct').checked;
   const proxyURL = document.getElementById('set-proxy').value.trim();
+  const imageBaseURL = document.getElementById('set-img-base').value.trim();
+  const imageAPIKey = document.getElementById('set-img-key').value.trim();
+  const imageModel = document.getElementById('set-img-model').value.trim() || 'dall-e-3';
+  const imageSize = document.getElementById('set-img-size').value || '1024x1024';
   setSerialInput(document.getElementById('set-serial').checked);
   const fKey = document.getElementById('field-key'), fBase = document.getElementById('field-base');
   fKey.classList.remove('invalid'); fBase.classList.remove('invalid');
   if (directCall && !apiKey) { fKey.classList.add('invalid'); toast('请填写 API Key', 'err'); return; }
   if (directCall && !baseURL) { fBase.classList.add('invalid'); toast('请填写接口地址', 'err'); return; }
   if (!model) { toast('请选择或填写模型', 'err'); return; }
-  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL });
+  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize });
   closeSettings();
   const head = apiKey ? `已接入 ${PROVIDER_META[provider].label} · ${model}` : '已保存（无 Key，将使用本地降级回复）';
   toast(head, 'ok');
@@ -6336,8 +6427,47 @@ window.__debug = {
     });
   }
 
+  // ---------- 文生图（OpenAI Images 兼容接口；未配置时回退 pollinations.ai 免费图床） ----------
+  function generateImage(prompt) {
+    return new Promise(function (resolve, reject) {
+      try {
+        prompt = String(prompt || '').trim();
+        if (!prompt) return reject(new Error('文生图提示词为空'));
+        var cfg = BotCraftAI.getConfig ? BotCraftAI.getConfig() : {};
+        var key = (cfg.imageAPIKey || '').trim();
+        var base = (cfg.imageBaseURL || '').trim().replace(/\/$/, '');
+        var model = (cfg.imageModel || 'dall-e-3').trim();
+        var size = (cfg.imageSize || '1024x1024').trim();
+        if (base && key) {
+          // OpenAI Images 兼容接口
+          fetch(base + '/v1/images/generations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+            body: JSON.stringify({ model: model, prompt: prompt, n: 1, size: size })
+          }).then(function (r) {
+            if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + '：' + t); });
+            return r.json();
+          }).then(function (d) {
+            var url = d && d.data && d.data[0] && (d.data[0].url || d.data[0].b64_json);
+            if (url) {
+              if (/^data:image/i.test(url)) return resolve(url);
+              return resolve(String(url));
+            }
+            throw new Error('接口未返回图片 URL');
+          }).catch(function (e) { reject(e); });
+        } else {
+          // 未配置：使用 pollinations.ai 免费接口（无需 Key，直接返回图片）
+          var seed = Math.floor(Math.random() * 999999);
+          var url = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=1024&height=1024&seed=' + seed + '&nologo=true';
+          // 先 HEAD 探测可用性，避免直接嵌入失效地址
+          fetch(url, { method: 'HEAD', mode: 'no-cors' }).then(function () { resolve(url); }).catch(function () { resolve(url); });
+        }
+      } catch (e) { reject(e); }
+    });
+  }
+
   // ---------- 汇总「真实工具」执行结果，注入模型上下文 ----------
-  // 仅对客户端可真正执行的插件（联网检索 / 天气查询）做实际调用，避免“声明调用却无结果”
+  // 仅对客户端可真正执行的插件（联网检索 / 天气查询 / 图片生成）做实际调用，避免“声明调用却无结果”
   async function collectToolContext(bot, userMsg) {
     var parts = [];
     var plugins = (bot && bot.plugins) || [];
@@ -6767,6 +6897,7 @@ window.__debug = {
   window.getNodeRole = getNodeRole; // 暴露给主脚本 normalize() 使用（否则注册/登录后 loadBots 崩溃）
   window.searchKB = searchKB;
   window.searchWeb = searchWeb;
+  window.generateImage = generateImage;
   window.injectLogPanel = injectLogPanel;
   window.collectToolContext = collectToolContext; // 暴露给主脚本 sendMsg 单节点对话路径，否则联网检索/天气工具上下文被 try/catch 静默吞掉
   window.renderRunLogs = renderRunLogs;
