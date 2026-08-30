@@ -3742,6 +3742,38 @@ function readImageAsDataURL(file) {
     r.readAsDataURL(file);
   });
 }
+// 发送前压缩图片：缩放最长边 + 转 JPEG，避免大图（手机照片常 3-7MB）整张塞进请求后被模型忽略或超时
+async function compressImageDataURL(dataURL, maxEdge, quality) {
+  return new Promise(function (resolve) {
+    try {
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          if (!w || !h) { resolve(dataURL); return; }
+          var scale = Math.min(1, maxEdge / Math.max(w, h));
+          var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+          var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+          var cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, ch);
+          cx.drawImage(img, 0, 0, cw, ch);
+          resolve(cv.toDataURL('image/jpeg', quality));
+        } catch (e) { resolve(dataURL); }
+      };
+      img.onerror = function () { resolve(dataURL); };
+      img.src = dataURL;
+    } catch (e) { resolve(dataURL); }
+  });
+}
+// 启发式判断当前模型是否可能支持视觉（图片/视频识别）。图片格式基于 OpenAI image_url，需模型为视觉模型且 API 兼容该格式
+function isLikelyVisionModel(model) {
+  var m = (model || '').toLowerCase();
+  if (!m) return false;
+  var vision = ['4o', '4.1', '4.5', 'vision', 'vl', 'qwen-vl', 'qwen2-vl', 'glm-4v', 'glm-4.1v', 'step-1v', 'moonshot', 'gemini', 'claude', 'pixtral', 'internvl', 'minicpm-v'];
+  for (var i = 0; i < vision.length; i++) if (m.indexOf(vision[i]) >= 0) return true;
+  var non = ['deepseek', 'gpt-3.5', 'text-embedding', 'embedding', 'o1-mini', 'o1-preview', 'babbage', 'davinci', 'gpt-4'];
+  for (var j = 0; j < non.length; j++) if (m.indexOf(non[j]) >= 0) return false;
+  return false; // 未知模型保守提醒可能不支持
+}
 async function addPendingImages(files) {
   if (!files || !files.length) return;
   for (var i = 0; i < files.length; i++) {
@@ -3749,6 +3781,7 @@ async function addPendingImages(files) {
     if (!/^image\//.test(f.type)) { toast('仅支持图片文件：' + (f.name || '未知'), 'err'); continue; }
     try {
       var d = await readImageAsDataURL(f);
+      try { d = await compressImageDataURL(d, 1280, 0.82); } catch (e2) {}
       pendingImages.push(d);
     } catch (e) { toast('图片读取失败：' + (f.name || '未知'), 'err'); }
   }
@@ -3994,6 +4027,10 @@ async function sendMsg() {
     } catch (e) { /* 抽帧失败不影响发送 */ }
   }
   b.history.push(entry);
+  // 多模态提示：发送图片/视频帧时若当前模型可能不支持视觉，明确提醒（不阻止发送）
+  if ((imgs.length || vids.length || (entry.frames && entry.frames.length)) && !isLikelyVisionModel(cfg.model)) {
+    toast('当前模型「' + (cfg.model || '未设置') + '」可能不支持图片/视频识别，内容可能被忽略。建议改用视觉模型（如 gpt-4o / qwen-vl / glm-4v）', 'warn', 6000);
+  }
   appendMsg(b, entry);
   pendingImages = []; renderImagePreview();
   pendingAudios = []; renderAudioPreview();
