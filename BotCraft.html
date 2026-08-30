@@ -2013,6 +2013,7 @@ window.__storage = __storage;
   window.clearMemory = clearMemory;
   window.addMemoryItem = addMemoryItem;
   window.extractMemoryLocal = extractMemoryLocal;
+  window.selectRelevantMemories = selectRelevantMemories;
 })();
 </script>
 
@@ -6485,7 +6486,7 @@ window.__debug = {
       if (bot.memory && bot.memory.enabled && bot.memory.items && bot.memory.items.length) {
         var mem = bot.memory.items.filter(function (it2) { return it2 && it2.text && it2.text.trim(); });
         if (mem.length) {
-          var memSel = selectRelevantMemories(mem, userMsg, 12);
+          var memSel = window.selectRelevantMemories(mem, userMsg, 12);
           sys += '\n\n【长期记忆】你长期记住的关于该用户的关键信息，请自然运用：\n' + memSel.map(function (it2, i2) { return (i2 + 1) + '. [' + (it2.type || '其他') + '] ' + it2.text; }).join('\n');
         }
       }
