@@ -3275,8 +3275,7 @@ function resolveModelLabel(modelId, provider) {
   for (const [k, v] of Object.entries(meta || {})) {
     if (v && Array.isArray(v.models) && v.models.includes(id)) { provKey = k; break; }
   }
-  const cur = getBot && getBot(currentId);  // 当前机器人（脚本里无 currentBot 变量，统一用 currentId 查）
-  const key = provider || (cur && cur.provider) || provKey || '';
+  const key = provider || provKey || '';
   const provLabel = (meta[key] && meta[key].label) || (meta[provKey] && meta[provKey].label) || '';
   const pretty = id.replace(/[-_]/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
   return provLabel ? provLabel + ' · ' + pretty : pretty;
@@ -5742,10 +5741,9 @@ function renderSettingsPreview() {
     var modelSel = document.getElementById('set-model').value;
     var modelCustom = (document.getElementById('set-model-custom').value || '').trim();
     var model = modelSel === '__custom' ? modelCustom : modelSel;
-    var label = ((typeof resolveModelLabel === 'function' ? resolveModelLabel(model) : model) || model || '未选择');
+    var label = ((typeof resolveModelLabel === 'function' ? resolveModelLabel(model, provider) : model) || model || '未选择');
     var direct = document.getElementById('set-direct').checked;
-    var provLabel = ((PROVIDER_META || {})[provider] || {}).label || provider || '';
-    host.innerHTML = '<span style="color:var(--brand)">' + escapeHtml(label) + '</span> · ' + (direct ? '浏览器直连' : '走代理') + ' · ' + escapeHtml(provLabel);
+    host.innerHTML = escapeHtml(label) + ' · ' + (direct ? '浏览器直连' : '走代理');
   } catch (e) {}
 }
 function closeSettings() { document.getElementById('settingsModal').classList.remove('on'); }
