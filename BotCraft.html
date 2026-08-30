@@ -1457,7 +1457,16 @@ window.__storage = __storage;
       }
     }
     if (bot && bot.nodes && bot.nodes.length) {
-      parts.push('\n【处理流程】请按以下工作流节点顺序组织回答：' + bot.nodes.map(n => n.h).join(' → ') + '。其中「检索知识」指从上方【知识库】中查找相关正文（内容已附上），不要把它理解为“向用户索取文件/附件”；只有知识库为空时才需要向用户询问。');
+      const cfgFast = (typeof BotCraftAI !== 'undefined' && BotCraftAI.getConfig) ? BotCraftAI.getConfig().fastReply : false;
+      if (cfgFast) {
+        // 快速模式：合并所有节点设定到一次 system prompt，保留人设/流程，不再分步执行
+        parts.push('\n【角色 / 流程设定】你拥有以下专属人设与工作流约束，请在一次回复中综合运用它们，直接输出最终结果，不要分步骤展示内部处理过程：');
+        bot.nodes.forEach(function (n, i) {
+          if (n && n.h) parts.push((i + 1) + '. 「' + n.h + '」' + (n.p && n.p.trim() ? '：' + n.p.trim() : ''));
+        });
+      } else {
+        parts.push('\n【处理流程】请按以下工作流节点顺序组织回答：' + bot.nodes.map(n => n.h).join(' → ') + '。其中「检索知识」指从上方【知识库】中查找相关正文（内容已附上），不要把它理解为“向用户索取文件/附件”；只有知识库为空时才需要向用户询问。');
+      }
     }
     if (bot && bot.brand && (bot.brand.name || bot.brand.pitch || bot.brand.slogan || bot.brand.tone || bot.brand.taboo || bot.brand.products || bot.brand.links)) {
       var br = bot.brand, bL = [];
