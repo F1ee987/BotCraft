@@ -6507,6 +6507,23 @@ window.__debug = {
           return new Promise(function (_, rej) { timer = setTimeout(function () { rej(new Error(err || '图片生成超时')); }, ms); });
         }
         function _clearTimer() { if (timer) { clearTimeout(timer); timer = null; } }
+        // 把图片 URL 真正下载成 data URL，直接内嵌进聊天，避免浏览器二次外链加载失败 / 跨域裂图
+        function _toDataUrl(url, ms) {
+          return Promise.race([
+            fetch(url).then(function (r) {
+              if (!r.ok) throw new Error('HTTP ' + r.status);
+              return r.blob();
+            }).then(function (blob) {
+              return new Promise(function (res, rej) {
+                var fr = new FileReader();
+                fr.onload = function () { res(fr.result); };
+                fr.onerror = function () { rej(new Error('图片读取失败')); };
+                fr.readAsDataURL(blob);
+              });
+            }),
+            _timeout(ms, '图片下载超时')
+          ]);
+        }
         if (base && key) {
           // OpenAI Images 兼容接口
           Promise.race([
@@ -6518,30 +6535,24 @@ window.__debug = {
               if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + '：' + t); });
               return r.json();
             }).then(function (d) {
-              var url = d && d.data && d.data[0] && (d.data[0].url || d.data[0].b64_json);
-              if (url) {
-                if (/^data:image/i.test(url)) return url;
-                return String(url);
-              }
-              throw new Error('接口未返回图片 URL');
+              var item = d && d.data && d.data[0];
+              if (!item) throw new Error('接口未返回图片');
+              if (item.b64_json) return resolve('data:image/png;base64,' + item.b64_json);
+              // 优先内嵌 data URL；若图片服务不支持跨域读取，再回退原始 URL（由聊天图片自行加载）
+              return _toDataUrl(item.url, 60000).then(function (du) { resolve(du); }, function () { resolve(String(item.url)); });
             }),
             _timeout(120000, '图片生成接口响应超时（120s），请检查网络或 API 状态')
-          ]).then(function (u) { _clearTimer(); resolve(u); }).catch(function (e) { _clearTimer(); reject(e); });
+          ]).then(function () { _clearTimer(); }).catch(function (e) { _clearTimer(); reject(e); });
         } else {
-          // 未配置：使用 pollinations.ai 免费接口（无需 Key，直接返回图片）
+          // 未配置：pollinations.ai 免费接口（无需 Key，直接返回图片）
           var seed = Math.floor(Math.random() * 999999);
           var safePrompt = encodeURIComponent(prompt).replace(/[!'()*]/g, function (c) { return '%' + c.charCodeAt(0).toString(16).toUpperCase(); });
           var url = 'https://image.pollinations.ai/prompt/' + safePrompt + '?width=1024&height=1024&seed=' + seed + '&nologo=true&safe=false';
-          // 直接返回 URL：pollinations.ai 会根据 URL 实时生成图片。预加载校验可捕获网络完全不可用的情况。
-          Promise.race([
-            new Promise(function (res) {
-              var img = new Image();
-              img.onload = function () { res(url); };
-              img.onerror = function () { res(url); }; // 允许继续尝试展示，由聊天图片 onerror 提示失败
-              img.src = url;
-            }),
-            _timeout(30000, 'pollinations.ai 图片接口响应超时，请检查网络')
-          ]).then(function (u) { _clearTimer(); resolve(u); }).catch(function (e) { _clearTimer(); reject(e); });
+          // 真实下载图片字节并内嵌为 data URL，确保图片直接显示在聊天中（不依赖浏览器外链二次加载）
+          _toDataUrl(url, 30000).then(function (du) { _clearTimer(); resolve(du); }, function (e) {
+            _clearTimer();
+            reject(new Error('无法从 pollinations.ai 获取图片（' + (e && e.message ? e.message : e) + '）。该免费图床在部分网络下不可达，可在「设置 → 🖼️ 文生图设置」中配置国内/稳定的 OpenAI Images 兼容接口。'));
+          });
         }
       } catch (e) { reject(e); }
     });
