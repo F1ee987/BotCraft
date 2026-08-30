@@ -1450,7 +1450,7 @@ window.__storage = __storage;
     if (bot && bot.memory && bot.memory.enabled && bot.memory.items && bot.memory.items.length) {
       var mem = bot.memory.items.filter(function (it) { return it && it.text && it.text.trim(); });
       if (mem.length) {
-        var lastMe = (history || []).slice().reverse().find(function (m) { return m.role === 'me'; });
+        var lastMe = (bot.history || []).slice().reverse().find(function (m) { return m.role === 'me'; });
         var memSel = selectRelevantMemories(mem, lastMe ? lastMe.text : '', 12);
         var memNote = (mem.length > memSel.length) ? ('（共 ' + mem.length + ' 条记忆，已挑选最相关的 ' + memSel.length + ' 条注入）') : '';
         parts.push('\n【长期记忆】以下是你长期记住的关于该用户的关键信息，请在回答时自然运用（不必刻意说「我记得」）：' + memNote + '\n' + memSel.map(function (it, i) { return (i + 1) + '. [' + (it.type || '其他') + '] ' + it.text; }).join('\n'));
