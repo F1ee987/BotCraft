@@ -1377,7 +1377,10 @@ window.__storage = __storage;
     parts.push((bot && bot.prompt) || '你是一个有用的助手。');
     if (bot && bot.knowledges && bot.knowledges.length) {
       const kctx = bot.knowledges.map(id => kbById(id)).filter(Boolean).map(rec => '【' + rec.name + '】\n' + rec.content).join('\n\n');
-      if (kctx) parts.push('\n【知识库】以下是已挂载知识库的完整正文，请直接作为回答依据：\n' + kctx + '\n\n注意：知识库内容已随本条系统提示一并提供，用户无需再次上传或粘贴相同内容；除非知识库确实为空，否则不要向用户索要文件或文本。');
+      // 知识库整体截断：保留条目完整性，总长在 6000 字符以内，避免挂载大知识库后撑爆上下文
+      const MAX_KB_LEN = 6000;
+      const safeKctx = kctx.length > MAX_KB_LEN ? kctx.slice(0, MAX_KB_LEN) + '\n…（知识库内容过长已截断）' : kctx;
+      if (safeKctx) parts.push('\n【知识库】以下是已挂载知识库的完整正文，请直接作为回答依据：\n' + safeKctx + '\n\n注意：知识库内容已随本条系统提示一并提供，用户无需再次上传或粘贴相同内容；除非知识库确实为空，否则不要向用户索要文件或文本。');
     }
     if (bot && bot.plugins && bot.plugins.length) {
       var realTools = ['网页搜索', '联网检索', '天气查询'];
@@ -6066,6 +6069,8 @@ window.__debug = {
               }
             }
             out = out.map(function (s) { return String(s).replace(/<\/?[^>]+>/g, '').trim(); }).filter(Boolean);
+            // 单条结果截断，避免单条网页摘要过长撑爆上下文
+            out = out.map(function (s) { return s.length > 600 ? s.slice(0, 600) + '…' : s; });
             resolve(out.slice(0, k));
           })
           .catch(function (e) { console.warn('[searchWeb] 失败：', e); resolve([]); });
@@ -6125,6 +6130,9 @@ window.__debug = {
         var wh = await searchWeb(userMsg, 5);
         if (wh && wh.length) parts.push('【联网检索结果】\n' + wh.map(function (c, i) { return '（' + (i + 1) + '）\n' + c; }).join('\n\n'));
         else parts.push('【联网检索】未检索到可用结果（或当前环境限制了跨域请求）。');
+        // 工具上下文整体截断，防止单次联网结果叠加后超过模型上下文上限
+        var webCtx = parts[parts.length - 1];
+        if (webCtx && webCtx.length > 2500) parts[parts.length - 1] = webCtx.slice(0, 2500) + '\n…（检索结果过长已截断）';
       } catch (e) { parts.push('【联网检索】检索失败：' + (e && e.message ? e.message : e)); }
     }
     if (plugins.indexOf('天气查询') >= 0) {
