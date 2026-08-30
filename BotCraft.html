@@ -1381,8 +1381,8 @@ window.__storage = __storage;
   function getConfig() { return Object.assign({}, cfg); }
 
   // 构造 messages（含历史上下文 + 系统提示）
-  function buildMessages(bot, history, toolCtx) {
-    const sys = composeSystemPrompt(bot, toolCtx);
+  function buildMessages(bot, history, toolCtx, imagePrompt) {
+    const sys = composeSystemPrompt(bot, toolCtx, imagePrompt);
     const msgs = [{ role: 'system', content: sys }];
     const turns = (history || []).slice();
     // 保留较多历史轮次（默认模型上下文足够大，正常聊天不会被截断）
@@ -1454,7 +1454,7 @@ window.__storage = __storage;
     return cleaned;
   }
 
-  function composeSystemPrompt(bot, toolCtx) {
+  function composeSystemPrompt(bot, toolCtx, imagePrompt) {
     const parts = [];
     parts.push((bot && bot.prompt) || '你是一个有用的助手。');
     if (bot && bot.knowledges && bot.knowledges.length) {
@@ -1472,6 +1472,10 @@ window.__storage = __storage;
       note += '其余插件为能力偏好提示，请在其擅长方向上按该专长作答。';
       note += '特别说明：当「图片生成」插件启用且用户需要配图时，系统会先调用文生图接口生成真实图片，并在聊天中直接展示；你只需在正文中说明「已为你生成配图」或简单引用，不要把图片 URL 当作纯文本重复输出。';
       parts.push(note);
+    }
+    // 用户当前请求需要配图：明确告知 AI 系统会自动生成并展示图片，避免模型自己编造/重复 URL
+    if (imagePrompt) {
+      parts.push('\n【图片生成】用户当前请求「' + imagePrompt.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。你在正文中只需自然说明「已为你生成配图」或简单引用，不要输出图片 URL，不要把图片地址当纯文本重复，也不要自行描述不存在的图片内容。');
     }
     // 真实工具执行结果（联网检索 / 天气查询等），由系统在调用模型前自动拉取并注入
     if (toolCtx && toolCtx.trim()) {
@@ -1872,7 +1876,7 @@ window.__storage = __storage;
   // 支持流式与非流式。stream=true 时返回 AsyncIterable<string>
   async function chat(bot, history, opt) {
     opt = opt || {};
-    const messages = buildMessages(bot, history, opt && opt.toolCtx);
+    const messages = buildMessages(bot, history, opt && opt.toolCtx, opt && opt.imagePrompt);
     if (!canCall()) {
       return opt.stream ? fakeStream(messages) : runFallback(bot, history, messages);
     }
@@ -4306,15 +4310,18 @@ async function sendMsg() {
   // 流式的 AbortController 信号
   const signal = { then(cb) { if (abortCtrl) abortCtrl.signal.addEventListener('abort', cb, { once: true }); } };
 
-  // 图片生成插件：若用户表达生图意图，并行启动文生图（不阻塞模型回复，生成完成后追加到聊天）
-  const wantsImage = ((aiBot.plugins || []).indexOf('图片生成') >= 0) && wantsImageGeneration(v);
+  // 图片生成：只要用户表达明确生图意图（无论是否启用插件），都自动调用文生图
+  const hasImagePlugin = ((aiBot.plugins || []).indexOf('图片生成') >= 0);
+  const userWantsImage = wantsImageGeneration(v);
+  const wantsImage = userWantsImage;
+  const imagePromptText = userWantsImage ? extractImagePrompt(v) : '';
   let imagePromise = null;
   if (wantsImage) {
-    imagePromise = window.generateImage(extractImagePrompt(v));
+    imagePromise = window.generateImage(imagePromptText);
     const imgTip = document.createElement('div');
     imgTip.className = 'msg bot img-tip';
     imgTip.id = 'imgTip_' + b.history.length;
-    imgTip.innerHTML = _body(escapeHtml(activeBot.n), '🎨 已接收到配图需求，正在生成图片，请稍候…');
+    imgTip.innerHTML = _body(escapeHtml(activeBot.n), hasImagePlugin ? '🎨 已接收到配图需求，正在生成图片，请稍候…' : '🎨 检测到你想要图片，正在直接生成，请稍候…');
     chat.appendChild(imgTip); scrollChatToBottom();
   }
 
@@ -4338,7 +4345,7 @@ async function sendMsg() {
       const curWho = cur.querySelector('.who');
       const curBody = cur.querySelector('.wf-stream-body');
       var _lastPaint = 0;
-      const result = await runWorkflow(b, v, imgs, auds, entry.frames || [], function (st) {
+      const result = await runWorkflow(b, v, imgs, auds, entry.frames || [], imagePromptText, function (st) {
         // 顶部总进度
         var txt = '🔄 工作流执行中（' + (st.done || 0) + '/' + (st.total || aiBot.nodes.length) + '）';
         if (st.phase === 'human') txt = '⏸ 已暂停 · 等待人工审批（' + escapeHtml(st.curName || '审批') + '）— 请在弹窗中通过或驳回';
@@ -4368,14 +4375,16 @@ async function sendMsg() {
       activeBot.updatedAt = Date.now(); saveBots();
       attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b);
       scrollChatToBottom(true); // 所有 DOM 变更完成后统一落底
-      // 若已启动图片生成，完成后把图追加到聊天记录
+      // 若已启动图片生成，完成后把图追加到聊天记录（若 AI 已自己贴图则不再重复追加）
       if (imagePromise) {
         try {
           const imgUrl = await imagePromise;
           if (imgUrl) {
             document.querySelectorAll('.img-tip').forEach(el => el.remove());
-            b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
-            renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
+            if (!hasImageMarkdown(result.final)) {
+              b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
+              renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
+            }
           } else { toast('图片生成失败：未返回图片地址', 'err'); }
         } catch (e) { console.warn('[图片生成] 失败：', e); document.querySelectorAll('.img-tip').forEach(el => el.remove()); toast('图片生成失败：' + (e && e.message ? e.message : e), 'err'); }
       }
@@ -4383,7 +4392,7 @@ async function sendMsg() {
       // 普通对话：启用真实插件（联网检索 / 天气查询）时，先执行工具并把结果注入上下文
       let _toolCtx = '';
       try { _toolCtx = await collectToolContext(aiBot, v); } catch (e) { _toolCtx = ''; }
-      const stream = await BotCraftAI.chat(aiBot, historyForCall, { stream: true, signal, toolCtx: _toolCtx });
+      const stream = await BotCraftAI.chat(aiBot, historyForCall, { stream: true, signal, toolCtx: _toolCtx, imagePrompt: imagePromptText });
     typing.remove();
     // 创建正在输入的「气泡」，逐字追加
     const bubble = document.createElement('div');
@@ -4412,14 +4421,16 @@ async function sendMsg() {
     activeBot.updatedAt = Date.now(); saveBots();
     attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b);
     scrollChatToBottom(true); // 复制按钮/快捷栏等所有 DOM 变更完成后再统一落底，避免分段跳动
-    // 若已启动图片生成，完成后把图追加到聊天记录
+    // 若已启动图片生成，完成后把图追加到聊天记录（若 AI 已自己贴图则不再重复追加）
     if (imagePromise) {
       try {
         const imgUrl = await imagePromise;
         if (imgUrl) {
           document.querySelectorAll('.img-tip').forEach(el => el.remove());
-          b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
-          renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
+          if (!hasImageMarkdown(full)) {
+            b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
+            renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
+          }
         } else { toast('图片生成失败：未返回图片地址', 'err'); }
       } catch (e) { console.warn('[图片生成] 失败：', e); document.querySelectorAll('.img-tip').forEach(el => el.remove()); toast('图片生成失败：' + (e && e.message ? e.message : e), 'err'); }
     }
@@ -4469,7 +4480,12 @@ function setSendingUI(sending) {
 function wantsImageGeneration(userMsg) {
   if (!userMsg) return false;
   var s = String(userMsg);
-  return /(生成|画|作|来|给|做|创建|绘制|产出|搞|弄)(一?[张幅个组份])?\s*(图片|图像|图|配图|海报|插画|封面|banner|宣传图|草图|写真|照片)|(图片|图像|图|配图|海报|插画|封面|宣传图)\s*(生成|绘制|创作|画|做|来)|配[一张]*图|来[一张]*图|画[一张]*图|生图|文生图/i.test(s);
+  return /(生成|画|作|来|给|做|创建|绘制|产出|搞|弄)(一?[张幅个组份])?\s*(图片|图像|图|配图|海报|插画|封面|banner|宣传图|草图|写真|照片)|(图片|图像|图|配图|海报|插画|封面|宣传图)\s*(生成|绘制|创作|画|做|来)|配[一张]*图|来[一张]*图|画[一张]*图|生图|文生图|生成.*照片|画.*照片|来.*写真/i.test(s);
+}
+function hasImageMarkdown(text) {
+  if (!text) return false;
+  var s = String(text);
+  return /!\[[^\]]*\]\([^)\s]+\)/.test(s) || /<img\s/i.test(s);
 }
 function extractImagePrompt(userMsg) {
   var s = String(userMsg || '');
@@ -6438,29 +6454,47 @@ window.__debug = {
         var base = (cfg.imageBaseURL || '').trim().replace(/\/$/, '');
         var model = (cfg.imageModel || 'dall-e-3').trim();
         var size = (cfg.imageSize || '1024x1024').trim();
+        // 统一超时控制，避免插件挂起
+        var timer;
+        function _timeout(ms, err) {
+          return new Promise(function (_, rej) { timer = setTimeout(function () { rej(new Error(err || '图片生成超时')); }, ms); });
+        }
+        function _clearTimer() { if (timer) { clearTimeout(timer); timer = null; } }
         if (base && key) {
           // OpenAI Images 兼容接口
-          fetch(base + '/v1/images/generations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-            body: JSON.stringify({ model: model, prompt: prompt, n: 1, size: size })
-          }).then(function (r) {
-            if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + '：' + t); });
-            return r.json();
-          }).then(function (d) {
-            var url = d && d.data && d.data[0] && (d.data[0].url || d.data[0].b64_json);
-            if (url) {
-              if (/^data:image/i.test(url)) return resolve(url);
-              return resolve(String(url));
-            }
-            throw new Error('接口未返回图片 URL');
-          }).catch(function (e) { reject(e); });
+          Promise.race([
+            fetch(base + '/v1/images/generations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+              body: JSON.stringify({ model: model, prompt: prompt, n: 1, size: size })
+            }).then(function (r) {
+              if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + '：' + t); });
+              return r.json();
+            }).then(function (d) {
+              var url = d && d.data && d.data[0] && (d.data[0].url || d.data[0].b64_json);
+              if (url) {
+                if (/^data:image/i.test(url)) return url;
+                return String(url);
+              }
+              throw new Error('接口未返回图片 URL');
+            }),
+            _timeout(120000, '图片生成接口响应超时（120s），请检查网络或 API 状态')
+          ]).then(function (u) { _clearTimer(); resolve(u); }).catch(function (e) { _clearTimer(); reject(e); });
         } else {
           // 未配置：使用 pollinations.ai 免费接口（无需 Key，直接返回图片）
           var seed = Math.floor(Math.random() * 999999);
-          var url = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=1024&height=1024&seed=' + seed + '&nologo=true';
-          // 先 HEAD 探测可用性，避免直接嵌入失效地址
-          fetch(url, { method: 'HEAD', mode: 'no-cors' }).then(function () { resolve(url); }).catch(function () { resolve(url); });
+          var safePrompt = encodeURIComponent(prompt).replace(/[!'()*]/g, function (c) { return '%' + c.charCodeAt(0).toString(16).toUpperCase(); });
+          var url = 'https://image.pollinations.ai/prompt/' + safePrompt + '?width=1024&height=1024&seed=' + seed + '&nologo=true&safe=false';
+          // 直接返回 URL：pollinations.ai 会根据 URL 实时生成图片。预加载校验可捕获网络完全不可用的情况。
+          Promise.race([
+            new Promise(function (res) {
+              var img = new Image();
+              img.onload = function () { res(url); };
+              img.onerror = function () { res(url); }; // 允许继续尝试展示，由聊天图片 onerror 提示失败
+              img.src = url;
+            }),
+            _timeout(30000, 'pollinations.ai 图片接口响应超时，请检查网络')
+          ]).then(function (u) { _clearTimer(); resolve(u); }).catch(function (e) { _clearTimer(); reject(e); });
         }
       } catch (e) { reject(e); }
     });
@@ -6556,11 +6590,12 @@ window.__debug = {
   }
 
   // ---------- 串行工作流引擎 ----------
-  async function runWorkflow(bot, userMsg, imgs, auds, frms, onProgress) {
+  async function runWorkflow(bot, userMsg, imgs, auds, frms, imagePrompt, onProgress) {
     var logs = [];
     function flushLogs() { renderRunLogs(logs); }
     function emit(st) { if (typeof onProgress === 'function') { try { onProgress(st); } catch (e) { } } }
     var canCall = (window.BotCraftAI && BotCraftAI.canCall) ? BotCraftAI.canCall() : false;
+    var _imagePromptForNodes = imagePrompt || '';
     var nodes = (bot.nodes && bot.nodes.length) ? bot.nodes : [];
     var prev = '', finalText = userMsg;
     var _imgInjected = false; // 多模态：图片仅注入到第一个处理节点，避免重复
@@ -6649,6 +6684,10 @@ window.__debug = {
       }
       // 文体注入：去AI腔/润色节点套用所选写作风格
       if ((role === 'review' || role === 'generate') && bot.styleText) sys += '\n\n【写作风格】请按以下文体要求输出：' + bot.styleText;
+      // 图片生成说明：最终节点知道系统会自动配图，避免自己编造 URL 或重复图片地址
+      if (_imagePromptForNodes && !isIntermediate) {
+        sys += '\n\n【图片生成】用户当前请求「' + _imagePromptForNodes.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。你只需在正文里自然说明「已为你生成配图」或简单引用，不要输出图片 URL，不要把图片地址当纯文本重复。';
+      }
       // 长期记忆注入（按相关性智能挑选，避免无关记忆干扰）
       if (bot.memory && bot.memory.enabled && bot.memory.items && bot.memory.items.length) {
         var mem = bot.memory.items.filter(function (it2) { return it2 && it2.text && it2.text.trim(); });
