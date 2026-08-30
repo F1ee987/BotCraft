@@ -448,6 +448,8 @@ body.embed-mode #wsName{font-size:15px}
 .msg.bot img.md-img{max-width:100%;max-height:420px;border-radius:12px;margin:8px 0;display:block;box-shadow:0 2px 12px rgba(0,0,0,.08);background:var(--bg)}
 .msg.bot img.md-img.img-err{max-width:100%;padding:12px;border:1px dashed var(--line);border-radius:8px;background:var(--bg);color:var(--sub);font-size:12px;box-shadow:none}
 .msg.bot.img-tip .msg-body{font-style:italic;color:var(--sub);background:rgba(47,158,122,.08);border-left:3px solid var(--brand)}
+.msg.bot.img-tip.img-err-bubble .msg-body{font-style:normal;color:#ff4d4f;background:rgba(255,77,79,.08);border-left:3px solid #ff4d4f}
+.md-img-placeholder{padding:16px;border:1px dashed var(--line);border-radius:8px;background:var(--bg);color:#ff4d4f;text-align:center;font-size:13px;line-height:1.6}
 .msg.bot a{color:var(--brand);text-decoration:underline;text-underline-offset:2px}
 .msg.bot a:hover{opacity:.82}
 .msg.bot pre.md-code{position:relative;padding-top:34px}
@@ -1475,7 +1477,10 @@ window.__storage = __storage;
     }
     // 用户当前请求需要配图：明确告知 AI 系统会自动生成并展示图片，避免模型自己编造/重复 URL
     if (imagePrompt) {
-      parts.push('\n【图片生成】用户当前请求「' + imagePrompt.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。你在正文中只需自然说明「已为你生成配图」或简单引用，不要输出图片 URL，不要把图片地址当纯文本重复，也不要自行描述不存在的图片内容。');
+      var imgNote = '\n【图片生成】用户当前请求「' + imagePrompt.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。';
+      imgNote += ' 你只需在正文里自然说明「已为你生成配图」或简单引用，绝对不要输出图片 URL，不要把图片地址当纯文本重复，也不要自行描述不存在的图片内容。';
+      imgNote += ' 特别重要：用户要的是「直接看到图片」，不是要你写「图片生成提示词、负面提示词、小红书/抖音配文、图片比例、分镜脚本」等；你禁止输出任何带【】方括号的板块标题，禁止输出 Midjourney/Stable Diffusion 提示词模板，禁止输出营销文案脚本。违者视为违规输出。';
+      parts.push(imgNote);
     }
     // 真实工具执行结果（联网检索 / 天气查询等），由系统在调用模型前自动拉取并注入
     if (toolCtx && toolCtx.trim()) {
@@ -2407,7 +2412,7 @@ function renderMarkdown(text) {
       return m;
     });
     s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, u) {
-      if (/^(https?:|data:image|\/)/i.test(u) && !/["'<>]/.test(u)) return '<img src="' + u + '" alt="' + escapeHtml(alt) + '" class="md-img" onload="scrollChatToBottom()" onerror="this.classList.add(\'img-err\');this.alt=\'图片加载失败：\'+this.src">';
+      if (/^(https?:|data:image|\/)/i.test(u) && !/["'<>]/.test(u)) return '<img src="' + u + '" alt="' + escapeHtml(alt) + '" class="md-img" onload="scrollChatToBottom()" onerror="onImageError(this,\'' + escapeHtml(u).replace(/'/g, '\\\'') + '\')">';
       return m;
     });
     return s;
@@ -2467,6 +2472,17 @@ function renderMarkdown(text) {
   html = html.replace(/\u0000CB(\d+)\u0000/g, function (_, n) { return codeBlocks[+n]; });
   return html;
 }
+// 聊天中 markdown 图片加载失败时的占位提示（从 HTML 字符串调用，必须挂 window）
+function onImageError(img, url) {
+  try {
+    img.classList.add('img-err');
+    var wrap = document.createElement('div');
+    wrap.className = 'md-img-placeholder';
+    wrap.innerHTML = '<div>⚠️ 图片加载失败</div><small>' + escapeHtml(url) + '<br>可在设置 → 🖼️ 文生图设置中配置稳定的图片接口。</small>';
+    if (img.parentNode) img.parentNode.replaceChild(wrap, img);
+  } catch (e) { /* noop */ }
+}
+window.onImageError = onImageError;
 // 代码块「单独复制」：复制该块原文，兼容 file://（clipboard API 可能不可用 → execCommand 回退）
 function copyCodeBlock(btn) {
   try {
@@ -4252,6 +4268,17 @@ function sampleVideoFrames(url, count, maxW) {
   });
 }
 async function sendMsg() {
+  // 图片生成失败时，在聊天记录里追加错误提示（不只是 toast）
+  function appendImageError(msg) {
+    var c = document.getElementById('chat');
+    if (!c) return;
+    c.querySelectorAll('.img-tip').forEach(function (el) { el.remove(); });
+    var errDiv = document.createElement('div');
+    errDiv.className = 'msg bot img-tip img-err-bubble';
+    errDiv.innerHTML = _body(escapeHtml(activeBot && activeBot.n ? activeBot.n : '系统'), '<div>⚠️ 图片生成失败：' + escapeHtml(msg) + '<br><small>可在设置 → 🖼️ 文生图设置中配置国内/稳定的图片接口（OpenAI Images 兼容）。</small></div>');
+    c.appendChild(errDiv);
+    scrollChatToBottom(true);
+  }
   if (sending) {
     // 非串行模式：AI 回复期间允许预输入，把当前输入框文本加入待发队列，回复完成后自动依次发送
     if (!getSerialInput()) {
@@ -4385,8 +4412,8 @@ async function sendMsg() {
               b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
               renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
             }
-          } else { toast('图片生成失败：未返回图片地址', 'err'); }
-        } catch (e) { console.warn('[图片生成] 失败：', e); document.querySelectorAll('.img-tip').forEach(el => el.remove()); toast('图片生成失败：' + (e && e.message ? e.message : e), 'err'); }
+          } else { appendImageError('未返回图片地址'); }
+        } catch (e) { console.warn('[图片生成] 失败：', e); appendImageError(e && e.message ? e.message : e); }
       }
     } else {
       // 普通对话：启用真实插件（联网检索 / 天气查询）时，先执行工具并把结果注入上下文
@@ -4431,8 +4458,8 @@ async function sendMsg() {
             b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
             renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
           }
-        } else { toast('图片生成失败：未返回图片地址', 'err'); }
-      } catch (e) { console.warn('[图片生成] 失败：', e); document.querySelectorAll('.img-tip').forEach(el => el.remove()); toast('图片生成失败：' + (e && e.message ? e.message : e), 'err'); }
+        } else { appendImageError('未返回图片地址'); }
+      } catch (e) { console.warn('[图片生成] 失败：', e); appendImageError(e && e.message ? e.message : e); }
     }
     }
   } catch (err) {
@@ -6686,7 +6713,9 @@ window.__debug = {
       if ((role === 'review' || role === 'generate') && bot.styleText) sys += '\n\n【写作风格】请按以下文体要求输出：' + bot.styleText;
       // 图片生成说明：最终节点知道系统会自动配图，避免自己编造 URL 或重复图片地址
       if (_imagePromptForNodes && !isIntermediate) {
-        sys += '\n\n【图片生成】用户当前请求「' + _imagePromptForNodes.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。你只需在正文里自然说明「已为你生成配图」或简单引用，不要输出图片 URL，不要把图片地址当纯文本重复。';
+        sys += '\n\n【图片生成】用户当前请求「' + _imagePromptForNodes.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。';
+        sys += ' 你只需在正文里自然说明「已为你生成配图」或简单引用，绝对不要输出图片 URL，不要把图片地址当纯文本重复。';
+        sys += ' 特别重要：用户要的是「直接看到图片」，不是要你写「图片生成提示词、负面提示词、小红书/抖音配文、图片比例、分镜脚本」等内容；因此你禁止输出任何带【】方括号的板块标题，禁止输出 Midjourney/Stable Diffusion 提示词模板，禁止输出文案脚本。违者视为违规输出。';
       }
       // 长期记忆注入（按相关性智能挑选，避免无关记忆干扰）
       if (bot.memory && bot.memory.enabled && bot.memory.items && bot.memory.items.length) {
