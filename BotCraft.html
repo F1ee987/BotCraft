@@ -1233,6 +1233,10 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none;
       <input id="set-serial" type="checkbox" checked style="width:auto">
       <label style="margin:0">串行输入（AI 回复期间锁定输入框，必须等上一条完成才能发下一条；关闭后可在回复期间预输入，消息自动排队依次发送）</label>
     </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px">
+      <input id="set-fast" type="checkbox" style="width:auto">
+      <label style="margin:0">⚡ 快速模式（开启后，编排型机器人也只走一次直接对话，跳过串行分步工作流，首字更快；需要多步推理时关闭此开关）</label>
+    </div>
     <div class="field">
       <label>代理地址（可选，生产环境推荐）</label>
       <input id="set-proxy" placeholder="https://your-domain.com/api/ai-proxy">
@@ -1318,7 +1322,7 @@ window.__storage = __storage;
   };
   const DEFAULT_CFG = {
     provider: 'openai', baseURL: PROVIDERS.openai.base, apiKey: '', model: 'gpt-4o-mini',
-    temperature: 0.7, maxTokens: 800, directCall: true, proxyURL: '', fallback: 'smart',
+    temperature: 0.7, maxTokens: 800, directCall: true, proxyURL: '', fallback: 'smart', fastReply: false,
   };
   let cfg = loadConfig();
 
@@ -4236,7 +4240,7 @@ async function sendMsg() {
   const signal = { then(cb) { if (abortCtrl) abortCtrl.signal.addEventListener('abort', cb, { once: true }); } };
 
   try {
-    if (aiBot.nodes && aiBot.nodes.length > 1) {
+    if (!BotCraftAI.getConfig().fastReply && aiBot.nodes && aiBot.nodes.length > 1) {
       // 多节点 → 走串行工作流引擎（逐步真实执行 + 执行日志 + 实时进度）
       typing.remove(); // 用进度气泡替代静态转圈
       injectLogPanel();
@@ -4269,7 +4273,7 @@ async function sendMsg() {
           curBody.textContent = '';
         } else if (st.phase === 'token') {
           var _now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-          if (_now - _lastPaint > 60) { _lastPaint = _now; curBody.textContent = st.text; scrollChatToBottom(); }
+          if (_now - _lastPaint > 24) { _lastPaint = _now; curBody.textContent = st.text; scrollChatToBottom(); }
         } else if (st.phase === 'done' && st.role && st.role !== 'start' && st.role !== 'human') {
           curBody.innerHTML = renderMarkdown(st.text || curBody.textContent);
           scrollChatToBottom();
@@ -4301,7 +4305,7 @@ async function sendMsg() {
     for await (const chunk of stream) {
       full += chunk;
       const _now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      if (_now - _lastPaint > 60) { _lastPaint = _now; span.textContent = full; scrollChatToBottom(); }
+      if (_now - _lastPaint > 24) { _lastPaint = _now; span.textContent = full; scrollChatToBottom(); }
     }
     // 日历/提醒插件：解析模型返回的 [REMINDER: 标题 | 时间] 标记并真实存储
     if ((activeBot.plugins || []).indexOf('日历/提醒') >= 0) {
@@ -5855,6 +5859,7 @@ function openSettings() {
   document.getElementById('set-maxtokens').value = cfg.maxTokens || 800;
   document.getElementById('set-direct').checked = !!cfg.directCall;
   document.getElementById('set-serial').checked = getSerialInput();
+  const _fastEl = document.getElementById('set-fast'); if (_fastEl) _fastEl.checked = !!cfg.fastReply;
   document.getElementById('set-proxy').value = cfg.proxyURL || '';
   fillModelOptions(cfg.provider, cfg.model);
   document.getElementById('set-model-custom').value =
@@ -5954,13 +5959,14 @@ function saveSettings() {
   const maxTokens = parseInt(document.getElementById('set-maxtokens').value, 10) || 800;
   const directCall = document.getElementById('set-direct').checked;
   const proxyURL = document.getElementById('set-proxy').value.trim();
+  const fastReply = document.getElementById('set-fast').checked;
   setSerialInput(document.getElementById('set-serial').checked);
   const fKey = document.getElementById('field-key'), fBase = document.getElementById('field-base');
   fKey.classList.remove('invalid'); fBase.classList.remove('invalid');
   if (directCall && !apiKey) { fKey.classList.add('invalid'); toast('请填写 API Key', 'err'); return; }
   if (directCall && !baseURL) { fBase.classList.add('invalid'); toast('请填写接口地址', 'err'); return; }
   if (!model) { toast('请选择或填写模型', 'err'); return; }
-  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL });
+  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL, fastReply });
   closeSettings();
   const head = apiKey ? `已接入 ${PROVIDER_META[provider].label} · ${model}` : '已保存（无 Key，将使用本地降级回复）';
   toast(head, 'ok');
