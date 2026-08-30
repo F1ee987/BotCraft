@@ -1599,7 +1599,7 @@ window.__storage = __storage;
     b.memory.pending = true; renderMemoryPanelIfOpen(b);
     var convo = recent.map(function (m) { return (m.role === 'me' ? '用户' : '助手') + '：' + (m.text || ''); }).join('\n');
     var existing = (b.memory.items || []).map(function (it) { return it.text; }).join('\n');
-    var sys = '你是记忆管理员。阅读对话与已有记忆，产出【更新后的长期记忆清单】。规则：1) 只保留长期有用、跨会话稳定的信息，包括：a) 用户事实（偏好/身份/项目/禁忌/常用术语/约定）；b) 助手给出的、用户未反对且跨会话有用的结论/方案/建议/约定（例如助手给出的确定结论、可执行方案、明确建议、双方达成的约定）——纯临时解释、寒暄、陪聊不记；若用户紧接着否定了某条结论/方案，则不记或修正它；2) 合并重复、修正过期信息；3) 用简洁中文条目，每条 ≤ 40 字；4) 直接输出 JSON 数组，每条形如 {"text":"条目内容","type":"类别"}，type 只能从 [偏好,事实,身份,项目,禁忌,术语,约定,结论,方案,建议,其他] 中选一个最贴切的；不要任何解释或 markdown 代码块；5) 逐条比对【已有记忆】，若新条目与某条语义几乎相同（只是措辞/标点/语序不同），只保留一条，绝不要重复列出相同事实，已有记忆里的信息也不要再以新条目重复出现。';
+    var sys = '你是记忆管理员。阅读对话与已有记忆，产出【更新后的长期记忆清单】。规则：1) 保留长期有用、跨会话稳定的信息，包括：a) 用户事实（偏好/身份/项目/禁忌/常用术语/约定）；b) 助手给出的、用户未反对且跨会话有用的结论/方案/建议/约定；c) 用户在学/问的技术主题、操作步骤、代码用法、工具配置、关键参数（如 Selenium/XPath/正则/某库用法），这些应记为「术语」或「方案」，便于后续对话承接；2) 合并重复、修正过期信息；3) 用简洁中文条目，每条 ≤ 40 字；4) 直接输出 JSON 数组，每条形如 {"text":"条目内容","type":"类别"}，type 只能从 [偏好,事实,身份,项目,禁忌,术语,约定,结论,方案,建议,其他] 中选一个最贴切的；不要任何解释或 markdown 代码块；5) 逐条比对【已有记忆】，若新条目与某条语义几乎相同（只是措辞/标点/语序不同），只保留一条，已有记忆里的信息不要重复列出；6) 如果本轮对话明显包含可沉淀信息，不要返回空数组，请至少提炼 1-3 条最相关的条目。';
     var userMsg = '【已有记忆】\n' + (existing || '（无）') + '\n\n【最近对话】\n' + convo + '\n\n请输出更新后的记忆 JSON 数组（每条带 type 类别）。';
     BotCraftAI.request([{ role: 'system', content: sys }, { role: 'user', content: userMsg }]).then(function (out) {
       var arr = parseMemoryJSON(out);
@@ -1608,13 +1608,19 @@ window.__storage = __storage;
         merged = dedupeMemoryItems(merged); // 归一化精确去重（合并「标点/空格/大小写/全角」差异造成的伪重复）
         if (merged.length > 50) merged = merged.slice(-50);
         b.memory.items = merged;
+      } else {
+        // AI 提炼返回空时，用本地规则兜底扫描，避免面板一直为空
+        try { extractMemoryLocal(b, true); } catch (e) { }
       }
       b.memory.lastUpdate = Date.now();
       b.memory._seenLen = b.history.length;
       b.memory.pending = false;
       saveBots(); renderMemoryPanelIfOpen(b); renderCtxBar(b);
     }).catch(function (e) {
-      console.warn('[memory] 更新失败', e); b.memory.pending = false; renderMemoryPanelIfOpen(b);
+      console.warn('[memory] 更新失败', e);
+      // 失败也兜底：用本地规则尽量抽出一些记忆，避免用户看到空面板
+      try { extractMemoryLocal(b, true); } catch (e2) { }
+      b.memory.pending = false; renderMemoryPanelIfOpen(b);
       if (window.toast) toast('记忆自动更新失败：' + (e && e.message || e), 'err');
     });
   }
