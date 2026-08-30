@@ -1336,8 +1336,21 @@ window.__storage = __storage;
     const turns = (history || []).slice();
     const MAX_TURNS = 20;
     if (turns.length > MAX_TURNS * 2) turns.splice(0, turns.length - MAX_TURNS * 2);
-    turns.forEach(m => {
+    // 仅最新一轮用户消息携带真实媒体；更早的媒体消息降级为占位文本，
+    // 避免每轮都把全部历史图片/音频/视频的 base64 重发，导致请求体随轮次无限膨胀、撑爆上下文而报 API 错误
+    let _lastMeIdx = -1;
+    for (let i = turns.length - 1; i >= 0; i--) { if (turns[i].role === 'me') { _lastMeIdx = i; break; } }
+    turns.forEach(function (m, _idx) {
       if (m.role === 'me' && ((m.images && m.images.length) || (m.audio && m.audio.length) || (m.frames && m.frames.length))) {
+        if (_idx !== _lastMeIdx) {
+          // 历史媒体：不重发 base64，仅用占位文本保留上下文语义，防止请求体过大
+          let _ph = (m.text || '');
+          if (m.images && m.images.length) _ph += (_ph ? ' ' : '') + '[用户此前发送了 ' + m.images.length + ' 张图片]';
+          if (m.frames && m.frames.length) _ph += (_ph ? ' ' : '') + '[用户此前发送了 ' + m.frames.length + ' 段视频]';
+          if (m.audio && m.audio.length) _ph += (_ph ? ' ' : '') + '[用户此前发送了 ' + m.audio.length + ' 段音频]';
+          msgs.push({ role: 'user', content: _ph.trim() || '[用户此前发送了媒体内容]' });
+          return;
+        }
         const parts = [];
         if (m.text) parts.push({ type: 'text', text: m.text });
         (m.images || []).forEach(function (src) { parts.push({ type: 'image_url', image_url: { url: src } }); });
