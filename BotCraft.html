@@ -621,6 +621,9 @@ body.embed-mode #wsName{font-size:15px}
 .mem-type-禁忌{background:rgba(255,107,129,.18);color:#ff6b81;border:1px solid rgba(255,107,129,.4)}
 .mem-type-术语{background:rgba(45,206,211,.18);color:#2dced3;border:1px solid rgba(45,206,211,.4)}
 .mem-type-约定{background:rgba(241,196,15,.2);color:#d4a017;border:1px solid rgba(241,196,15,.45)}
+.mem-type-结论{background:rgba(31,125,96,.2);color:#1f7d60;border:1px solid rgba(31,125,96,.45)}
+.mem-type-方案{background:rgba(45,206,211,.18);color:#1f9aa5;border:1px solid rgba(45,206,211,.4)}
+.mem-type-建议{background:rgba(47,158,122,.16);color:#2f9e7a;border:1px solid rgba(47,158,122,.4)}
 .mem-type-其他{background:rgba(150,160,180,.18);color:var(--sub);border:1px solid var(--line)}
 .mem-type-sel{padding:9px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--txt);font-size:12.5px;font-family:inherit;flex-shrink:0}
 .mem-type-sel:focus{outline:none;border-color:var(--brand)}
@@ -1531,7 +1534,7 @@ window.__storage = __storage;
     return (s || '').toLowerCase().replace(/[^a-z0-9一-龥]/g, '').trim();
   }
   // 记忆类别（自动提炼 / 手动添加共用）。用于着色与筛选
-  var MEM_TYPES = ['偏好', '事实', '身份', '项目', '禁忌', '术语', '约定', '其他'];
+  var MEM_TYPES = ['偏好', '事实', '身份', '项目', '禁忌', '术语', '约定', '结论', '方案', '建议', '其他'];
   function normMemType(t) {
     t = (t || '').trim();
     if (MEM_TYPES.indexOf(t) >= 0) return t;
@@ -1596,7 +1599,7 @@ window.__storage = __storage;
     b.memory.pending = true; renderMemoryPanelIfOpen(b);
     var convo = recent.map(function (m) { return (m.role === 'me' ? '用户' : '助手') + '：' + (m.text || ''); }).join('\n');
     var existing = (b.memory.items || []).map(function (it) { return it.text; }).join('\n');
-    var sys = '你是记忆管理员。阅读对话与已有记忆，产出【更新后的长期记忆清单】。规则：1) 只保留长期有用、跨会话稳定的用户事实（偏好/身份/项目/禁忌/常用术语/约定），丢弃临时闲聊；2) 合并重复、修正过期信息；3) 用简洁中文条目，每条 ≤ 40 字；4) 直接输出 JSON 数组，每条形如 {"text":"条目内容","type":"类别"}，type 只能从 [偏好,事实,身份,项目,禁忌,术语,约定,其他] 中选一个最贴切的；不要任何解释或 markdown 代码块；5) 逐条比对【已有记忆】，若新条目与某条语义几乎相同（只是措辞/标点/语序不同），只保留一条，绝不要重复列出相同事实，已有记忆里的信息也不要再以新条目重复出现。';
+    var sys = '你是记忆管理员。阅读对话与已有记忆，产出【更新后的长期记忆清单】。规则：1) 只保留长期有用、跨会话稳定的信息，包括：a) 用户事实（偏好/身份/项目/禁忌/常用术语/约定）；b) 助手给出的、用户未反对且跨会话有用的结论/方案/建议/约定（例如助手给出的确定结论、可执行方案、明确建议、双方达成的约定）——纯临时解释、寒暄、陪聊不记；若用户紧接着否定了某条结论/方案，则不记或修正它；2) 合并重复、修正过期信息；3) 用简洁中文条目，每条 ≤ 40 字；4) 直接输出 JSON 数组，每条形如 {"text":"条目内容","type":"类别"}，type 只能从 [偏好,事实,身份,项目,禁忌,术语,约定,结论,方案,建议,其他] 中选一个最贴切的；不要任何解释或 markdown 代码块；5) 逐条比对【已有记忆】，若新条目与某条语义几乎相同（只是措辞/标点/语序不同），只保留一条，绝不要重复列出相同事实，已有记忆里的信息也不要再以新条目重复出现。';
     var userMsg = '【已有记忆】\n' + (existing || '（无）') + '\n\n【最近对话】\n' + convo + '\n\n请输出更新后的记忆 JSON 数组（每条带 type 类别）。';
     BotCraftAI.request([{ role: 'system', content: sys }, { role: 'user', content: userMsg }]).then(function (out) {
       var arr = parseMemoryJSON(out);
