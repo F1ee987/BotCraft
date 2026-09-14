@@ -1079,6 +1079,14 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
   </main>
 
   <!-- ==================== 工作台 ==================== -->
+  <!-- 更多 ▾ 菜单必须挂在 body 直属层级：原来在 .ws-side 里，而 .ws-side 有 backdrop-filter
+       （会成为 fixed 后代的包含块）+ overflow-x:hidden（把菜单裁掉）——位置漂移且显示不全 -->
+  <div class="ws-more-menu" id="wsMoreMenu">
+    <div class="ws-more-item" data-tab="style">文体</div>
+    <div class="ws-more-item" data-tab="memory">记忆</div>
+    <div class="ws-more-item" data-tab="versions">版本</div>
+    <div class="ws-more-item" data-tab="batch">批量</div>
+  </div>
   <main class="workspace" id="page-workspace">
     <div class="ws-side">
       <div class="ws-head">
@@ -1094,12 +1102,6 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
           <div class="ws-tab" data-tab="publish">发布</div>
         </div>
         <div class="ws-tab ws-tab-more" id="wsTabMore">更多 ▾</div>
-      </div>
-      <div class="ws-more-menu" id="wsMoreMenu">
-        <div class="ws-more-item" data-tab="style">文体</div>
-        <div class="ws-more-item" data-tab="memory">记忆</div>
-        <div class="ws-more-item" data-tab="versions">版本</div>
-        <div class="ws-more-item" data-tab="batch">批量</div>
       </div>
       <div class="ws-body" id="wsFlowBody"></div>
       <div class="tab-panel" id="wsPromptBody" style="display:none">
@@ -6925,8 +6927,15 @@ function openWsMore() {
   const menu = document.getElementById('wsMoreMenu'); const btn = document.getElementById('wsTabMore'); if (!menu || !btn) return;
   menu.classList.add('open');
   const r = btn.getBoundingClientRect();
-  menu.style.top = (r.bottom + 6) + 'px';
-  menu.style.left = Math.max(8, r.right - menu.offsetWidth) + 'px';
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  // 垂直：下方放不下就向上弹；水平：右缘贴视口内侧，不越界
+  let top = r.bottom + 6;
+  if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+  let left = r.right - mw;
+  if (left < 8) left = 8;
+  if (left + mw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - mw - 8);
+  menu.style.top = top + 'px';
+  menu.style.left = left + 'px';
 }
 function closeWsMore() { const menu = document.getElementById('wsMoreMenu'); if (menu) menu.classList.remove('open'); }
 document.querySelectorAll('.ws-tab:not(.ws-tab-more)').forEach(tab => { tab.onclick = () => switchWsTab(tab.dataset.tab); });
