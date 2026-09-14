@@ -80,7 +80,7 @@
   --ok:#34c759; --warn:#ff9500; --danger:#ff3b30;
   --fill:rgba(255,255,255,.60);
   --fill-strong:rgba(255,255,255,.85);
-  --fill-hover:rgba(255,255,255,.70);
+  --fill-hover:rgba(0,0,0,.055);    /* 浅色下悬浮=压暗一档（白上提白几乎不可见），Apple 同款手法 */
   --glass-bg:rgba(255,255,255,.50);
   --glass-bg-hover:rgba(255,255,255,.60);
   --glass-bg-active:rgba(124,58,237,.16);
@@ -122,6 +122,13 @@
 [data-theme="light"] .mem-more{border-color:rgba(0,0,0,.14)}
 [data-theme="light"] .mem-more:hover{background:rgba(124,58,237,.06)}
 [data-theme="light"] .node,[data-theme="light"] .brand-card,[data-theme="light"] .mem-item .mem-type{box-shadow:none}
+/* 浅色 · 悬浮反馈增强：白底上只换底色感知弱，补边框/投影让「可点」状态更明确 */
+[data-theme="light"] .btn:hover,[data-theme="light"] .file-btn:hover{border-color:rgba(0,0,0,.12);box-shadow:0 1px 4px rgba(31,41,71,.12)}
+[data-theme="light"] .btn-ghost:hover{background:rgba(124,58,237,.08)}
+[data-theme="light"] .btn-primary:hover{filter:brightness(1.08);box-shadow:0 5px 16px rgba(124,58,237,.32)}
+[data-theme="light"] .btn-primary:active{box-shadow:none}
+[data-theme="light"] .nav a:hover,[data-theme="light"] .hamburger:hover{background:rgba(0,0,0,.055)}
+[data-theme="light"] .mem-view:hover{border-color:rgba(0,0,0,.14)}
 *{box-sizing:border-box;margin:0;padding:0}
 /* ============ 液态玻璃的背景层 ============
    玻璃必须有东西可以透出来才成立。没有这层彩色光晕，全局玻璃背后全是纯色，
