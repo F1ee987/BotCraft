@@ -391,6 +391,9 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .empty-tip{text-align:center;color:var(--sub);padding:60px 20px;font-size:14px}
 .empty-tip button{margin-top:16px}
 .tab-panel{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:16px}
+/* 工作区可拉窄：面板直接子元素允许收缩，flex 行内容允许换行 */
+.tab-panel > *,.ws-body > *{min-width:0}
+.tab-panel input,.tab-panel textarea,.ws-body input,.ws-body textarea{min-width:0}
 /* ===== 聊天区：高度锁定 + 内部滚动（界面长度不随内容变化） ===== */
 /* 约束链：.app(min-height:100vh) → .workspace(flex:1) → .ws-main → .chat-head/.chat/.quick-bar/.chat-input
    每一层都必须有明确高度约束，否则 .chat 的 flex:1 无法生效，会随消息撑高整页。 */
@@ -634,7 +637,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .mem-fold:hover{text-decoration:underline}
 .mem-del{margin-top:2px;width:24px;height:24px;flex-shrink:0;border:none;background:var(--fill);border:1px solid transparent;border-radius:7px;cursor:pointer;color:var(--sub);font-size:13px;transition:.15s var(--ease)}
 .mem-del:hover{color:var(--danger)}
-.mem-add{flex:1;padding:9px 10px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit;transition:.18s var(--ease)}
+.mem-add{flex:1;min-width:0;padding:9px 10px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit;transition:.18s var(--ease)}
 .mem-add:focus{outline:none;border-color:var(--brand);background:transparent}
 .ver-bar{display:flex;gap:8px;margin-bottom:6px}
 .ver-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);margin-bottom:8px;transition:.15s var(--ease)}
@@ -693,8 +696,8 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .mem-type-sel{padding:9px 8px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit;flex-shrink:0}
 .mem-type-sel:focus{outline:none;border-color:var(--brand)}
 /* ============ 记忆工具栏 / 健康度 ============ */
-.mem-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-.mem-toolbar .mem-search{margin-bottom:0;flex:1}
+.mem-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.mem-toolbar .mem-search{margin-bottom:0;flex:1 1 120px;min-width:0}
 .mem-sort{padding:9px 8px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:12px;font-family:inherit;flex-shrink:0;cursor:pointer}
 .mem-sort:focus{outline:none;border-color:var(--brand)}
 .mem-status{font-size:11.5px;color:var(--sub);line-height:1.7;margin:8px 0;padding:8px 11px;border-radius:10px;background:var(--fill);border:1px solid transparent}
@@ -706,7 +709,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .brand-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:14px;margin-top:14px}
 .brand-head{font-size:14px;font-weight:600;color:var(--txt);display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .brand-sub{font-size:11px;font-weight:400;color:var(--sub)}
-.brand-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.brand-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
 .brand-area{display:flex;flex-direction:column;gap:4px;margin-top:8px}
 .brand-area>span{font-size:11.5px;color:var(--sub);font-weight:590}
 .brand-area input,.brand-area textarea{width:100%;padding:8px 10px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit;transition:.18s var(--ease)}
@@ -2670,8 +2673,8 @@ window.__storage = __storage;
     var html = '';
     html += '<div style="font-size:12px;color:var(--sub);margin-bottom:10px">开启后会自动从对话中沉淀长期记忆（未配置 Key 时用本地规则提炼，配置后由 AI 智能提炼），并在后续对话里按相关性运用。也可手动添加。</div>';
     html += '<label class="kb-row" style="margin-bottom:10px"><input type="checkbox" id="memEnable" ' + (m.enabled ? 'checked' : '') + '> <span>🧠 启用长期记忆</span><span class="kb-toggle">' + (m.enabled ? '已开启' : '已关闭') + '</span></label>';
-    html += '<div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn btn-primary btn-sm" onclick="updateMemoryNow()">⚡ 立即更新</button><button class="btn btn-ghost btn-sm" onclick="dedupeMemoryNow()" title="合并语义重复的记忆，并按重要度清理超量条目">🧹 去重合并</button></div>';
-    html += '<div style="display:flex;gap:8px;margin-bottom:10px">';
+    html += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="updateMemoryNow()">⚡ 立即更新</button><button class="btn btn-ghost btn-sm" onclick="dedupeMemoryNow()" title="合并语义重复的记忆，并按重要度清理超量条目">🧹 去重合并</button></div>';
+    html += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">';
     html += '<button class="btn btn-ghost btn-sm" onclick="exportMemory()" title="把该机器人的记忆导出为 JSON，便于迁移或存档">⬇️ 导出</button>';
     html += '<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'memImportFile\').click()" title="从 JSON 导入记忆（自动去重）">⬆️ 导入</button>';
     html += '<input type="file" id="memImportFile" accept=".json,application/json" style="display:none" onchange="importMemoryFile(this)">';
@@ -2707,7 +2710,7 @@ window.__storage = __storage;
     html += '<label class="brand-area"><span>官网 / 链接</span><input id="brandLinks" class="mem-add" style="flex:none;width:100%" value="' + escapeAttr(_br.links || '') + '" oninput="setBrand(\'links\',this.value)"></label>';
     html += '<button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%" onclick="exportTemplate()">💾 导出为模板</button>';
     html += '</div>';
-    html += '<div style="margin-top:12px;display:flex;gap:8px"><select id="memTypeSel" class="mem-type-sel">';
+    html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><select id="memTypeSel" class="mem-type-sel">';
     MEM_TYPES.forEach(function (tp) { html += '<option value="' + tp + '">' + tp + '</option>'; });
     html += '</select><input id="memAddInput" class="mem-add" placeholder="手动添加一条记忆，如：用户偏好简洁的回答"><button class="btn btn-ghost btn-sm" onclick="addMemoryItem()">＋ 添加</button></div>';
     box.innerHTML = html;
