@@ -1372,7 +1372,9 @@ window.__storage = __storage;
   const LS_CFG = 'botcraft.ai.config.v1';
   const PROVIDERS = {
     openai:   { label: 'OpenAI',          base: 'https://api.openai.com/v1',              models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1-mini'] },
-    dashscope:{ label: '阿里云百炼',       base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen3.8-max', 'qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen2.5-72b-instruct'] },
+    // 顺序按「便宜/有免费额度」在前，付费旗舰 qwen3.8-max 后置：首位是设置面板最易选中的项，
+    // 放旗舰模型会让用户不知不觉按最贵单价计费、或直接撞上免费额度用尽的 403
+    dashscope:{ label: '阿里云百炼',       base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen-plus', 'qwen-turbo', 'qwen3.8-flash', 'qwen-max', 'qwen3.8-max', 'qwen2.5-72b-instruct'] },
     hunyuan:  { label: '腾讯混元',         base: 'https://api.hunyuan.cloud.tencent.com/v1', models: ['hunyuan-lite', 'hunyuan-standard', 'hunyuan-pro'] },
     deepseek: { label: 'DeepSeek',        base: 'https://api.deepseek.com/v1',           models: ['deepseek-chat', 'deepseek-reasoner'] },
     zhipu:    { label: '智谱 GLM（免费）',  base: 'https://open.bigmodel.cn/api/paas/v4',  models: ['glm-4.6v-flash', 'glm-4.7-flash', 'glm-4.5-flash', 'glm-4-plus'] },
@@ -3819,6 +3821,32 @@ function resolveModelLabel(modelId, provider) {
 }
 window.resolveModelLabel = resolveModelLabel;  // 显式导出，避免严格模式/隔离环境下引用不到
 
+// 由 HTTP 状态码 + 服务商返回的正文，给出「可执行」的修复建议。
+// 关键：403 有两种完全不同的成因——① 账户免费额度用尽 / 欠费，② Key 无权访问该模型。
+// 二者都返回 403，若统一提示「API Key 无效」，会把用户引向反复检查密钥、网络与跨域，白折腾。
+function apiErrHint(err) {
+  const st = (err && err.status) ? err.status : 0;
+  const d = String((err && (err.detail || err.message)) || '');
+  if (st === 401) return 'API Key 无效或已过期，请在「设置」中重新粘贴密钥。';
+  if (st === 403) {
+    // 阿里云百炼「免费额度用完即停」会回 AllocationQuota.FreeTierOnly；其他厂商有同类文案
+    if (/free\s*tier|free\s*quota|quota\s*exhaust|免费额度|额度已用尽|用完即停/i.test(d))
+      return '该账户在此模型上的免费额度已用尽（服务商返回 Free quota exhausted），与 Key 是否正确、网络是否通畅无关，重试无效。三种解决方案：'
+        + '① 登录服务商控制台关闭「免费额度用完即停」开关，改为按量付费（阿里云百炼：控制台 → 模型用量 → 免费额度页签 → 找到该模型 → 关闭右侧开关）；'
+        + '② 完成实名认证并充值后继续使用该模型（未实名用户该开关由系统强制开启，无法关闭）；'
+        + '③ 在「设置」里换用仍有免费额度的模型（如 qwen-plus / qwen-turbo），或换一家服务商。';
+    if (/arrear|欠费|insufficient|余额不足|balance|overdue|payment/i.test(d))
+      return '账户余额不足或已欠费，请先在服务商控制台充值，或换用其他服务商/模型。';
+    return 'API Key 无权访问该模型，或该模型尚未在服务商控制台开通。请检查密钥权限，并确认该模型已开通（部分模型需单独开通后方可调用）。';
+  }
+  if (st === 400) return '请求体过大（超出该模型的上下文上限）或参数不合法。可换用上下文更大的模型（如 gpt-4o / qwen-plus），或减少挂载的大知识库。';
+  if (st === 404) return '接口路径或模型名不存在，请检查 baseURL 与模型名。';
+  if (st === 429) return '请求过于频繁（触发限流）或超出每分钟调用额度，请稍后重试或降低发送频率。';
+  if (st >= 500) return '服务端临时错误，已自动重试仍失败，请稍后重试。';
+  return '请检查「设置」中的 API Key、接口地址与模型名是否正确，或稍后重试。';
+}
+window.apiErrHint = apiErrHint;
+
 function refreshWorkspace() {
   const b = getBot(currentId); if (!b) return;
   document.getElementById('wsName').textContent = b.n;
@@ -4727,14 +4755,7 @@ async function sendMsg() {
     else {
       const _real = (err && err.message) ? err.message : (err ? String(err) : '未知错误');
       toast('模型调用失败：' + _real, 'err');
-      let _hint = '请检查「设置」中的 API Key、接口地址与模型名是否正确，或稍后重试。';
-      if (err && err.status) {
-        if (err.status === 400) _hint = '请求体过大（超出该模型的上下文上限）。可换用上下文更大的模型（如 gpt-4o / qwen-plus），或减少挂载的大知识库。';
-        else if (err.status === 401 || err.status === 403) _hint = 'API Key 无效或无权访问该模型，请检查「设置」中的密钥。';
-        else if (err.status === 404) _hint = '接口路径或模型名不存在，请检查 baseURL 与模型名。';
-        else if (err.status === 429) _hint = '请求过于频繁（触发限流），请稍后重试或降低发送频率。';
-        else if (err.status >= 500) _hint = '服务端临时错误，已自动重试仍失败，请稍后重试。';
-      }
+      const _hint = (typeof apiErrHint === 'function') ? apiErrHint(err) : '请检查「设置」中的 API Key、接口地址与模型名是否正确，或稍后重试。';
       b.history.push({ role: 'bot', text: '⚠️ 调用失败：' + _real + '\n\n' + _hint });
     }
     renderHistory(b); saveBots();
@@ -6668,7 +6689,12 @@ window.__debug = {
       var why = (err && err.name === 'AbortError')
         ? '请求超时（>60s，可能因网络慢、跨域拦截、接口限速或提示词/上下文过大导致）'
         : ('调用失败：' + (err && err.message ? err.message : String(err)));
-      return '[⚠️ 真实模型调用未成功] 步骤「' + name + '」' + why + '。已降级为演示输出；请检查 API Key、接口地址、网络与跨域设置（必要时改用代理地址）。';
+      // 鉴权/额度类错误与网络无关：给出服务商真实原因，不再把用户引向排查网络与跨域
+      var hint = (typeof apiErrHint === 'function')
+        ? apiErrHint(err)
+        : '请检查 API Key、接口地址、网络与跨域设置（必要时改用代理地址）。';
+      return '[⚠️ 真实模型调用未成功] 步骤「' + name + '」' + why + '。\n\n'
+        + '以下是降级演示内容，并非模型真实输出，请勿直接使用。\n\n修复建议：' + hint;
     }
     return '[模拟输出·请配置api Key] 步骤「' + name + '」已按工作流执行（降级演示，配置 API Key 后将由真实模型生成内容）。';
   }
