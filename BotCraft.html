@@ -8,75 +8,94 @@
 <style>
 :root{
   /* ===== Apple 深色系统色板（对齐 iOS/macOS Dark 语义色） ===== */
-  --bg:#1c1c1e;                     /* systemBackground 深色：窗口 / 内容底 */
-  --panel:#2c2c2e;                  /* 侧栏 / 面板 */
-  --panel2:#1c1c1e;                 /* 聊天区底 */
-  --card:#2c2c2e;                   /* 卡片 */
-  --hover:#3a3a3c;                  /* systemGray4：悬停 / 控件填充 */
-  --line:rgba(84,84,88,.55);        /* separator 深色 */
+  /* 液态玻璃的地基：底色压深，真正的层次由多层半透明表面叠出来 */
+  --bg:#0d0d10;                     /* 窗口底（玻璃后面透出的彩色光晕叠在它之上） */
+  --panel:rgba(28,28,33,.50);       /* 侧栏 / 面板：玻璃层 */
+  --panel2:rgba(18,18,22,.26);      /* 聊天区 / 输入区底：更薄的玻璃 */
+  --card:rgba(255,255,255,.065);    /* 卡片：白色低透明「提亮一层」，叠在任意底色上都成立 */
+  --hover:rgba(255,255,255,.12);    /* 悬停 / 控件填充 */
+  --line:rgba(255,255,255,.10);     /* 玻璃上的分隔线用白色低透明，灰线会割裂玻璃层 */
   --txt:#ffffff;                    /* label */
-  --sub:rgba(235,235,245,.6);       /* secondaryLabel */
+  --sub:rgba(235,235,245,.62);      /* secondaryLabel */
   --brand:#0a84ff;                  /* systemBlue 深色 */
   --brand2:#0060df;
   --ok:#30d158; --warn:#ff9f0a; --danger:#ff453a;
   --radius:16px;
   --r-sm:10px; --r-md:14px; --r-lg:20px;
-  /* 填充层：Apple 用「半透明灰填充」表达控件层级，而不是描边玻璃 */
-  --fill:rgba(120,120,128,.24);
-  --fill-strong:rgba(120,120,128,.36);
-  --fill-hover:rgba(120,120,128,.32);
-  /* 浮层材质：只有真正的浮层（顶栏/侧栏/弹窗/菜单/Toast）用毛玻璃，
-     内容卡片一律实色分层 —— 这是 Apple 与「全屏玻璃拟态」的关键区别 */
-  --glass-bg:rgba(44,44,46,.72);
-  --glass-bg-hover:rgba(58,58,60,.78);
-  --glass-bg-active:rgba(10,132,255,.22);
-  --glass-border:rgba(255,255,255,.09);
-  --glass-border-hover:rgba(255,255,255,.16);
-  --glass-shadow:0 10px 34px rgba(0,0,0,.42);
-  --glass-blur:20px;
-  --glass-sat:180%;
-  --glass-filter:saturate(180%) blur(20px);
+  /* 填充层：玻璃上的控件用半透明白，与卡片保持同一套光学语义（提亮 = 抬高） */
+  --fill:rgba(255,255,255,.09);
+  --fill-strong:rgba(255,255,255,.16);
+  --fill-hover:rgba(255,255,255,.13);
+  /* ===== 液态玻璃材质 =====
+     全局玻璃：结构面（顶栏/侧栏/面板/输入区/浮层/大卡片）用真 backdrop-filter，
+     高频列表项（卡片/节点/消息/记忆条目）用「半透明 + 边缘高光」模拟 —— 它们背后
+     就是已模糊的父级玻璃，视觉上同样是玻璃叠玻璃，但不会堆出几十上百个合成层。 */
+  --glass-bg:rgba(28,28,33,.50);
+  --glass-bg-hover:rgba(38,38,44,.56);
+  --glass-bg-active:rgba(10,132,255,.26);
+  --glass-border:rgba(255,255,255,.12);
+  --glass-border-hover:rgba(255,255,255,.20);
+  --glass-shadow:0 10px 34px rgba(0,0,0,.46);
+  --glass-blur:26px;
+  --glass-sat:190%;
+  --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
   --glass-ridge:none;
+  /* 液态玻璃四件套：顶缘高光 + 底缘暗线 + 外悬浮阴影 + 内描边 */
+  --lg-top:inset 0 1px 0 rgba(255,255,255,.20);
+  --lg-bottom:inset 0 -1px 0 rgba(0,0,0,.22);
+  --lg-float:0 10px 30px rgba(0,0,0,.40);
+  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.13),rgba(255,255,255,0) 46%);
+  --lg-shadow:var(--lg-top),var(--lg-bottom),var(--lg-float);
+  --lg-float-hover:0 16px 38px rgba(0,0,0,.46);
+  /* 内嵌凹陷底（代码块 / 引用 / 表格头）：玻璃上的「下沉」层，用半透明黑而非实色，才能透出玻璃 */
+  --sunken:rgba(0,0,0,.24);
   --chip-bg:var(--fill);
   --chip-border:transparent;
   --chip-txt:var(--txt);
   --chip-hover:var(--fill-strong);
-  --msg-bot-bg:rgba(120,120,128,.20);
-  --log-bg:rgba(28,28,30,.86); --log-head-bg:rgba(28,28,30,.94);
-  --log-border:rgba(255,255,255,.10); --log-fg:#f2f2f7;
-  --log-item-bg:rgba(255,255,255,.05); --log-item-border:rgba(255,255,255,.08);
-  --log-item-fg:rgba(235,235,245,.6); --log-ms:#5ac8fa; --log-shadow:0 10px 34px rgba(0,0,0,.42);
+  --msg-bot-bg:rgba(255,255,255,.10);
+  --log-bg:rgba(22,22,26,.62); --log-head-bg:rgba(22,22,26,.72);
+  --log-border:rgba(255,255,255,.13); --log-fg:#f2f2f7;
+  --log-item-bg:rgba(255,255,255,.07); --log-item-border:rgba(255,255,255,.10);
+  --log-item-fg:rgba(235,235,245,.62); --log-ms:#5ac8fa; --log-shadow:0 14px 40px rgba(0,0,0,.50);
   /* Apple 标准进出场缓动 */
   --ease:cubic-bezier(.32,.72,0,1);
 }
 /* ==================== 浅色主题 ==================== */
 [data-theme="light"]{
-  --bg:#f2f2f7;                     /* systemGroupedBackground */
-  --panel:#ffffff;
-  --panel2:#ffffff;
-  --card:#ffffff;
-  --hover:#e5e5ea;                  /* systemGray5 light */
-  --line:rgba(60,60,67,.29);        /* separator light */
+  --bg:#e9ecf5;                     /* 窗口底：浅灰蓝，让彩色光晕透出来 */
+  --panel:rgba(255,255,255,.52);    /* 玻璃层（浅色玻璃是「白色提亮」而非变暗） */
+  --panel2:rgba(255,255,255,.30);
+  --card:rgba(255,255,255,.58);
+  --hover:rgba(255,255,255,.72);
+  --line:rgba(0,0,0,.09);           /* 浅色玻璃上的分隔线必须用暗色，否则看不见 */
   --txt:#000000;
-  --sub:rgba(60,60,67,.6);
+  --sub:rgba(60,60,67,.62);
   --brand:#007aff;                  /* systemBlue light */
   --brand2:#0062cc;
   --ok:#34c759; --warn:#ff9500; --danger:#ff3b30;
-  --fill:rgba(120,120,128,.16);
-  --fill-strong:rgba(120,120,128,.26);
-  --fill-hover:rgba(120,120,128,.21);
-  --glass-bg:rgba(255,255,255,.72);
-  --glass-bg-hover:rgba(255,255,255,.82);
-  --glass-bg-active:rgba(0,122,255,.14);
-  --glass-border:rgba(0,0,0,.07);
-  --glass-border-hover:rgba(0,0,0,.13);
-  --glass-shadow:0 10px 34px rgba(0,0,0,.14);
+  --fill:rgba(255,255,255,.55);
+  --fill-strong:rgba(255,255,255,.78);
+  --fill-hover:rgba(255,255,255,.66);
+  --glass-bg:rgba(255,255,255,.50);
+  --glass-bg-hover:rgba(255,255,255,.60);
+  --glass-bg-active:rgba(0,122,255,.16);
+  --glass-border:rgba(255,255,255,.70);
+  --glass-border-hover:rgba(255,255,255,.92);
+  --glass-shadow:0 10px 30px rgba(31,41,71,.16);
   --glass-ridge:none;
-  --msg-bot-bg:rgba(120,120,128,.14);
-  --log-bg:rgba(255,255,255,.88); --log-head-bg:rgba(255,255,255,.95);
-  --log-border:rgba(0,0,0,.09); --log-fg:#1c1c1e;
-  --log-item-bg:rgba(120,120,128,.08); --log-item-border:rgba(0,0,0,.06);
-  --log-item-fg:rgba(60,60,67,.6); --log-ms:#007aff; --log-shadow:0 10px 34px rgba(0,0,0,.16);
+  --lg-top:inset 0 1px 0 rgba(255,255,255,.95);
+  --lg-bottom:inset 0 -1px 0 rgba(31,41,71,.07);
+  --lg-float:0 10px 28px rgba(31,41,71,.13);
+  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.60),rgba(255,255,255,0) 46%);
+  --lg-shadow:var(--lg-top),var(--lg-bottom),var(--lg-float);
+  --lg-float-hover:0 16px 34px rgba(31,41,71,.18);
+  --sunken:rgba(120,120,128,.13);
+  --msg-bot-bg:rgba(255,255,255,.52);
+  --log-bg:rgba(255,255,255,.62); --log-head-bg:rgba(255,255,255,.72);
+  --log-border:rgba(0,0,0,.10); --log-fg:#1c1c1e;
+  --log-item-bg:rgba(255,255,255,.52); --log-item-border:rgba(0,0,0,.07);
+  --log-item-fg:rgba(60,60,67,.62); --log-ms:#007aff; --log-shadow:0 14px 40px rgba(31,41,71,.18);
 }
 /* 浅色主题下浮层的少量定向修正（分层用实色，不再叠渐变与内发光） */
 [data-theme="light"] .topbar{background:var(--glass-bg-hover);border-bottom-color:var(--glass-border);}
@@ -86,13 +105,39 @@
 [data-theme="light"] .sidebar .side-item:hover .ic{background:var(--fill-strong)}
 [data-theme="light"] .sidebar .side-item.active{color:var(--txt)}
 [data-theme="light"] .sidebar .side-item.active .ic{background:var(--brand)}
-[data-theme="light"] .auth-mask{background:var(--bg);}
+[data-theme="light"] .auth-mask{background:rgba(233,236,245,.84);}
 [data-theme="light"] .modal,.modal-box{background:var(--glass-bg-hover);border-color:var(--glass-border);}
 [data-theme="light"] .cmd-panel,.toast{background:var(--glass-bg-hover);border-color:var(--glass-border);color:var(--txt);}
 *{box-sizing:border-box;margin:0;padding:0}
-/* ============ 材质策略：毛玻璃只给真正的浮层，内容一律实色分层 ============ */
-body .topbar, body .sidebar, body .mbox, body .toast, body .cmd-panel,
-body .pop-menu, body .ws-more-menu, body .bot-switch-menu{
+/* ============ 液态玻璃的背景层 ============
+   玻璃必须有东西可以透出来才成立。没有这层彩色光晕，全局玻璃背后全是纯色，
+   看上去只是一堆灰色半透明块 —— 这是「液态玻璃」与「死灰玻璃」的分界。 */
+body::before{
+  content:'';position:fixed;inset:-18%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(44% 40% at 12% 6%, rgba(10,132,255,.42), transparent 64%),
+    radial-gradient(38% 36% at 86% 10%, rgba(191,90,242,.30), transparent 66%),
+    radial-gradient(42% 38% at 76% 86%, rgba(48,209,88,.22), transparent 68%),
+    radial-gradient(36% 34% at 16% 90%, rgba(90,200,250,.26), transparent 68%);
+  animation:lgFlow 30s ease-in-out infinite;
+}
+/* 液体的缓慢流动：只动 transform，走 GPU 合成，不触发重排重绘 */
+@keyframes lgFlow{
+  0%,100%{transform:translate3d(0,0,0) scale(1)}
+  33%{transform:translate3d(2.2%,-1.8%,0) scale(1.06)}
+  66%{transform:translate3d(-1.6%,2%,0) scale(1.03)}
+}
+@media (prefers-reduced-motion: reduce){body::before{animation:none}}
+
+/* ============ 材质策略：全局液态玻璃 ============
+   第一层用真 backdrop-filter —— 结构面（顶栏 / 侧栏 / 面板 / 输入区 / 浮层 / 大卡片）。
+   同屏数量可控（个位到十几个），是玻璃质感的主要来源；
+   高频列表项（卡片 / 节点 / 消息 / 记忆条目）改用「半透明 + 边缘高光」模拟，
+   它们背后本就是已模糊的父级玻璃，视觉同样是玻璃叠玻璃，却不会堆出上百个合成层。 */
+body .topbar, body .sidebar, body .ws-side, body .mbox, body .toast, body .cmd-panel,
+body .pop-menu, body .ws-more-menu, body .bot-switch-menu, body .modal, body .modal-box,
+body .chat-input, body .fast-bar, body .stat-card, body .chart-box, body .brand-card,
+body .pub-card, body .batch-bar{
   backdrop-filter: var(--glass-filter) !important;
   -webkit-backdrop-filter: var(--glass-filter) !important;
 }
@@ -106,7 +151,7 @@ body{
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
 }
-/* 背景保持纯净：不加点阵 / 极光 / 光带（Apple 的分层靠色阶，不靠装饰光） */
+/* 背景光晕交给 body::before（z-index:-1，在背景之上、内容之下），这里不再加装饰 */
 .chat,.chat-input,.sidebar{position:relative}
 
 a{color:inherit;text-decoration:none}
@@ -183,7 +228,7 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .acct-add{margin-top:2px;color:var(--brand);font-weight:590}
 
 /* ============ 登录 ============ */
-.auth-mask{display:none;position:fixed;inset:0;z-index:90;background:var(--bg);align-items:center;justify-content:center;flex-direction:column;gap:10px;text-align:center;padding:20px}
+.auth-mask{display:none;position:fixed;inset:0;z-index:90;background:rgba(13,13,16,.78);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);align-items:center;justify-content:center;flex-direction:column;gap:10px;text-align:center;padding:20px}
 .auth-mask.on{display:flex}
 .auth-brand .logo{justify-content:center}
 .auth-brand p{color:var(--sub);font-size:13px;margin-top:12px}
@@ -734,6 +779,54 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none;
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms!important;transition-duration:.001ms!important}
 }
+/* ==================================================================
+   液态玻璃：玻璃表面的「厚度」层
+   ------------------------------------------------------------------
+   材质变量改成半透明之后，所有引用 --card / --panel / --fill 的组件
+   已经自动玻璃化。这一层补的是玻璃的物理特征：顶缘高光、底缘暗线、
+   外悬浮阴影（--lg-* 四件套），以及悬停时「被抬起」的液态手感。
+   下列卡片类刻意不用 backdrop-filter —— 几十上百个合成层会拖垮 WebView2，
+   而它们背后本就是已经模糊的父级玻璃，视觉上同样是玻璃叠玻璃。
+   ================================================================== */
+body .bot-card, body .node, body .list-row, body .kb-row, body .ver-item,
+body .batch-item, body .channel, body .pub-ch, body .mem-text, body .msg.bot,
+body .stat-card, body .chart-box, body .brand-card, body .pub-card, body .batch-bar{
+  background-image:var(--lg-spec);
+  border-color:var(--glass-border);
+  box-shadow:var(--lg-shadow);
+}
+/* 抬起前的过渡要显式声明 transform，否则位移会瞬跳（原规则只过渡了 background/border/shadow） */
+body .bot-card, body .kb-row, body .ver-item, body .pub-ch, body .list-row, body .channel{
+  transition:background-color .2s var(--ease),border-color .2s var(--ease),
+    box-shadow .2s var(--ease),transform .22s var(--ease);
+}
+/* 悬停 = 玻璃被抬起。只给纯展示卡片；.node 带拖拽用的 transform，不碰 */
+body .bot-card:hover, body .kb-row:hover, body .ver-item:hover,
+body .pub-ch:hover, body .list-row:hover, body .channel:hover{
+  transform:translateY(-1px);
+  border-color:var(--glass-border-hover);
+  box-shadow:var(--lg-top),var(--lg-float-hover);
+}
+body .bot-card:active, body .pub-ch:active, body .kb-row:active,
+body .list-row:active, body .channel:active{transform:translateY(0) scale(.996)}
+/* 分段控件选中项：磨砂白玻璃，而不是实色贴片 */
+body .ws-tab.active, body .auth-tab.active{box-shadow:var(--lg-top),0 1px 3px rgba(0,0,0,.20)}
+body .ws-tab:hover{background:var(--fill)}
+/* 侧栏当前项：玻璃上的蓝色玻璃片 */
+body .side-item.active{background:var(--glass-bg-active) !important;box-shadow:var(--lg-top)}
+body .side-item.active .ic{background:var(--brand)}
+/* 用户气泡：蓝色玻璃，加顶缘高光与柔和蓝投影 */
+body .msg.me{box-shadow:var(--lg-top),0 6px 18px rgba(10,132,255,.26)}
+/* 玻璃上的「下沉」层：代码块 / 引用 / 表格头改用半透明黑，
+   否则会在玻璃里切出一块实色硬底，破坏液态的连续层次 */
+body .msg pre, body .msg code, body .msg.bot blockquote.md-quote,
+body .msg.bot table.md-table th, body .msg.bot img.md-img{background:var(--sunken)}
+body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-top)}
+/* 滚动条：玻璃上要用白色低透明细条，原来的灰条在玻璃里显脏 */
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.34);background-clip:padding-box}
+[data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(60,60,67,.26);background-clip:padding-box}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover{background:rgba(60,60,67,.4);background-clip:padding-box}
 </style>
 </head>
 <body>
@@ -1242,7 +1335,7 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none;
     <div class="field">
       <label>最大输出 tokens</label>
       <input id="set-maxtokens" type="number" min="50" max="8192" value="2048">
-      <div style="margin-top:6px;font-size:12px;color:var(--fg-dim);line-height:1.5">
+      <div style="margin-top:6px;font-size:12px;color:var(--sub);line-height:1.5">
         思考型模型（GLM-5 / Qwen3 等）的「思考过程」也会占用这个额度。设得太小会导致：<b>步骤明明跑完了，回复却是空的</b>。<br>
         本项目已在阿里云百炼 / 智谱接口上自动关闭思考；若你的网关不支持，请把这里调到 2000 以上。
       </div>
