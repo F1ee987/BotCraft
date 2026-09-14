@@ -136,21 +136,40 @@
    玻璃必须有东西可以透出来才成立。没有这层彩色光晕，全局玻璃背后全是纯色，
    看上去只是一堆灰色半透明块 —— 这是「液态玻璃」与「死灰玻璃」的分界。 */
 body::before{
-  content:'';position:fixed;inset:-18%;z-index:-1;pointer-events:none;
+  content:'';position:fixed;inset:-24%;z-index:-1;pointer-events:none;
   background:
     radial-gradient(44% 40% at 12% 6%, rgba(139,92,246,.42), transparent 64%),
     radial-gradient(38% 36% at 86% 10%, rgba(99,102,241,.30), transparent 66%),
     radial-gradient(42% 38% at 76% 86%, rgba(48,209,88,.20), transparent 68%),
     radial-gradient(36% 34% at 16% 90%, rgba(167,139,250,.26), transparent 68%);
-  animation:lgFlow 30s ease-in-out infinite;
+  animation:lgFlow 26s ease-in-out infinite;
+}
+/* 第二流动层：异色（青/粉/橙）反向慢流，与第一层错速叠加出液体感 */
+body::after{
+  content:'';position:fixed;inset:-26%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(34% 30% at 78% 22%, rgba(34,211,238,.20), transparent 66%),
+    radial-gradient(30% 28% at 20% 40%, rgba(244,114,182,.17), transparent 66%),
+    radial-gradient(36% 32% at 62% 78%, rgba(251,146,60,.15), transparent 68%),
+    radial-gradient(28% 26% at 44% 10%, rgba(129,140,248,.18), transparent 66%);
+  animation:lgFlow2 38s ease-in-out infinite;
 }
 /* 液体的缓慢流动：只动 transform，走 GPU 合成，不触发重排重绘 */
 @keyframes lgFlow{
-  0%,100%{transform:translate3d(0,0,0) scale(1)}
-  33%{transform:translate3d(2.2%,-1.8%,0) scale(1.06)}
-  66%{transform:translate3d(-1.6%,2%,0) scale(1.03)}
+  0%,100%{transform:translate3d(0,0,0) rotate(0deg) scale(1)}
+  25%{transform:translate3d(3.2%,-2.4%,0) rotate(1.6deg) scale(1.07)}
+  50%{transform:translate3d(-2.2%,2.8%,0) rotate(-1.2deg) scale(1.04)}
+  75%{transform:translate3d(-3.4%,-1.6%,0) rotate(.8deg) scale(1.09)}
 }
-@media (prefers-reduced-motion: reduce){body::before{animation:none}}
+@keyframes lgFlow2{
+  0%,100%{transform:translate3d(0,0,0) rotate(0deg) scale(1)}
+  33%{transform:translate3d(-4%,2.6%,0) rotate(-2deg) scale(1.06)}
+  66%{transform:translate3d(3.4%,-3.2%,0) rotate(1.4deg) scale(1.1)}
+}
+/* 浅色模式：光晕降浓度，避免在浅底上发脏 */
+[data-theme="light"] body::before{opacity:.55}
+[data-theme="light"] body::after{opacity:.45}
+@media (prefers-reduced-motion: reduce){body::before,body::after{animation:none}}
 
 /* ============ 材质策略：全局液态玻璃 ============
    第一层用真 backdrop-filter —— 结构面（顶栏 / 侧栏 / 面板 / 输入区 / 浮层 / 大卡片）。
