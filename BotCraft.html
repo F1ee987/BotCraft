@@ -1055,7 +1055,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
             <button class="btn btn-ghost btn-sm" onclick="document.getElementById('batchFile').click()">📂 导入</button>
             <input type="file" id="batchFile" accept=".txt,.csv,text/plain,text/csv" style="display:none" onchange="importBatchFile(event)">
             <button class="btn btn-ghost btn-sm" onclick="clearBatchInput()">🧹 清空</button>
-            <span class="batch-count" id="batchCount">共 0 条</span>
+            <span class="batch-count" id="batchInputCount">共 0 条</span>
             <span style="flex:1"></span>
             <button class="btn btn-primary btn-sm" id="batchStart" onclick="startBatch()">▶ 开始批量</button>
             <button class="btn btn-ghost btn-sm" id="batchStop" style="display:none" onclick="stopBatch()">⏹ 停止</button>
@@ -2073,7 +2073,7 @@ window.__storage = __storage;
     html += '<button class="btn btn-ghost btn-sm" onclick="clearMemory()">🗑 清空</button>';
     html += '</div>';
     if (items.length) {
-      html += '<div class="mem-toolbar"><input id="memSearch" class="mem-search" placeholder="🔍 搜索记忆…" value="' + escapeHtml(f.q) + '">';
+      html += '<div class="mem-toolbar"><input id="memSearch" class="mem-search" placeholder="🔍 搜索记忆…" value="' + escapeAttr(f.q) + '">';
       html += '<select id="memSort" class="mem-sort" title="排序方式">';
       html += '<option value="importance"' + (f.sort === 'importance' ? ' selected' : '') + '>按重要度</option>';
       html += '<option value="new"' + (f.sort === 'new' ? ' selected' : '') + '>按最新</option>';
@@ -2097,7 +2097,7 @@ window.__storage = __storage;
     html += brandField('语气 / 风格', 'tone', _br.tone);
     html += '<label class="brand-area"><span>产品 / 服务</span><textarea id="brandProducts" class="mem-text" style="min-height:54px" oninput="setBrand(\'products\',this.value)">' + escapeHtml(_br.products || '') + '</textarea></label>';
     html += '<label class="brand-area"><span>禁忌（不要说的话 / 事）</span><textarea id="brandTaboo" class="mem-text" style="min-height:54px" oninput="setBrand(\'taboo\',this.value)">' + escapeHtml(_br.taboo || '') + '</textarea></label>';
-    html += '<label class="brand-area"><span>官网 / 链接</span><input id="brandLinks" class="mem-add" style="flex:none;width:100%" value="' + escapeHtml(_br.links || '') + '" oninput="setBrand(\'links\',this.value)"></label>';
+    html += '<label class="brand-area"><span>官网 / 链接</span><input id="brandLinks" class="mem-add" style="flex:none;width:100%" value="' + escapeAttr(_br.links || '') + '" oninput="setBrand(\'links\',this.value)"></label>';
     html += '<button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%" onclick="exportTemplate()">💾 导出为模板</button>';
     html += '</div>';
     html += '<div style="margin-top:12px;display:flex;gap:8px"><select id="memTypeSel" class="mem-type-sel">';
@@ -2219,7 +2219,7 @@ window.__storage = __storage;
     if (!b.brand) b.brand = {}; b.brand[key] = val; saveBots();
   }
   function brandField(label, key, val) {
-    return '<label class="brand-area"><span>' + label + '</span><input class="mem-add" style="flex:none;width:100%" value="' + escapeHtml(val || '') + '" oninput="setBrand(\'' + key + '\',this.value)"></label>';
+    return '<label class="brand-area"><span>' + label + '</span><input class="mem-add" style="flex:none;width:100%" value="' + escapeAttr(val || '') + '" oninput="setBrand(\'' + key + '\',this.value)"></label>';
   }
   function getUserTpls() { try { return JSON.parse(localStorage.getItem('botcraft_user_tpls') || '[]') || []; } catch (e) { return []; } }
   function saveUserTpls(a) { try { localStorage.setItem('botcraft_user_tpls', JSON.stringify(a)); } catch (e) {} }
@@ -2494,6 +2494,14 @@ window.__storage = __storage;
   }
 
   window.BotCraftAI = { chat, request, canCall, getConfig, updateConfig, getProviders, composeSystemPrompt };
+  // 品牌档案 / 模板导入导出：这三个函数此前只被内联事件属性调用，却没有导出。
+  // 内联 on* 属性在**全局作用域**求值，而它们定义在本 IIFE 内 → 点击/输入时
+  // 抛 ReferenceError，表现为「品牌信息改了不保存」「导出/导入模板点了没反应」。
+  // 它们依赖的 currentId / getBot / saveBots / toast / renderTplPick 都在主脚本
+  // 顶层，故导出后即可正常工作。
+  window.setBrand = setBrand;
+  window.exportTemplate = exportTemplate;
+  window.importTplFile = importTplFile;
   // 暴露记忆功能到全局，供主脚本 sendMsg 与记忆 Tab 内联 onclick 调用
   window.scheduleMemoryUpdate = scheduleMemoryUpdate;
   window.doMemoryUpdate = doMemoryUpdate;
@@ -2799,6 +2807,12 @@ let sessionToken = '';    // 登录令牌
 
 function uid() { return 'bot_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6); }
 function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+// escapeAttr：用于 **HTML 属性值** 位置（value= / title= / placeholder= / data-* / alt=）。
+// escapeHtml 不转义引号 —— 放在文本节点位置是对的，但放进属性里时，值中一个 " 就会
+// 提前闭合属性，后面的内容变成游离属性、DOM 结构错乱（这也是 XSS 入口）。
+// ⚠️ 不要「顺手」把引号加进 escapeHtml：renderMarkdown 里基于「引号未被转义」做了
+//    URL 白名单过滤（!/["'<>]/.test(u)），一旦引号变成 &quot; 该过滤会失效并放行注入。
+function escapeAttr(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 // 完整 markdown 子集渲染：标题/加粗/斜体/删除线/有序·无序·任务列表/表格/引用/分隔线/链接/行内码/代码块(带语言标签)
 // 设计原则：先抽出代码块与行内码占位，避免被行内解析破坏；整段转义后做块级解析；链接仅放行 http(s)/mailto/相对路径，过滤引号防 XSS。
 function renderMarkdown(text) {
@@ -2809,7 +2823,7 @@ function renderMarkdown(text) {
     const id = codeBlocks.length;
     const safe = escapeHtml(code.replace(/\n$/, ''));
     const copyBtn = '<button type="button" class="md-copy" onclick="copyCodeBlock(this)" aria-label="复制代码">📋 复制</button>';
-    codeBlocks.push('<pre class="md-code"' + (lang ? ' data-lang="' + escapeHtml(lang) + '"' : '') + '>' + copyBtn + '<code>' + safe + '</code></pre>');
+    codeBlocks.push('<pre class="md-code"' + (lang ? ' data-lang="' + escapeAttr(lang) + '"' : '') + '>' + copyBtn + '<code>' + safe + '</code></pre>');
     return '\u0000CB' + id + '\u0000';
   });
   const inlineCodes = [];
@@ -2825,12 +2839,15 @@ function renderMarkdown(text) {
     s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
     s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
     s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
-    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, t, u) {
-      if (/^(https?:|mailto:|\/|#)/i.test(u) && !/["'<>]/.test(u)) return '<a href="' + u + '" target="_blank" rel="noopener">' + t + '</a>';
+    // 顺序要紧：**图片必须排在链接前面**。图片语法 ![](url) 里含有 [](url)，
+    // 若先跑链接规则，它会把 [](url) 部分吃掉换成 <a>，图片规则再也匹配不到，
+    // 结果是 `![alt](url)` 渲染成 `!<a href="url">alt</a>` —— 图片永远显示不出来。
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, u) {
+      if (/^(https?:|data:image|\/)/i.test(u) && !/["'<>]/.test(u)) return '<img src="' + u + '" alt="' + escapeAttr(alt) + '" class="md-img" onload="scrollChatToBottom()" onerror="onImageError(this,\'' + escapeHtml(u).replace(/'/g, '\\\'') + '\')">';
       return m;
     });
-    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, u) {
-      if (/^(https?:|data:image|\/)/i.test(u) && !/["'<>]/.test(u)) return '<img src="' + u + '" alt="' + escapeHtml(alt) + '" class="md-img" onload="scrollChatToBottom()" onerror="onImageError(this,\'' + escapeHtml(u).replace(/'/g, '\\\'') + '\')">';
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, t, u) {
+      if (/^(https?:|mailto:|\/|#)/i.test(u) && !/["'<>]/.test(u)) return '<a href="' + u + '" target="_blank" rel="noopener">' + t + '</a>';
       return m;
     });
     return s;
@@ -2920,17 +2937,23 @@ function copyTextRobust(text) {
   }
   fallbackCopy(text);
 }
+// 注意：不要在原地之外再定义一份 fallbackCopy —— 函数声明重复时**后者静默覆盖前者**，
+// 曾导致这里这份「移出视口、不抢滚动、不弹 toast」的实现在运行时被后面一份
+// 「直接 appendChild 到 body 末尾」的简化版取代：复制时页面会闪现白框并跳滚动，
+// 且给代码块复制额外弹了一个文案错位的「已复制输出」。
+// 统一约定：本函数**只负责复制，不弹 toast**，反馈交给调用方。
 function fallbackCopy(text) {
   try {
     var ta = document.createElement('textarea');
     ta.value = text; ta.setAttribute('readonly', '');
     ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
     document.body.appendChild(ta); ta.focus(); ta.select();
-    try { document.execCommand('copy'); } catch (e) {}
-    document.body.removeChild(ta);
-  } catch (e) {}
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    if (ta.parentNode) ta.parentNode.removeChild(ta);   // 即使 execCommand 抛错也不留 DOM 残渣
+    return !!ok;
+  } catch (e) { return false; }
 }
-function uid() { return 'bot_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6); }
 function uidHex(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(b => b.toString(16).padStart(2, '0')).join(''); }
 
 function normalize(b) {
@@ -3059,7 +3082,11 @@ function getBatchInputs() {
   return arr;
 }
 function updateBatchCount() {
-  const el = document.getElementById('batchCount'); if (el) el.textContent = '共 ' + getBatchInputs().length + ' 条';
+  // 注意：这里必须用 batchInputCount，不能用 batchCount —— 后者是批量选择栏
+  // 「已选 N 项」的计数元素。两者曾共用同一个 id，getElementById 只会返回
+  // 文档中靠前的那个（批量栏），导致本行的「共 N 条」永远不更新、
+  // 且把批量栏的「已选 N 项」覆盖成「共 N 条」。
+  const el = document.getElementById('batchInputCount'); if (el) el.textContent = '共 ' + getBatchInputs().length + ' 条';
 }
 function parseCsvLine(line) {
   const out = []; let cur = ''; let q = false;
@@ -3164,14 +3191,13 @@ window.stopBatch = function () {
 window.copyBatchOut = function (idx) {
   const it = batchResults.find(function (r) { return r.idx === idx; }); if (!it || !it.output) return;
   const text = it.output;
+  // fallbackCopy 不再自带 toast（它要同时服务代码块复制，那里靠按钮自身反馈），
+  // 所以这里的成功/失败提示由调用方按返回值给出。
+  const done = function () { var ok = fallbackCopy(text); toast(ok ? '已复制输出' : '复制失败，请手动选择', ok ? 'ok' : 'err'); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function () { toast('已复制输出', 'ok'); }, function () { fallbackCopy(text); });
-  } else fallbackCopy(text);
+    navigator.clipboard.writeText(text).then(function () { toast('已复制输出', 'ok'); }, done);
+  } else done();
 };
-function fallbackCopy(text) {
-  try { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('已复制输出', 'ok'); }
-  catch (e) { toast('复制失败，请手动选择', 'err'); }
-}
 window.exportBatch = function (fmt) {
   if (!batchResults.length) { toast('没有可导出的结果', 'warn'); return; }
   const bot = getBot(currentId) || {};
@@ -3337,8 +3363,6 @@ async function hashPassword(password, saltHex) {
   const bits = hasSubtle() ? await pbkdf2Native(password, salt) : await pbkdf2Fallback(password, salt);
   return { hash: bytesToHex(bits), salt: saltHex || bytesToHex(salt) };
 }
-function hexToBytes(hex) { const b = new Uint8Array(hex.length / 2); for (let i = 0; i < b.length; i++) b[i] = parseInt(hex.substr(i * 2, 2), 16); return b; }
-
 // ==================== 注册 / 登录 / 登出 ====================
 async function register(username, email, password) {
   const u = (username || '').trim(), e = (email || '').trim(), p = String(password || '');
@@ -4198,7 +4222,7 @@ function bindNodeEdit(body, b) {
         <select class="ne-bot" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px;display:${isHandoffType ? 'block' : 'none'}" ${botOpts ? '' : 'disabled'}>
           ${botOpts ? botOpts : '<option value="">（暂无其他机器人）</option>'}
         </select>
-        <input class="ne-h" value="${escapeHtml(nd.h)}" placeholder="节点标题">
+        <input class="ne-h" value="${escapeAttr(nd.h)}" placeholder="节点标题">
         <textarea class="ne-p" placeholder="节点描述">${escapeHtml(nd.p)}</textarea>
         ${isAprType ? `
         <div style="margin-top:6px">
@@ -5811,7 +5835,7 @@ function renderPluginGrid() {
   const b = getBot(currentId);
   const cats = ['全部', ...Array.from(new Set(plugins.map(p => p.cat)))];
   const filtered = plugins.filter(p => _pluginFilter === '全部' || p.cat === _pluginFilter);
-  const chips = cats.map(c => `<button class="chip ${_pluginFilter === c ? 'on' : ''}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+  const chips = cats.map(c => `<button class="chip ${_pluginFilter === c ? 'on' : ''}" data-cat="${escapeAttr(c)}">${escapeHtml(c)}</button>`).join('');
   const cards = filtered.map(p => {
     const installed = installedPlugins.has(p.n);
     const enabled = !!(b && b.plugins.includes(p.n));
@@ -5819,7 +5843,7 @@ function renderPluginGrid() {
     if (enabled) { badge = '🟢 已启用'; action = `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${escapeHtml(p.n)}')">取消启用</button>`; }
     else if (installed) { badge = '✅ 已安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();enablePluginToBot('${escapeHtml(p.n)}')">启用到机器人</button>`; }
     else { badge = '未安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();installAndEnable('${escapeHtml(p.n)}')">📦 安装并启用</button>`; }
-    return `<div class="bot-card plugin-card" data-plug="${escapeHtml(p.n)}">
+    return `<div class="bot-card plugin-card" data-plug="${escapeAttr(p.n)}">
       <div class="bot-avatar" style="background:${p.c}">${p.ic}</div>
       <h3>${escapeHtml(p.n)}</h3><p>${escapeHtml(p.d)}</p>
       <div class="bot-meta"><span class="plugin-cat">${escapeHtml(p.cat)}</span><span class="plugin-badge ${enabled ? 'on' : ''}">${badge}</span></div>
@@ -6144,7 +6168,7 @@ function openPublishModal(chId) {
     var hint = f.prefix ? '<div style="font-size:11px;color:var(--sub);margin-top:4px">' + escapeHtml(f.prefix) + '</div>' : '';
     var ph = (f.placeholder || '').replace('{id}', b.id);
     return '<div class="pub-field field"><label>' + escapeHtml(f.label) + req + '</label>'
-      + '<input id="pubF_' + f.key + '" type="' + (f.type || 'text') + '" value="' + escapeHtml(v) + '" placeholder="' + escapeHtml(ph) + '">' + hint + '</div>';
+      + '<input id="pubF_' + f.key + '" type="' + (f.type || 'text') + '" value="' + escapeAttr(v) + '" placeholder="' + escapeAttr(ph) + '">' + hint + '</div>';
   }).join('');
   document.getElementById('pubModalFields').innerHTML = fields || '<div class="pub-empty">该方式无需额外填写，点击「发布」即可生成产物。</div>';
   document.getElementById('publishModal').classList.add('on');
@@ -6235,7 +6259,7 @@ function renderPublishArtifacts(b) {
     html += '<div class="pub-card"><div class="pub-card-h">' + ({ '飞书': '📮', '微信公众号': '💬', '企业微信': '🏢' }[ch] || '·') + ' ' + ch + '</div>'
       + '<div class="pub-note">' + escapeHtml(guide) + '</div>'
       + '<div class="pub-sub">Webhook / 回调地址</div>'
-      + '<input class="pub-input" id="pubWh_' + key + '" placeholder="https://your-server.com/bot/' + encodeURIComponent(b.id) + '" value="' + escapeHtml(val) + '">'
+      + '<input class="pub-input" id="pubWh_' + key + '" placeholder="https://your-server.com/bot/' + encodeURIComponent(b.id) + '" value="' + escapeAttr(val) + '">'
       + '<div class="pub-actions"><button class="btn btn-ghost btn-sm" onclick="savePubWebhook(\'' + b.id + '\',\'' + key + '\')">💾 保存地址</button></div></div>';
   });
   box.innerHTML = html;
@@ -6384,10 +6408,10 @@ function renderDataset() {
   const numCols = cols.filter(function (c) { return rows.some(function (r) { return isCellNumeric(r[c]); }); });
   const catCols = cols.filter(function (c) { return numCols.indexOf(c) < 0; });
   const xSel = document.getElementById('dataX');
-  if (xSel) xSel.innerHTML = (catCols.length ? catCols : cols).map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join('');
+  if (xSel) xSel.innerHTML = (catCols.length ? catCols : cols).map(function (c) { return '<option value="' + escapeAttr(c) + '">' + escapeHtml(c) + '</option>'; }).join('');
   const ySel = document.getElementById('dataY');
   const hasNum = numCols.length > 0;
-  if (ySel) { ySel.innerHTML = numCols.map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join(''); document.getElementById('dataFieldBar').style.display = hasNum ? 'flex' : 'none'; }
+  if (ySel) { ySel.innerHTML = numCols.map(function (c) { return '<option value="' + escapeAttr(c) + '">' + escapeHtml(c) + '</option>'; }).join(''); document.getElementById('dataFieldBar').style.display = hasNum ? 'flex' : 'none'; }
   const sumBox = document.getElementById('dataSummary');
   if (sumBox) {
     const cells = [];
