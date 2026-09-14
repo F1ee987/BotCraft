@@ -104,7 +104,7 @@
 }
 /* 浅色主题下浮层的少量定向修正（分层用实色，不再叠渐变与内发光） */
 [data-theme="light"] .topbar{background:var(--glass-bg-hover);border-color:rgba(0,0,0,.10);box-shadow:var(--lg-shadow)}
-[data-theme="light"] .sidebar{background:var(--glass-bg-hover);border-right-color:var(--glass-border);}
+[data-theme="light"] .sidebar{background:var(--glass-bg-hover);border-color:rgba(0,0,0,.10);box-shadow:var(--lg-shadow)}
 [data-theme="light"] .sidebar .side-item{color:var(--sub);}
 [data-theme="light"] .sidebar .side-item .ic{background:var(--fill)}
 [data-theme="light"] .sidebar .side-item:hover .ic{background:var(--fill-strong)}
@@ -169,7 +169,8 @@ body .topbar{background:var(--glass-bg-hover) !important;}
    顶栏/侧栏/输入区这些结构面原来只开模糊背景，这里统一挂上
    顶缘泛光（--lg-top）与对角高光（--lg-spec）；真浮层再加深浮投影 */
 body .topbar{background-image:var(--lg-spec);box-shadow:var(--lg-shadow)}
-body .sidebar,body .ws-side{background-image:var(--lg-spec);box-shadow:var(--lg-top)}
+body .sidebar{background-image:var(--lg-spec);box-shadow:var(--lg-shadow)}  /* 悬浮玻璃条：全套光影 */
+body .ws-side{background-image:var(--lg-spec);box-shadow:var(--lg-top)}     /* 工作区内侧栏贴边布局，只上高光 */
 body .chat-input,body .fast-bar{background-image:var(--lg-spec);box-shadow:var(--lg-top),var(--lg-float)}
 body .mbox,body .cmdk-box,body .toast,body .cmd-panel{box-shadow:var(--lg-shadow);background-image:var(--lg-spec)}
 html,body{height:100%}
@@ -279,7 +280,7 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 #auth-err{font-size:12px}
 
 /* ============ 布局 ============ */
-.app{display:flex;height:calc(100vh - 52px)}
+.app{display:flex;height:calc(100vh - 66px)}  /* 顶栏悬浮条实际占位 52px + 上下 margin 14px */
 /* 嵌入模式：隐藏顶栏与侧边栏，仅保留聊天工作区（作独立对话挂件使用） */
 body.embed-mode .topbar{display:none}
 body.embed-mode .sidebar{display:none}
@@ -287,20 +288,21 @@ body.embed-mode .app{height:100vh}
 body.embed-mode .ws-side{display:none}
 body.embed-mode .ws-resizer{display:none}
 body.embed-mode #wsName{font-size:15px}
-.sidebar{width:232px;background:var(--glass-bg-hover);border-right:1px solid var(--line);padding:14px 10px;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;transition:width .24s var(--ease);position:relative;z-index:20}
+.sidebar{width:232px;margin:0 10px 12px 12px;border-radius:18px;background:var(--glass-bg-hover);border:1px solid var(--glass-border);padding:14px 10px;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;transition:width .24s var(--ease),border-color .25s var(--ease);position:relative;z-index:20}
 .side-section{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:1.1px;padding:20px 10px 7px;font-weight:600;opacity:.9}
 .side-section:first-child{padding-top:4px}
 .side-item{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:9px;font-size:14px;color:var(--txt);cursor:pointer;margin-bottom:2px;transition:background .18s var(--ease),color .18s var(--ease);background:transparent;border:1px solid transparent}
-.side-item .ic{font-size:16px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:var(--fill);flex-shrink:0;transition:.18s var(--ease)}
+.side-item .ic{font-size:16px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--fill);box-shadow:var(--lg-top),0 1px 4px rgba(0,0,0,.14);flex-shrink:0;transition:.18s var(--ease)}
+.side-item:hover .ic{transform:translateY(-1px);box-shadow:var(--lg-top),0 3px 9px rgba(0,0,0,.20)}
 .side-item .ic svg{width:17px;height:17px;display:block}
 .side-item:hover{background:var(--fill)}
 .side-item:hover .ic{background:var(--fill-strong)}
 .side-item.active{background:var(--fill-strong);color:var(--txt);font-weight:590}
-.side-item.active .ic{background:var(--brand)}
+.side-item.active .ic{background:var(--brand);box-shadow:var(--lg-top),0 4px 14px rgba(139,92,246,.42)}
 .side-item .badge{margin-left:auto;font-size:11px;background:var(--fill);padding:1px 7px;border-radius:10px;color:var(--sub);font-weight:600}
 .side-item.active .badge{background:var(--brand);color:#fff}
-.side-create{margin-top:auto;margin-bottom:4px;padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--brand)!important;color:#fff!important;font-size:14px;font-weight:590;border-radius:10px;cursor:pointer;transition:filter .18s var(--ease),transform .12s var(--ease);border:1px solid transparent!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
-.side-create:hover{filter:brightness(1.06)}
+.side-create{margin-top:auto;margin-bottom:4px;padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--brand)!important;color:#fff!important;font-size:14px;font-weight:590;border-radius:10px;cursor:pointer;transition:filter .18s var(--ease),transform .12s var(--ease),box-shadow .18s var(--ease);border:1px solid transparent!important;box-shadow:var(--lg-top),0 6px 18px rgba(139,92,246,.35)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.side-create:hover{filter:brightness(1.06);box-shadow:var(--lg-top),0 9px 24px rgba(139,92,246,.46)!important}
 .side-create:active{filter:brightness(.94);transform:scale(.98)}
 .side-create .sc-ic{font-size:18px;font-weight:600;line-height:1}
 /* 侧边栏折叠（收成图标栏） */
