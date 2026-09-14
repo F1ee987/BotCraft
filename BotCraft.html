@@ -1241,7 +1241,11 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none;
     </div>
     <div class="field">
       <label>最大输出 tokens</label>
-      <input id="set-maxtokens" type="number" min="50" max="4000" value="800">
+      <input id="set-maxtokens" type="number" min="50" max="8192" value="2048">
+      <div style="margin-top:6px;font-size:12px;color:var(--fg-dim);line-height:1.5">
+        思考型模型（GLM-5 / Qwen3 等）的「思考过程」也会占用这个额度。设得太小会导致：<b>步骤明明跑完了，回复却是空的</b>。<br>
+        本项目已在阿里云百炼 / 智谱接口上自动关闭思考；若你的网关不支持，请把这里调到 2000 以上。
+      </div>
     </div>
     <div class="field" style="display:flex;align-items:center;gap:8px">
       <input id="set-direct" type="checkbox" checked style="width:auto">
@@ -1363,13 +1367,23 @@ window.__storage = __storage;
   };
   const DEFAULT_CFG = {
     provider: 'openai', baseURL: PROVIDERS.openai.base, apiKey: '', model: 'gpt-4o-mini',
-    temperature: 0.7, maxTokens: 800, directCall: true, proxyURL: '', fallback: 'smart', fastReply: false,
+    temperature: 0.7, maxTokens: 2048, directCall: true, proxyURL: '', fallback: 'smart', fastReply: false,
     imageBaseURL: '', imageAPIKey: '', imageModel: 'dall-e-3', imageSize: '1024x1024',
   };
   let cfg = loadConfig();
 
   function loadConfig() {
-    try { const raw = __storage.getItem(LS_CFG); if (raw) return Object.assign({}, DEFAULT_CFG, JSON.parse(raw)); } catch (e) {}
+    try {
+      const raw = __storage.getItem(LS_CFG);
+      if (raw) {
+        const c = Object.assign({}, DEFAULT_CFG, JSON.parse(raw));
+        // 一次性迁移：800 是旧版本的出厂默认值，已被证实不够用——起草类节点会被
+        // 截断（finish_reason=length），思考型模型更是整段正文为空。
+        // 只有仍停留在旧默认值的配置才会被抬高，用户手动改过的值不动。
+        if (Number(c.maxTokens) === 800) c.maxTokens = DEFAULT_CFG.maxTokens;
+        return c;
+      }
+    } catch (e) {}
     return Object.assign({}, DEFAULT_CFG);
   }
   function saveConfig() { try { __storage.setItem(LS_CFG, JSON.stringify(cfg)); } catch (e) {} }
@@ -2169,9 +2183,16 @@ window.__storage = __storage;
       model: forceModel || cfg.model,
       messages: messages,
       temperature: Number(cfg.temperature) || 0.7,
-      max_tokens: Number(cfg.maxTokens) || 800,
+      max_tokens: Number(cfg.maxTokens) || 2048,
       stream: !!stream,
     };
+    // 思考型模型（GLM-5 / Qwen3 等）默认会把 max_tokens 大量甚至全部消耗在「思考过程」上，
+    // 正式回答（content）因此为空、finish_reason='length'——表现为「工作流步骤跑完了，却没有输出」。
+    // 实测同一任务：开启思考 670 completion tokens（其中 626 是思考）且正文为空；
+    // 关闭思考后 45 tokens 且正文完整，既修掉空回复又省约 93% 输出成本。
+    if (/dashscope\.aliyuncs\.com/i.test(url)) body.enable_thinking = false;
+    else if (/(open\.bigmodel\.cn|zhipu)/i.test(url)) body.thinking = { type: 'disabled' };
+
     const headers = { 'Content-Type': 'application/json' };
     if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
 
@@ -2226,10 +2247,12 @@ window.__storage = __storage;
         }
       }
       if (!resp) { clearTimeout(timer); throw lastErr || new Error('请求失败'); }
+      let lastFinish = '';
       async function* iter() {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
+        let _finish = '', _yielded = 0, _reasonLen = 0;
         try {
           while (true) {
             const { value, done } = await reader.read();
@@ -2244,14 +2267,34 @@ window.__storage = __storage;
               if (data === '[DONE]') return;
               try {
                 const json = JSON.parse(data);
-                const delta = json.choices?.[0]?.delta?.content;
-                if (delta) yield delta;
+                const _ch = json.choices?.[0];
+                if (_ch && _ch.finish_reason) _finish = _ch.finish_reason;
+                const _rc = _ch && _ch.delta ? _ch.delta.reasoning_content : '';
+                if (_rc) _reasonLen += _rc.length;
+                const delta = _ch && _ch.delta ? _ch.delta.content : '';
+                if (delta) { _yielded++; yield delta; }
               } catch (e) { /* 忽略非 JSON 行 */ }
             }
           }
-        } finally { clearTimeout(timer); }
+        } finally {
+          clearTimeout(timer);
+          lastFinish = _finish; // 供上层判断是否被 max_tokens 截断
+          // 思考过程吃光 max_tokens 时正文为空。必须显式报错——旧版静默返回空串，
+          // 工作流最后一个节点拿到空产出，用户只看到「一条什么都没有的回复」。
+          if (!_yielded && _reasonLen > 0) {
+            const e = new Error('模型正文为空：' + _reasonLen + ' 字输出被用于「思考过程」，' +
+              (_finish === 'length' ? '正式回答前就已达到 max_tokens 上限' : '未产生正式回答内容'));
+            e.name = 'EmptyOutputError';
+            e.reasoningLength = _reasonLen;
+            e.finishReason = _finish;
+            throw e;
+          }
+        }
       }
-      return iter();
+      const _stream = iter();
+      // finish_reason 只在流结束时才知道，挂在迭代器上供工作流判断「是否被截断」
+      _stream.getFinishReason = function () { return lastFinish; };
+      return _stream;
     }
 
     // 非流式：整段带重试
@@ -2274,7 +2317,16 @@ window.__storage = __storage;
     if (lastErr) { clearTimeout(timer); throw lastErr; }
     const choice = data && data.choices && data.choices[0];
     const content = choice && (choice.message ? choice.message.content : choice.text);
-    if (!content) throw new Error('模型返回为空');
+    if (!content) {
+      // 与流式分支保持一致的诊断：区分「思考吃光预算」和「真的什么都没有」
+      const _r = (choice && choice.message && choice.message.reasoning_content) || '';
+      if (_r) {
+        const e = new Error('模型正文为空：' + _r.length + ' 字输出被用于「思考过程」，正式回答未产生内容');
+        e.name = 'EmptyOutputError'; e.reasoningLength = _r.length;
+        throw e;
+      }
+      throw new Error('模型返回为空');
+    }
     return content.trim();
   }
 
@@ -3808,6 +3860,12 @@ window.resolveModelLabel = resolveModelLabel;  // 显式导出，避免严格模
 function apiErrHint(err) {
   const st = (err && err.status) ? err.status : 0;
   const d = String((err && (err.detail || err.message)) || '');
+  // 思考型模型（GLM-5 / Qwen3 等）把 max_tokens 全耗在思考过程上 → 正文为空。
+  // 这不是 Key/网络问题，调大输出上限或换非思考型模型即可。
+  if (err && err.name === 'EmptyOutputError')
+    return '模型把输出预算全部消耗在「思考过程」上了，正式回答为空。解决：'
+      + '① 到「设置」把「最大输出 tokens」调大（建议 2000 以上，留足思考+正文的空间）；'
+      + '② 或改用非思考型模型（qwen-plus / qwen-turbo / gpt-4o-mini 等）。';
   if (st === 401) return 'API Key 无效或已过期，请在「设置」中重新粘贴密钥。';
   if (st === 403) {
     // 阿里云百炼「免费额度用完即停」会回 AllocationQuota.FreeTierOnly；其他厂商有同类文案
@@ -6296,7 +6354,7 @@ function openSettings() {
   document.getElementById('set-base').value = cfg.baseURL || '';
   document.getElementById('set-temp').value = cfg.temperature || 0.7;
   document.getElementById('set-temp-val').textContent = (cfg.temperature || 0.7).toFixed(1);
-  document.getElementById('set-maxtokens').value = cfg.maxTokens || 800;
+  document.getElementById('set-maxtokens').value = cfg.maxTokens || 2048;
   document.getElementById('set-direct').checked = !!cfg.directCall;
   document.getElementById('set-serial').checked = getSerialInput();
   document.getElementById('set-proxy').value = cfg.proxyURL || '';
@@ -6399,7 +6457,7 @@ function saveSettings() {
   const modelCustom = document.getElementById('set-model-custom').value.trim();
   const model = modelSel === '__custom' ? modelCustom : modelSel;
   const temperature = parseFloat(document.getElementById('set-temp').value) || 0.7;
-  const maxTokens = parseInt(document.getElementById('set-maxtokens').value, 10) || 800;
+  const maxTokens = parseInt(document.getElementById('set-maxtokens').value, 10) || 2048;
   const directCall = document.getElementById('set-direct').checked;
   const proxyURL = document.getElementById('set-proxy').value.trim();
   const imageBaseURL = document.getElementById('set-img-base').value.trim();
@@ -6922,6 +6980,7 @@ window.__debug = {
     var _imagePromptForNodes = imagePrompt || '';
     var nodes = (bot.nodes && bot.nodes.length) ? bot.nodes : [];
     var prev = '', finalText = userMsg;
+    var _lastNonEmpty = '', _lastNonEmptyNode = '', _lastNodeName = ''; // 空产出兜底用
     var _imgInjected = false; // 多模态：图片仅注入到第一个处理节点，避免重复
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
@@ -7038,7 +7097,7 @@ window.__debug = {
         _imgInjected = true;
       }
       var messages = [{ role: 'system', content: sys }, { role: 'user', content: userContent }];
-      var out;
+      var out, _truncated = false;
       try {
         if (!canCall) {
           out = callModelFallback(node);
@@ -7054,12 +7113,32 @@ window.__debug = {
           } else if (typeof _it === 'string') {
             out = _it;
           }
+          // finish_reason=length 说明这一步没写完就被 max_tokens 掐断了（草稿类节点最容易撞上）
+          if (_it && typeof _it.getFinishReason === 'function' && _it.getFinishReason() === 'length') _truncated = true;
         }
       } catch (e) { console.warn('[runWorkflow] 步骤失败，降级：', e); out = callModelFallback(node, e); }
       var t1 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       out = (out || '').toString().trim();
-      logs.push({ i: i + 1, role: role, name: node.h || ('步骤' + i), ms: Math.max(0, Math.round(t1 - t0)), output: out });
+      _lastNodeName = node.h || ('步骤' + (i + 1));
+      // 空产出兜底：无论何种原因（模型空回复 / 思考吃光 token / 兼容网关吞掉内容），
+      // 都不能让某一节点悄悄产出空串——否则最后一个节点为空时用户只看到「没有输出」。
+      if (!out) out = '⚠️ 本步骤「' + _lastNodeName + '」模型返回为空，未产出内容（详见执行日志）。';
+      else { _lastNonEmpty = out; _lastNonEmptyNode = _lastNodeName; }
+      logs.push({
+        i: i + 1, role: role, name: node.h || ('步骤' + i), ms: Math.max(0, Math.round(t1 - t0)), output: out,
+        note: _truncated ? '⚠️ 本步骤被「最大输出 tokens」截断，内容没写完。建议到「设置」把该值调大。' : ''
+      });
       flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: (node.h || ('步骤' + i)), role: role, phase: 'done', text: out }); prev = out; finalText = out;
+    }
+    // 最终交付兜底：末尾节点没产出时，退回最后一个有内容的节点，而不是给用户一片空白
+    var _fin = (finalText || '').toString().trim();
+    if (!_fin || _fin === userMsg) {
+      if (_lastNonEmpty) {
+        _fin = '⚠️ 最后一步「' + _lastNodeName + '」没有产出内容，以下为上一节点「' + _lastNonEmptyNode + '」的结果：\n\n' + _lastNonEmpty;
+      } else {
+        _fin = '⚠️ 工作流没有产出任何内容。请到「设置」检查模型名与「最大输出 tokens」是否合适，或改用非思考型模型后重试。';
+      }
+      finalText = _fin;
     }
     return { final: finalText, logs: logs };
   }
@@ -7234,9 +7313,10 @@ window.__debug = {
     var roleLabel = { start: '开始', clarify: '澄清', outline: '大纲', draft: '撰写', review: '去AI腔', human: '审批', step: '步骤' };
     body.innerHTML = (logs || []).map(function (l) {
       var o = (l.output || '').slice(0, 600);
+      var _note = l.note ? '<div style="margin-top:6px;color:var(--warn);line-height:1.5">' + escapeHtml(l.note) + '</div>' : '';
       return '<div style="margin-bottom:12px;padding:8px 10px;border:1px solid var(--log-item-border);border-radius:10px;background:var(--log-item-bg)">' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:4px;color:var(--log-item-fg)">#' + l.i + ' · ' + (roleLabel[l.role] || l.role) + ' · ' + escapeHtml(l.name || '') + ' <span style="color:var(--log-ms)">' + l.ms + 'ms</span></div>' +
-        '<div style="white-space:pre-wrap;line-height:1.5;max-height:140px;overflow:auto">' + escapeHtml(o) + '</div></div>';
+        '<div style="white-space:pre-wrap;line-height:1.5;max-height:140px;overflow:auto">' + escapeHtml(o) + '</div>' + _note + '</div>';
     }).join('');
   }
   // 重新打开执行日志面板（缓存最近一次日志；无记录给占位提示）
