@@ -176,12 +176,15 @@ body .mbox,body .cmdk-box,body .toast,body .cmd-panel{box-shadow:var(--lg-shadow
 html,body{height:100%}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","PingFang SC","Helvetica Neue","Segoe UI","Microsoft YaHei",sans-serif;
-  color:var(--txt);min-height:100vh;overflow-x:hidden;line-height:1.5;
+  color:var(--txt);overflow:hidden;line-height:1.5;
+  display:flex;flex-direction:column;
   position:relative;
   background:var(--bg);
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
 }
+/* body 锁定视口 + 纵向 flex：顶栏占多少 .app 就自动填剩余，
+   页面滚动全部下沉到 .main 内部 —— 不再依赖 calc(100vh - 顶栏高) 的魔法数字 */
 /* 背景光晕交给 body::before（z-index:-1，在背景之上、内容之下），这里不再加装饰 */
 .chat,.chat-input,.sidebar{position:relative}
 
@@ -280,7 +283,7 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 #auth-err{font-size:12px}
 
 /* ============ 布局 ============ */
-.app{display:flex;height:calc(100vh - 66px)}  /* 顶栏悬浮条实际占位 52px + 上下 margin 14px */
+.app{display:flex;flex:1;min-height:0}  /* 自动填满顶栏以下空间，高度不再依赖顶栏具体占位 */
 /* 嵌入模式：隐藏顶栏与侧边栏，仅保留聊天工作区（作独立对话挂件使用） */
 body.embed-mode .topbar{display:none}
 body.embed-mode .sidebar{display:none}
@@ -371,7 +374,7 @@ body.embed-mode #wsName{font-size:15px}
 .card-menu:hover{background:var(--fill)}
 
 /* ============ 工作台 ============ */
-.workspace{display:none;flex:1;min-width:0;min-height:0;height:calc(100vh - 52px)}  /* 高度锁定视口，聊天区用内部滚动 */
+.workspace{display:none;flex:1;min-width:0;min-height:0;height:100%}  /* 高度跟随 .main 内容区，聊天区用内部滚动 */
 .workspace.on{display:flex}
 .ws-side{width:300px;min-width:0;overflow-x:hidden;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column}
 /* 左侧工作区调宽拉手：夹在 ws-side 与 ws-main 之间，拖拽调宽、双击复位、按钮收起 */
