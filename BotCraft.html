@@ -829,6 +829,51 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.34);background-clip:padding-box}
 [data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(60,60,67,.26);background-clip:padding-box}
 [data-theme="light"] ::-webkit-scrollbar-thumb:hover{background:rgba(60,60,67,.4);background-clip:padding-box}
+
+/* ==================== 上下文用量带 & 上下文面板 ==================== */
+/* 10 个内容来源各一个区分色，深浅两套主题分别取值，保证在玻璃材质上都能看清 */
+:root{
+  --ctx1:#8b5cf6; --ctx2:#a78bfa; --ctx3:#f472b6; --ctx4:#fb923c; --ctx5:#38bdf8;
+  --ctx6:#34d399; --ctx7:#94a3b8; --ctx8:#facc15; --ctx9:#f87171; --ctx10:#2dd4bf;
+}
+[data-theme="light"]{
+  --ctx1:#7c3aed; --ctx2:#9333ea; --ctx3:#db2777; --ctx4:#ea580c; --ctx5:#0284c7;
+  --ctx6:#059669; --ctx7:#64748b; --ctx8:#ca8a04; --ctx9:#dc2626; --ctx10:#0d9488;
+}
+.ctx-wrap{display:flex;flex-direction:column;gap:5px;width:100%;min-width:0}
+.ctx-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--sub)}
+.ctx-total{font-weight:600;color:var(--txt);font-variant-numeric:tabular-nums}
+.ctx-ratio{font-variant-numeric:tabular-nums}
+.ctx-over{color:var(--danger);font-weight:600}
+.ctx-band{position:relative;display:flex;height:6px;width:100%;border-radius:999px;background:var(--fill);overflow:hidden}
+.ctx-seg{height:100%;transition:width .25s var(--ease)}
+.ctx-seg+.ctx-seg{box-shadow:inset 1px 0 0 rgba(0,0,0,.3)}
+.ctx-btn{margin-left:auto;cursor:pointer;color:var(--brand-hi);font-weight:600;white-space:nowrap}
+.ctx-btn:hover{text-decoration:underline}
+.ctx-mini{font-size:11.5px;color:var(--sub);display:flex;gap:10px;flex-wrap:wrap}
+/* 上下文详情浮层 */
+.ctxp{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5)}
+.ctxp.on{display:flex}
+.ctxp-box{width:min(780px,93vw);max-height:86vh;display:flex;flex-direction:column;border-radius:var(--r-lg);background:var(--glass-bg-hover);border:1px solid var(--glass-border);box-shadow:var(--lg-shadow);overflow:hidden}
+.ctxp-hd{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600;color:var(--txt)}
+.ctxp-x{margin-left:auto;cursor:pointer;color:var(--sub);font-size:17px;line-height:1}
+.ctxp-x:hover{color:var(--txt)}
+.ctxp-body{padding:14px 18px 20px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.ctxp-bar{display:flex;height:10px;border-radius:999px;background:var(--fill);overflow:hidden}
+.ctxp-sum{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--sub)}
+.ctxp-sum b{color:var(--txt);font-variant-numeric:tabular-nums}
+.ctxp-row{border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);padding:10px 12px}
+.ctxp-row-hd{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt);cursor:pointer}
+.ctxp-row-hd:hover{color:var(--brand-hi)}
+.ctxp-dot{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+.ctxp-len{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--sub);font-size:11.5px}
+.ctxp-tag{font-size:10.5px;border-radius:6px;padding:2px 7px;background:var(--fill);color:var(--sub)}
+.ctxp-tag.warn{color:var(--warn)}
+.ctxp-tag.p0{color:var(--ok)}
+.ctxp-pre{display:none;margin-top:8px;padding:9px 10px;border-radius:8px;background:var(--sunken);font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.6;color:var(--sub);white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto}
+.ctxp-row.open .ctxp-pre{display:block}
+.ctxp-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--sub)}
+.ctxp-legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px}
 </style>
 </head>
 <body>
@@ -1485,8 +1530,9 @@ window.__storage = __storage;
   function getConfig() { return Object.assign({}, cfg); }
 
   // 构造 messages（含历史上下文 + 系统提示）
-  function buildMessages(bot, history, toolCtx, imagePrompt) {
-    const sys = composeSystemPrompt(bot, toolCtx, imagePrompt);
+  // opts.preview=true 为纯预演：不累加记忆使用次数、不写盘，供上下文面板测算用量
+  function buildMessages(bot, history, toolCtx, imagePrompt, opts) {
+    const sys = composeSystemPrompt(bot, toolCtx, imagePrompt, opts);
     const msgs = [{ role: 'system', content: sys }];
     const turns = (history || []).slice();
     // 保留较多历史轮次（默认模型上下文足够大，正常聊天不会被截断）
@@ -1527,19 +1573,13 @@ window.__storage = __storage;
     });
     // 安全预算：仅在请求体确实过大（远超正常聊天）时才从最旧历史开始裁剪，
     // 正常情况下不限制你的输入；若仍触发模型上下文上限，会以真实错误提示而非静默失败
-    const HISTORY_BUDGET = 60000;
-    function _msgChars(x) {
-      if (!x) return 0;
-      const c = x.content;
-      if (typeof c === 'string') return c.length;
-      if (Array.isArray(c)) return c.reduce(function (s, p) { return s + (p && p.text ? p.text.length : 0) + (p && p.image_url ? 2000 : 0) + (p && p.input_audio ? 2000 : 0); }, 0);
-      return 0;
-    }
+    var histDropped = 0;
     // system 消息（index 0）始终保留；其余历史消息超预算则从最旧开始丢弃
     while (msgs.length > 2) {
-      let used = 0; for (let k = 1; k < msgs.length; k++) used += _msgChars(msgs[k]);
+      let used = 0; for (let k = 1; k < msgs.length; k++) used += _ctxMsgChars(msgs[k]);
       if (used <= HISTORY_BUDGET) break;
       msgs.splice(1, 1);
+      histDropped++;
     }
     // 清洗：过滤空内容消息，避免 API 因空 assistant 消息返回 400；
     // 相邻同角色消息合并，避免连续 user/user、assistant/assistant 被网关拒绝
@@ -1555,18 +1595,183 @@ window.__storage = __storage;
       }
       cleaned.push(x);
     });
+    // 回填历史部分用量（system 部分已由 composeSystemPrompt 发布），供底部用量条与上下文面板读取
+    var _histLen = 0;
+    for (var _hk = 1; _hk < cleaned.length; _hk++) _histLen += _ctxMsgChars(cleaned[_hk]);
+    var _snap = getCtxSnap();
+    if (_snap) {
+      _snap.histLen = _histLen;
+      _snap.turns = Math.max(0, cleaned.length - 1);
+      _snap.histDropped = histDropped;
+    }
     return cleaned;
   }
 
-  function composeSystemPrompt(bot, toolCtx, imagePrompt) {
-    const parts = [];
-    parts.push((bot && bot.prompt) || '你是一个有用的助手。');
+  // ==================== 上下文预算管理（区块化记账 + 优先级装箱） ====================
+  // 背景：单次请求的上下文由多个来源拼成（人设/知识库/记忆/品牌/工作流/工具结果/历史）。
+  // 旧实现在整体超限时对拼好的字符串做 slice(0, BUDGET) 砍尾 —— 而尾部恰好是
+  // 「工作流设定 → 品牌档案 → 固定收尾」。于是知识库原样留着，品牌调性与流程约束却先被静默丢弃，
+  // 属于「越重要的越先掉」的反向淘汰。现改为按来源分区块记账，再按优先级装箱：
+  // P0 区块永久保护，其余从低优先级开始截断/丢弃，全过程记录明细，可在上下文面板审计。
+  var SYS_BUDGET = 20000;      // 系统提示整体预算（字符）
+  var HISTORY_BUDGET = 60000;  // 历史对话预算（字符）
+  var CTX_MIN_KEEP = 160;      // 非保护区块至少能保留这么多字符才值得截断，否则整块丢弃
+  // prio 越小越重要；0 为保护区，预算再紧也不裁剪
+  var CTX_SECTIONS = [
+    { k: 'prompt', label: '人设提示词', prio: 0, color: 'var(--ctx1)' },
+    { k: 'brand', label: '品牌档案', prio: 0, color: 'var(--ctx2)' },
+    { k: 'tail', label: '固定收尾', prio: 0, color: 'var(--ctx7)' },
+    { k: 'style', label: '写作风格', prio: 1, color: 'var(--ctx8)' },
+    { k: 'plugin', label: '插件说明', prio: 1, color: 'var(--ctx5)' },
+    { k: 'image', label: '配图说明', prio: 1, color: 'var(--ctx4)' },
+    { k: 'flow', label: '工作流设定', prio: 2, color: 'var(--ctx9)' },
+    { k: 'memory', label: '长期记忆', prio: 2, color: 'var(--ctx3)' },
+    { k: 'tool', label: '工具结果', prio: 3, color: 'var(--ctx10)' },
+    { k: 'kb', label: '知识库', prio: 3, color: 'var(--ctx6)' }
+  ];
+  var CTX_META = {};
+  CTX_SECTIONS.forEach(function (s) { CTX_META[s.k] = s; });
+
+  // 单条消息的上下文字符估算（字符串按长度；多模态 parts 给图片/音频一个固定权重，
+  // 因为 base64 体积远大于其文本语义，按真实长度会淹没其他区块）
+  function _ctxMsgChars(x) {
+    if (!x) return 0;
+    var c = x.content;
+    if (typeof c === 'string') return c.length;
+    if (Array.isArray(c)) return c.reduce(function (s, p) {
+      return s + (p && p.text ? p.text.length : 0) + (p && p.image_url ? 2000 : 0) + (p && p.input_audio ? 2000 : 0);
+    }, 0);
+    return 0;
+  }
+
+  // 优先级装箱：先给保护区块留足预算，剩余额度按 prio 升序（重要者优先）分配给其余区块，
+  // 分不到的区块按「先截断、截不动则整块丢弃」处理，并写明原因。原地修改 section.text。
+  function packContextSections(secs, budget) {
+    // 注意不能用 budget || SYS_BUDGET：0 是合法预算（全部裁剪），会被 falsy 判断吞掉后静默回落默认值
+    if (typeof budget !== 'number' || !isFinite(budget) || budget < 0) budget = SYS_BUDGET;
+    var prot = [], rest = [];
+    secs.forEach(function (s) {
+      s.origLen = s.text.length;
+      s.kept = s.text.length;
+      s.trimNote = '';
+      (CTX_META[s.k] && CTX_META[s.k].prio === 0 ? prot : rest).push(s);
+    });
+    var baseLen = 0;
+    prot.forEach(function (s) { baseLen += s.text.length; });
+    // 极端情形：保护区块自身已超预算 —— 仅此情形才动保护区，且按原顺序保头部、末位整体丢弃
+    if (baseLen > budget) {
+      var left = budget;
+      prot.forEach(function (s) {
+        if (s.text.length <= left) { left -= s.text.length; return; }
+        if (left >= CTX_MIN_KEEP) {
+          s.text = s.text.slice(0, left - 24) + '\n…（保护区超限，此处已截断）';
+          s.trimNote = '保护区超限截断';
+        } else { s.text = ''; s.trimNote = '保护区超限，整体丢弃'; }
+        s.kept = s.text.length;
+        left = 0;
+      });
+      rest.forEach(function (s) { s.kept = 0; s.text = ''; s.trimNote = '预算已被保护区占满'; });
+      return;
+    }
+    var remain = budget - baseLen;
+    // 稳定排序：同优先级按原始拼接顺序，保证行为可预期
+    rest.sort(function (a, b) { return (CTX_META[a.k].prio - CTX_META[b.k].prio) || (a.i - b.i); });
+    rest.forEach(function (s) {
+      if (s.text.length <= remain) { remain -= s.text.length; return; }
+      var orig = s.text.length;
+      if (remain >= CTX_MIN_KEEP) {
+        var keep = remain - 24;
+        s.text = s.text.slice(0, keep).replace(/\s+$/, '') + '\n…（上下文预算不足，此处已截断）';
+        s.trimNote = '截断 ' + (orig - keep) + ' 字';
+      } else {
+        s.text = '';
+        s.trimNote = '预算耗尽，整块丢弃';
+      }
+      s.kept = s.text.length;
+      remain = 0;
+    });
+  }
+
+  // 发布快照供界面读取：block2 的用量条与上下文面板都从 window._ctxSnap 取数
+  function publishCtxSnap(secs, opts) {
+    opts = opts || {};
+    var list = [], sysLen = 0;
+    secs.forEach(function (s) {
+      var m = CTX_META[s.k] || { label: s.k, color: 'var(--ctx7)', prio: 3 };
+      var rec = {
+        k: s.k, label: m.label, color: m.color, prio: m.prio,
+        len: s.text.length, orig: (s.origLen === undefined ? s.text.length : s.origLen),
+        note: s.trimNote || '',
+        // 保留裁剪后的实际内容，供上下文面板展开查看「真正送出去的正文」
+        text: s.text
+      };
+      sysLen += rec.len;
+      list.push(rec);
+    });
+    var snap = {
+      t: Date.now(),
+      budget: (opts.budget === undefined || opts.budget === null) ? SYS_BUDGET : opts.budget,
+      sysLen: sysLen,
+      sections: list,
+      histLen: opts.histLen || 0,
+      histBudget: opts.histBudget === undefined ? HISTORY_BUDGET : opts.histBudget,
+      turns: opts.turns || 0,
+      histDropped: opts.histDropped || 0,
+      mediaNote: opts.mediaNote || 0,
+      preview: !!opts.preview
+    };
+    window._ctxSnap = snap;
+    return snap;
+  }
+  function getCtxSnap() { return window._ctxSnap || null; }
+
+  // 预演：按当前配置测算「下一句话会送出去多少上下文」，不写盘、不累加记忆使用次数。
+  // 供底部用量条在用户还没发消息时显示实时占用。
+  function previewContext(bot) {
+    try {
+      if (!bot) bot = getBot(currentId);
+      if (!bot) return null;
+      // 节流：界面多处会触发刷新，避免同一帧内重复预演（150ms 内直接复用现有快照）
+      var now = Date.now();
+      if (window._ctxPrevAt && (now - window._ctxPrevAt) < 150 && window._ctxSnap) return window._ctxSnap;
+      window._ctxPrevAt = now;
+      var msgs = buildMessages(bot, bot.history, '', '', { preview: true });
+      // system 与历史用量已由 buildMessages 发布，这里只补充多媒体消息计数
+      var snap = getCtxSnap();
+      if (snap) {
+        var mediaNote = 0;
+        for (var i = 1; i < msgs.length; i++) { if (Array.isArray(msgs[i].content)) mediaNote++; }
+        snap.mediaNote = mediaNote;
+        snap.preview = true;
+      }
+      return snap;
+    } catch (e) { return null; }
+  }
+  // 暴露给 block2（跨 script 块只能走 window）
+  window.BotCraftCtx = {
+    preview: previewContext,
+    snap: getCtxSnap,
+    meta: CTX_SECTIONS,
+    sysBudget: function () { return SYS_BUDGET; },
+    histBudget: function () { return HISTORY_BUDGET; }
+  };
+
+  function composeSystemPrompt(bot, toolCtx, imagePrompt, opts) {
+    // 每个内容来源作为一个区块独立记账，最终由 packContextSections 按优先级分配预算，
+    // 而不是拼完再 slice 砍尾 —— 见上方「上下文预算管理」注释
+    const secs = [];
+    function pushSec(k, text) {
+      var t = (text === null || text === undefined) ? '' : String(text);
+      if (!t.trim()) return;
+      secs.push({ k: k, text: t, i: secs.length });
+    }
+    pushSec('prompt', (bot && bot.prompt) || '你是一个有用的助手。');
     if (bot && bot.knowledges && bot.knowledges.length) {
       const kctx = bot.knowledges.map(id => kbById(id)).filter(Boolean).map(rec => '【' + rec.name + '】\n' + rec.content).join('\n\n');
       // 知识库整体截断：保留条目完整性，总长在 6000 字符以内，避免挂载大知识库后撑爆上下文
       const MAX_KB_LEN = 6000;
       const safeKctx = kctx.length > MAX_KB_LEN ? kctx.slice(0, MAX_KB_LEN) + '\n…（知识库内容过长已截断）' : kctx;
-      if (safeKctx) parts.push('\n【知识库】以下是已挂载知识库的完整正文，请直接作为回答依据：\n' + safeKctx + '\n\n注意：知识库内容已随本条系统提示一并提供，用户无需再次上传或粘贴相同内容；除非知识库确实为空，否则不要向用户索要文件或文本。');
+      if (safeKctx) pushSec('kb', '\n【知识库】以下是已挂载知识库的完整正文，请直接作为回答依据：\n' + safeKctx + '\n\n注意：知识库内容已随本条系统提示一并提供，用户无需再次上传或粘贴相同内容；除非知识库确实为空，否则不要向用户索要文件或文本。');
     }
     if (bot && bot.plugins && bot.plugins.length) {
       var realTools = ['网页搜索', '联网检索', '天气查询', '图片生成'];
@@ -1575,43 +1780,45 @@ window.__storage = __storage;
       note += '其中「网页搜索 / 联网检索」「天气查询」「图片生成」是由系统在生成前自动执行的真实工具，其结果会出现在下方【工具结果】区块，请直接依据这些结果回答用户，无需自己编造，也不要假装这些工具没被调用；';
       note += '其余插件为能力偏好提示，请在其擅长方向上按该专长作答。';
       note += '特别说明：当「图片生成」插件启用且用户需要配图时，系统会先调用文生图接口生成真实图片，并在聊天中直接展示；你只需在正文中说明「已为你生成配图」或简单引用，不要把图片 URL 当作纯文本重复输出。';
-      parts.push(note);
+      pushSec('plugin', note);
     }
     // 用户当前请求需要配图：明确告知 AI 系统会自动生成并展示图片，避免模型自己编造/重复 URL
     if (imagePrompt) {
       var imgNote = '\n【图片生成】用户当前请求「' + imagePrompt.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。';
       imgNote += ' 你只需在正文里自然说明「已为你生成配图」或简单引用，绝对不要输出图片 URL，不要把图片地址当纯文本重复，也不要自行描述不存在的图片内容。';
       imgNote += ' 特别重要：用户要的是「直接看到图片」，不是要你写「图片生成提示词、负面提示词、小红书/抖音配文、图片比例、分镜脚本」等；你禁止输出任何带【】方括号的板块标题，禁止输出 Midjourney/Stable Diffusion 提示词模板，禁止输出营销文案脚本。违者视为违规输出。';
-      parts.push(imgNote);
+      pushSec('image', imgNote);
     }
     // 真实工具执行结果（联网检索 / 天气查询等），由系统在调用模型前自动拉取并注入
     if (toolCtx && toolCtx.trim()) {
-      parts.push('\n【工具结果】以下是已启用插件的实际执行结果，请据此作答：\n' + toolCtx.trim());
+      pushSec('tool', '\n【工具结果】以下是已启用插件的实际执行结果，请据此作答：\n' + toolCtx.trim());
     }
     if (bot && bot.styleText) {
-      parts.push('\n【写作风格】请严格遵循以下文体要求输出：' + bot.styleText);
+      pushSec('style', '\n【写作风格】请严格遵循以下文体要求输出：' + bot.styleText);
     }
     if (bot && bot.memory && bot.memory.enabled && bot.memory.items && bot.memory.items.length) {
       var mem = bot.memory.items.filter(function (it) { return it && it.text && it.text.trim(); });
       if (mem.length) {
         var lastMe = (bot.history || []).slice().reverse().find(function (m) { return m.role === 'me'; });
-        var memSel = selectRelevantMemories(mem, lastMe ? lastMe.text : '', 12);
-        try { _memSaveDebounce(bot); } catch (e) { }   // 持久化「使用次数」（重要度模型的输入）
+        var memSel = selectRelevantMemories(mem, lastMe ? lastMe.text : '', 12, !!(opts && opts.preview));
+        // 预览模式不写盘：_memSaveDebounce 会把使用次数落盘，预演时跳过以免污染重要度
+        if (!(opts && opts.preview)) { try { _memSaveDebounce(bot); } catch (e) { } }
         var pinnedN = memSel.filter(function (it) { return MEM_PIN_TYPES.indexOf(it.type || '其他') >= 0; }).length;
         var memNote = (mem.length > memSel.length) ? ('（共 ' + mem.length + ' 条记忆，已挑选 ' + memSel.length + ' 条注入' + (pinnedN ? '，其中常驻 ' + pinnedN + ' 条' : '') + '）') : '';
-        parts.push('\n【长期记忆】以下是你长期记住的关于该用户的关键信息，请在回答时自然运用（不必刻意说「我记得」）：' + memNote + '\n' + memSel.map(function (it, i) { return (i + 1) + '. [' + (it.type || '其他') + '] ' + it.text; }).join('\n'));
+        pushSec('memory', '\n【长期记忆】以下是你长期记住的关于该用户的关键信息，请在回答时自然运用（不必刻意说「我记得」）：' + memNote + '\n' + memSel.map(function (it, i) { return (i + 1) + '. [' + (it.type || '其他') + '] ' + it.text; }).join('\n'));
       }
     }
     if (bot && bot.nodes && bot.nodes.length) {
       const cfgFast = (typeof BotCraftAI !== 'undefined' && BotCraftAI.getConfig) ? BotCraftAI.getConfig().fastReply : false;
       if (cfgFast) {
         // 快速模式：合并所有节点设定到一次 system prompt，保留人设/流程，不再分步执行
-        parts.push('\n【角色 / 流程设定】你拥有以下专属人设与工作流约束，请在一次回复中综合运用它们，直接输出最终结果，不要分步骤展示内部处理过程：');
+        var flowF = ['\n【角色 / 流程设定】你拥有以下专属人设与工作流约束，请在一次回复中综合运用它们，直接输出最终结果，不要分步骤展示内部处理过程：'];
         bot.nodes.forEach(function (n, i) {
-          if (n && n.h) parts.push((i + 1) + '. 「' + n.h + '」' + (n.p && n.p.trim() ? '：' + n.p.trim() : ''));
+          if (n && n.h) flowF.push((i + 1) + '. 「' + n.h + '」' + (n.p && n.p.trim() ? '：' + n.p.trim() : ''));
         });
+        pushSec('flow', flowF.join('\n'));
       } else {
-        parts.push('\n【处理流程】请按以下工作流节点顺序组织回答：' + bot.nodes.map(n => n.h).join(' → ') + '。其中「检索知识」指从上方【知识库】中查找相关正文（内容已附上），不要把它理解为“向用户索取文件/附件”；只有知识库为空时才需要向用户询问。');
+        pushSec('flow', '\n【处理流程】请按以下工作流节点顺序组织回答：' + bot.nodes.map(n => n.h).join(' → ') + '。其中「检索知识」指从上方【知识库】中查找相关正文（内容已附上），不要把它理解为“向用户索取文件/附件”；只有知识库为空时才需要向用户询问。');
       }
     }
     if (bot && bot.brand && (bot.brand.name || bot.brand.pitch || bot.brand.slogan || bot.brand.tone || bot.brand.taboo || bot.brand.products || bot.brand.links)) {
@@ -1623,13 +1830,16 @@ window.__storage = __storage;
       if (br.products) bL.push('产品/服务：' + br.products);
       if (br.taboo) bL.push('禁忌（不要说的话/事）：' + br.taboo);
       if (br.links) bL.push('链接：' + br.links);
-      parts.push('\n【品牌档案】请始终以该客户的品牌身份与调性作答，避免与品牌调性冲突的表达：\n' + bL.join('\n'));
+      pushSec('brand', '\n【品牌档案】请始终以该客户的品牌身份与调性作答，避免与品牌调性冲突的表达：\n' + bL.join('\n'));
     }
-    parts.push('\n请用专业、友好的语气回答，回答尽量简洁清晰。若用户使用代码相关需求，请用代码块包裹。');
-    const sysText = parts.join('\n');
-    // 系统提示整体上限：知识库+品牌+记忆+工作流叠加可能很长，对小上下文模型（本地/代理）做硬截断，避免 400/413
-    const SYS_BUDGET = 20000;
-    return sysText.length > SYS_BUDGET ? sysText.slice(0, SYS_BUDGET) + '\n…（系统提示过长已截断，优先保留核心设定）' : sysText;
+    pushSec('tail', '\n请用专业、友好的语气回答，回答尽量简洁清晰。若用户使用代码相关需求，请用代码块包裹。');
+    // 按优先级装箱分配预算：人设/品牌/固定收尾为保护区，其余从低优先级开始削减
+    // 同样避开 || 陷阱：显式判断 null/undefined，0 是合法预算
+    const budget = (opts && opts.budget !== undefined && opts.budget !== null) ? opts.budget : SYS_BUDGET;
+    packContextSections(secs, budget);
+    const sysText = secs.map(function (s) { return s.text; }).filter(Boolean).join('\n');
+    publishCtxSnap(secs, { budget: budget, preview: !!(opts && opts.preview) });
+    return sysText;
   }
 
   // ==================== 机器人长期记忆 ====================
@@ -1815,7 +2025,9 @@ window.__storage = __storage;
   }
   // 记忆注入（双层）：① 常驻记忆（禁忌/身份/约定）→ 始终在场；② 相关记忆 → 按与当前问题的相关度挑选
   // 旧版只按 Jaccard 相似度排序，会导致「不要用表情」这类禁忌一换话题就被筛掉，故改为双层。
-  function selectRelevantMemories(items, query, maxN) {
+  // noCount=true 为纯预览模式：只测算会注入哪些记忆，不累加使用次数（供上下文面板预演用，
+  // 避免每次刷新界面都刷高 count 从而污染重要度模型）
+  function selectRelevantMemories(items, query, maxN, noCount) {
     items = (items || []).filter(function (it) { return it && it.text && it.text.trim(); });
     maxN = maxN || 12;
     if (!items.length) return [];
@@ -1839,7 +2051,7 @@ window.__storage = __storage;
       }
     }
     // 命中统计：真正被注入的记忆累加使用次数（驱动重要度与「常用」排序）
-    picked.forEach(function (it) { it.count = (it.count || 0) + 1; it.lastUsed = Date.now(); });
+    if (!noCount) picked.forEach(function (it) { it.count = (it.count || 0) + 1; it.lastUsed = Date.now(); });
     return picked;
   }
   function doMemoryUpdate(b) {
@@ -4129,19 +4341,146 @@ document.addEventListener('keydown', function (e) {
 // 兼容旧入口：切换机器人
 window.switchBotManual = function (id) { if (id) openBot(id); };
 
-// 聊天头部上下文条：直观显示发送时将携带的知识库与提示词（确认「勾选内容跟随上传」）
+// ==================== 上下文用量带 & 详情面板 ====================
+// 底部条从「配置摘要」升级为「用量带」：直观显示本次请求实际携带多少上下文、各来源占比、是否被裁剪。
+// 数据来自 BotCraftCtx.preview()（预演下一句话，内含节流与记忆计数保护，不会污染使用次数统计）。
+function fmtCtxLen(n) {
+  n = n || 0;
+  if (n >= 10000) return (n / 1000).toFixed(1) + 'k';
+  if (n >= 1000) return (n / 1000).toFixed(2) + 'k';
+  return String(n);
+}
+function ctxSnapNow(b) {
+  var api = window.BotCraftCtx;
+  if (!api || !api.preview) return null;
+  try { return api.preview(b); } catch (e) { return null; }
+}
+function ctxPrioLabel(p) {
+  return p === 0 ? { t: '保护区', c: 'p0' } : p === 1 ? { t: '重要', c: '' } : p === 2 ? { t: '普通', c: '' } : { t: '可裁', c: 'warn' };
+}
+// 聊天头部上下文条
 function renderCtxBar(b) {
   const el = document.getElementById('ctxBar'); if (!el || !b) return;
+  // ① 配置摘要（保留原有语义，作为次要信息）
   const kbNames = (b.knowledges || []).map(function (id) { var r = kbById(id); return r ? r.name : null; }).filter(Boolean);
-  var html = kbNames.length ? ('📚 知识库：' + escapeHtml(kbNames.join('、'))) : '📚 知识库：未挂载';
-  html += '　|　' + (b.prompt && b.prompt.trim() ? '✏️ 提示词：已启用' : '✏️ 提示词：默认');
-  if (b.memory && b.memory.enabled) html += '　|　🧠 记忆：' + ((b.memory.items && b.memory.items.length) || 0) + ' 条';
+  var summary = kbNames.length ? ('📚 知识库：' + escapeHtml(kbNames.join('、'))) : '📚 知识库：未挂载';
+  summary += '　|　' + (b.prompt && b.prompt.trim() ? '✏️ 提示词：已启用' : '✏️ 提示词：默认');
+  if (b.memory && b.memory.enabled) summary += '　|　🧠 记忆：' + ((b.memory.items && b.memory.items.length) || 0) + ' 条';
   if (b.styleId && b.styleText) {
     const st = getStyleById(b.styleId);
-    html += '　|　🎨 文体：' + escapeHtml(st ? st.n : '已启用');
+    summary += '　|　🎨 文体：' + escapeHtml(st ? st.n : '已启用');
   }
+  // ② 用量：快照不可用时降级为纯摘要，保证不出现空白条
+  var snap = ctxSnapNow(b);
+  if (!snap || !snap.sections || !snap.sections.length) {
+    el.innerHTML = '<div class="ctx-wrap"><div class="ctx-mini">' + summary + '</div></div>';
+    return;
+  }
+  var sysBudget = snap.budget || 20000;
+  var sysUsed = snap.sysLen || 0;
+  var histLen = snap.histLen || 0;
+  var histBudget = snap.histBudget || 60000;
+  var cut = snap.sections.filter(function (s) { return s.note; });
+  var sysPct = sysBudget ? (sysUsed / sysBudget * 100) : 0;
+  var items = snap.sections.filter(function (s) { return s.len > 0; });
+  var raw = items.map(function (s) { return sysBudget ? (s.len / sysBudget * 100) : 0; });
+  var sum = raw.reduce(function (a, c) { return a + c; }, 0);
+  var scale = sum > 100 ? (100 / sum) : 1;   // 超预算时按比例压回 100%，避免图条溢出
+  var segs = '';
+  items.forEach(function (s, i) {
+    segs += '<div class="ctx-seg" style="width:' + (raw[i] * scale).toFixed(3) + '%;background:' + s.color + '" title="' +
+      escapeAttr(s.label + '：' + s.len + ' 字' + (s.note ? '（' + s.note + '）' : '')) + '"></div>';
+  });
+  var html = '<div class="ctx-wrap">';
+  html += '<div class="ctx-head">';
+  html += '<span class="ctx-total" title="本次请求的系统提示 + 历史对话合计字符数">🧩 上下文 ' + fmtCtxLen(sysUsed + histLen) + ' 字</span>';
+  html += '<span class="ctx-ratio' + (sysUsed > sysBudget ? ' ctx-over' : '') + '" title="系统提示：人设 / 知识库 / 记忆 / 品牌 / 工作流等合计占系统提示预算">系统 ' + fmtCtxLen(sysUsed) + ' / ' + fmtCtxLen(sysBudget) + '（' + Math.round(sysPct) + '%）</span>';
+  html += '<span class="ctx-ratio" title="历史对话共 ' + (snap.turns || 0) + ' 条消息，预算 ' + histBudget + ' 字">历史 ' + (snap.turns || 0) + ' 条 ' + fmtCtxLen(histLen) + ' / ' + fmtCtxLen(histBudget) + '</span>';
+  if (snap.histDropped) html += '<span class="ctx-over" title="历史超出预算，已从最旧的消息开始丢弃">已丢弃最旧 ' + snap.histDropped + ' 条</span>';
+  if (cut.length) html += '<span class="ctx-over" title="' + escapeAttr(cut.map(function (s) { return s.label + '：' + s.note; }).join('　')) + '">⚠️ 已裁剪 ' + cut.length + ' 个区块</span>';
+  html += '<span class="ctx-btn" onclick="openCtxPanel()" title="查看上下文逐区块明细与实际注入内容">上下文详情 ›</span>';
+  html += '</div>';
+  html += '<div class="ctx-band">' + segs + '</div>';
+  html += '<div class="ctx-mini">' + summary + '</div>';
+  html += '</div>';
   el.innerHTML = html;
 }
+
+function openCtxPanel() {
+  var host = document.getElementById('ctxPanel');
+  if (!host) {
+    host = document.createElement('div');
+    host.className = 'ctxp'; host.id = 'ctxPanel';
+    // 点遮罩关闭
+    host.addEventListener('click', function (e) { if (e.target === host) closeCtxPanel(); });
+    host.innerHTML = '<div class="ctxp-box"><div class="ctxp-hd"><span>🧩 上下文详情</span>' +
+      '<span class="ctxp-x" onclick="closeCtxPanel()" title="关闭（Esc）">✕</span></div>' +
+      '<div class="ctxp-body" id="ctxPanelBody"></div></div>';
+    document.body.appendChild(host);
+    if (!window._ctxEscBound) {
+      window._ctxEscBound = true;
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCtxPanel(); });
+    }
+  }
+  host.classList.add('on');
+  renderCtxPanel();
+}
+function closeCtxPanel() { var h = document.getElementById('ctxPanel'); if (h) h.classList.remove('on'); }
+function toggleCtxRow(el) { var row = el && el.closest ? el.closest('.ctxp-row') : null; if (row) row.classList.toggle('open'); }
+
+function renderCtxPanel() {
+  var body = document.getElementById('ctxPanelBody'); if (!body) return;
+  var snap = ctxSnapNow();
+  if (!snap || !snap.sections || !snap.sections.length) {
+    body.innerHTML = '<div class="ctxp-sum">暂无可用的上下文快照。</div>';
+    return;
+  }
+  var sysBudget = snap.budget || 20000, sysUsed = snap.sysLen || 0;
+  var histLen = snap.histLen || 0, histBudget = snap.histBudget || 60000;
+  var cut = snap.sections.filter(function (s) { return s.note; });
+  // 汇总图条：系统各区块 + 历史段（历史按自身预算折算后占剩余宽度）
+  var items = snap.sections.filter(function (s) { return s.len > 0; });
+  var raw = items.map(function (s) { return sysBudget ? (s.len / sysBudget * 100) : 0; });
+  var sum = raw.reduce(function (a, c) { return a + c; }, 0);
+  var scale = sum > 100 ? (100 / sum) : 1;
+  var bar = items.map(function (s, i) {
+    return '<div class="ctx-seg" style="width:' + (raw[i] * scale).toFixed(3) + '%;background:' + s.color + '"></div>';
+  }).join('');
+  var html = '';
+  html += '<div class="ctxp-bar">' + bar + '</div>';
+  html += '<div class="ctxp-sum">';
+  html += '<span>系统提示 <b>' + sysUsed + '</b> / ' + sysBudget + ' 字（<b>' + Math.round(sysBudget ? sysUsed / sysBudget * 100 : 0) + '%</b>）</span>';
+  html += '<span>历史对话 <b>' + (snap.turns || 0) + '</b> 条 <b>' + histLen + '</b> / ' + histBudget + ' 字</span>';
+  html += '<span>合计 <b>' + (sysUsed + histLen) + '</b> 字</span>';
+  if (snap.mediaNote) html += '<span>含多媒体消息 <b>' + snap.mediaNote + '</b> 条（按 2000 字/条估算）</span>';
+  if (snap.histDropped) html += '<span class="ctx-over">已丢弃最旧 ' + snap.histDropped + ' 条历史</span>';
+  html += '</div>';
+  if (cut.length) {
+    html += '<div class="ctxp-sum ctx-over">⚠️ 因预算不足已裁剪：' + escapeHtml(cut.map(function (s) { return s.label + '（' + s.note + '）'; }).join('、')) + '</div>';
+  } else {
+    html += '<div class="ctxp-sum">本区块全部完整注入，未发生裁剪。</div>';
+  }
+  // 逐区块明细（点击行可展开实际注入正文）
+  snap.sections.slice().sort(function (a, c) { return a.prio - c.prio || c.len - a.len; }).forEach(function (s) {
+    var pl = ctxPrioLabel(s.prio);
+    var pct = sysBudget ? (s.len / sysBudget * 100) : 0;
+    html += '<div class="ctxp-row">';
+    html += '<div class="ctxp-row-hd" onclick="toggleCtxRow(this)">';
+    html += '<i class="ctxp-dot" style="background:' + s.color + '"></i>';
+    html += '<span>' + escapeHtml(s.label) + '</span>';
+    html += '<span class="ctxp-tag ' + pl.c + '">' + pl.t + '</span>';
+    if (s.note) html += '<span class="ctxp-tag warn">' + escapeHtml(s.note) + '</span>';
+    html += '<span class="ctxp-len">' + s.len + ' 字 · ' + pct.toFixed(1) + '%</span>';
+    html += '</div>';
+    html += '<div class="ctxp-pre">' + (s.text ? escapeHtml(s.text) : '（该区块未注入内容）') + '</div>';
+    html += '</div>';
+  });
+  html += '<div class="ctxp-legend">';
+  html += '<span>裁剪优先级：保护区（永不裁剪）→ 重要 → 普通 → 可裁（优先削减）</span>';
+  html += '</div>';
+  body.innerHTML = html;
+}
+
 
 function botGlyph(o) {
   if (o && o.ic && ('' + o.ic).trim()) return o.ic;
