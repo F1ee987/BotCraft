@@ -604,6 +604,13 @@ body.embed-mode #wsName{font-size:15px}
 .mem-item{position:relative;display:flex;gap:8px;margin-bottom:8px;align-items:flex-start}
 .mem-text{flex:1;width:100%;padding:9px 10px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit;resize:vertical;line-height:1.5;transition:.18s var(--ease)}
 .mem-text:focus{outline:none;border-color:var(--brand);background:transparent}
+/* 记忆条目折叠态：默认只占一行，点开才展开为可编辑全文 */
+.mem-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.mem-view{width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:12.5px;line-height:1.5;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.18s var(--ease)}
+.mem-view:hover{background:var(--fill-hover);border-color:var(--line)}
+.mem-view-empty{color:var(--sub)}
+.mem-fold{align-self:flex-start;border:0;background:none;color:var(--brand);font-size:11px;padding:0 2px;cursor:pointer;font-family:inherit}
+.mem-fold:hover{text-decoration:underline}
 .mem-del{margin-top:2px;width:24px;height:24px;flex-shrink:0;border:none;background:var(--fill);border:1px solid transparent;border-radius:7px;cursor:pointer;color:var(--sub);font-size:13px;transition:.15s var(--ease)}
 .mem-del:hover{color:var(--danger)}
 .mem-add{flex:1;padding:9px 10px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit;transition:.18s var(--ease)}
@@ -2525,8 +2532,19 @@ window.__storage = __storage;
   var _memSaveT = null;
   function _memSaveDebounce(b) { if (_memSaveT) clearTimeout(_memSaveT); _memSaveT = setTimeout(function () { saveBots(); }, 400); }
   var _memFilter = { q: '', type: '全部', sort: 'importance' };
+  // 折叠态：默认只渲染一行只读摘要，点开才换成 textarea（可编辑全文）。
+  // key 用文本本身而不是索引——排序/删除会让索引漂移，展开状态会跑到别的条目上。
+  var _memOpen = {};
+  var _memFocusGi = null;
+  function memKey(it) { return String((it && it.text) || '').slice(0, 80); }
+  function memAnyOpen() { return Object.keys(_memOpen).length > 0; }
+  function memSetAll(items, open) {
+    _memOpen = {};
+    if (open) items.forEach(function (it) { _memOpen[memKey(it)] = true; });
+  }
   function renderMemList(b) {
     var listEl = document.getElementById('memList'); if (!listEl) return;
+    var focusGi = _memFocusGi; _memFocusGi = null;   // 就地消费：条目被筛选掉时不会残留到下一次渲染
     var items = (b.memory && b.memory.items) || [];
     var f = _memFilter;
     var view = items.filter(function (it) {
@@ -2549,14 +2567,45 @@ window.__storage = __storage;
         if (pinned) marks += '<span class="mem-pin" title="常驻记忆：每轮对话都会注入，不受相关性筛选影响">📌</span>';
         if (it.count) marks += '<span class="mem-badge" title="已被注入使用 ' + it.count + ' 次">×' + it.count + '</span>';
         if (it.src === 'manual') marks += '<span class="mem-badge mem-badge-manual" title="手动添加">手动</span>';
-        return '<div class="mem-item"><span class="mem-type mem-type-' + tp + '">' + tp + '</span><textarea class="mem-text" data-mi="' + gi + '" rows="2">' + escapeHtml(it.text) + '</textarea>' + marks + '<button class="mem-del" data-del="' + gi + '" title="删除">✕</button></div>';
+        var open = !!_memOpen[memKey(it)];
+        var body = open
+          ? '<textarea class="mem-text" data-mi="' + gi + '" rows="2">' + escapeHtml(it.text) + '</textarea>'
+          : '<div class="mem-view" data-mi="' + gi + '" title="点击展开并编辑">' + (it.text ? escapeHtml(it.text) : '<span class="mem-view-empty">（空记忆，点击补充）</span>') + '</div>';
+        return '<div class="mem-item"><span class="mem-type mem-type-' + tp + '">' + tp + '</span><div class="mem-main">' + body + (open ? '<button type="button" class="mem-fold" data-fold="' + gi + '">收起 ▴</button>' : '') + '</div>' + marks + '<button class="mem-del" data-del="' + gi + '" title="删除">✕</button></div>';
       }).join('');
     } else {
       html = '<div class="empty-tip">还没有记忆。多聊几句，或手动添加一条。</div>';
     }
     listEl.innerHTML = html;
-    listEl.querySelectorAll('.mem-del').forEach(function (el) { el.onclick = function () { b.memory.items.splice(+el.dataset.del, 1); saveBots(); renderMemList(b); renderMemoryPanelNear(b); }; });
-    listEl.querySelectorAll('.mem-text').forEach(function (el) { el.oninput = function () { var i = +el.dataset.mi; if (b.memory.items[i]) { b.memory.items[i].text = el.value; b.memory.items[i].t = Date.now(); _memSaveDebounce(b); } }; });
+    listEl.querySelectorAll('.mem-del').forEach(function (el) {
+      el.onclick = function () {
+        var it = b.memory.items[+el.dataset.del];
+        if (it) delete _memOpen[memKey(it)];
+        b.memory.items.splice(+el.dataset.del, 1); saveBots(); renderMemList(b); renderMemoryPanelNear(b);
+      };
+    });
+    listEl.querySelectorAll('.mem-text').forEach(function (el) {
+      el.oninput = function () { var i = +el.dataset.mi; if (b.memory.items[i]) { b.memory.items[i].text = el.value; b.memory.items[i].t = Date.now(); _memSaveDebounce(b); } };
+      // 展开态按内容自增高（上限 320px，超出内部滚动），避免还要手动拖右下角
+      el.style.height = 'auto';
+      el.style.height = Math.min(Math.max(el.scrollHeight + 2, 36), 320) + 'px';
+      if (focusGi !== null && focusGi === +el.dataset.mi) {
+        el.focus();
+        var _v = el.value; try { el.selectionStart = el.selectionEnd = _v.length; } catch (e) { }
+      }
+    });
+    listEl.querySelectorAll('.mem-view').forEach(function (el) {
+      el.onclick = function () {
+        var it = items[+el.dataset.mi]; if (!it) return;
+        _memOpen[memKey(it)] = true; _memFocusGi = +el.dataset.mi; renderMemList(b);
+      };
+    });
+    listEl.querySelectorAll('.mem-fold').forEach(function (el) {
+      el.onclick = function () {
+        var it = items[+el.dataset.fold]; if (it) delete _memOpen[memKey(it)];
+        _memFocusGi = null; renderMemList(b);
+      };
+    });
   }
   // 局部刷新状态栏（避免编辑/删除时重绘整个面板导致输入框失焦）
   function renderMemoryPanelNear(b) {
@@ -2599,7 +2648,9 @@ window.__storage = __storage;
       html += '<option value="importance"' + (f.sort === 'importance' ? ' selected' : '') + '>按重要度</option>';
       html += '<option value="new"' + (f.sort === 'new' ? ' selected' : '') + '>按最新</option>';
       html += '<option value="used"' + (f.sort === 'used' ? ' selected' : '') + '>按常用</option>';
-      html += '</select></div>';
+      html += '</select>';
+      html += '<button type="button" class="mem-sort" id="memFoldAll" title="' + (memAnyOpen() ? '把所有记忆收回一行' : '展开所有记忆的全文') + '">' + (memAnyOpen() ? '收起全部' : '展开全部') + '</button>';
+      html += '</div>';
       html += '<div class="mem-chips">';
       html += '<span class="mem-chip' + (f.type === '全部' ? ' on' : '') + '" data-type="全部">全部</span>';
       MEM_TYPES.forEach(function (tp) { html += '<span class="mem-chip mem-chip-' + tp + (f.type === tp ? ' on' : '') + '" data-type="' + tp + '">' + tp + '</span>'; });
@@ -2639,6 +2690,12 @@ window.__storage = __storage;
     if (sc) sc.oninput = function () { f.q = sc.value; renderMemList(b); };
     var so = document.getElementById('memSort');
     if (so) so.onchange = function () { f.sort = so.value; renderMemList(b); };
+    var fa = document.getElementById('memFoldAll');
+    if (fa) fa.onclick = function () {
+      memSetAll(items, !memAnyOpen());   // 按钮文字要跟着变，所以整面板重绘
+      _memFocusGi = null;
+      renderMemoryPanel(b);
+    };
     box.querySelectorAll('.mem-chip').forEach(function (el) { el.onclick = function () { f.type = el.dataset.type; renderMemoryPanel(b); }; });
     // 打开面板时若发现有待提炼的新对话，且距上次更新已超过 1 分钟，自动补一次（省掉手动点「立即更新」）
     if (m.enabled && !m.pending) {
