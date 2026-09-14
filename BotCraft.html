@@ -17,8 +17,9 @@
   --line:rgba(255,255,255,.10);     /* 玻璃上的分隔线用白色低透明，灰线会割裂玻璃层 */
   --txt:#ffffff;                    /* label */
   --sub:rgba(235,235,245,.62);      /* secondaryLabel */
-  --brand:#0a84ff;                  /* systemBlue 深色 */
-  --brand2:#0060df;
+  --brand:#8b5cf6;                  /* violet-500：与 app 图标主色统一（图标渐变 #6366f1→#8b5cf6） */
+  --brand-hi:#a78bfa;               /* violet-400：渐变亮端（logo 等） */
+  --brand2:#6d28d9;                 /* violet-700：渐变深端 */
   --ok:#30d158; --warn:#ff9f0a; --danger:#ff453a;
   --radius:16px;
   --r-sm:10px; --r-md:14px; --r-lg:20px;
@@ -32,7 +33,7 @@
      就是已模糊的父级玻璃，视觉上同样是玻璃叠玻璃，但不会堆出几十上百个合成层。 */
   --glass-bg:rgba(28,28,33,.50);
   --glass-bg-hover:rgba(38,38,44,.56);
-  --glass-bg-active:rgba(10,132,255,.26);
+  --glass-bg-active:rgba(139,92,246,.26);
   --glass-border:rgba(255,255,255,.12);
   --glass-border-hover:rgba(255,255,255,.20);
   --glass-shadow:0 10px 34px rgba(0,0,0,.46);
@@ -57,7 +58,7 @@
   --log-bg:rgba(22,22,26,.62); --log-head-bg:rgba(22,22,26,.72);
   --log-border:rgba(255,255,255,.13); --log-fg:#f2f2f7;
   --log-item-bg:rgba(255,255,255,.07); --log-item-border:rgba(255,255,255,.10);
-  --log-item-fg:rgba(235,235,245,.62); --log-ms:#5ac8fa; --log-shadow:0 14px 40px rgba(0,0,0,.50);
+  --log-item-fg:rgba(235,235,245,.62); --log-ms:#a78bfa; --log-shadow:0 14px 40px rgba(0,0,0,.50);
   /* Apple 标准进出场缓动 */
   --ease:cubic-bezier(.32,.72,0,1);
 }
@@ -71,15 +72,16 @@
   --line:rgba(0,0,0,.09);           /* 浅色玻璃上的分隔线必须用暗色，否则看不见 */
   --txt:#000000;
   --sub:rgba(60,60,67,.62);
-  --brand:#007aff;                  /* systemBlue light */
-  --brand2:#0062cc;
+  --brand:#7c3aed;                  /* violet-600：浅色底上加深一档，保证文字/图标对比度 */
+  --brand-hi:#8b5cf6;               /* violet-500：浅色主题的亮端也相应加深 */
+  --brand2:#6d28d9;
   --ok:#34c759; --warn:#ff9500; --danger:#ff3b30;
   --fill:rgba(255,255,255,.55);
   --fill-strong:rgba(255,255,255,.78);
   --fill-hover:rgba(255,255,255,.66);
   --glass-bg:rgba(255,255,255,.50);
   --glass-bg-hover:rgba(255,255,255,.60);
-  --glass-bg-active:rgba(0,122,255,.16);
+  --glass-bg-active:rgba(124,58,237,.16);
   --glass-border:rgba(255,255,255,.70);
   --glass-border-hover:rgba(255,255,255,.92);
   --glass-shadow:0 10px 30px rgba(31,41,71,.16);
@@ -95,7 +97,7 @@
   --log-bg:rgba(255,255,255,.62); --log-head-bg:rgba(255,255,255,.72);
   --log-border:rgba(0,0,0,.10); --log-fg:#1c1c1e;
   --log-item-bg:rgba(255,255,255,.52); --log-item-border:rgba(0,0,0,.07);
-  --log-item-fg:rgba(60,60,67,.62); --log-ms:#007aff; --log-shadow:0 14px 40px rgba(31,41,71,.18);
+  --log-item-fg:rgba(60,60,67,.62); --log-ms:#7c3aed; --log-shadow:0 14px 40px rgba(31,41,71,.18);
 }
 /* 浅色主题下浮层的少量定向修正（分层用实色，不再叠渐变与内发光） */
 [data-theme="light"] .topbar{background:var(--glass-bg-hover);border-bottom-color:var(--glass-border);}
@@ -115,10 +117,10 @@
 body::before{
   content:'';position:fixed;inset:-18%;z-index:-1;pointer-events:none;
   background:
-    radial-gradient(44% 40% at 12% 6%, rgba(10,132,255,.42), transparent 64%),
-    radial-gradient(38% 36% at 86% 10%, rgba(191,90,242,.30), transparent 66%),
-    radial-gradient(42% 38% at 76% 86%, rgba(48,209,88,.22), transparent 68%),
-    radial-gradient(36% 34% at 16% 90%, rgba(90,200,250,.26), transparent 68%);
+    radial-gradient(44% 40% at 12% 6%, rgba(139,92,246,.42), transparent 64%),
+    radial-gradient(38% 36% at 86% 10%, rgba(99,102,241,.30), transparent 66%),
+    radial-gradient(42% 38% at 76% 86%, rgba(48,209,88,.20), transparent 68%),
+    radial-gradient(36% 34% at 16% 90%, rgba(167,139,250,.26), transparent 68%);
   animation:lgFlow 30s ease-in-out infinite;
 }
 /* 液体的缓慢流动：只动 transform，走 GPU 合成，不触发重排重绘 */
@@ -168,7 +170,7 @@ input,textarea,select{font-family:inherit}
 .nav a.active{background:var(--brand);color:#fff;border-color:transparent}
 .model-tag{background:var(--fill);padding:4px 10px;border-radius:8px;font-size:12.5px;color:var(--sub);font-weight:500}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:18px;letter-spacing:-.2px;color:var(--txt)}
-.logo .dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(180deg,#3f9cff,#0a84ff);position:relative;overflow:hidden}
+.logo .dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(180deg,var(--brand-hi),var(--brand));position:relative;overflow:hidden}
 .logo .dot::after{content:'';position:absolute;inset:7px;border:2.5px solid rgba(255,255,255,.95);border-radius:6px}
 .nav a{font-size:13.5px;font-weight:590;padding:6px 14px;border-radius:8px;color:var(--sub);background:transparent;border:1px solid transparent;transition:background .18s var(--ease),color .18s var(--ease)}
 .nav{display:flex;gap:4px;margin-left:8px}
@@ -453,7 +455,7 @@ body.embed-mode #wsName{font-size:15px}
 .msg-video{max-width:240px;border-radius:10px;margin-top:6px;display:block}
 .msg{max-width:78%;padding:11px 15px;border-radius:18px;font-size:13.5px;line-height:1.6;word-break:break-word}
 .msg.bot{background:var(--msg-bot-bg);border:1px solid transparent;align-self:flex-start;border-bottom-left-radius:6px;max-width:78%}
-.msg.me{background:linear-gradient(180deg,#0a84ff,#0060df);align-self:flex-end;border-bottom-right-radius:6px;color:#fff}
+.msg.me{background:linear-gradient(180deg,var(--brand),var(--brand2));align-self:flex-end;border-bottom-right-radius:6px;color:#fff}
 .msg .who{font-size:10.5px;color:var(--sub);margin-bottom:4px;font-weight:590}
 .msg pre{background:var(--bg);border-radius:10px;padding:10px;margin:8px 0;overflow-x:auto;font-size:12px;font-family:'SF Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .msg code{background:var(--bg);padding:1px 5px;border-radius:5px;font-size:12px;font-family:'SF Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -661,7 +663,7 @@ body.embed-mode #wsName{font-size:15px}
 .mem-sort:focus{outline:none;border-color:var(--brand)}
 .mem-status{font-size:11.5px;color:var(--sub);line-height:1.7;margin:8px 0;padding:8px 11px;border-radius:10px;background:var(--fill);border:1px solid transparent}
 .mem-status b{color:var(--txt)}
-.mem-badge{font-size:10px;padding:1px 6px;border-radius:980px;background:rgba(10,132,255,.16);color:var(--brand);border:1px solid rgba(10,132,255,.35);flex-shrink:0;align-self:flex-start;margin-top:7px;white-space:nowrap}
+.mem-badge{font-size:10px;padding:1px 6px;border-radius:980px;background:rgba(139,92,246,.16);color:var(--brand);border:1px solid rgba(139,92,246,.35);flex-shrink:0;align-self:flex-start;margin-top:7px;white-space:nowrap}
 .mem-badge-manual{background:rgba(94,92,230,.16);color:#7d7aff;border-color:rgba(94,92,230,.35)}
 .mem-pin{font-size:11px;flex-shrink:0;align-self:flex-start;margin-top:7px;cursor:help}
 /* ============ 品牌档案 ============ */
@@ -729,7 +731,7 @@ body.embed-mode #wsName{font-size:15px}
 .bar-val{font-size:10px;color:var(--sub)}
 .bar-lbl{font-size:10px;color:var(--sub)}
 .line-chart .grid-line{stroke:var(--line);stroke-width:1}
-.line-chart .area{fill:rgba(10,132,255,.15)}
+.line-chart .area{fill:rgba(139,92,246,.15)}
 .line-chart .line{fill:none;stroke:url(#lineGrad);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 .line-chart .dot{fill:var(--brand)}
 .dist-list{display:flex;flex-direction:column;gap:12px}
@@ -770,7 +772,7 @@ body.embed-mode #wsName{font-size:15px}
 ::-webkit-scrollbar-thumb:hover{background:rgba(120,120,128,.75);background-clip:padding-box}
 ::-webkit-scrollbar-track{background:transparent}
 *{-webkit-tap-highlight-color:transparent}
-::selection{background:rgba(10,132,255,.28);color:var(--txt)}
+::selection{background:rgba(139,92,246,.28);color:var(--txt)}
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px}
 input:focus,textarea:focus,select:focus{outline:none}
 /* 表单聚焦：Apple 式蓝色描边（不再叠玻璃投影） */
@@ -816,7 +818,7 @@ body .ws-tab:hover{background:var(--fill)}
 body .side-item.active{background:var(--glass-bg-active) !important;box-shadow:var(--lg-top)}
 body .side-item.active .ic{background:var(--brand)}
 /* 用户气泡：蓝色玻璃，加顶缘高光与柔和蓝投影 */
-body .msg.me{box-shadow:var(--lg-top),0 6px 18px rgba(10,132,255,.26)}
+body .msg.me{box-shadow:var(--lg-top),0 6px 18px rgba(139,92,246,.26)}
 /* 玻璃上的「下沉」层：代码块 / 引用 / 表格头改用半透明黑，
    否则会在玻璃里切出一块实色硬底，破坏液态的连续层次 */
 body .msg pre, body .msg code, body .msg.bot blockquote.md-quote,
@@ -1215,7 +1217,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
     <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:var(--danger);font-size:11.5px;margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
     <div class="field"><label>头像</label>
       <div class="color-pick" id="colors">
-        <div class="c on" style="background:linear-gradient(135deg,#0a84ff,#0060df)" data-c=""></div>
+        <div class="c on" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)" data-c=""></div>
         <div class="c" style="background:linear-gradient(135deg,#30d158,#32ade6)" data-c="📊"></div>
         <div class="c" style="background:linear-gradient(135deg,#ff8b6d,#ff6b9d)" data-c="🎨"></div>
         <div class="c" style="background:linear-gradient(135deg,#f5c542,#ff8b3d)" data-c="✍️"></div>
@@ -2629,7 +2631,7 @@ const ORCH_BY_NAME = {
 };
 
 const SEED_BOTS = [
-  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '', c: 'linear-gradient(135deg,#0a84ff,#0060df)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['产品说明书 v3'], model: 'gpt-4o-mini' },
+  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['产品说明书 v3'], model: 'gpt-4o-mini' },
   { n: '产品文案生成器', d: '根据卖点一键生成小红书/抖音种草文案', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], model: 'gpt-4o-mini' },
   { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#30d158,#32ade6)', tag: '已发布', u: 320, t: '95%', prompt: '你是数据分析师，能解读数据并给出关键结论。', nodes: ORCH_BY_NAME['数据报表分析师'], plugins: ['代码执行器'], knowledges: [], model: 'gpt-4o-mini' },
   { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与发音', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], model: 'gpt-4o-mini' },
@@ -2640,7 +2642,7 @@ const SEED_BOTS = [
 ];
 
 const tpls = [
-  { n: '电商智能客服', d: '支持订单查询、退换货、商品推荐', ic: '🛒', c: 'linear-gradient(135deg,#0a84ff,#0060df)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。', nodes: ORCH_BY_NAME['电商智能客服'] },
+  { n: '电商智能客服', d: '支持订单查询、退换货、商品推荐', ic: '🛒', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。', nodes: ORCH_BY_NAME['电商智能客服'] },
   { n: '知识库问答', d: '基于企业文档的 RAG 检索增强问答', ic: '📚', c: 'linear-gradient(135deg,#30d158,#32ade6)', prompt: '你是企业知识库助手，严格基于提供的文档作答。', nodes: ORCH_BY_NAME['知识库问答'] },
   { n: '短视频脚本生成', d: '输入主题自动产出分镜与台词', ic: '🎬', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', prompt: '你是短视频编导，产出吸睛的分镜脚本与台词。', nodes: ORCH_BY_NAME['短视频脚本生成'] },
   { n: '邮件自动回复', d: '理解邮件意图并草拟专业回复', ic: '📧', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', prompt: '你是邮件助理，草拟得体、专业的邮件回复。', nodes: ORCH_BY_NAME['邮件自动回复'] },
@@ -2693,7 +2695,7 @@ const STYLE_TPLS = [
     style: '用官方正式公文的风格输出：措辞稳妥、站位准确；多用「将/拟/予以/扎实推进」等规范表述；结构清晰、层级分明；客观庄重，不带个人情绪；避免网络化表达。' },
   { id: 'literary', n: '文艺抒情风', d: '意象丰富、细腻有画面感', ic: '🪶', c: 'linear-gradient(135deg,#b39ddb,#7e57c2)',
     style: '用文艺抒情的风格输出：多用意象、通感与比喻，画面感强；节奏舒缓、留白适当；情绪细腻含蓄；避免直白说教，让文字有呼吸感。' },
-  { id: 'sales', n: '电商卖货风', d: '痛点前置、利益点突出、强转化', ic: '🛒', c: 'linear-gradient(135deg,#0a84ff,#0060df)',
+  { id: 'sales', n: '电商卖货风', d: '痛点前置、利益点突出、强转化', ic: '🛒', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
     style: '用电商卖货文案的风格输出：开头直击痛点/场景；中段讲清卖点与使用利益（而非参数）；用「限时/专属/手慢无」等稀缺感促单；结尾强引导行动（下单/加购）；语气热情有煽动性。' },
   { id: 'wechat', n: '微信公众号风', d: '标题党友好、叙事强、有共鸣', ic: '📣', c: 'linear-gradient(135deg,#ffb74d,#ff7043)',
     style: '用微信公众号文章的风格输出：标题有悬念或冲突感；开篇用故事/场景代入；正文叙事性强、有案例与情绪起伏；穿插小标题与金句；结尾升华并引导转发/关注。' },
@@ -5153,7 +5155,7 @@ function renderKbPanel(b) {
       <span>${p.ic} ${escapeHtml(p.n)}</span>
       <span class="kb-toggle">${b.plugins.includes(p.n) ? '已启用' : '点击启用'}</span>
     </label>`).join('');
-    ph += `<label class="kb-row" data-web="1" style="border:1px dashed var(--brand);background:rgba(10,132,255,.08)">
+    ph += `<label class="kb-row" data-web="1" style="border:1px dashed var(--brand);background:rgba(139,92,246,.08)">
       <input type="checkbox" ${b.webSearch ? 'checked' : ''}>
       <span>🌐 联网检索</span>
       <span class="kb-toggle">${b.webSearch ? '已开启' : '点击开启'}</span>
@@ -5406,7 +5408,7 @@ function submitCreate() {
   if (desc.length > 120) { toast('功能介绍不超过 120 字', 'err'); return; }
   const colorEl = document.querySelector('.color-pick .c.on');
   const icon = colorEl ? colorEl.dataset.c : '';
-  const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,#0a84ff,#0060df)';
+  const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,#8b5cf6,#6d28d9)';
   const finalName = name || (tpl ? tpl.n : '');
   const prompt = tpl ? (tpl.prompt || SAMPLE_PROMPT) : SAMPLE_PROMPT;
   const base = {
@@ -6305,7 +6307,7 @@ function renderLineChart() {
   const labels = [];
   for (let i = 0; i < data.length; i++) { const d = new Date(today); d.setDate(d.getDate() - (data.length - 1 - i)); labels.push((d.getMonth() + 1) + '/' + d.getDate()); }
   let html = `<defs><linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%" stop-color="#0a84ff"/><stop offset="100%" stop-color="#0060df"/></linearGradient></defs>`;
+    <stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#6d28d9"/></linearGradient></defs>`;
   // 网格线
   for (let g = 0; g <= 3; g++) {
     const y = pad.t + (ih / 3) * g;
@@ -6423,7 +6425,7 @@ function drawDataChart() {
   const bw = iw / keys.length;
   keys.forEach(function (k, i) {
     const v = groups[k]; const h = (v / max) * ih; const x = pad.l + i * bw + bw * 0.15; const w = bw * 0.7; const y = pad.t + ih - h;
-    html += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="#0a84ff"/>';
+    html += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="#8b5cf6"/>';
     html += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" font-size="10" fill="var(--txt)" text-anchor="middle">' + v + '</text>';
     html += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (H - 42) + '" font-size="10" fill="var(--sub)" text-anchor="middle">' + escapeHtml(String(k).slice(0, 8)) + '</text>';
   });
