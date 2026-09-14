@@ -185,6 +185,8 @@ input,textarea,select{font-family:inherit}
 }
 .btn:hover{background:var(--fill-hover)}
 .btn:active{background:var(--fill-strong);transform:scale(.97)}
+.btn:disabled{opacity:.5;cursor:default;pointer-events:none}
+.btn[disabled]{opacity:.5;cursor:default;pointer-events:none}  /* 属性选择器兜住 JS 里写 disabled 的情况 */
 .btn-ghost{background:transparent;color:var(--brand);border:1px solid transparent}
 .btn-ghost:hover{background:var(--fill)}
 .btn-primary{background:var(--brand);color:#fff;border:1px solid transparent}
@@ -448,6 +450,11 @@ body.embed-mode #wsName{font-size:15px}
 .audio-chip .x{width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:0;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0}
 .msg.me .msg-audio{margin-top:6px;display:block}
 .msg.bot .msg-audio{margin-top:6px;display:block}
+.msg-media-btn{margin-top:6px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12px;cursor:pointer;transition:background .16s var(--ease),border-color .16s var(--ease)}
+.msg-media-btn:hover{background:var(--fill-hover);border-color:var(--brand)}
+.msg-fold{margin-top:8px;padding-top:6px;border-top:1px dashed var(--line);color:var(--sub);font-size:12px}
+.msg-fold-btn{border:0;background:none;color:var(--brand);font-size:12px;cursor:pointer;padding:0}
+.msg-fold-btn:hover{text-decoration:underline}
 .video-preview{display:flex;gap:8px;flex-wrap:wrap}
 .video-preview:empty{display:none}
 .video-chip{position:relative;width:84px;height:84px;border-radius:10px;overflow:hidden;border:1px solid var(--glass-border);background:#000;flex-shrink:0}
@@ -848,7 +855,8 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .ctx-over{color:var(--danger);font-weight:600}
 /* 压缩成功是改善，不是警告 —— 刻意用 ok 色而非 danger 色，避免与「已裁剪」混淆 */
 .ctx-ok{color:var(--ok);font-weight:600}
-.ctxp-comp{display:inline-block;margin-left:6px;padding:0 6px;border-radius:6px;font-size:10.5px;font-weight:600;color:var(--ok);background:var(--fill-strong)}
+.ctxp-comp{display:inline-block;padding:0 6px;border-radius:6px;font-size:10.5px;font-weight:600;color:var(--ok);background:var(--fill-strong)}  /* 不给 margin-left：父容器 .ctxp-tools 已有 gap，叠加会让间距跟别处不一致 */
+.ctxp-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}  /* 不设 margin-bottom：.ctxp-body 的 gap 已负责行距，叠加会变成两倍 */
 .ctx-band{position:relative;display:flex;height:6px;width:100%;border-radius:999px;background:var(--fill);overflow:hidden}
 .ctx-seg{height:100%;transition:width .25s var(--ease)}
 .ctx-seg+.ctx-seg{box-shadow:inset 1px 0 0 rgba(0,0,0,.3)}
@@ -875,7 +883,6 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .ctxp-tag.warn{color:var(--warn)}
 .ctxp-tag.p0{color:var(--ok)}
 .ctxp-tag.ok{color:var(--ok)}
-.ctxp-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .ctxp-hint{font-size:11.5px;color:var(--sub)}
 .ctxp-pre{display:none;margin-top:8px;padding:9px 10px;border-radius:8px;background:var(--sunken);font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.6;color:var(--sub);white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto}
 .ctxp-row.open .ctxp-pre{display:block}
@@ -4757,8 +4764,12 @@ function ctxCompressNow() {
   if (!api || !api.compress) { if (window.toast) toast('压缩能力不可用', 'warn'); return; }
   var b = getBot(currentId);
   if (!b) return;
+  if (window._ctxCompressing) return;        // 防连点：压缩本身可能耗时数十秒
+  window._ctxCompressing = true;
+  renderCtxPanel();                          // 立刻切到「压缩中…」置灰态
   if (window.toast) toast('正在压缩超长区块…', '');
   Promise.resolve(api.compress(b)).then(function (r) {
+    window._ctxCompressing = false;
     window._ctxPrevAt = 0;                 // 让下一次预演真正重算
     renderCtxPanel(); renderCtxBar(b);
     if (!r || !r.done) {
@@ -4769,12 +4780,21 @@ function ctxCompressNow() {
     var saved = (r.items || []).reduce(function (a, x) { return a + Math.max(0, x.src - x.out); }, 0);
     if (window.toast) toast('🗜 已压缩 ' + r.done + ' 个区块，省约 ' + saved + ' 字', 'ok');
   })['catch'](function (e) {
+    window._ctxCompressing = false;
+    renderCtxPanel();
     if (window.toast) toast('压缩失败：' + ((e && e.message) || e), 'err');
   });
 }
 
 function renderCtxPanel() {
   var body = document.getElementById('ctxPanelBody'); if (!body) return;
+  // 每次重绘都会整体重建 innerHTML，于是滚动位置和「已展开的行」都会丢。
+  // 表现是：用户翻到面板中部看某个区块，一点「立即压缩」就跳回顶部、展开的正文也收起。
+  // 这里先记下这两个状态，渲染完再还原 —— 展开态用区块 key（data-k）匹配，不靠文本顺序。
+  var keepTop = body.scrollTop;
+  var openKeys = [];
+  var _open = body.querySelectorAll('.ctxp-row.open');
+  for (var _i = 0; _i < _open.length; _i++) openKeys.push(_open[_i].getAttribute('data-k'));
   var snap = ctxSnapNow();
   if (!snap || !snap.sections || !snap.sections.length) {
     body.innerHTML = '<div class="ctxp-sum">暂无可用的上下文快照。</div>';
@@ -4794,10 +4814,16 @@ function renderCtxPanel() {
     return '<div class="ctx-seg" style="width:' + (raw[i] * scale).toFixed(3) + '%;background:' + s.color + '"></div>';
   }).join('');
   var html = '';
+  // 压缩是异步的，期间把按钮置灰：否则连点会叠加多次压缩与多个提示。
+  // 状态放在 window._ctxCompressing 上而不是 DOM 上 —— 因为这里每次都会重建 innerHTML，
+  // 直接改按钮属性会在下一次重绘时丢掉。
+  var busy = !!window._ctxCompressing;
   html += '<div class="ctxp-tools">';
-  html += '<button class="btn btn-ghost btn-sm" onclick="ctxCompressNow()" title="立即为超长区块生成压缩摘要。压缩结果会缓存，之后发送时自动优先使用压缩版（而非截断）">🗜 立即压缩</button>';
+  html += '<button class="btn btn-ghost btn-sm" id="ctxCompressBtn"' + (busy ? ' disabled' : '') +
+    ' onclick="ctxCompressNow()" title="立即为超长区块生成压缩摘要。压缩结果会缓存，之后发送时自动优先使用压缩版（而非截断）">' +
+    (busy ? '🗜 压缩中…' : '🗜 立即压缩') + '</button>';
   if (comp.length) html += '<span class="ctxp-comp">🗜 已压缩 ' + comp.length + ' 个区块，省 ' + (snap.compressedSaved || 0) + ' 字</span>';
-  html += '<span class="ctxp-hint">压缩只在区块超出配额时发生，且只压一次</span>';
+  html += '<span class="ctxp-hint">压缩只在区块超出配额时发生；结果按内容缓存，同一内容不会重复压</span>';
   html += '</div>';
   html += '<div class="ctxp-bar">' + bar + '</div>';
   html += '<div class="ctxp-sum">';
@@ -4819,21 +4845,36 @@ function renderCtxPanel() {
   snap.sections.slice().sort(function (a, c) { return a.prio - c.prio || c.len - a.len; }).forEach(function (s) {
     var pl = ctxPrioLabel(s.prio);
     var pct = sysBudget ? (s.len / sysBudget * 100) : 0;
-    html += '<div class="ctxp-row">';
+    html += '<div class="ctxp-row" data-k="' + escapeAttr(s.k) + '">';
     html += '<div class="ctxp-row-hd" onclick="toggleCtxRow(this)">';
     html += '<i class="ctxp-dot" style="background:' + s.color + '"></i>';
     html += '<span>' + escapeHtml(s.label) + '</span>';
     html += '<span class="ctxp-tag ' + pl.c + '">' + pl.t + '</span>';
     if (s.note) html += '<span class="ctxp-tag ' + (s.trimmed ? 'warn' : 'ok') + '">' + escapeHtml(s.note) + '</span>';
-    html += '<span class="ctxp-len">' + s.len + ' 字 · ' + pct.toFixed(1) + '%</span>';
+    // 发生过压缩/裁剪的区块显示「原始 → 实际」，否则只显示实际长度。
+    // 之前只给实际长度，用户根本看不出这个区块被压掉了多少，等于白压。
+    var lenTxt = (s.compressed || s.trimmed)
+      ? (s.orig + ' → ' + s.len + ' 字')
+      : (s.len + ' 字');
+    html += '<span class="ctxp-len">' + lenTxt + ' · ' + pct.toFixed(1) + '%</span>';
     html += '</div>';
     html += '<div class="ctxp-pre">' + (s.text ? escapeHtml(s.text) : '（该区块未注入内容）') + '</div>';
     html += '</div>';
   });
   html += '<div class="ctxp-legend">';
+  html += '<span>🗜 压缩 = 换成要点摘要（信息保留，是改善）</span>';
+  html += '<span>⚠️ 裁剪 = 真的丢弃内容（有损失）</span>';
   html += '<span>裁剪优先级：保护区（永不裁剪）→ 重要 → 普通 → 可裁（优先削减）</span>';
   html += '</div>';
   body.innerHTML = html;
+  // 还原展开态与滚动位置（顺序不能反：先展开行，再恢复滚动，否则行高变化会让位置偏掉）
+  if (openKeys.length) {
+    var rows = body.querySelectorAll('.ctxp-row');
+    for (var _j = 0; _j < rows.length; _j++) {
+      if (openKeys.indexOf(rows[_j].getAttribute('data-k')) >= 0) rows[_j].classList.add('open');
+    }
+  }
+  body.scrollTop = keepTop;
 }
 
 
@@ -5012,6 +5053,40 @@ function scrollChatToBottom(force) {
 }
 
 function _body(who,inner){return '<div class="msg-body"><div class="who">'+who+'</div>'+inner+'</div>';}
+// 内联媒体（data:URI）超过该长度就懒加载：base64 音频/图片直接写进 src 会让浏览器在解析
+// innerHTML 时就开始解码，实测一条 268,884 字符的 base64 音频足以让渲染线程停摆（界面卡死）。
+var LAZY_MEDIA_MIN = 20000;
+var MSG_FOLD_LEN = 3000; // 单条文本超过该长度先折叠，展开时才跑 renderMarkdown 全量
+function _lazyMedia(box, el, src, label) {
+  src = src || '';
+  if (String(src).length < LAZY_MEDIA_MIN) return false;
+  el.setAttribute('data-src', src);
+  var btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'msg-media-btn';
+  btn.textContent = '▶ ' + label;
+  btn.onclick = function () { el.src = el.getAttribute('data-src'); el.style.display = ''; btn.remove(); };
+  el.style.display = 'none';
+  box.appendChild(btn); box.appendChild(el);
+  return true;
+}
+function _foldHtml(i, len) {
+  return '<div class="msg-fold">… 已折叠，<button type="button" class="msg-fold-btn" data-mi="' + i + '">展开全文（共 ' + len + ' 字）</button></div>';
+}
+// 把模板里写在 data-src 上的媒体按需激活：小的直接显示，大的先给按钮
+function hydrateLazyMedia(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-src]').forEach(function (el) {
+    var s = el.getAttribute('data-src') || '';
+    if (!s) return;
+    if (s.length < LAZY_MEDIA_MIN) { el.src = s; return; }
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'msg-media-btn';
+    btn.textContent = '▶ ' + (el.tagName === 'IMG' ? '查看图片' : (el.tagName === 'AUDIO' ? '播放音频' : '播放视频'));
+    btn.onclick = function () { el.src = s; el.style.display = ''; btn.remove(); };
+    el.style.display = 'none';
+    el.parentNode.insertBefore(btn, el);
+  });
+}
 function appendMsg(b, m) {
   const chat = document.getElementById('chat'); if (!chat) return;
   const div = document.createElement('div');
@@ -5026,15 +5101,17 @@ function appendMsg(b, m) {
     }
     if (m.audio && m.audio.length) {
       m.audio.forEach(function (src) {
-        var au = document.createElement('audio'); au.className = 'msg-audio'; au.src = src; au.controls = true;
-        div.appendChild(au);
+        var au = document.createElement('audio'); au.className = 'msg-audio'; au.controls = true;
+        if (_lazyMedia(div, au, src, '播放音频')) return;
+        au.src = src; div.appendChild(au);
       });
     }
     if (m.videos && m.videos.length) {
       m.videos.forEach(function (item) {
-        var vv = document.createElement('video'); vv.className = 'msg-video'; vv.src = item.url; vv.controls = true; vv.muted = true; vv.playsInline = true;
-        if (m.frames && m.frames.length) vv.poster = m.frames[0];
-        div.appendChild(vv);
+        var vv = document.createElement('video'); vv.className = 'msg-video'; vv.controls = true; vv.muted = true; vv.playsInline = true;
+        if (m.frames && m.frames.length && String(m.frames[0]).length < LAZY_MEDIA_MIN) vv.poster = m.frames[0];
+        if (_lazyMedia(div, vv, item && item.url, '播放视频')) return;
+        vv.src = (item && item.url) || ''; div.appendChild(vv);
       });
     }
   } else {
@@ -5050,13 +5127,33 @@ function renderHistory(b) {
   if (!b.history || b.history.length === 0) {
     chat.innerHTML = `<div class="msg bot">${_body(escapeHtml(b.n), renderMarkdown(b.d || '你好，我是你的助手，开始对话吧～'))}</div>`;
   } else {
-    chat.innerHTML = b.history.map(m =>
-      m.role === 'me'
-        ? `<div class="msg me">${escapeHtml(m.text)}${ (m.images && m.images.length) ? m.images.map(function (s) { return '<img class="msg-img" src="' + s + '" alt="图片">'; }).join('') : '' }${ (m.audio && m.audio.length) ? m.audio.map(function (s) { return '<audio class="msg-audio" src="' + s + '" controls></audio>'; }).join('') : '' }${ (m.videos && m.videos.length) ? m.videos.map(function (it) { return '<video class="msg-video" src="' + (it.url || '') + '" controls muted playsinline' + ((m.frames && m.frames.length) ? ' poster="' + m.frames[0] + '"' : '') + '></video>'; }).join('') : '' }</div>`
-        : `<div class="msg bot">${_body(escapeHtml(m.who || b.n), renderMarkdown(m.text))}</div>`
-    ).join('');
+    chat.innerHTML = b.history.map(function (m, i) {
+      if (m.role === 'me') {
+        var mt = m.text || '';
+        var mh = mt.length > MSG_FOLD_LEN ? escapeHtml(mt.slice(0, MSG_FOLD_LEN)) + _foldHtml(i, mt.length) : escapeHtml(mt);
+        return '<div class="msg me">' + mh
+          + ((m.images && m.images.length) ? m.images.map(function (s) { return '<img class="msg-img" data-src="' + escapeAttr(s) + '" alt="图片">'; }).join('') : '')
+          + ((m.audio && m.audio.length) ? m.audio.map(function (s) { return '<audio class="msg-audio" data-src="' + escapeAttr(s) + '" controls preload="none"></audio>'; }).join('') : '')
+          + ((m.videos && m.videos.length) ? m.videos.map(function (it) { return '<video class="msg-video" data-src="' + escapeAttr((it && it.url) || '') + '" controls muted playsinline preload="none"' + ((m.frames && m.frames.length && String(m.frames[0]).length < LAZY_MEDIA_MIN) ? ' poster="' + escapeAttr(m.frames[0]) + '"' : '') + '></video>'; }).join('') : '')
+          + '</div>';
+      }
+      var bt = m.text || '';
+      var bh = bt.length > MSG_FOLD_LEN ? renderMarkdown(bt.slice(0, MSG_FOLD_LEN)) + _foldHtml(i, bt.length) : renderMarkdown(bt);
+      return '<div class="msg bot">' + _body(escapeHtml(m.who || b.n), bh) + '</div>';
+    }).join('');
   }
   chat.querySelectorAll('.typing').forEach(t => t.remove());
+  hydrateLazyMedia(chat);
+  // 折叠展开：用 onclick 赋值（非 addEventListener），重绘不会累积监听
+  chat.onclick = function (e) {
+    var fb = e.target && e.target.closest ? e.target.closest('.msg-fold-btn') : null;
+    if (!fb) return;
+    var mi = +fb.dataset.mi, msg = b.history && b.history[mi]; if (!msg) return;
+    var box = fb.parentNode, span = document.createElement('div');
+    span.innerHTML = (msg.role === 'me') ? escapeHtml(msg.text || '') : renderMarkdown(msg.text || '');
+    box.parentNode.replaceChild(span, box);
+    attachCopyBtns();
+  };
   attachCopyBtns(); renderQuickBar();
   scrollChatToBottom(true); // 整段重绘后强制落到底部（多帧兜底，避免异步排版导致"弹回顶部"）
 }
