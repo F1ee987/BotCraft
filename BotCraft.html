@@ -1796,9 +1796,30 @@ window.__storage = __storage;
       if (window.toast) toast('记忆自动更新失败：' + (e && e.message || e), 'err');
     });
   }
+  // 记忆面板是否可见。
+  // 不能用「哪个 tab 处于 active」来判断：「记忆」属于次要 tab（藏在「更多」菜单里），
+  // switchWsTab 会把 active 类加在 #wsTabMore 上——那是个没有 data-tab 的「更多」按钮，
+  // 于是 querySelector('.ws-tab.active').dataset.tab 恒不等于 'memory'，
+  // 导致后台所有异步刷新（AI 提炼完成 / 本地规则抽取 / 更新中状态）全部静默失效，
+  // 用户必须切走再切回才能看到新记忆（切回时 switchWsTab 会无条件重绘一次）。
+  // 直接判断面板自身的可见性最可靠，且不会随 tab 结构变动再次失灵。
+  function memPanelVisible() {
+    var el = document.getElementById('wsMemoryBody');
+    if (!el) return false;
+    if (el.style.display === 'none') return false;
+    if (el.getClientRects && el.getClientRects().length === 0) return false;
+    return true;
+  }
+  var _memDirty = false;   // 输入期间被跳过的刷新标记，等失焦后补一次
   function renderMemoryPanelIfOpen(b) {
-    var act = document.querySelector('.ws-tab.active');
-    if (act && act.dataset.tab === 'memory') renderMemoryPanel(b);
+    if (!memPanelVisible()) { _memDirty = false; return; }
+    var el = document.getElementById('wsMemoryBody');
+    var ae = document.activeElement;
+    // 用户正在面板内打字（搜索框 / 编辑记忆原文）时不整体重绘，
+    // 否则光标位置和未提交的输入会被打断；置脏标记，失焦后补上。
+    if (ae && el.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || '')) { _memDirty = true; return; }
+    _memDirty = false;
+    renderMemoryPanel(b);
   }
   // ==================== 本地规则记忆抽取（不依赖 API Key）====================
   // 演示模式 / 无 Key 时，仍可从用户说的话里用规则沉淀长期事实，无需手动点更新。
@@ -1988,6 +2009,14 @@ window.__storage = __storage;
     MEM_TYPES.forEach(function (tp) { html += '<option value="' + tp + '">' + tp + '</option>'; });
     html += '</select><input id="memAddInput" class="mem-add" placeholder="手动添加一条记忆，如：用户偏好简洁的回答"><button class="btn btn-ghost btn-sm" onclick="addMemoryItem()">＋ 添加</button></div>';
     box.innerHTML = html;
+    // 输入期间被跳过的后台刷新，失焦后补一次（焦点仍留在面板内的输入控件上则继续等）
+    box.onfocusout = function () {
+      setTimeout(function () {
+        var ae2 = document.activeElement;
+        if (ae2 && box.contains(ae2) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae2.tagName || '')) return;
+        if (_memDirty) { _memDirty = false; renderMemoryPanelIfOpen(b); }
+      }, 0);
+    };
     var en = document.getElementById('memEnable');
     if (en) en.onchange = function () { b.memory.enabled = en.checked; saveBots(); renderMemoryPanel(b); renderCtxBar(b); if (en.checked) scheduleMemoryUpdate(b); };
     var sc = document.getElementById('memSearch');
