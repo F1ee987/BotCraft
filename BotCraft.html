@@ -35,20 +35,21 @@
   --glass-bg:rgba(28,28,33,.50);
   --glass-bg-hover:rgba(38,38,44,.56);
   --glass-bg-active:rgba(139,92,246,.26);
-  --glass-border:rgba(255,255,255,.12);
-  --glass-border-hover:rgba(255,255,255,.20);
+  --glass-border:rgba(255,255,255,.17);
+  --glass-border-hover:rgba(255,255,255,.30);
   --glass-shadow:0 10px 34px rgba(0,0,0,.46);
   --glass-blur:26px;
   --glass-sat:190%;
   --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
   --glass-ridge:none;
-  /* 液态玻璃四件套：顶缘高光 + 底缘暗线 + 外悬浮阴影 + 内描边 */
-  --lg-top:inset 0 1px 0 rgba(255,255,255,.20);
-  --lg-bottom:inset 0 -1px 0 rgba(0,0,0,.22);
-  --lg-float:0 10px 30px rgba(0,0,0,.40);
-  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.13),rgba(255,255,255,0) 46%);
+  /* 液态玻璃四件套（玻璃珠化）：顶缘亮线 + 顶部内泛光（大片高光斑）、
+     底缘暗线 + 底部折射回光、双层外投影（近实远虚）、对角高光渐变 */
+  --lg-top:inset 0 1px 0 rgba(255,255,255,.28),inset 0 10px 18px -8px rgba(255,255,255,.16);
+  --lg-bottom:inset 0 -1px 0 rgba(0,0,0,.25),inset 0 -8px 14px -8px rgba(255,255,255,.07);
+  --lg-float:0 12px 34px rgba(0,0,0,.42),0 2px 8px rgba(0,0,0,.28);
+  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.20),rgba(255,255,255,.05) 38%,rgba(255,255,255,0) 62%);
   --lg-shadow:var(--lg-top),var(--lg-bottom),var(--lg-float);
-  --lg-float-hover:0 16px 38px rgba(0,0,0,.46);
+  --lg-float-hover:0 18px 42px rgba(0,0,0,.46),0 4px 12px rgba(0,0,0,.28);
   /* 内嵌凹陷底（代码块 / 引用 / 表格头）：玻璃上的「下沉」层，用半透明黑而非实色，才能透出玻璃 */
   --sunken:rgba(0,0,0,.24);
   --chip-bg:var(--fill);
@@ -88,12 +89,12 @@
   --glass-border-hover:rgba(255,255,255,.92);
   --glass-shadow:0 10px 30px rgba(31,41,71,.16);
   --glass-ridge:none;
-  --lg-top:inset 0 1px 0 rgba(255,255,255,.95);
-  --lg-bottom:inset 0 -1px 0 rgba(31,41,71,.07);
-  --lg-float:0 10px 28px rgba(31,41,71,.13);
-  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.60),rgba(255,255,255,0) 46%);
+  --lg-top:inset 0 1px 0 rgba(255,255,255,.95),inset 0 10px 20px -10px rgba(255,255,255,.65);
+  --lg-bottom:inset 0 -1px 0 rgba(31,41,71,.07),inset 0 -8px 16px -10px rgba(255,255,255,.55);
+  --lg-float:0 12px 32px rgba(31,41,71,.16),0 2px 8px rgba(31,41,71,.10);
+  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.80),rgba(255,255,255,.28) 42%,rgba(255,255,255,.06) 62%);
   --lg-shadow:var(--lg-top),var(--lg-bottom),var(--lg-float);
-  --lg-float-hover:0 16px 34px rgba(31,41,71,.18);
+  --lg-float-hover:0 18px 38px rgba(31,41,71,.22),0 4px 12px rgba(31,41,71,.10);
   --sunken:rgba(120,120,128,.13);
   --msg-bot-bg:rgba(255,255,255,.52);
   --log-bg:rgba(255,255,255,.62); --log-head-bg:rgba(255,255,255,.72);
