@@ -406,7 +406,7 @@ body.embed-mode #wsName{font-size:15px}
 .quick-bar{padding:10px 18px 0;display:flex;gap:8px;flex-wrap:wrap;flex:0 0 auto;min-height:43px;align-content:flex-start}  /* 固定最小高度：快捷词数量/换行变化时不再顶动聊天区 */
 .ctx-bar{padding:6px 18px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--sub);display:flex;gap:10px;flex-wrap:wrap;flex:0 0 auto}
 /* 快速模式开关：聊天框输入栏上方独立一行 */
-.fast-bar{padding:9px 18px;border-top:1px solid var(--line);background:var(--panel2);display:flex;align-items:center;flex:0 0 auto}
+.fast-bar{padding:9px 18px;border-top:1px solid var(--line);background:var(--panel2);display:flex;align-items:center;gap:22px;flex-wrap:wrap;flex:0 0 auto}
 .fast-toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:13px;color:var(--txt);font-weight:600}
 .fast-ico{font-size:14px}
 .fast-txt{letter-spacing:.5px}
@@ -846,6 +846,9 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .ctx-total{font-weight:600;color:var(--txt);font-variant-numeric:tabular-nums}
 .ctx-ratio{font-variant-numeric:tabular-nums}
 .ctx-over{color:var(--danger);font-weight:600}
+/* 压缩成功是改善，不是警告 —— 刻意用 ok 色而非 danger 色，避免与「已裁剪」混淆 */
+.ctx-ok{color:var(--ok);font-weight:600}
+.ctxp-comp{display:inline-block;margin-left:6px;padding:0 6px;border-radius:6px;font-size:10.5px;font-weight:600;color:var(--ok);background:var(--fill-strong)}
 .ctx-band{position:relative;display:flex;height:6px;width:100%;border-radius:999px;background:var(--fill);overflow:hidden}
 .ctx-seg{height:100%;transition:width .25s var(--ease)}
 .ctx-seg+.ctx-seg{box-shadow:inset 1px 0 0 rgba(0,0,0,.3)}
@@ -871,6 +874,9 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .ctxp-tag{font-size:10.5px;border-radius:6px;padding:2px 7px;background:var(--fill);color:var(--sub)}
 .ctxp-tag.warn{color:var(--warn)}
 .ctxp-tag.p0{color:var(--ok)}
+.ctxp-tag.ok{color:var(--ok)}
+.ctxp-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.ctxp-hint{font-size:11.5px;color:var(--sub)}
 .ctxp-pre{display:none;margin-top:8px;padding:9px 10px;border-radius:8px;background:var(--sunken);font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.6;color:var(--sub);white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto}
 .ctxp-row.open .ctxp-pre{display:block}
 .ctxp-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--sub)}
@@ -1154,6 +1160,11 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
             <span class="fast-ico">⚡</span>
             <span class="fast-txt">快速模式</span>
             <span class="switch"><input type="checkbox" id="fastToggle" onchange="BotCraftAI.updateConfig({ fastReply: this.checked })"><span class="slider"></span></span>
+          </label>
+          <label class="fast-toggle" title="上下文超出预算时，把超长区块压成要点摘要再发送，而不是直接截断丢弃。压缩结果会缓存，同一份内容只压一次；关闭后完全回退到旧的截断行为，不产生任何额外调用">
+            <span class="fast-ico">🗜</span>
+            <span class="fast-txt">超限压缩</span>
+            <span class="switch"><input type="checkbox" id="autoCompressToggle" onchange="BotCraftAI.updateConfig({ autoCompress: this.checked })"><span class="slider"></span></span>
           </label>
         </div>
         <div class="chat-input">
@@ -1509,6 +1520,9 @@ window.__storage = __storage;
   const DEFAULT_CFG = {
     provider: 'openai', baseURL: PROVIDERS.openai.base, apiKey: '', model: 'gpt-4o-mini',
     temperature: 0.7, maxTokens: 2048, directCall: true, proxyURL: '', fallback: 'smart', fastReply: false,
+    // 上下文超预算时用压缩摘要代替截断（默认开）。压缩有缓存，同一份内容只压一次；
+    // 若关闭，则完全回退到旧行为（超限直接截断/丢弃，不产生任何额外调用）
+    autoCompress: true,
     imageBaseURL: '', imageAPIKey: '', imageModel: 'dall-e-3', imageSize: '1024x1024',
   };
   let cfg = loadConfig();
@@ -1633,6 +1647,243 @@ window.__storage = __storage;
   var CTX_META = {};
   CTX_SECTIONS.forEach(function (s) { CTX_META[s.k] = s; });
 
+  // ==================== 超限自动压缩（用压缩代替截断） ====================
+  // 旧行为：区块装不下就「截断 → 整块丢弃」，信息直接消失（知识库正文、写作风格首当其冲）。
+  // 新行为：装不下时改用该区块的**压缩摘要** —— 字数降下来了，要点还在。
+  //
+  // 关键约束：composeSystemPrompt / packContextSections 必须保持**同步**
+  // （消息要在同一帧内拼好才能发），而模型压缩是异步的。
+  // 所以采用「预压缩 + 缓存 + 同步取用」三段式：
+  //   ① chat() 发送前 await prepareCtxCompression() —— 算出谁要压、压到多长，异步压好写进缓存；
+  //   ② composeSystemPrompt（同步）按**同一份配额口径**算出 key，从缓存取压缩版挂到区块上；
+  //   ③ packContextSections 优先用压缩版，装不下才对压缩版截断。
+  // 任何环节失败（无 Key / 超时 / 报错）都只是「这轮不压缩」，回退到原有截断逻辑，绝不影响发送。
+  var CTX_COMPRESS_MIN = 400;      // 配额低于此值就不压了（压出来也没多少意义，截断更快）
+  var CTX_COMPRESS_RATIO = 1.6;    // 原长 / 配额 达到此比例才值得压缩
+  var CTX_COMPRESS_TIMEOUT = 8000; // 单块压缩超时（毫秒），超时放弃本轮压缩
+  var CTX_COMP_SLACK = 32;         // 压缩目标比配额再收一点，给拼接与提示留余量
+  var CTX_CACHE_MAX = 24;          // 缓存条数上限
+  var CTX_CACHE_CHARS = 40000;     // 缓存总字符上限
+  var CTX_CACHE_BUCKET = 200;      // 目标长度按此粒度分桶，避免目标微变导致缓存全失效
+
+  // 稳定短哈希（djb2 → base36）：只作缓存 key，不需要抗碰撞
+  function ctxHash(s) {
+    var h = 5381, i = s.length;
+    while (i) h = ((h * 33) ^ s.charCodeAt(--i)) >>> 0;
+    return h.toString(36);
+  }
+  // 压缩目标长度：纯函数，保证 prepare 与 attach 两侧算出同一个值，否则缓存永远不命中
+  function compressTarget(quota) {
+    return Math.max(CTX_MIN_KEEP, Math.floor(quota) - CTX_COMP_SLACK);
+  }
+  function ctxCacheKey(text, target) {
+    return ctxHash(text) + '_' + Math.round(target / CTX_CACHE_BUCKET);
+  }
+  // 该区块是否值得压缩：配额太小不划算，差距不大就让它按原样装进预算
+  function needCompress(s, quota) {
+    var meta = CTX_META[s.k];
+    if (!s || !s.text || (meta && meta.prio === 0)) return false;
+    if (typeof quota !== 'number' || quota < CTX_COMPRESS_MIN) return false;
+    return s.text.length >= quota * CTX_COMPRESS_RATIO;
+  }
+
+  // 配额预演：用与 packContextSections **完全相同**的优先级装箱口径，算出每个区块最多能占多少字。
+  // 只做算术、不改文本 —— 供 prepareCtxCompression 判断谁要压缩、压到多长。
+  function ctxQuotaPlan(secs, budget) {
+    if (typeof budget !== 'number' || !isFinite(budget) || budget < 0) budget = SYS_BUDGET;
+    var plan = {}, prot = [], rest = [];
+    secs.forEach(function (s) {
+      (CTX_META[s.k] && CTX_META[s.k].prio === 0 ? prot : rest).push(s);
+    });
+    var baseLen = 0;
+    prot.forEach(function (s) { baseLen += s.text.length; });
+    if (baseLen > budget) {
+      // 保护区自身已超预算：其余区块一点配额都分不到，压缩也救不回来
+      rest.forEach(function (s) { plan[s.k] = 0; });
+      return plan;
+    }
+    var remain = budget - baseLen;
+    rest.sort(function (a, b) { return (CTX_META[a.k].prio - CTX_META[b.k].prio) || (a.i - b.i); });
+    rest.forEach(function (s) {
+      if (s.text.length <= remain) { plan[s.k] = s.text.length; remain -= s.text.length; return; }
+      plan[s.k] = remain;   // 装不下：配额就是剩下全部
+      remain = 0;
+    });
+    return plan;
+  }
+
+  // 本地规则压缩：无 Key / AI 压缩失败时的兜底。零成本、同步、可预测。
+  // 它不冒充「智能摘要」，只做无损的信息密度提升：去空行、去装饰线、去重复行、合并空白，
+  // 若还不够短，再按「信息量」挑行（列表项 / 标题 / 含约束信号词的短行优先），但保持原顺序输出。
+  function localCompressText(text, targetLen) {
+    var src = String(text === null || text === undefined ? '' : text);
+    if (!src.trim() || !(targetLen > 0)) return '';
+    if (src.length <= targetLen) return src;
+    var out = [], seen = {};
+    src.split(/\r?\n/).forEach(function (raw) {
+      var l = raw.replace(/[ \t\u3000]+/g, ' ').trim();
+      if (!l) return;                                  // 空行信息量为零
+      if (/^[-=_*~·—]{3,}$/.test(l)) return;            // 纯装饰分隔线
+      var key = l.replace(/[\s，。、；：！？,.!?;:]/g, ''); // 归一化后判重，吃掉标点差异
+      if (!key || seen[key]) return;
+      seen[key] = 1;
+      out.push(l);
+    });
+    if (!out.length) return src.slice(0, targetLen);
+    var NOTE = '\n…（本地压缩摘要：原文过长，已省略冗余细节）';
+    var picked = out;
+    if (out.join('\n').length > targetLen) {
+      // 按信息量打分挑行，但输出保持原顺序 —— 打乱顺序会破坏「步骤 1/2/3」这类语义
+      var ranked = out.map(function (l, i) {
+        var score = 0;
+        if (/^([-*•·]|\d+[.、)]|【|#)/.test(l)) score += 3;   // 列表项 / 标题
+        if (l.length <= 30) score += 2;                        // 短行多半是标题或要点
+        if (/(必须|不要|禁止|要求|注意|默认|约定|格式|字数|步骤)/.test(l)) score += 2;
+        return { l: l, i: i, s: score };
+      }).sort(function (a, b) { return b.s - a.s || a.i - b.i; });
+      var keep = {}, BUDGET = targetLen - NOTE.length;
+      if (BUDGET < 20) BUDGET = targetLen;              // 目标太小就不留提示位了
+      var used = 0;
+      ranked.forEach(function (x) {
+        if (used + x.l.length + 1 > BUDGET) return;
+        keep[x.i] = 1; used += x.l.length + 1;
+      });
+      picked = out.filter(function (l, i) { return keep[i]; });
+      if (!picked.length) picked = [out[0]];             // 兜底：至少留第一行
+    }
+    var kept = picked.join('\n');
+    if (kept.length > targetLen) {
+      return kept.slice(0, Math.max(0, targetLen - 16)).replace(/\s+$/, '') + '\n…（已压缩截断）';
+    }
+    return (kept.length + NOTE.length <= targetLen) ? (kept + NOTE) : kept;
+  }
+
+  // 压缩缓存挂在 bot 上，随 data.json 一起落盘 → 同一份知识库只压一次，跨会话复用
+  function ctxCacheOf(bot) {
+    if (!bot) return {};
+    if (!bot.ctxCache || typeof bot.ctxCache !== 'object' || Array.isArray(bot.ctxCache)) bot.ctxCache = {};
+    return bot.ctxCache;
+  }
+  function ctxCacheGet(bot, text, target) {
+    var hit = ctxCacheOf(bot)[ctxCacheKey(text, target)];
+    // src 长度一并校验：哈希可能有碰撞，长度是最便宜的二次确认
+    if (!hit || !hit.t || hit.src !== text.length) return null;
+    return hit;
+  }
+  function ctxCachePut(bot, text, target, outText, mode) {
+    var c = ctxCacheOf(bot);
+    c[ctxCacheKey(text, target)] = {
+      t: outText, src: text.length, out: outText.length, at: Date.now(),
+      mode: mode || 'local',
+      model: (mode === 'ai') ? (getConfig().model || '') : ''
+    };
+    var keys = Object.keys(c);
+    if (keys.length > CTX_CACHE_MAX) {                   // 先按条数淘汰最旧的
+      keys.sort(function (a, b) { return (c[a].at || 0) - (c[b].at || 0); });
+      keys.slice(0, keys.length - CTX_CACHE_MAX).forEach(function (k) { delete c[k]; });
+    }
+    var total = 0;
+    keys = Object.keys(c);
+    keys.forEach(function (k) { total += (c[k].out || 0); });
+    if (total > CTX_CACHE_CHARS) {                       // 再按总字符淘汰，避免缓存把 data.json 撑大
+      keys.sort(function (a, b) { return (c[a].at || 0) - (c[b].at || 0); });
+      for (var i = 0; i < keys.length && total > CTX_CACHE_CHARS; i++) {
+        total -= (c[keys[i]].out || 0);
+        delete c[keys[i]];
+      }
+    }
+  }
+
+  // 同步取用：算出这轮的真实配额，把命中的压缩版挂到区块的 s.comp 上。
+  // 与 packContextSections 用同一份 ctxQuotaPlan，因此 key 必然对得上。
+  function attachCtxCompressed(bot, secs, budget) {
+    var c = ctxCacheOf(bot);
+    if (!Object.keys(c).length) return;
+    var plan = ctxQuotaPlan(secs, budget);
+    secs.forEach(function (s) {
+      if (!needCompress(s, plan[s.k])) return;
+      var e = ctxCacheGet(bot, s.text, compressTarget(plan[s.k]));
+      if (!e || !e.t || e.t.length >= s.text.length) return;   // 没变短就别用
+      s.comp = e.t;
+    });
+  }
+
+  function withTimeout(p, ms) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var t = setTimeout(function () { if (!done) { done = true; reject(new Error('ctx compress timeout')); } }, ms);
+      Promise.resolve(p).then(
+        function (v) { if (!done) { done = true; clearTimeout(t); resolve(v); } },
+        function (e) { if (!done) { done = true; clearTimeout(t); reject(e); } }
+      );
+    });
+  }
+
+  var CTX_COMP_SYS = '你是上下文压缩器。把用户给出的内容压缩成更短的要点文本，用于后续对话继续使用。'
+    + '规则：1) 必须原样保留：数字、金额、日期、专有名词（人名/品牌/产品名）、术语、明确的要求与限制、禁止项、步骤及其顺序；'
+    + '2) 删除：客套寒暄、重复表述、与任务无关的举例和背景铺垫、同义反复的修饰；'
+    + '3) 保持原有的分点/列表结构，不要把分点合并成一大段；不得新增原文没有的信息，不要写评论或建议；'
+    + '4) 直接输出压缩后的正文，不要任何前言、解释、标题或 markdown 代码块；'
+    + '5) 若原文已足够精简，可原样输出。';
+  function compressByAI(text, target, label) {
+    var userMsg = '【待压缩内容' + (label ? '（' + label + '）' : '') + '】\n' + text
+      + '\n\n目标：压缩后不超过 ' + target + ' 字（当前 ' + text.length + ' 字）。请直接输出压缩结果。';
+    return Promise.resolve(window.BotCraftAI.request([
+      { role: 'system', content: CTX_COMP_SYS },
+      { role: 'user', content: userMsg }
+    ])).then(function (out) {
+      return String(out === null || out === undefined ? '' : out)
+        .trim().replace(/^```[a-zA-Z]*\s*/, '').replace(/```$/, '').trim();
+    });
+  }
+
+  // 发送前预压缩。opts.toolCtx / opts.imagePrompt 必须与随后 buildMessages 的一致，
+  // 否则区块内容不同 → 缓存 key 不同 → 白压一轮。
+  async function prepareCtxCompression(bot, opts) {
+    opts = opts || {};
+    if (!bot) return { ok: false, reason: 'no-bot' };
+    if (getConfig().autoCompress === false) return { ok: false, reason: 'disabled' };
+    var budget = (typeof opts.budget === 'number') ? opts.budget : SYS_BUDGET;
+    // 预演口径组装区块：不累加记忆使用次数、不落盘
+    var secs = buildCtxSections(bot, opts.toolCtx, opts.imagePrompt, { preview: true });
+    var plan = ctxQuotaPlan(secs, budget);
+    var todo = secs.filter(function (s) { return needCompress(s, plan[s.k]); });
+    if (!todo.length) return { ok: true, done: 0, cached: 0, items: [] };
+    var misses = todo.filter(function (s) { return !ctxCacheGet(bot, s.text, compressTarget(plan[s.k])); });
+    var cachedN = todo.length - misses.length;
+    if (!misses.length) return { ok: true, done: 0, cached: cachedN, items: [] };
+    var canAI = !!(window.BotCraftAI && BotCraftAI.canCall && BotCraftAI.canCall());
+    var queue = misses.slice(), results = [];
+    // 并发 2：压缩是「长输入、短输出」，串行会让首字延迟逐块叠加
+    var workers = [];
+    for (var w = 0; w < 2; w++) {
+      workers.push((async function () {
+        while (queue.length) {
+          var s = queue.shift();
+          var tgt = compressTarget(plan[s.k]);
+          var out = '', mode = 'local';
+          if (canAI) {
+            try {
+              out = await withTimeout(compressByAI(s.text, tgt, CTX_META[s.k] ? CTX_META[s.k].label : s.k), CTX_COMPRESS_TIMEOUT);
+              mode = 'ai';
+            } catch (e) {
+              console.warn('[ctx] 压缩失败，改用本地规则：', e);
+              out = '';
+            }
+          }
+          if (!out) { try { out = localCompressText(s.text, tgt); } catch (e2) { out = ''; } mode = 'local'; }
+          if (out && out.length < s.text.length) {
+            ctxCachePut(bot, s.text, tgt, out, mode);
+            results.push({ k: s.k, label: CTX_META[s.k] ? CTX_META[s.k].label : s.k, src: s.text.length, out: out.length, mode: mode });
+          }
+        }
+      })());
+    }
+    try { await Promise.all(workers); } catch (e) { console.warn('[ctx] 压缩任务异常：', e); }
+    if (results.length) { try { saveBots(); } catch (e) { } }
+    return { ok: true, done: results.length, cached: cachedN, items: results };
+  }
+
   // 单条消息的上下文字符估算（字符串按长度；多模态 parts 给图片/音频一个固定权重，
   // 因为 base64 体积远大于其文本语义，按真实长度会淹没其他区块）
   function _ctxMsgChars(x) {
@@ -1678,15 +1929,39 @@ window.__storage = __storage;
     // 稳定排序：同优先级按原始拼接顺序，保证行为可预期
     rest.sort(function (a, b) { return (CTX_META[a.k].prio - CTX_META[b.k].prio) || (a.i - b.i); });
     rest.forEach(function (s) {
-      if (s.text.length <= remain) { remain -= s.text.length; return; }
       var orig = s.text.length;
+      // 压缩优先：若已备好更短的压缩版，就用它顶替原文 —— 字数降下来、要点还在。
+      // 这是「压缩代替截断」的落点：走这条路不丢信息结构，只是密度更高。
+      var useComp = !!(s.comp && s.comp.length && s.comp.length < orig);
+      var body = useComp ? s.comp : s.text;
+      if (body.length <= remain) {
+        if (useComp) {
+          s.text = body;
+          s.compressed = true;
+          s.trimNote = '已压缩 ' + orig + ' → ' + body.length + ' 字（要点保留）';
+        }
+        s.kept = s.text.length;
+        remain -= body.length;
+        return;
+      }
+      // 仍然装不下：截断。压缩版被截断也比原文被截断信息密度更高，故优先截压缩版
       if (remain >= CTX_MIN_KEEP) {
         var keep = remain - 24;
-        s.text = s.text.slice(0, keep).replace(/\s+$/, '') + '\n…（上下文预算不足，此处已截断）';
-        s.trimNote = '截断 ' + (orig - keep) + ' 字';
+        s.text = body.slice(0, keep).replace(/\s+$/, '') + (useComp
+          ? '\n…（压缩后仍超预算，此处已截断）'
+          : '\n…（上下文预算不足，此处已截断）');
+        s.compressed = useComp;
+        // trimmed 与 compressed 分开记：前者是「有内容被丢掉」，后者是「用了压缩版」，
+        // 用量带要分开提示 —— 压缩是改善，截断才是损失
+        s.trimmed = true;
+        s.trimNote = useComp
+          ? ('压缩 ' + orig + ' → ' + body.length + ' 字，仍截断 ' + Math.max(0, body.length - keep) + ' 字')
+          : ('截断 ' + Math.max(0, orig - keep) + ' 字');
       } else {
         s.text = '';
-        s.trimNote = '预算耗尽，整块丢弃';
+        s.compressed = false;
+        s.trimmed = true;
+        s.trimNote = useComp ? '预算不足以容纳压缩版，整块丢弃' : '预算耗尽，整块丢弃';
       }
       s.kept = s.text.length;
       remain = 0;
@@ -1696,16 +1971,22 @@ window.__storage = __storage;
   // 发布快照供界面读取：block2 的用量条与上下文面板都从 window._ctxSnap 取数
   function publishCtxSnap(secs, opts) {
     opts = opts || {};
-    var list = [], sysLen = 0;
+    var list = [], sysLen = 0, compN = 0, compSaved = 0;
     secs.forEach(function (s) {
       var m = CTX_META[s.k] || { label: s.k, color: 'var(--ctx7)', prio: 3 };
+      var _orig = (s.origLen === undefined ? s.text.length : s.origLen);
       var rec = {
         k: s.k, label: m.label, color: m.color, prio: m.prio,
-        len: s.text.length, orig: (s.origLen === undefined ? s.text.length : s.origLen),
+        len: s.text.length, orig: _orig,
         note: s.trimNote || '',
+        // 该区块本轮是「压缩后送出去的」还是「原文送出去的」——面板据此显示 🗜 标记
+        compressed: !!s.compressed,
+        // 真的有内容被丢掉（截断 / 整块丢弃）才为真；压缩本身不算损失，故两者分开
+        trimmed: !!s.trimmed,
         // 保留裁剪后的实际内容，供上下文面板展开查看「真正送出去的正文」
         text: s.text
       };
+      if (rec.compressed) { compN++; compSaved += Math.max(0, _orig - rec.len); }
       sysLen += rec.len;
       list.push(rec);
     });
@@ -1714,6 +1995,8 @@ window.__storage = __storage;
       budget: (opts.budget === undefined || opts.budget === null) ? SYS_BUDGET : opts.budget,
       sysLen: sysLen,
       sections: list,
+      compressedN: compN,
+      compressedSaved: compSaved,
       histLen: opts.histLen || 0,
       histBudget: opts.histBudget === undefined ? HISTORY_BUDGET : opts.histBudget,
       turns: opts.turns || 0,
@@ -1754,10 +2037,19 @@ window.__storage = __storage;
     snap: getCtxSnap,
     meta: CTX_SECTIONS,
     sysBudget: function () { return SYS_BUDGET; },
-    histBudget: function () { return HISTORY_BUDGET; }
+    histBudget: function () { return HISTORY_BUDGET; },
+    // 超限压缩：面板的「立即压缩」按钮与真机端到端验证都从这里进
+    compress: prepareCtxCompression,
+    localCompress: localCompressText,
+    quotaPlan: ctxQuotaPlan,
+    cacheOf: ctxCacheOf,
+    buildSections: buildCtxSections
   };
 
-  function composeSystemPrompt(bot, toolCtx, imagePrompt, opts) {
+  // 组装上下文区块（不做预算分配）——供 composeSystemPrompt 正式发送与压缩预演共用。
+  // 抽出来的理由：压缩要按「同一份区块」算配额，若两边各拼一遍，
+  // 迟早出现「按这份内容定配额、却按那份内容发送」的漂移。
+  function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     // 每个内容来源作为一个区块独立记账，最终由 packContextSections 按优先级分配预算，
     // 而不是拼完再 slice 砍尾 —— 见上方「上下文预算管理」注释
     const secs = [];
@@ -1834,9 +2126,18 @@ window.__storage = __storage;
       pushSec('brand', '\n【品牌档案】请始终以该客户的品牌身份与调性作答，避免与品牌调性冲突的表达：\n' + bL.join('\n'));
     }
     pushSec('tail', '\n请用专业、友好的语气回答，回答尽量简洁清晰。若用户使用代码相关需求，请用代码块包裹。');
+    return secs;
+  }
+
+  function composeSystemPrompt(bot, toolCtx, imagePrompt, opts) {
+    const secs = buildCtxSections(bot, toolCtx, imagePrompt, opts);
     // 按优先级装箱分配预算：人设/品牌/固定收尾为保护区，其余从低优先级开始削减
     // 同样避开 || 陷阱：显式判断 null/undefined，0 是合法预算
     const budget = (opts && opts.budget !== undefined && opts.budget !== null) ? opts.budget : SYS_BUDGET;
+    // 挂上预压缩文本（若缓存里有）。压缩本身是异步的，不可能在这里现压 ——
+    // 这里只做同步取用；真正的压缩由 chat() 发送前调用 prepareCtxCompression 完成。
+    // 必须传 budget：配额决定压缩目标长度，也就决定缓存 key，两侧口径必须一致。
+    attachCtxCompressed(bot, secs, budget);
     packContextSections(secs, budget);
     const sysText = secs.map(function (s) { return s.text; }).filter(Boolean).join('\n');
     publishCtxSnap(secs, { budget: budget, preview: !!(opts && opts.preview) });
@@ -2470,6 +2771,22 @@ window.__storage = __storage;
   // 支持流式与非流式。stream=true 时返回 AsyncIterable<string>
   async function chat(bot, history, opt) {
     opt = opt || {};
+    // 发送前先把「预计超配额」的区块压好。缓存命中时零成本、毫秒级返回；
+    // 只有首次遇到超长内容才会真的调用模型。压缩失败一律静默回退到原有截断逻辑，
+    // 绝不能让压缩成为发送链路上的故障点。
+    try {
+      var _cr = await prepareCtxCompression(bot, { toolCtx: opt.toolCtx, imagePrompt: opt.imagePrompt });
+      // 真花了模型调用才提示（本地压缩免费，不必打扰）；缓存的压缩不提示
+      if (_cr && _cr.items) {
+        var _aiItems = _cr.items.filter(function (x) { return x.mode === 'ai'; });
+        if (_aiItems.length && window.toast) {
+          var _saved = _aiItems.reduce(function (a, x) { return a + (x.src - x.out); }, 0);
+          toast('🗜 已压缩 ' + _aiItems.length + ' 个超长区块（省约 ' + _saved + ' 字，要点保留）', 'ok');
+        }
+      }
+    } catch (e) {
+      console.warn('[ctx] 预压缩失败，按原策略发送：', e);
+    }
     const messages = buildMessages(bot, history, opt && opt.toolCtx, opt && opt.imagePrompt);
     if (!canCall()) {
       return opt.stream ? fakeStream(messages) : runFallback(bot, history, messages);
@@ -4381,7 +4698,10 @@ function renderCtxBar(b) {
   var sysUsed = snap.sysLen || 0;
   var histLen = snap.histLen || 0;
   var histBudget = snap.histBudget || 60000;
-  var cut = snap.sections.filter(function (s) { return s.note; });
+  // 「压缩」与「裁剪」分开统计：压缩是把长内容换成要点摘要（信息密度提升，是改善），
+  // 裁剪是真的丢掉了内容（损失）。混在一起会让用户误以为压缩也是坏消息。
+  var cut = snap.sections.filter(function (s) { return s.trimmed; });
+  var comp = snap.sections.filter(function (s) { return s.compressed; });
   var sysPct = sysBudget ? (sysUsed / sysBudget * 100) : 0;
   var items = snap.sections.filter(function (s) { return s.len > 0; });
   var raw = items.map(function (s) { return sysBudget ? (s.len / sysBudget * 100) : 0; });
@@ -4398,6 +4718,7 @@ function renderCtxBar(b) {
   html += '<span class="ctx-ratio' + (sysUsed > sysBudget ? ' ctx-over' : '') + '" title="系统提示：人设 / 知识库 / 记忆 / 品牌 / 工作流等合计占系统提示预算">系统 ' + fmtCtxLen(sysUsed) + ' / ' + fmtCtxLen(sysBudget) + '（' + Math.round(sysPct) + '%）</span>';
   html += '<span class="ctx-ratio" title="历史对话共 ' + (snap.turns || 0) + ' 条消息，预算 ' + histBudget + ' 字">历史 ' + (snap.turns || 0) + ' 条 ' + fmtCtxLen(histLen) + ' / ' + fmtCtxLen(histBudget) + '</span>';
   if (snap.histDropped) html += '<span class="ctx-over" title="历史超出预算，已从最旧的消息开始丢弃">已丢弃最旧 ' + snap.histDropped + ' 条</span>';
+  if (comp.length) html += '<span class="ctx-ok" title="' + escapeAttr(comp.map(function (s) { return s.label + '：' + s.note; }).join('　')) + '">🗜 已压缩 ' + comp.length + ' 个区块（省 ' + fmtCtxLen(snap.compressedSaved || 0) + ' 字）</span>';
   if (cut.length) html += '<span class="ctx-over" title="' + escapeAttr(cut.map(function (s) { return s.label + '：' + s.note; }).join('　')) + '">⚠️ 已裁剪 ' + cut.length + ' 个区块</span>';
   html += '<span class="ctx-btn" onclick="openCtxPanel()" title="查看上下文逐区块明细与实际注入内容">上下文详情 ›</span>';
   html += '</div>';
@@ -4428,6 +4749,29 @@ function openCtxPanel() {
 }
 function closeCtxPanel() { var h = document.getElementById('ctxPanel'); if (h) h.classList.remove('on'); }
 function toggleCtxRow(el) { var row = el && el.closest ? el.closest('.ctxp-row') : null; if (row) row.classList.toggle('open'); }
+// 手动触发一次超限压缩（与记忆面板的「⚡ 立即更新」同一交互约定）。
+// 压缩是异步的，完成后必须强制刷新预演 —— previewContext 有 150ms 节流，
+// 不清掉节流时间戳就会拿到压缩前的旧快照，表现成「点了没反应」。
+function ctxCompressNow() {
+  var api = window.BotCraftCtx;
+  if (!api || !api.compress) { if (window.toast) toast('压缩能力不可用', 'warn'); return; }
+  var b = getBot(currentId);
+  if (!b) return;
+  if (window.toast) toast('正在压缩超长区块…', '');
+  Promise.resolve(api.compress(b)).then(function (r) {
+    window._ctxPrevAt = 0;                 // 让下一次预演真正重算
+    renderCtxPanel(); renderCtxBar(b);
+    if (!r || !r.done) {
+      var cached = (r && r.cached) || 0;
+      if (window.toast) toast(cached ? ('已有 ' + cached + ' 个压缩结果，可直接使用') : '当前上下文未超出预算，无需压缩', '');
+      return;
+    }
+    var saved = (r.items || []).reduce(function (a, x) { return a + Math.max(0, x.src - x.out); }, 0);
+    if (window.toast) toast('🗜 已压缩 ' + r.done + ' 个区块，省约 ' + saved + ' 字', 'ok');
+  })['catch'](function (e) {
+    if (window.toast) toast('压缩失败：' + ((e && e.message) || e), 'err');
+  });
+}
 
 function renderCtxPanel() {
   var body = document.getElementById('ctxPanelBody'); if (!body) return;
@@ -4438,7 +4782,9 @@ function renderCtxPanel() {
   }
   var sysBudget = snap.budget || 20000, sysUsed = snap.sysLen || 0;
   var histLen = snap.histLen || 0, histBudget = snap.histBudget || 60000;
-  var cut = snap.sections.filter(function (s) { return s.note; });
+  // 同用量带：裁剪（真丢内容）与压缩（换成要点摘要）分开统计
+  var cut = snap.sections.filter(function (s) { return s.trimmed; });
+  var comp = snap.sections.filter(function (s) { return s.compressed; });
   // 汇总图条：系统各区块 + 历史段（历史按自身预算折算后占剩余宽度）
   var items = snap.sections.filter(function (s) { return s.len > 0; });
   var raw = items.map(function (s) { return sysBudget ? (s.len / sysBudget * 100) : 0; });
@@ -4448,6 +4794,11 @@ function renderCtxPanel() {
     return '<div class="ctx-seg" style="width:' + (raw[i] * scale).toFixed(3) + '%;background:' + s.color + '"></div>';
   }).join('');
   var html = '';
+  html += '<div class="ctxp-tools">';
+  html += '<button class="btn btn-ghost btn-sm" onclick="ctxCompressNow()" title="立即为超长区块生成压缩摘要。压缩结果会缓存，之后发送时自动优先使用压缩版（而非截断）">🗜 立即压缩</button>';
+  if (comp.length) html += '<span class="ctxp-comp">🗜 已压缩 ' + comp.length + ' 个区块，省 ' + (snap.compressedSaved || 0) + ' 字</span>';
+  html += '<span class="ctxp-hint">压缩只在区块超出配额时发生，且只压一次</span>';
+  html += '</div>';
   html += '<div class="ctxp-bar">' + bar + '</div>';
   html += '<div class="ctxp-sum">';
   html += '<span>系统提示 <b>' + sysUsed + '</b> / ' + sysBudget + ' 字（<b>' + Math.round(sysBudget ? sysUsed / sysBudget * 100 : 0) + '%</b>）</span>';
@@ -4456,9 +4807,12 @@ function renderCtxPanel() {
   if (snap.mediaNote) html += '<span>含多媒体消息 <b>' + snap.mediaNote + '</b> 条（按 2000 字/条估算）</span>';
   if (snap.histDropped) html += '<span class="ctx-over">已丢弃最旧 ' + snap.histDropped + ' 条历史</span>';
   html += '</div>';
+  if (comp.length) {
+    html += '<div class="ctxp-sum ctx-ok">🗜 已用压缩摘要代替截断：' + escapeHtml(comp.map(function (s) { return s.label + '（' + s.note + '）'; }).join('、')) + '</div>';
+  }
   if (cut.length) {
     html += '<div class="ctxp-sum ctx-over">⚠️ 因预算不足已裁剪：' + escapeHtml(cut.map(function (s) { return s.label + '（' + s.note + '）'; }).join('、')) + '</div>';
-  } else {
+  } else if (!comp.length) {
     html += '<div class="ctxp-sum">本区块全部完整注入，未发生裁剪。</div>';
   }
   // 逐区块明细（点击行可展开实际注入正文）
@@ -4470,7 +4824,7 @@ function renderCtxPanel() {
     html += '<i class="ctxp-dot" style="background:' + s.color + '"></i>';
     html += '<span>' + escapeHtml(s.label) + '</span>';
     html += '<span class="ctxp-tag ' + pl.c + '">' + pl.t + '</span>';
-    if (s.note) html += '<span class="ctxp-tag warn">' + escapeHtml(s.note) + '</span>';
+    if (s.note) html += '<span class="ctxp-tag ' + (s.trimmed ? 'warn' : 'ok') + '">' + escapeHtml(s.note) + '</span>';
     html += '<span class="ctxp-len">' + s.len + ' 字 · ' + pct.toFixed(1) + '%</span>';
     html += '</div>';
     html += '<div class="ctxp-pre">' + (s.text ? escapeHtml(s.text) : '（该区块未注入内容）') + '</div>';
@@ -7843,6 +8197,9 @@ window.__debug = {
   window.syncFastToggle = function () {
     var el = document.getElementById('fastToggle');
     if (el) el.checked = !!BotCraftAI.getConfig().fastReply;
+    // 自动压缩默认开：只有显式关过（false）才是关，undefined 视为开
+    var ac = document.getElementById('autoCompressToggle');
+    if (ac) ac.checked = (BotCraftAI.getConfig().autoCompress !== false);
   };
 
   // 启动钩子
