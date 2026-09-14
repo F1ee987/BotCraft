@@ -69,18 +69,18 @@
   --popover:#ffffff;                /* 弹出菜单（浅色）：纯白浮层 */
   --panel:rgba(255,255,255,.52);    /* 玻璃层（浅色玻璃是「白色提亮」而非变暗） */
   --panel2:rgba(255,255,255,.30);
-  --card:rgba(255,255,255,.58);
+  --card:rgba(255,255,255,.66);
   --hover:rgba(255,255,255,.72);
-  --line:rgba(0,0,0,.09);           /* 浅色玻璃上的分隔线必须用暗色，否则看不见 */
-  --txt:#000000;
+  --line:rgba(0,0,0,.10);           /* 浅色玻璃上的分隔线必须用暗色，否则看不见 */
+  --txt:#1d1d1f;                    /* Apple label 近黑：纯黑在浅玻璃上太硬 */
   --sub:rgba(60,60,67,.62);
   --brand:#7c3aed;                  /* violet-600：浅色底上加深一档，保证文字/图标对比度 */
   --brand-hi:#8b5cf6;               /* violet-500：浅色主题的亮端也相应加深 */
   --brand2:#6d28d9;
   --ok:#34c759; --warn:#ff9500; --danger:#ff3b30;
-  --fill:rgba(255,255,255,.55);
-  --fill-strong:rgba(255,255,255,.78);
-  --fill-hover:rgba(255,255,255,.66);
+  --fill:rgba(255,255,255,.60);
+  --fill-strong:rgba(255,255,255,.85);
+  --fill-hover:rgba(255,255,255,.70);
   --glass-bg:rgba(255,255,255,.50);
   --glass-bg-hover:rgba(255,255,255,.60);
   --glass-bg-active:rgba(124,58,237,.16);
@@ -112,6 +112,16 @@
 [data-theme="light"] .auth-mask{background:rgba(233,236,245,.84);}
 [data-theme="light"] .modal,.modal-box{background:var(--glass-bg-hover);border-color:var(--glass-border);}
 [data-theme="light"] .cmd-panel,.toast{background:var(--glass-bg-hover);border-color:var(--glass-border);color:var(--txt);}
+
+/* ============ 浅色主题 · 细节美化 ============
+   浅色玻璃是「白上叠白」，没有发丝边控件就会融进面板里看不见 */
+[data-theme="light"] input,[data-theme="light"] textarea,[data-theme="light"] select,
+[data-theme="light"] .mem-view,[data-theme="light"] .msg.bot{border-color:rgba(0,0,0,.10)}
+[data-theme="light"] .ws-more-menu,[data-theme="light"] .pop-menu,[data-theme="light"] .bot-switch-menu{border-color:rgba(0,0,0,.10);box-shadow:0 12px 32px rgba(31,41,71,.18)}
+[data-theme="light"] .ws-tab.active{box-shadow:0 1px 3px rgba(31,41,71,.14)}
+[data-theme="light"] .mem-more{border-color:rgba(0,0,0,.14)}
+[data-theme="light"] .mem-more:hover{background:rgba(124,58,237,.06)}
+[data-theme="light"] .node,[data-theme="light"] .brand-card,[data-theme="light"] .mem-item .mem-type{box-shadow:none}
 *{box-sizing:border-box;margin:0;padding:0}
 /* ============ 液态玻璃的背景层 ============
    玻璃必须有东西可以透出来才成立。没有这层彩色光晕，全局玻璃背后全是纯色，
