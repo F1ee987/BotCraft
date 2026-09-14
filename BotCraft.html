@@ -160,6 +160,11 @@ body{
 a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:none;outline:none}
 input,textarea,select{font-family:inherit}
+/* 原生 select 弹出层跟随 color-scheme：不声明时 WebView2 暗色界面里弹白底选项框 */
+select{color-scheme:dark}
+[data-theme="light"] select{color-scheme:light}
+select option{background:#1f1f24;color:#f2f2f7}
+[data-theme="light"] select option{background:#ffffff;color:#111114}
 
 /* ============ 顶部导航（毛玻璃工具栏 + hairline 分隔） ============ */
 .topbar{height:52px;display:flex;align-items:center;padding:0 16px;gap:12px;position:sticky;top:0;z-index:50;
@@ -350,7 +355,7 @@ body.embed-mode #wsName{font-size:15px}
 .ws-tab.active{background:var(--card);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.16)}
 .ws-tab:hover{color:var(--txt)}
 .ws-tab-more{position:relative;user-select:none}
-.ws-more-menu{position:fixed;min-width:148px;background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:10px;padding:5px;display:none;flex-direction:column;gap:1px;z-index:80;box-shadow:var(--glass-shadow)}
+.ws-more-menu{position:fixed;min-width:148px;background:var(--bg);border:1px solid var(--glass-border);border-radius:10px;padding:5px;display:none;flex-direction:column;gap:1px;z-index:80;box-shadow:var(--lg-shadow)}
 .ws-more-menu.open{display:flex}
 .ws-more-item{padding:8px 10px;border-radius:7px;font-size:12.5px;color:var(--txt);cursor:pointer;white-space:nowrap;font-weight:590;transition:background .15s var(--ease)}
 .ws-more-item:hover{background:var(--fill)}
@@ -610,6 +615,8 @@ body.embed-mode #wsName{font-size:15px}
 .mem-view:hover{background:var(--fill-hover);border-color:var(--line)}
 .mem-view-empty{color:var(--sub)}
 .mem-fold{align-self:flex-start;border:0;background:none;color:var(--brand);font-size:11px;padding:0 2px;cursor:pointer;font-family:inherit}
+.mem-more{margin-top:8px;width:100%;padding:7px;border:1px dashed var(--line);border-radius:10px;background:transparent;color:var(--sub);font-size:12px;font-family:inherit;cursor:pointer;transition:.16s var(--ease)}
+.mem-more:hover{color:var(--txt);border-color:var(--brand);background:var(--fill)}
 .mem-fold:hover{text-decoration:underline}
 .mem-del{margin-top:2px;width:24px;height:24px;flex-shrink:0;border:none;background:var(--fill);border:1px solid transparent;border-radius:7px;cursor:pointer;color:var(--sub);font-size:13px;transition:.15s var(--ease)}
 .mem-del:hover{color:var(--danger)}
@@ -2536,6 +2543,8 @@ window.__storage = __storage;
   // key 用文本本身而不是索引——排序/删除会让索引漂移，展开状态会跑到别的条目上。
   var _memOpen = {};
   var _memFocusGi = null;
+  var _memShowAll = false;          // 默认只显示前 3 条，其余收进「显示全部 N 条」
+  var MEM_PREVIEW_N = 3;
   function memKey(it) { return String((it && it.text) || '').slice(0, 80); }
   function memAnyOpen() { return Object.keys(_memOpen).length > 0; }
   function memSetAll(items, open) {
@@ -2556,10 +2565,15 @@ window.__storage = __storage;
     if (sortBy === 'importance') view.sort(function (a, c) { return memImportance(c) - memImportance(a) || (c.t || 0) - (a.t || 0); });
     else if (sortBy === 'used') view.sort(function (a, c) { return (c.count || 0) - (a.count || 0) || (c.t || 0) - (a.t || 0); });
     else view.sort(function (a, c) { return (c.t || 0) - (a.t || 0); });
+    // 无筛选（无搜索词 + 类型=全部）时默认只铺前 3 条；搜索/按类型筛选时全部展示，
+    // 否则「明明搜到了却看不见」更反直觉。
+    var unfiltered = !f.q && f.type === '全部';
+    var capOn = unfiltered && !_memShowAll && view.length > MEM_PREVIEW_N;
+    var shown = capOn ? view.slice(0, MEM_PREVIEW_N) : view;
     var html = '';
     if (items.length && !view.length) html = '<div class="empty-tip">没有匹配的记忆。</div>';
     else if (view.length) {
-      html = view.map(function (it) {
+      html = shown.map(function (it) {
         var gi = items.indexOf(it);
         var tp = it.type || '其他';
         var pinned = MEM_PIN_TYPES.indexOf(tp) >= 0;
@@ -2573,6 +2587,8 @@ window.__storage = __storage;
           : '<div class="mem-view" data-mi="' + gi + '" title="点击展开并编辑">' + (it.text ? escapeHtml(it.text) : '<span class="mem-view-empty">（空记忆，点击补充）</span>') + '</div>';
         return '<div class="mem-item"><span class="mem-type mem-type-' + tp + '">' + tp + '</span><div class="mem-main">' + body + (open ? '<button type="button" class="mem-fold" data-fold="' + gi + '">收起 ▴</button>' : '') + '</div>' + marks + '<button class="mem-del" data-del="' + gi + '" title="删除">✕</button></div>';
       }).join('');
+      if (capOn) html += '<button type="button" class="mem-more" id="memMore">显示全部 ' + view.length + ' 条 ▾</button>';
+      else if (unfiltered && _memShowAll && view.length > MEM_PREVIEW_N) html += '<button type="button" class="mem-more" id="memMore">收起，只显示前 ' + MEM_PREVIEW_N + ' 条 ▴</button>';
     } else {
       html = '<div class="empty-tip">还没有记忆。多聊几句，或手动添加一条。</div>';
     }
@@ -2605,6 +2621,9 @@ window.__storage = __storage;
         var it = items[+el.dataset.fold]; if (it) delete _memOpen[memKey(it)];
         _memFocusGi = null; renderMemList(b);
       };
+    });
+    listEl.querySelectorAll('.mem-more').forEach(function (el) {
+      el.onclick = function () { _memShowAll = !_memShowAll; renderMemList(b); };
     });
   }
   // 局部刷新状态栏（避免编辑/删除时重绘整个面板导致输入框失焦）
@@ -2692,7 +2711,9 @@ window.__storage = __storage;
     if (so) so.onchange = function () { f.sort = so.value; renderMemList(b); };
     var fa = document.getElementById('memFoldAll');
     if (fa) fa.onclick = function () {
-      memSetAll(items, !memAnyOpen());   // 按钮文字要跟着变，所以整面板重绘
+      var opening = !memAnyOpen();
+      if (opening) _memShowAll = true;   // 展开全部时必须解除「只显示 3 条」限量，否则展开的条目不可见
+      memSetAll(items, opening);         // 按钮文字要跟着变，所以整面板重绘
       _memFocusGi = null;
       renderMemoryPanel(b);
     };
