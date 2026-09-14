@@ -10,6 +10,7 @@
   /* ===== Apple 深色系统色板（对齐 iOS/macOS Dark 语义色） ===== */
   /* 液态玻璃的地基：底色压深，真正的层次由多层半透明表面叠出来 */
   --bg:#0d0d10;                     /* 窗口底（玻璃后面透出的彩色光晕叠在它之上） */
+  --popover:#22222b;                /* 弹出菜单（更多 ▾ 等）：比窗口底抬亮一档，一眼可辨「浮在上面」 */
   --panel:rgba(28,28,33,.50);       /* 侧栏 / 面板：玻璃层 */
   --panel2:rgba(18,18,22,.26);      /* 聊天区 / 输入区底：更薄的玻璃 */
   --card:rgba(255,255,255,.065);    /* 卡片：白色低透明「提亮一层」，叠在任意底色上都成立 */
@@ -65,6 +66,7 @@
 /* ==================== 浅色主题 ==================== */
 [data-theme="light"]{
   --bg:#e9ecf5;                     /* 窗口底：浅灰蓝，让彩色光晕透出来 */
+  --popover:#ffffff;                /* 弹出菜单（浅色）：纯白浮层 */
   --panel:rgba(255,255,255,.52);    /* 玻璃层（浅色玻璃是「白色提亮」而非变暗） */
   --panel2:rgba(255,255,255,.30);
   --card:rgba(255,255,255,.58);
@@ -256,6 +258,7 @@ body.embed-mode .topbar{display:none}
 body.embed-mode .sidebar{display:none}
 body.embed-mode .app{height:100vh}
 body.embed-mode .ws-side{display:none}
+body.embed-mode .ws-resizer{display:none}
 body.embed-mode #wsName{font-size:15px}
 .sidebar{width:232px;background:var(--glass-bg-hover);border-right:1px solid var(--line);padding:14px 10px;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;transition:width .24s var(--ease);position:relative;z-index:20}
 .side-section{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:1.1px;padding:20px 10px 7px;font-weight:600;opacity:.9}
@@ -342,6 +345,17 @@ body.embed-mode #wsName{font-size:15px}
 .workspace{display:none;flex:1;min-width:0;min-height:0;height:calc(100vh - 52px)}  /* 高度锁定视口，聊天区用内部滚动 */
 .workspace.on{display:flex}
 .ws-side{width:300px;min-width:0;overflow-x:hidden;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column}
+/* 左侧工作区调宽拉手：夹在 ws-side 与 ws-main 之间，拖拽调宽、双击复位、按钮收起 */
+.ws-resizer{width:6px;flex-shrink:0;cursor:col-resize;position:relative;background:transparent}
+.ws-resizer::after{content:'';position:absolute;left:2px;top:0;bottom:0;width:2px;background:transparent;transition:background .16s var(--ease)}
+.ws-resizer:hover::after,body.resizing .ws-resizer::after{background:var(--brand)}
+body.resizing{cursor:col-resize;user-select:none}
+.ws-side-toggle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:15px;height:38px;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--popover);color:var(--sub);font-size:10px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)}
+.ws-resizer:hover .ws-side-toggle,body.ws-side-collapsed .ws-side-toggle{opacity:1}
+.ws-side-toggle:hover{color:var(--txt);border-color:var(--brand)}
+body.ws-side-collapsed .ws-side{display:none}
+body.ws-side-collapsed .ws-resizer{width:12px}
+body.ws-side-collapsed .ws-resizer::after{left:5px}
 .ws-head{padding:16px;border-bottom:1px solid var(--line)}
 .ws-head h2{font-size:18px;font-weight:600;letter-spacing:-.3px;display:flex;align-items:center;gap:8px}
 .ws-head h2 .status{width:8px;height:8px;border-radius:50%;background:var(--ok)}
@@ -355,9 +369,9 @@ body.embed-mode #wsName{font-size:15px}
 .ws-tab.active{background:var(--card);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.16)}
 .ws-tab:hover{color:var(--txt)}
 .ws-tab-more{position:relative;user-select:none}
-.ws-more-menu{position:fixed;min-width:148px;background:var(--bg);border:1px solid var(--glass-border);border-radius:10px;padding:5px;display:none;flex-direction:column;gap:1px;z-index:80;box-shadow:var(--lg-shadow)}
+.ws-more-menu{position:fixed;min-width:148px;background:var(--popover);border:1px solid var(--glass-border);border-radius:12px;padding:6px;display:none;flex-direction:column;gap:2px;z-index:80;box-shadow:var(--lg-shadow)}
 .ws-more-menu.open{display:flex}
-.ws-more-item{padding:8px 10px;border-radius:7px;font-size:12.5px;color:var(--txt);cursor:pointer;white-space:nowrap;font-weight:590;transition:background .15s var(--ease)}
+.ws-more-item{padding:9px 12px;border-radius:8px;font-size:13px;color:var(--txt);cursor:pointer;white-space:nowrap;font-weight:590;transition:background .15s var(--ease)}
 .ws-more-item:hover{background:var(--fill)}
 .ws-more-item.active{background:var(--fill);color:var(--brand)}
 .ws-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:14px}
@@ -781,8 +795,9 @@ body.embed-mode #wsName{font-size:15px}
   .grid{grid-template-columns:1fr}
   .charts{grid-template-columns:1fr}
   body:not(.embed-mode) .workspace{flex-direction:column}
-  body:not(.embed-mode) .ws-side{display:flex;flex:1 1 46%;min-height:0;width:100%;overflow-y:auto;border-right:none;border-bottom:1px solid var(--line)}
+  body:not(.embed-mode) .ws-side{display:flex;flex:1 1 46%;min-height:0;width:100% !important;overflow-y:auto;border-right:none;border-bottom:1px solid var(--line)}
   body:not(.embed-mode) .ws-main{flex:1 1 54%;min-height:0}
+  body:not(.embed-mode) .ws-resizer{display:none}
   .msg{max-width:88%}
   .chat{padding:14px}
   .chat-head{padding:12px 14px}
@@ -1146,6 +1161,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
           <div id="batchList" class="batch-list"></div>
         </div>
     </div>
+    <div class="ws-resizer" id="wsResizer" title="拖拽调整宽度，双击复位"><button type="button" class="ws-side-toggle" id="wsSideToggle" title="收起 / 展开工作区">‹</button></div>
     <div class="ws-main">
       <div class="chat-head">
         <div class="ava" id="chatAva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></div>
@@ -6917,6 +6933,55 @@ document.addEventListener('click', function (e) {
   const menu = document.getElementById('wsMoreMenu');
   if (menu && menu.classList.contains('open') && !menu.contains(e.target) && e.target !== document.getElementById('wsTabMore')) closeWsMore();
 });
+
+// ============ 左侧工作区：拖拽调宽 / 双击复位 / 收起展开 ============
+(function () {
+  const side = document.querySelector('.ws-side');
+  const rz = document.getElementById('wsResizer');
+  if (!side || !rz) return;
+  const tg = document.getElementById('wsSideToggle');
+  const WKEY = 'botcraft.wsside.width', CKEY = 'botcraft.wsside.collapsed';
+  const MIN_W = 220, MAX_W = 560, DEF_W = 300;
+  const isColumn = function () { return window.matchMedia && window.matchMedia('(max-width:760px)').matches; };
+  let savedW = parseInt((function(){ try { return localStorage.getItem(WKEY); } catch (e) { return null; } })(), 10);
+  if (!(savedW >= MIN_W && savedW <= MAX_W)) savedW = DEF_W;
+  side.style.width = savedW + 'px';
+  const collapsedNow = function () { return document.body.classList.contains('ws-side-collapsed'); };
+  const applyCollapsed = function (c) {
+    document.body.classList.toggle('ws-side-collapsed', c);
+    if (tg) tg.textContent = c ? '›' : '‹';
+    if (tg) tg.title = c ? '展开工作区' : '收起工作区';
+  };
+  let initC = false;
+  try { initC = localStorage.getItem(CKEY) === '1'; } catch (e) {}
+  applyCollapsed(initC);
+  let dragging = false;
+  rz.addEventListener('mousedown', function (e) {
+    if (e.button !== 0 || e.target === tg || collapsedNow() || isColumn()) return;
+    dragging = true; document.body.classList.add('resizing'); e.preventDefault();
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    const w = Math.min(MAX_W, Math.max(MIN_W, e.clientX));
+    side.style.width = w + 'px';
+  });
+  window.addEventListener('mouseup', function () {
+    if (!dragging) return;
+    dragging = false; document.body.classList.remove('resizing');
+    try { localStorage.setItem(WKEY, String(parseInt(side.style.width, 10) || DEF_W)); } catch (e) {}
+  });
+  rz.addEventListener('dblclick', function () {
+    if (collapsedNow() || isColumn()) return;
+    side.style.width = DEF_W + 'px';
+    try { localStorage.setItem(WKEY, String(DEF_W)); } catch (e) {}
+  });
+  if (tg) tg.addEventListener('click', function (e) {
+    e.stopPropagation();
+    const c = !collapsedNow();
+    applyCollapsed(c);
+    try { localStorage.setItem(CKEY, c ? '1' : '0'); } catch (e) {}
+  });
+})();
 
 function channelsOf(b) { return b.channels || (b.channels = ['网页嵌入', 'API 接口']); }
 
