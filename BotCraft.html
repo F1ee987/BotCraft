@@ -3316,7 +3316,7 @@ const ORCH_BY_NAME = {
 };
 
 const SEED_BOTS = [
-  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['产品说明书 v3'], model: 'gpt-4o-mini' },
+  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['builtin_manual_v3', 'builtin_aftersale'], model: 'gpt-4o-mini' },
   { n: '产品文案生成器', d: '根据卖点一键生成小红书/抖音种草文案', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], model: 'gpt-4o-mini' },
   { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#30d158,#32ade6)', tag: '已发布', u: 320, t: '95%', prompt: '你是数据分析师，能解读数据并给出关键结论。', nodes: ORCH_BY_NAME['数据报表分析师'], plugins: ['代码执行器'], knowledges: [], model: 'gpt-4o-mini' },
   { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与发音', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], model: 'gpt-4o-mini' },
@@ -3453,12 +3453,111 @@ const BUILTIN_KB = [
 Token,模型计费与上下文长度的基本单位
 RAG,检索增强生成，让模型先检索资料再作答的技术`
   },
+  // ---- 演示用知识库文档：内容自洽可验证，用于体验「挂知识库问答」（RAG 检索增强）----
+  {
+    id: 'builtin_manual_v3', name: '产品说明书 v3（内置）', type: 'md', size: 0, builtin: true,
+    content: `# 云雀智能音箱 X1 产品说明书（v3）
+
+## 产品规格
+- 尺寸重量：直径 95mm × 高 168mm，重约 620g
+- 扬声器功率：10W 全频单元
+- 电池续航：内置 2600mAh，中音量连续播放约 8 小时
+- 无线连接：蓝牙 5.3 / Wi-Fi 2.4GHz（不支持 5GHz 频段）
+- 供电：5V/2A USB-C 接口充电，完整充满约 2.5 小时
+
+## 按键与接口
+- 顶部：电源键（长按 3 秒开关机）、音量加/减、播放/暂停
+- 侧面：静音拨杆（拨到静音后拾音灯变红）
+- 底部：USB-C 充电口、Reset 针孔（长捅 8 秒恢复出厂）
+
+## 指示灯状态
+- 白色呼吸：待机聆听中
+- 蓝色常亮：蓝牙已连接
+- 青色闪烁：正在配网
+- 红色常亮：静音模式或电量低于 10%
+
+## 常见故障排查
+1. 无法开机：先充电 15 分钟以上再长按电源键 3 秒。
+2. 搜不到蓝牙：确认音箱处于白色/蓝色灯状态，已配对设备需先在手机端忽略后重连。
+3. Wi-Fi 配网失败：本机仅支持 2.4GHz 频段，请勿连接 5GHz 热点；路由器开启「允许新设备接入」。
+4. 声音变小：检查 App 内均衡器是否误设为「人声增强」，恢复默认即可。
+5. 恢复出厂：Reset 孔长捅 8 秒，所有配对信息将被清除。`
+  },
+  {
+    id: 'builtin_aftersale', name: '售后与退换货政策（内置）', type: 'md', size: 0, builtin: true,
+    content: `# 售后与退换货政策
+
+## 退换货时限
+- 7 天无理由退货：签收后 7 天内，商品未激活、配件包装齐全可申请退货。
+- 15 天换货：签收后 15 天内出现非人为性能故障，可申请免费换新。
+- 12 个月保修：自签收日起 12 个月内，非人为损坏免费维修。
+
+## 运费规则
+- 质量问题退换：往返运费全部由商家承担。
+- 无理由退货：运费由买家承担（同城 8 元，跨省 12 元起，以揽收称重为准）。
+- 换货补差：换新型号价格不同需补差价，支持的支付方式与下单一致。
+
+## 价保与发票
+- 价保周期：签收后 30 天内降价可申请差价补偿，原路退回，1-3 个工作日到账。
+- 发票：支持电子普通发票与增值税专用发票，下单时可备注，开票后 24 小时内发送至邮箱。
+
+## 不予退换的情形
+- 已激活并绑定账号的定制款设备（非质量问题）。
+- 人为损坏：进水、摔落变形、私自拆机。
+- 超过时限（以物流签收时间为准）的申请。`
+  },
+  {
+    id: 'builtin_logistics', name: '物流与配送说明（内置）', type: 'md', size: 0, builtin: true,
+    content: `# 物流与配送说明
+
+## 发货时效
+- 现货商品：付款后 48 小时内发货（节假日顺延）。
+- 预售商品：页面标注的预售期结束后 72 小时内发货。
+
+## 配送时效（发货后）
+- 一线城市：1-2 天
+- 二三线城市：2-4 天
+- 偏远地区（新疆/西藏/内蒙古部分区域）：5-7 天
+
+## 运费标准
+- 单笔订单满 99 元包邮；不满 99 元收取 8 元基础运费。
+- 偏远地区加收 10 元/单附加运费，下单页会自动计算。
+
+## 查件与改址
+- 查件：订单详情页点击「查看物流」，或把运单号粘贴到快递官网查询。
+- 改址：发货前可在订单页自助修改收货地址；发货后需联系在线客服拦截，拦截成功才能改。
+- 拒收：无理由拒收会产生往返运费，建议先联系客服再决定。`
+  },
+  {
+    id: 'builtin_membership', name: '会员与优惠规则（内置）', type: 'csv', size: 0, builtin: true,
+    content: `会员等级,所需成长值,下单折扣,专属权益
+普通会员,0,无折扣,注册即享；生日无券
+白银会员,1000,98 折,每月 1 张 5 元无门槛券
+黄金会员,5000,95 折,每月 2 张 10 元券；免费上门退换
+钻石会员,20000,9 折,全年包邮；专属客服；新品优先购`
+  },
 ];
 let ALL_KB = []; // [{ id, name, type, size, updatedAt, content, builtin? }]
 function loadKB() {
   try { ALL_KB = JSON.parse(localStorage.getItem(userScopedKey('kb')) || '[]'); if (!Array.isArray(ALL_KB)) ALL_KB = []; } catch (e) { ALL_KB = []; }
   var exist = {}; ALL_KB.forEach(function (x) { exist[x.id] = 1; });
   BUILTIN_KB.forEach(function (b) { if (!exist[b.id]) ALL_KB.unshift(b); });
+  // 迁移：老数据里 knowledges 曾误存「文档名」而非 id（挂载按 id 匹配，永远落空）。
+  // 这里把无法按 id 解析、但能按名字对上内置文档的引用，自动映射成正确 id。
+  if (typeof bots !== 'undefined' && Array.isArray(bots)) {
+    var byName = {}; ALL_KB.forEach(function (x) { byName[String(x.name).replace(/（内置）$/, '')] = x.id; });
+    bots.forEach(function (b) {
+      if (!b.knowledges || !b.knowledges.length) return;
+      var changed = false;
+      var fixed = b.knowledges.map(function (id) {
+        if (kbById(id)) return id;
+        var mapped = byName[String(id).replace(/（内置）$/, '')];
+        if (mapped) { changed = true; return mapped; }
+        return id;
+      });
+      if (changed) { b.knowledges = fixed; b.updatedAt = Date.now(); saveBots(); }
+    });
+  }
 }
 let _saveKBTimer = null;
 function _writeKB() { try { localStorage.setItem(userScopedKey('kb'), JSON.stringify(ALL_KB)); } catch (e) { toast('知识库保存失败（存储已满？）', 'err'); } }
