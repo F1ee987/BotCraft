@@ -103,7 +103,7 @@
   --log-item-fg:rgba(60,60,67,.62); --log-ms:#7c3aed; --log-shadow:0 14px 40px rgba(31,41,71,.18);
 }
 /* 浅色主题下浮层的少量定向修正（分层用实色，不再叠渐变与内发光） */
-[data-theme="light"] .topbar{background:var(--glass-bg-hover);border-bottom-color:var(--glass-border);}
+[data-theme="light"] .topbar{background:var(--glass-bg-hover);border-color:rgba(0,0,0,.10);box-shadow:var(--lg-shadow)}
 [data-theme="light"] .sidebar{background:var(--glass-bg-hover);border-right-color:var(--glass-border);}
 [data-theme="light"] .sidebar .side-item{color:var(--sub);}
 [data-theme="light"] .sidebar .side-item .ic{background:var(--fill)}
@@ -168,7 +168,7 @@ body .topbar{background:var(--glass-bg-hover) !important;}
 /* 玻璃珠物理层补齐：--lg-* 变量升级只对「引用了它们」的组件生效，
    顶栏/侧栏/输入区这些结构面原来只开模糊背景，这里统一挂上
    顶缘泛光（--lg-top）与对角高光（--lg-spec）；真浮层再加深浮投影 */
-body .topbar{background-image:var(--lg-spec);box-shadow:var(--lg-top),var(--lg-float)}
+body .topbar{background-image:var(--lg-spec);box-shadow:var(--lg-shadow)}
 body .sidebar,body .ws-side{background-image:var(--lg-spec);box-shadow:var(--lg-top)}
 body .chat-input,body .fast-bar{background-image:var(--lg-spec);box-shadow:var(--lg-top),var(--lg-float)}
 body .mbox,body .cmdk-box,body .toast,body .cmd-panel{box-shadow:var(--lg-shadow);background-image:var(--lg-spec)}
@@ -193,10 +193,12 @@ select{color-scheme:dark}
 select option{background:#1f1f24;color:#f2f2f7}
 [data-theme="light"] select option{background:#ffffff;color:#111114}
 
-/* ============ 顶部导航（毛玻璃工具栏 + hairline 分隔） ============ */
-.topbar{height:52px;display:flex;align-items:center;padding:0 16px;gap:12px;position:sticky;top:0;z-index:50;
+/* ============ 顶部导航：悬浮圆角液态玻璃条（参考 Apple Liquid Glass 珠） ============
+   通栏贴边矩形没有「珠」的感觉——留边距 + 大圆角 + 全套玻璃珠光影才立得住 */
+.topbar{height:52px;display:flex;align-items:center;padding:0 16px;gap:12px;position:sticky;top:10px;z-index:50;
+  margin:10px 12px 4px;border-radius:16px;
   background:var(--glass-bg-hover);
-  border-bottom:1px solid var(--line);
+  border:1px solid var(--glass-border);
   font-size:14px;color:var(--sub);
   transition:background .25s var(--ease),border-color .25s var(--ease)}
 .nav a:hover{background:var(--fill);color:var(--txt)}
