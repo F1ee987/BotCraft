@@ -607,6 +607,56 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg-copy:hover{background:var(--fill-strong);color:var(--brand)}
 .msg-copy:active{transform:scale(.97)}
 .msg-copy.copied{color:#fff;background:var(--brand);border-color:transparent}
+/* 消息操作：重新生成 / 编辑重发。与「复制」同族，靠 margin-left 水平排开在气泡下方 */
+.msg-act{margin-top:8px;margin-left:6px;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:980px;font-size:11.5px;font-weight:590;cursor:pointer;
+  background:var(--fill);color:var(--sub);border:1px solid transparent;transition:.15s var(--ease);font-family:inherit}
+.msg-act:hover{background:var(--fill-strong);color:var(--brand)}
+.msg-act:active{transform:scale(.97)}
+.msg-act[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}
+/* 编辑消息弹窗 */
+.edit-msg-ta{width:100%;min-height:132px;max-height:44vh;resize:vertical;box-sizing:border-box;border-radius:12px;padding:11px 13px;
+  background:var(--fill);color:var(--txt);border:1px solid var(--line);font-size:13px;line-height:1.6;font-family:inherit}
+.edit-msg-ta:focus{outline:none;border-color:var(--brand)}
+.edit-msg-tip{font-size:12px;color:var(--sub);line-height:1.6;margin:0 0 12px}
+.edit-msg-tip b{color:var(--brand);font-weight:600}
+/* 会话面板（会话切换 + 历史搜索） */
+.sess-search{margin-bottom:12px}
+.sess-search input{width:100%;box-sizing:border-box;border-radius:10px;padding:9px 12px;background:var(--fill);color:var(--txt);border:1px solid var(--line);font-size:13px;font-family:inherit}
+.sess-search input:focus{outline:none;border-color:var(--brand)}
+.sess-list{max-height:46vh;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.sess-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 12px;border-radius:12px;cursor:pointer;
+  background:var(--fill);border:1px solid transparent;color:var(--txt);font-family:inherit;transition:.15s var(--ease)}
+.sess-row:hover{background:var(--fill-hover);border-color:var(--line)}
+.sess-row.on{border-color:var(--brand);background:var(--fill-strong)}
+.sess-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.sess-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess-sub{font-size:11px;color:var(--sub)}
+.sess-acts{display:flex;gap:8px;flex:0 0 auto;opacity:0;transition:.15s var(--ease)}
+.sess-row:hover .sess-acts{opacity:1}
+.sess-acts em{font-style:normal;font-size:11.5px;color:var(--sub);padding:3px 7px;border-radius:7px;background:var(--fill-strong)}
+.sess-acts em:hover{color:var(--brand)}
+.sess-hit{display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;padding:9px 12px;border-radius:12px;cursor:pointer;
+  background:var(--fill);border:1px solid transparent;color:var(--txt);font-family:inherit}
+.sess-hit:hover{background:var(--fill-hover);border-color:var(--line)}
+.sess-hit-top{font-size:11px;color:var(--sub)}
+.sess-hit-txt{font-size:12.5px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sess-hit-txt mark{background:rgba(139,92,246,.24);color:var(--brand);border-radius:3px;padding:0 2px}
+.sess-empty{text-align:center;color:var(--sub);font-size:13px;padding:26px 10px}
+.sess-rename{width:100%;box-sizing:border-box;border-radius:8px;padding:5px 9px;background:var(--fill-strong);color:var(--txt);border:1px solid var(--brand);font-size:13px;font-family:inherit}
+.sess-rename:focus{outline:none}
+.msg.hit{animation:msgHit 1.9s var(--ease)}
+@keyframes msgHit{0%,100%{background:transparent}20%{background:rgba(139,92,246,.16)}}
+/* Token 用量卡片 */
+.usage-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.usage-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.usage-card .val{font-size:21px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.usage-card .lbl{font-size:12px;color:var(--sub);margin-top:5px}
+.usage-card .trend{font-size:11px;color:var(--sub);margin-top:6px;opacity:.85}
+.usage-bar{display:flex;height:9px;border-radius:980px;overflow:hidden;background:var(--fill);margin:4px 0 12px}
+.usage-bar i{display:block;height:100%}
+.usage-legend{display:flex;flex-wrap:wrap;gap:10px 18px;font-size:12px;color:var(--sub)}
+.usage-legend span{display:inline-flex;align-items:center;gap:6px}
+.usage-legend em{width:9px;height:9px;border-radius:3px;display:inline-block;flex:0 0 auto}
 .typing{align-self:flex-start;display:flex;align-items:center}
 .typing .msg-body{display:flex;align-items:center}
 .typing .dots{display:flex;gap:4px;padding:6px 0}
@@ -1275,6 +1325,8 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
             <div class="bs-list" id="bsList"></div>
           </div>
         </div>
+        <button class="btn btn-ghost btn-sm" onclick="openSessPanel()" title="切换会话 / 搜索历史对话">🗂 会话</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportChatMd()" title="把当前对话导出为 Markdown 文件">📤 导出</button>
         <button class="btn btn-ghost btn-sm" onclick="clearChat()">🗑️ 清空</button>
         <button class="btn btn-ghost btn-sm" id="logReopenBtn" onclick="reopenRunLog()" title="重新打开执行日志面板（查看最近一次工作流每步记录）">🪵 日志</button>
         <button class="btn btn-ghost btn-sm" id="stopBtn" style="display:none" onclick="stopGenerate()">⏹ 停止</button>
@@ -1362,6 +1414,14 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
       <div class="search-bar" style="max-width:200px"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></span><input value="最近 7 天" disabled></div>
     </div>
     <div class="stat-cards" id="statCards"></div>
+
+    <!-- Token 用量与费用（真实采集，非估算时标注） -->
+    <div class="chart-box" style="margin-bottom:16px">
+      <h3>🔢 Token 用量与费用</h3>
+      <div class="usage-cards" id="usageCards"></div>
+      <div id="usageMix"></div>
+      <p style="font-size:11.5px;color:var(--sub);margin:10px 0 0" id="usageHint"></p>
+    </div>
     <div class="charts">
       <div class="chart-box">
         <h3>📈 调用量趋势（次/天）</h3>
@@ -1654,6 +1714,32 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ==================== 编辑已发消息（改完重发） ==================== -->
+<div class="modal" id="editMsgModal">
+  <div class="mbox" style="width:620px">
+    <h2>✏️ 编辑消息并重发</h2>
+    <p class="edit-msg-tip">保存后这条消息会被替换为新内容，<b>它之后的对话记录将被清除</b>，然后重新请求模型回答。</p>
+    <textarea class="edit-msg-ta" id="editMsgTa" placeholder="输入新的消息内容…"></textarea>
+    <div class="toolbar" style="margin:14px 0 0;justify-content:flex-end">
+      <button class="btn btn-ghost" type="button" onclick="closeEditMsg()">取消</button>
+      <button class="btn btn-primary" type="button" id="editMsgSaveBtn" onclick="confirmEditMsg()">保存并重发</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 会话管理（多会话切换 + 历史搜索） ==================== -->
+<div class="modal" id="sessModal">
+  <div class="mbox" style="width:580px">
+    <h2>🗂 会话</h2>
+    <div class="sess-search"><input id="sessSearch" type="text" placeholder="🔍 搜索历史对话内容…" oninput="renderSessPanel()"></div>
+    <div class="sess-list" id="sessList"></div>
+    <div class="toolbar" style="margin:14px 0 0;justify-content:space-between">
+      <button class="btn btn-primary" type="button" onclick="newSession()">＋ 新建会话</button>
+      <button class="btn btn-ghost" type="button" onclick="closeSessPanel()">关闭</button>
+    </div>
+  </div>
+</div>
 
 <!-- ==================== 命令面板 (Cmd/Ctrl + K) ==================== -->
 <div class="cmdk" id="cmdk">
@@ -3154,12 +3240,13 @@ window.__storage = __storage;
         }
       }
       if (!resp) { clearTimeout(timer); throw lastErr || new Error('请求失败'); }
+      const _promptChars = countPromptChars(messages);
       let lastFinish = '';
       async function* iter() {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
-        let _finish = '', _yielded = 0, _reasonLen = 0;
+        let _finish = '', _yielded = 0, _reasonLen = 0, _usage = null, _outChars = 0;
         try {
           while (true) {
             const { value, done } = await reader.read();
@@ -3174,18 +3261,28 @@ window.__storage = __storage;
               if (data === '[DONE]') return;
               try {
                 const json = JSON.parse(data);
+                if (json.usage) _usage = json.usage;   // 多数服务只在末尾那个 chunk 回传用量
                 const _ch = json.choices?.[0];
                 if (_ch && _ch.finish_reason) _finish = _ch.finish_reason;
                 const _rc = _ch && _ch.delta ? _ch.delta.reasoning_content : '';
                 if (_rc) _reasonLen += _rc.length;
                 const delta = _ch && _ch.delta ? _ch.delta.content : '';
-                if (delta) { _yielded++; yield delta; }
+                if (delta) { _yielded++; _outChars += delta.length; yield delta; }
               } catch (e) { /* 忽略非 JSON 行 */ }
             }
           }
         } finally {
           clearTimeout(timer);
           lastFinish = _finish; // 供上层判断是否被 max_tokens 截断
+          // 采集用量：优先服务端真实 usage，缺失时按字符数估算并打 est 标记
+          if (typeof window.recordUsage === 'function') {
+            var _uPt = _usage && _usage.prompt_tokens != null ? _usage.prompt_tokens : 0;
+            var _uCt = _usage && _usage.completion_tokens != null ? _usage.completion_tokens : 0;
+            var _uReal = !!(_uPt || _uCt);
+            window.recordUsage(forceModel || cfg.model,
+              _uReal ? _uPt : estimateTokens(_promptChars),
+              _uReal ? _uCt : estimateTokens(_outChars), !_uReal);
+          }
           // 思考过程吃光 max_tokens 时正文为空。必须显式报错——旧版静默返回空串，
           // 工作流最后一个节点拿到空产出，用户只看到「一条什么都没有的回复」。
           if (!_yielded && _reasonLen > 0) {
@@ -3224,6 +3321,16 @@ window.__storage = __storage;
     if (lastErr) { clearTimeout(timer); throw lastErr; }
     const choice = data && data.choices && data.choices[0];
     const content = choice && (choice.message ? choice.message.content : choice.text);
+    // 采集用量（非流式响应本身就带 usage 字段）
+    if (typeof window.recordUsage === 'function') {
+      var _nu = data && data.usage;
+      var _nPt = _nu && _nu.prompt_tokens != null ? _nu.prompt_tokens : 0;
+      var _nCt = _nu && _nu.completion_tokens != null ? _nu.completion_tokens : 0;
+      var _nReal = !!(_nPt || _nCt);
+      window.recordUsage(forceModel || cfg.model,
+        _nReal ? _nPt : estimateTokens(countPromptChars(messages)),
+        _nReal ? _nCt : estimateTokens(String(content || '').length), !_nReal);
+    }
     if (!content) {
       // 与流式分支保持一致的诊断：区分「思考吃光预算」和「真的什么都没有」
       const _r = (choice && choice.message && choice.message.reasoning_content) || '';
@@ -3841,6 +3948,45 @@ function fallbackCopy(text) {
 }
 function uidHex(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(b => b.toString(16).padStart(2, '0')).join(''); }
 
+/* ==================== 多会话 ==================== */
+// 一个机器人可以有多条会话。关键设计：b.history 与「当前会话」的 history 始终是
+// **同一个数组引用**，所以既有的 push / splice / 渲染代码完全不需要感知会话的存在。
+function _activeSessionOf(b) {
+  if (!b || !Array.isArray(b.sessions) || !b.sessions.length) return null;
+  return b.sessions.filter(function (s) { return s && s.id === b.activeSession; })[0] || null;
+}
+function sessionTitle(s) {
+  if (!s) return '新对话';
+  if (s.title) return s.title;
+  var first = (s.history || []).filter(function (m) { return m && m.role === 'me' && String(m.text || '').trim(); })[0];
+  if (!first) return '新对话';
+  return String(first.text).replace(/\s+/g, ' ').trim().slice(0, 20);
+}
+function sessionMsgCount(s) { return ((s && s.history) || []).length; }
+// 旧数据迁移 + 引用对齐，必须**幂等**（每次 loadBots 都会跑一遍）
+function _initSessions(b) {
+  if (!b) return b;
+  if (!Array.isArray(b.sessions)) b.sessions = [];
+  if (!b.sessions.length) {
+    // 老数据：把原来的单条 history 提升为第一条会话
+    var h = Array.isArray(b.history) ? b.history : [];
+    b.sessions = [{ id: uid(), title: '', history: h, createdAt: Date.now(), updatedAt: Date.now() }];
+    b.activeSession = b.sessions[0].id;
+    b.history = h;
+    return b;
+  }
+  if (!b.activeSession || !b.sessions.some(function (s) { return s && s.id === b.activeSession; })) {
+    b.activeSession = b.sessions[0].id;
+  }
+  var cur = _activeSessionOf(b);
+  if (cur) {
+    if (!Array.isArray(cur.history)) cur.history = [];
+    // 写盘时当前会话会被摘空（内容在 b.history 里），这里按「有内容的那份」恢复
+    if (!cur.history.length && Array.isArray(b.history) && b.history.length) cur.history = b.history;
+    b.history = cur.history;   // 关键：保持同一引用
+  }
+  return b;
+}
 function normalize(b) {
   var res = {
     id: uid(), color: '', model: 'gpt-4o-mini', history: [], prompt: SAMPLE_PROMPT,
@@ -3860,6 +4006,8 @@ function normalize(b) {
   }
   // 每个机器人独立持有 nodes 副本，避免共享 ORCH_BY_NAME / 模板引用导致互相污染
   if (res.nodes) res.nodes = res.nodes.map(function (n) { return n ? Object.assign({}, n) : n; });
+  // 多会话：补齐会话结构，并把 b.history 对齐到当前会话（同一引用）
+  _initSessions(res);
   return res;
 }
 
@@ -4345,15 +4493,38 @@ function loadBots() {
 }
 // 每个机器人最多保留最近 N 条聊天历史，防止记录无限增长导致 JSON 序列化/写入越来越慢（越用越卡的根因）
 const HISTORY_LIMIT = 100;
-function _trimHistory(b) { if (b && Array.isArray(b.history) && b.history.length > HISTORY_LIMIT) b.history = b.history.slice(-HISTORY_LIMIT); }
+function _trimHistory(b) {
+  if (!b) return;
+  if (Array.isArray(b.history) && b.history.length > HISTORY_LIMIT) b.history = b.history.slice(-HISTORY_LIMIT);
+  // 多会话：每条会话各自限长，并把当前会话的裁剪结果同步回 b.history（保持同一引用）
+  if (Array.isArray(b.sessions)) {
+    b.sessions.forEach(function (s) {
+      if (s && Array.isArray(s.history) && s.history.length > HISTORY_LIMIT) s.history = s.history.slice(-HISTORY_LIMIT);
+    });
+    var cur = _activeSessionOf(b);
+    if (cur && Array.isArray(cur.history)) b.history = cur.history;
+  }
+}
 let _saveBotsTimer = null;
 // 把任务推迟到浏览器空闲时段执行，避免阻塞滚动 / 输入等交互帧
 function runIdle(fn) { if (window.requestIdleCallback) requestIdleCallback(fn, { timeout: 1000 }); else setTimeout(fn, 0); }
 function _writeBots() {
   if (EMBED_MODE) return; // 嵌入模式为临时会话，不写回任何来源的 localStorage
   bots.forEach(_trimHistory);
-  if (!currentUser) { try { storage.setItem(LS_KEY, JSON.stringify(bots)); } catch (e) { } return; }
-  try { storage.setItem(LS_KEY_USER(), JSON.stringify(bots)); } catch (e) { }
+  // 多会话去重：当前会话的内容由 b.history 承载，写盘前把它从 sessions 里摘掉，
+  // 否则同一份历史会被序列化两次（localStorage 占用直接翻倍）。同步 + finally 保证一定还原。
+  var _held = [];
+  bots.forEach(function (b) {
+    var cur = _activeSessionOf(b);
+    if (!cur) return;
+    _held.push([cur, cur.history]);
+    cur.history = [];
+  });
+  var _json = null;
+  try { _json = JSON.stringify(bots); }
+  finally { _held.forEach(function (p) { p[0].history = p[1]; }); }
+  if (!currentUser) { try { storage.setItem(LS_KEY, _json); } catch (e) { } return; }
+  try { storage.setItem(LS_KEY_USER(), _json); } catch (e) { }
 }
 // 合并写入：高频调用（发消息 / 编辑 / 拖拽等）先在 200ms 内合并，再延到空闲时段序列化落盘；关闭页面前强制同步落盘。
 function saveBots() {
@@ -5024,7 +5195,7 @@ function cardMenu(e, id) {
     }
     if (act === 'copy' && b) {
       const nb = JSON.parse(JSON.stringify(b));
-      delete nb.id; nb.n = (b.n + '(副本)').slice(0, 30); nb.tag = '草稿'; nb.u = 0; nb.history = []; nb.createdAt = Date.now(); nb.updatedAt = Date.now();
+      delete nb.id; nb.n = (b.n + '(副本)').slice(0, 30); nb.tag = '草稿'; nb.u = 0; nb.history = []; nb.createdAt = Date.now(); nb.updatedAt = Date.now(); nb.sessions = []; nb.activeSession = ''; _initSessions(nb);  // 副本只继承配置，不带原机器人的会话
       bots.unshift(normalize(nb)); saveBots(); renderGrid(); updateStats(); toast('已复制为副本', 'ok');
     }
     if (act === 'fav' && b) { toggleFavorite(id); }
@@ -5099,7 +5270,7 @@ function batchCopy() {
   let c = 0;
   bots.filter(x => selectedBotIds.has(x.id)).forEach(b => {
     const nb = JSON.parse(JSON.stringify(b));
-    delete nb.id; nb.n = (b.n + '(副本)').slice(0, 30); nb.tag = '草稿'; nb.u = 0; nb.history = []; nb.createdAt = Date.now(); nb.updatedAt = Date.now();
+    delete nb.id; nb.n = (b.n + '(副本)').slice(0, 30); nb.tag = '草稿'; nb.u = 0; nb.history = []; nb.createdAt = Date.now(); nb.updatedAt = Date.now(); nb.sessions = []; nb.activeSession = ''; _initSessions(nb);  // 副本只继承配置，不带原机器人的会话
     bots.unshift(normalize(nb)); c++;
   });
   saveBots();
@@ -5161,7 +5332,8 @@ function openBot(id) {
   const b = getBot(id); if (!b) return;
   currentId = id;
   if (!b.nodes || !b.nodes.length) b.nodes = DEFAULT_NODES.slice();
-  if (!b.history) b.history = [];
+  if (!Array.isArray(b.history)) b.history = [];
+  _initSessions(b);  // 幂等：补齐会话结构，并把 b.history 对齐到当前会话
   if (!b.channels) b.channels = ['网页嵌入', 'API 接口'];
   refreshWorkspace();
   go('workspace');
@@ -5767,6 +5939,7 @@ function appendMsg(b, m) {
     div.innerHTML = _body(escapeHtml(m.who || b.n), renderMarkdown(m.text));
   }
   chat.appendChild(div);
+  div.setAttribute('data-mi', Math.max(0, (b.history || []).length - 1));  // 让「编辑」按钮能定位到 history 里的这一条
   attachCopyBtns();
   scrollChatToBottom();
 }
@@ -5779,7 +5952,7 @@ function renderHistory(b) {
       if (m.role === 'me') {
         var mt = m.text || '';
         var mh = mt.length > MSG_FOLD_LEN ? escapeHtml(mt.slice(0, MSG_FOLD_LEN)) + _foldHtml(i, mt.length) : escapeHtml(mt);
-        return '<div class="msg me">' + mh
+        return '<div class="msg me" data-mi="' + i + '">' + mh
           + ((m.images && m.images.length) ? m.images.map(function (s) { return '<img class="msg-img" data-src="' + escapeAttr(s) + '" alt="图片">'; }).join('') : '')
           + ((m.audio && m.audio.length) ? m.audio.map(function (s) { return '<audio class="msg-audio" data-src="' + escapeAttr(s) + '" controls preload="none"></audio>'; }).join('') : '')
           + ((m.videos && m.videos.length) ? m.videos.map(function (it) { return '<video class="msg-video" data-src="' + escapeAttr((it && it.url) || '') + '" controls muted playsinline preload="none"' + ((m.frames && m.frames.length && String(m.frames[0]).length < LAZY_MEDIA_MIN) ? ' poster="' + escapeAttr(m.frames[0]) + '"' : '') + '></video>'; }).join('') : '')
@@ -5787,7 +5960,7 @@ function renderHistory(b) {
       }
       var bt = m.text || '';
       var bh = bt.length > MSG_FOLD_LEN ? renderMarkdown(bt.slice(0, MSG_FOLD_LEN)) + _foldHtml(i, bt.length) : renderMarkdown(bt);
-      return '<div class="msg bot">' + _body(escapeHtml(m.who || b.n), bh) + '</div>';
+      return '<div class="msg bot" data-mi="' + i + '">' + _body(escapeHtml(m.who || b.n), bh) + '</div>';
     }).join('');
   }
   chat.querySelectorAll('.typing').forEach(t => t.remove());
@@ -5888,8 +6061,26 @@ function renderQuickBar() {
 }
 function attachCopyBtns() {
   var chat = document.getElementById('chat'); if (!chat) return;
+  var _lastBot = _lastBotIndex(getBot(currentId));
+  // 编辑：挂在用户自己发出去的消息上
+  chat.querySelectorAll('.msg.me:not([data-edit-bound])').forEach(function (msg) {
+    msg.setAttribute('data-edit-bound', '1');
+    var ed = document.createElement('button');
+    ed.type = 'button'; ed.className = 'msg-act'; ed.textContent = '\u270F\uFE0F 编辑';
+    ed.title = '修改这条消息并重新发送（它之后的对话会被清除）';
+    ed.onclick = function () { openEditMsg(+msg.getAttribute('data-mi')); };
+    msg.appendChild(ed);
+  });
   chat.querySelectorAll('.msg.bot:not([data-copy-bound])').forEach(function (msg) {
     msg.setAttribute('data-copy-bound', '1');
+    // 重新生成：只给最后一条 AI 回复挂，挂在别处没有意义
+    if (+msg.getAttribute('data-mi') === _lastBot && !msg.classList.contains('img-tip')) {
+      var rg = document.createElement('button');
+      rg.type = 'button'; rg.className = 'msg-act'; rg.textContent = '\uD83D\uDD04 重新生成';
+      rg.title = '用同样的上下文重新请求一次回答';
+      rg.onclick = function () { regenLastReply(); };
+      msg.appendChild(rg);
+    }
     var copy = document.createElement('button');
     copy.className = 'msg-copy'; copy.textContent = '\uD83D\uDCBF 复制';
     copy.onclick = function () {
@@ -6180,18 +6371,18 @@ function sampleVideoFrames(url, count, maxW) {
     };
   });
 }
+// 图片生成失败时，在聊天记录里追加错误提示（不只是 toast）
+function appendImageError(msg, botName) {
+  var c = document.getElementById('chat');
+  if (!c) return;
+  c.querySelectorAll('.img-tip').forEach(function (el) { el.remove(); });
+  var errDiv = document.createElement('div');
+  errDiv.className = 'msg bot img-tip img-err-bubble';
+  errDiv.innerHTML = _body(escapeHtml(botName || '系统'), '<div>⚠️ 图片生成失败：' + escapeHtml(msg) + '<br><small>可在设置 → 🖼️ 文生图设置中配置国内/稳定的图片接口（OpenAI Images 兼容）。</small></div>');
+  c.appendChild(errDiv);
+  scrollChatToBottom(true);
+}
 async function sendMsg() {
-  // 图片生成失败时，在聊天记录里追加错误提示（不只是 toast）
-  function appendImageError(msg) {
-    var c = document.getElementById('chat');
-    if (!c) return;
-    c.querySelectorAll('.img-tip').forEach(function (el) { el.remove(); });
-    var errDiv = document.createElement('div');
-    errDiv.className = 'msg bot img-tip img-err-bubble';
-    errDiv.innerHTML = _body(escapeHtml(activeBot && activeBot.n ? activeBot.n : '系统'), '<div>⚠️ 图片生成失败：' + escapeHtml(msg) + '<br><small>可在设置 → 🖼️ 文生图设置中配置国内/稳定的图片接口（OpenAI Images 兼容）。</small></div>');
-    c.appendChild(errDiv);
-    scrollChatToBottom(true);
-  }
   if (sending) {
     // 非串行模式：AI 回复期间允许预输入，把当前输入框文本加入待发队列，回复完成后自动依次发送
     if (!getSerialInput()) {
@@ -6202,9 +6393,7 @@ async function sendMsg() {
     return;
   }
   const b = getBot(currentId); if (!b) { toast('请先选择一个机器人', 'err'); return; }
-  const activeBot = resolveHandoff(b) || b;  // 工作流含「机器人」节点则转交目标机器人应答
-  setChatHeader(activeBot);
-  const inp = document.getElementById('msgInput'), chat = document.getElementById('chat');
+  const inp = document.getElementById('msgInput');
   const pa = document.getElementById('promptArea'); if (pa && (b.prompt || '') !== pa.value) { b.prompt = pa.value; }
   const v = (inp.value || '').trim();
   const imgs = pendingImages.slice();
@@ -6212,7 +6401,7 @@ async function sendMsg() {
   const vids = pendingVideos.slice();
   if (!v && !imgs.length && !auds.length && !vids.length) return;
   inp.value = ''; autoGrowInput();
-  if (!b.history) b.history = [];
+  if (!Array.isArray(b.history)) b.history = [];
   const entry = { role: 'me', text: v, t: Date.now() };
   if (imgs.length) entry.images = imgs;
   if (auds.length) entry.audio = auds;
@@ -6237,6 +6426,19 @@ async function sendMsg() {
   pendingAudios = []; renderAudioPreview();
   pendingVideos = []; renderVideoPreview();
   renderQuickBar(); saveBots();
+  await runReply(b, { text: v, entry: entry });
+}
+// 生成一次回复并写回 b.history。
+// 「发送 / 重新生成 / 编辑重发」三条入口共用它，保证工作流、生图、插件、错误处理与排队行为完全一致。
+async function runReply(b, opt) {
+  opt = opt || {};
+  const activeBot = resolveHandoff(b) || b;  // 工作流含「机器人」节点则转交目标机器人应答
+  setChatHeader(activeBot);
+  const chat = document.getElementById('chat'); if (!chat) return;
+  const entry = opt.entry || {};
+  const v = opt.text || entry.text || '';
+  const imgs = entry.images || [];
+  const auds = entry.audio || [];
   sending = true; abortCtrl = new AbortController();
   chat.querySelectorAll('.typing').forEach(t => t.remove());
   const typing = document.createElement('div');
@@ -6325,8 +6527,8 @@ async function sendMsg() {
               b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
               renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
             }
-          } else { appendImageError('未返回图片地址'); }
-        } catch (e) { console.warn('[图片生成] 失败：', e); appendImageError(e && e.message ? e.message : e); }
+          } else { appendImageError('未返回图片地址', activeBot.n); }
+        } catch (e) { console.warn('[图片生成] 失败：', e); appendImageError(e && e.message ? e.message : e, activeBot.n); }
       }
     } else {
       // 普通对话：启用真实插件（联网检索 / 天气查询）时，先执行工具并把结果注入上下文
@@ -6371,8 +6573,8 @@ async function sendMsg() {
             b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
             renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
           }
-        } else { appendImageError('未返回图片地址'); }
-      } catch (e) { console.warn('[图片生成] 失败：', e); appendImageError(e && e.message ? e.message : e); }
+        } else { appendImageError('未返回图片地址', activeBot.n); }
+      } catch (e) { console.warn('[图片生成] 失败：', e); appendImageError(e && e.message ? e.message : e, activeBot.n); }
     }
     }
   } catch (err) {
@@ -6387,6 +6589,7 @@ async function sendMsg() {
     renderHistory(b); saveBots();
   } finally {
     sending = false; abortCtrl = null; setSendingUI(false);
+    _maybeNameSession(b);   // 首条用户消息自动成为会话名（只在没名字时写一次）
     // 非串行模式：自动发送排队的消息，保持顺序处理
     if (!getSerialInput() && pendingQueue.length) {
       const next = pendingQueue.shift();
@@ -6456,11 +6659,282 @@ function stopGenerate() {
   const chat = document.getElementById('chat');
   if (chat) chat.querySelectorAll('.typing').forEach(t => t.remove());
 }
+// ==================== 消息操作：重新生成 / 编辑重发 ====================
+// DOM 里 .msg 的顺序与 b.history 一一对应（renderHistory 只渲染消息，typing / 进度气泡都是额外元素）
+function _msgEls() {
+  var chat = document.getElementById('chat');
+  return chat ? Array.prototype.slice.call(chat.querySelectorAll('.msg')) : [];
+}
+function _lastBotIndex(b) {
+  var h = (b && b.history) || [];
+  for (var i = h.length - 1; i >= 0; i--) { if (h[i].role === 'bot') return i; }
+  return -1;
+}
+// 重新生成最后一条回复：连同它一起截断，保留之前的历史重新请求
+async function regenLastReply() {
+  const b = getBot(currentId); if (!b) return;
+  if (sending) { toast('正在生成中，请稍候…', 'warn'); return; }
+  if (!b.history || !b.history.length) { toast('还没有对话内容', ''); return; }
+  var idx = _lastBotIndex(b);
+  if (idx < 0) { toast('还没有可重新生成的回复', ''); return; }
+  b.history.splice(idx);
+  var els = _msgEls();
+  for (var i = idx; i < els.length; i++) els[i].remove();  // 同步清 DOM，避免整段重绘的闪动
+  b.updatedAt = Date.now(); saveBots();
+  var lastMe = null;
+  for (var j = b.history.length - 1; j >= 0; j--) { if (b.history[j].role === 'me') { lastMe = b.history[j]; break; } }
+  await runReply(b, { text: (lastMe && lastMe.text) || '', entry: lastMe || {} });
+}
+var _editMsgIndex = -1;
+function openEditMsg(i) {
+  const b = getBot(currentId);
+  if (!b || !b.history || !b.history[i] || b.history[i].role !== 'me') return;
+  if (sending) { toast('正在生成中，请稍候…', 'warn'); return; }
+  _editMsgIndex = i;
+  var ta = document.getElementById('editMsgTa');
+  if (ta) ta.value = b.history[i].text || '';
+  var m = document.getElementById('editMsgModal');
+  if (m) m.classList.add('on');
+  setTimeout(function () {
+    if (!ta) return;
+    ta.focus();
+    try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) { }
+  }, 30);
+}
+function closeEditMsg() {
+  _editMsgIndex = -1;
+  var m = document.getElementById('editMsgModal');
+  if (m) m.classList.remove('on');
+}
+async function confirmEditMsg() {
+  var b = getBot(currentId), i = _editMsgIndex;
+  if (!b || !b.history || i < 0 || !b.history[i]) { closeEditMsg(); return; }
+  var ta = document.getElementById('editMsgTa');
+  var txt = ta ? (ta.value || '').trim() : '';
+  if (!txt) { toast('内容不能为空', 'err'); return; }
+  var msg = b.history[i];
+  msg.text = txt; msg.t = Date.now(); msg.edited = true;
+  // 这条消息之后的所有对话都作废——否则重发会把已经与旧内容绑定的回答再喂回模型
+  b.history.splice(i + 1);
+  var els = _msgEls();
+  for (var k = i; k < els.length; k++) els[k].remove();
+  closeEditMsg();
+  b.updatedAt = Date.now(); saveBots();
+  appendMsg(b, msg);
+  await runReply(b, { text: txt, entry: msg });
+}
+// ==================== 对话导出 ====================
+function chatToMarkdown(b) {
+  var h = (b && b.history) || [];
+  var out = ['# ' + ((b && b.n) || '对话记录'), '',
+    '> 导出时间：' + new Date().toLocaleString() + ' · 共 ' + h.length + ' 条消息', ''];
+  h.forEach(function (m) {
+    var who = m.role === 'me' ? '我' : (m.who || (b && b.n) || '机器人');
+    var ts = m.t ? new Date(m.t).toLocaleString() : '';
+    out.push('## ' + who + (ts ? '  ·  ' + ts : ''));
+    out.push('');
+    out.push(String(m.text || '').trim() || '_[空消息]_');
+    // 媒体只记数量：base64 内联进 Markdown 会让文件大到没法看
+    if (m.images && m.images.length) out.push('', '_（含 ' + m.images.length + ' 张图片，未内联）_');
+    if (m.audio && m.audio.length) out.push('', '_（含 ' + m.audio.length + ' 段音频，未内联）_');
+    if (m.videos && m.videos.length) out.push('', '_（含 ' + m.videos.length + ' 个视频，未内联）_');
+    out.push('');
+  });
+  return out.join('\n');
+}
+function exportChatMd() {
+  var b = getBot(currentId); if (!b) { toast('请先选择一个机器人', 'err'); return; }
+  if (!b.history || !b.history.length) { toast('当前还没有对话内容', ''); return; }
+  var name = String(b.n || '对话').replace(/[\\/:*?"<>|]/g, '_') + '_对话_' + usageDayKey(Date.now()) + '.md';
+  downloadFile(name, chatToMarkdown(b), 'text/markdown;charset=utf-8');
+  toast('已导出 Markdown（' + b.history.length + ' 条消息）', 'ok');
+}
+function copyAllChat() {
+  var b = getBot(currentId);
+  if (!b || !b.history || !b.history.length) { toast('当前还没有对话内容', ''); return; }
+  var txt = b.history.map(function (m) {
+    return (m.role === 'me' ? '我：' : ((m.who || b.n || '机器人') + '：')) + String(m.text || '');
+  }).join('\n\n');
+  copyTextRobust(txt);
+  toast('已复制全部对话（' + b.history.length + ' 条）', 'ok');
+}
+// ==================== 会话管理（多会话切换 + 历史搜索） ====================
+function openSessPanel() {
+  const b = getBot(currentId); if (!b) { toast('请先选择一个机器人', 'err'); return; }
+  var inp = document.getElementById('sessSearch'); if (inp) inp.value = '';
+  renderSessPanel();
+  var m = document.getElementById('sessModal'); if (m) m.classList.add('on');
+}
+function closeSessPanel() {
+  var m = document.getElementById('sessModal'); if (m) m.classList.remove('on');
+}
+function fmtSessTime(ts) {
+  if (!ts) return '';
+  var d = new Date(ts), n = new Date();
+  var hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  if (d.toDateString() === n.toDateString()) return '今天 ' + hm;
+  return (d.getMonth() + 1) + '-' + d.getDate() + ' ' + hm;
+}
+function renderSessPanel() {
+  var box = document.getElementById('sessList'); if (!box) return;
+  var b = getBot(currentId);
+  if (!b || !Array.isArray(b.sessions)) { box.innerHTML = ''; return; }
+  var inp = document.getElementById('sessSearch');
+  var q = inp ? (inp.value || '').trim() : '';
+  if (q) { renderSessHits(b, q); return; }
+  var list = b.sessions.slice().sort(function (x, y) {
+    return ((y && (y.updatedAt || y.createdAt)) || 0) - ((x && (x.updatedAt || x.createdAt)) || 0);
+  });
+  if (!list.length) { box.innerHTML = '<div class="sess-empty">还没有会话</div>'; return; }
+  box.innerHTML = list.map(function (s) {
+    var on = s.id === b.activeSession ? ' on' : '';
+    return '<div class="sess-row' + on + '" data-sid="' + escapeAttr(s.id) + '" onclick="switchSession(\'' + escapeAttr(s.id) + '\')">'
+      + '<span class="sess-main"><span class="sess-title">' + escapeHtml(sessionTitle(s)) + '</span>'
+      + '<span class="sess-sub">' + sessionMsgCount(s) + ' 条消息 · ' + escapeHtml(fmtSessTime(s.updatedAt || s.createdAt)) + '</span></span>'
+      + '<span class="sess-acts">'
+      + '<em onclick="event.stopPropagation();renameSession(\'' + escapeAttr(s.id) + '\')">重命名</em>'
+      + (b.sessions.length > 1 ? '<em onclick="event.stopPropagation();deleteSession(\'' + escapeAttr(s.id) + '\')">删除</em>' : '')
+      + '</span></div>';
+  }).join('');
+}
+// 跨会话全文搜索：命中消息 + 跳转定位
+function renderSessHits(b, q) {
+  var box = document.getElementById('sessList'); if (!box) return;
+  var ql = q.toLowerCase(), hits = [];
+  (b.sessions || []).forEach(function (s) {
+    (s.history || []).forEach(function (m, i) {
+      var t = String((m && m.text) || '');
+      if (!t) return;
+      var p = t.toLowerCase().indexOf(ql);
+      if (p < 0) return;
+      hits.push({ sid: s.id, mi: i, title: sessionTitle(s), who: (m.role === 'me' ? '我' : (m.who || b.n || '机器人')), text: t, pos: p, t: m.t || 0 });
+    });
+  });
+  if (!hits.length) { box.innerHTML = '<div class="sess-empty">没有匹配「' + escapeHtml(q) + '」的对话内容</div>'; return; }
+  hits.sort(function (x, y) { return (y.t || 0) - (x.t || 0); });
+  var total = hits.length;
+  hits = hits.slice(0, 60);
+  box.innerHTML = (total > hits.length ? '<div class="sess-sub" style="padding:2px 4px 6px">共 ' + total + ' 条命中，显示最近 ' + hits.length + ' 条</div>' : '')
+    + hits.map(function (h) {
+      var st = Math.max(0, h.pos - 28), en = Math.min(h.text.length, h.pos + q.length + 56);
+      var before = (st > 0 ? '…' : '') + h.text.slice(st, h.pos);
+      var mid = h.text.slice(h.pos, h.pos + q.length);
+      var after = h.text.slice(h.pos + q.length, en) + (en < h.text.length ? '…' : '');
+      return '<div class="sess-hit" onclick="jumpToHit(\'' + escapeAttr(h.sid) + '\',' + h.mi + ')">'
+        + '<span class="sess-hit-top">' + escapeHtml(h.title) + ' · ' + escapeHtml(h.who) + '</span>'
+        + '<span class="sess-hit-txt">' + escapeHtml(before) + '<mark>' + escapeHtml(mid) + '</mark>' + escapeHtml(after) + '</span></div>';
+    }).join('');
+}
+function jumpToHit(sid, mi) {
+  var b = getBot(currentId); if (!b) return;
+  if (b.activeSession !== sid) switchSession(sid, true);
+  closeSessPanel();
+  setTimeout(function () {
+    var el = _msgEls()[mi];
+    if (!el) return;
+    try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); }
+    el.classList.add('hit');
+    setTimeout(function () { el.classList.remove('hit'); }, 2000);
+  }, 60);
+}
+function switchSession(sid, silent) {
+  const b = getBot(currentId);
+  if (!b || !Array.isArray(b.sessions)) return;
+  var cur = _activeSessionOf(b);
+  if (cur) cur.history = b.history;    // 落定当前会话（通常已是同一引用）
+  var next = b.sessions.filter(function (s) { return s && s.id === sid; })[0];
+  if (!next) { toast('会话不存在', 'err'); return; }
+  b.activeSession = sid;
+  if (!Array.isArray(next.history)) next.history = [];
+  b.history = next.history;            // 关键：b.history 重新指向新会话
+  b.updatedAt = Date.now();
+  saveBots();
+  renderHistory(b); renderQuickBar();
+  if (!silent) toast('已切换到「' + sessionTitle(next) + '」', 'ok');
+  renderSessPanel();
+}
+function newSession() {
+  const b = getBot(currentId); if (!b) return;
+  if (!Array.isArray(b.sessions)) b.sessions = [];
+  var cur = _activeSessionOf(b);
+  if (cur && sessionMsgCount(cur) === 0) { toast('当前会话还是空的', ''); closeSessPanel(); return; }
+  var s = { id: uid(), title: '', history: [], createdAt: Date.now(), updatedAt: Date.now() };
+  b.sessions.push(s);
+  b.activeSession = s.id;
+  b.history = s.history;
+  b.updatedAt = Date.now(); saveBots();
+  renderHistory(b); renderQuickBar(); closeSessPanel();
+  var inp = document.getElementById('msgInput'); if (inp) inp.focus();
+  toast('已新建会话', 'ok');
+}
+function deleteSession(sid) {
+  const b = getBot(currentId);
+  if (!b || !Array.isArray(b.sessions)) return;
+  if (b.sessions.length <= 1) { toast('至少保留一条会话', 'warn'); return; }
+  var s = b.sessions.filter(function (x) { return x && x.id === sid; })[0];
+  if (!s) return;
+  if (!confirm('删除会话「' + sessionTitle(s) + '」？其中的 ' + sessionMsgCount(s) + ' 条消息将不可恢复。')) return;
+  var wasActive = (b.activeSession === sid);
+  b.sessions = b.sessions.filter(function (x) { return x && x.id !== sid; });
+  if (wasActive) {
+    var last = b.sessions[b.sessions.length - 1];
+    b.activeSession = last.id;
+    if (!Array.isArray(last.history)) last.history = [];
+    b.history = last.history;
+    renderHistory(b); renderQuickBar();
+  }
+  b.updatedAt = Date.now(); saveBots();
+  renderSessPanel();
+  toast('已删除会话', 'ok');
+}
+// 行内重命名：不用 window.prompt —— 桌面端 WebView 里它是 no-op
+function renameSession(sid) {
+  const b = getBot(currentId); if (!b) return;
+  var s = (b.sessions || []).filter(function (x) { return x && x.id === sid; })[0];
+  if (!s) return;
+  var box = document.getElementById('sessList'); if (!box) return;
+  var row = box.querySelector('.sess-row[data-sid="' + sid + '"]');
+  if (!row) return;
+  row.innerHTML = '<span class="sess-main"><input class="sess-rename" id="sessRenameInput" maxlength="40" value="'
+    + escapeAttr(s.title || sessionTitle(s)) + '" placeholder="会话名称"></span>';
+  var inp = document.getElementById('sessRenameInput');
+  if (!inp) return;
+  inp.focus(); inp.select();
+  var finished = false;
+  var done = function (save) {
+    if (finished) return;
+    finished = true;
+    if (save) {
+      s.title = String(inp.value || '').trim().slice(0, 40);
+      b.updatedAt = Date.now(); saveBots();
+      toast('已重命名会话', 'ok');
+    }
+    renderSessPanel();
+  };
+  inp.onkeydown = function (e) {
+    e.stopPropagation();   // 别让 Esc 冒到全局去关掉外层弹窗
+    if (e.key === 'Enter') { e.preventDefault(); done(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); done(false); }
+  };
+  inp.onblur = function () { done(true); };
+}
+// 新会话自动命名（首条用户消息前 20 字），只在没名字时写一次
+function _maybeNameSession(b) {
+  var s = _activeSessionOf(b); if (!s) return;
+  s.updatedAt = Date.now();
+  if (s.title) return;
+  var first = (b.history || []).filter(function (m) { return m && m.role === 'me' && String(m.text || '').trim(); })[0];
+  if (first) s.title = String(first.text).replace(/\s+/g, ' ').trim().slice(0, 20);
+}
 function clearChat() {
   const b = getBot(currentId); if (!b) return;
   if (!b.history || b.history.length === 0) { toast('对话已为空', ''); return; }
-  if (!confirm('确定清空当前机器人的全部对话记录吗？')) return;
-  b.history = []; b.updatedAt = Date.now(); saveBots(); renderHistory(b); renderQuickBar(); toast('已清空对话', 'ok');
+  var s = _activeSessionOf(b);
+  var many = !!(s && Array.isArray(b.sessions) && b.sessions.length > 1);
+  if (!confirm(many ? '确定清空当前会话的对话记录吗？（其它会话不受影响）' : '确定清空当前机器人的全部对话记录吗？')) return;
+  b.history.length = 0;   // 原地清空：保持与当前会话 history 的同一引用
+  if (s) { s.history = b.history; s.updatedAt = Date.now(); }
+  b.updatedAt = Date.now(); saveBots(); renderHistory(b); renderQuickBar(); toast('已清空对话', 'ok');
 }
 
 // ==================== 工作流导出 / 导入 ====================
@@ -6731,6 +7205,14 @@ function renderTplPick() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('createModal').classList.contains('on')) closeCreate();
   if (e.key === 'Enter' && document.getElementById('createModal').classList.contains('on') && !e.shiftKey) submitCreate();
+  // 编辑消息弹窗：Esc 取消，Ctrl/Cmd+Enter 提交（普通 Enter 留给换行）
+  var _emm = document.getElementById('editMsgModal');
+  if (_emm && _emm.classList.contains('on')) {
+    if (e.key === 'Escape') { closeEditMsg(); return; }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); confirmEditMsg(); return; }
+  }
+  var _sem = document.getElementById('sessModal');
+  if (_sem && _sem.classList.contains('on') && e.key === 'Escape') { closeSessPanel(); return; }
   // Cmd/Ctrl + K：命令面板
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault(); toggleCmdK();
@@ -6749,6 +7231,10 @@ const CMDK_COMMANDS = [
   { ic: '📚', label: '知识库', hint: '', act: 'knowledge' },
   { ic: '🔌', label: '插件中心', hint: '', act: 'plugins' },
   { ic: '⭐', label: '我的收藏', hint: '', act: 'favorites' },
+  { ic: '🗂', label: '会话管理（切换 / 搜索历史）', hint: '', act: 'sessions' },
+  { ic: '🔁', label: '重新生成上一条回复', hint: '', act: 'regen' },
+  { ic: '📤', label: '导出当前对话（Markdown）', hint: '', act: 'exportChat' },
+  { ic: '📋', label: '复制全部对话', hint: '', act: 'copyChat' },
   { ic: '🗑️', label: '清空当前对话', hint: '', act: 'clear' },
   { ic: '⬇️', label: '导出工作流 JSON', hint: '', act: 'export' },
   { ic: '🧹', label: '清空所有数据（重置）', hint: '', act: 'reset' },
@@ -6812,6 +7298,10 @@ function execCmdK(it) {
   switch (it.act) {
     case 'create': openCreate(); break;
     case 'settings': openSettings(); break;
+    case 'regen': regenLastReply(); break;
+    case 'sessions': openSessPanel(); break;
+    case 'exportChat': exportChatMd(); break;
+    case 'copyChat': copyAllChat(); break;
     case 'account': openAccountPanel(); break;
     case 'logout':
       if (!currentUser) { toast('当前未登录', 'err'); break; }
@@ -6859,6 +7349,8 @@ document.getElementById('cmdkInput').addEventListener('keydown', e => {
   else if (e.key === 'Escape') { toggleCmdK(false); }
 });
 document.getElementById('cmdk').addEventListener('click', e => { if (e.target.id === 'cmdk') toggleCmdK(false); });
+document.getElementById('editMsgModal').addEventListener('click', e => { if (e.target.id === 'editMsgModal') closeEditMsg(); });
+document.getElementById('sessModal').addEventListener('click', e => { if (e.target.id === 'sessModal') closeSessPanel(); });
 function submitCreate() {
   if (!requireLogin()) return;
   const nameEl = document.getElementById('f-name'), descEl = document.getElementById('f-desc');
@@ -7638,7 +8130,7 @@ function enterEmbedMode() {
     if (!raw) return false;
     var cfg; try { cfg = decodeBotCfg(raw); } catch (e) { console.warn('[embed] 解析失败', e); return false; }
     var bot = normalize(cfg);
-    bot.id = uid(); bot._embed = true; bot.history = [];
+    bot.id = uid(); bot._embed = true; bot.history = []; bot.sessions = []; bot.activeSession = ''; _initSessions(bot);
     EMBED_MODE = true;
     document.body.classList.add('embed-mode');
     bots = [bot]; currentId = bot.id;
@@ -7780,6 +8272,177 @@ function downloadEmbedPage(id, enc) {
 }
 
 // ==================== 数据分析（真实图表）====================
+/* ==================== Token 用量与费用统计 ==================== */
+// 数据源是 API 响应里的 usage 字段（流式需要服务端在末个 chunk 回传）。
+// 服务端没给时按字符数估算并打 est 标记——界面会明确区分，绝不把估算混进实测里。
+var USAGE_DAYS_KEEP = 60;          // 按天聚合只留最近 60 天，避免长期使用后撑爆 localStorage
+var USAGE_EST_PER_CHAR = 1 / 1.6;  // 中英混排实测约 1.6 字符 / token
+// 参考单价：元 / 百万 token，[输入, 输出]。用于量级估算，不是账单金额。
+var PRICE_TABLE = {
+  'gpt-4o': [18, 72], 'gpt-4o-mini': [1.1, 4.4], 'gpt-3.5-turbo': [3.5, 10.5],
+  'deepseek-chat': [2, 8], 'deepseek-reasoner': [4, 16],
+  'qwen-max': [20, 60], 'qwen-plus': [0.8, 2], 'qwen-turbo': [0.3, 0.6],
+  'glm-4-plus': [50, 50], 'glm-4-air': [1, 1], 'glm-4-flash': [0, 0],
+  'moonshot-v1-8k': [12, 12], 'claude-3-5-sonnet': [21, 105], 'gemini-1.5-pro': [17.5, 52.5]
+};
+var PRICE_FALLBACK = [10, 30];
+function priceOf(model) {
+  var m = String(model || '').toLowerCase();
+  if (!m) return PRICE_FALLBACK;
+  if (PRICE_TABLE[m]) return PRICE_TABLE[m];
+  var best = null;
+  Object.keys(PRICE_TABLE).forEach(function (k) {
+    if (m.indexOf(k) === 0 && (!best || k.length > best.length)) best = k;  // 带日期后缀的版本号 → 前缀匹配
+  });
+  return best ? PRICE_TABLE[best] : PRICE_FALLBACK;
+}
+function estimateTokens(chars) { return Math.max(0, Math.round((chars || 0) * USAGE_EST_PER_CHAR)); }
+function usageDayKey(ts) {
+  var d = new Date(ts);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function loadUsage() {
+  var d = null;
+  try { d = JSON.parse(__storage.getItem(userScopedKey('usage')) || 'null'); } catch (e) { d = null; }
+  if (!d || typeof d !== 'object') d = {};
+  if (!d.totals || typeof d.totals !== 'object') d.totals = { calls: 0, pt: 0, ct: 0, est: 0 };
+  ['days', 'bots', 'models'].forEach(function (k) { if (!d[k] || typeof d[k] !== 'object') d[k] = {}; });
+  return d;
+}
+var _usageCache = null, _usageCacheWho = null;
+function getUsage() {
+  var who = currentUser ? currentUser.username : '';
+  if (!_usageCache || _usageCacheWho !== who) { _usageCache = loadUsage(); _usageCacheWho = who; }
+  return _usageCache;
+}
+function saveUsage(d) {
+  var keys = Object.keys(d.days || {}).sort();
+  if (keys.length > USAGE_DAYS_KEEP) keys.slice(0, keys.length - USAGE_DAYS_KEEP).forEach(function (k) { delete d.days[k]; });
+  try { __storage.setItem(userScopedKey('usage'), JSON.stringify(d)); } catch (e) { /* 配额满等异常不该影响对话 */ }
+  _usageCache = null;
+}
+// 唯一写入入口：一次 API 调用记一条。任何异常都在这里兜住，统计绝不阻断对话。
+window.recordUsage = function (model, pt, ct, isEst) {
+  try {
+    pt = Math.max(0, Math.round(pt || 0)); ct = Math.max(0, Math.round(ct || 0));
+    if (!pt && !ct) return;
+    var d = getUsage(), day = usageDayKey(Date.now());
+    var bump = function (o) { o.calls = (o.calls || 0) + 1; o.pt = (o.pt || 0) + pt; o.ct = (o.ct || 0) + ct; };
+    d.totals.calls++; d.totals.pt += pt; d.totals.ct += ct;
+    if (isEst) d.totals.est = (d.totals.est || 0) + 1;
+    if (!d.days[day]) d.days[day] = { calls: 0, pt: 0, ct: 0 };
+    bump(d.days[day]);
+    var botName = '';
+    try { var _b = getBot(currentId); botName = (_b && _b.n) || ''; } catch (e) { botName = ''; }
+    if (botName) { if (!d.bots[botName]) d.bots[botName] = { calls: 0, pt: 0, ct: 0 }; bump(d.bots[botName]); }
+    var mk = String(model || '未知模型');
+    if (!d.models[mk]) d.models[mk] = { calls: 0, pt: 0, ct: 0 };
+    bump(d.models[mk]);
+    saveUsage(d);
+    var pg = document.getElementById('page-analytics');
+    if (pg && pg.style.display !== 'none') renderUsagePanel();   // 正看着分析页就实时刷新
+  } catch (e) { /* 静默：统计失败不影响对话主流程 */ }
+};
+// 统计输入侧字符数时跳过 data:URI（图片/音频 base64 不是「文本 token」，且体积巨大）
+function countPromptChars(messages) {
+  var n = 0;
+  (messages || []).forEach(function (m) {
+    var c = m && m.content;
+    if (typeof c === 'string') { n += c.length; return; }
+    if (Array.isArray(c)) c.forEach(function (part) {
+      if (!part) return;
+      if (typeof part.text === 'string') n += part.text.length;
+    });
+  });
+  return n;
+}
+function usageSummary() {
+  var d = getUsage(), today = usageDayKey(Date.now());
+  var pt = d.totals.pt || 0, ct = d.totals.ct || 0;
+  var cost = 0, wIn = 0, wOut = 0;
+  Object.keys(d.models).forEach(function (m) {
+    var x = d.models[m] || { pt: 0, ct: 0 }, p = priceOf(m);
+    cost += x.pt / 1e6 * p[0] + x.ct / 1e6 * p[1];
+    wIn += x.pt * p[0]; wOut += x.ct * p[1];
+  });
+  // 按天只聚合了总量、没拆模型，今日费用用各模型单价的加权平均来估算
+  var avgIn = pt ? wIn / pt : 0, avgOut = ct ? wOut / ct : 0;
+  var td = d.days[today] || { calls: 0, pt: 0, ct: 0 };
+  var days = [];
+  for (var i = 6; i >= 0; i--) {
+    var dt = new Date(); dt.setDate(dt.getDate() - i);
+    var v = d.days[usageDayKey(dt.getTime())] || { calls: 0, pt: 0, ct: 0 };
+    days.push({ calls: v.calls, tokens: v.pt + v.ct });
+  }
+  var bots = Object.keys(d.bots).map(function (n) {
+    var x = d.bots[n] || {};
+    return { name: n, calls: x.calls || 0, tokens: (x.pt || 0) + (x.ct || 0) };
+  }).sort(function (a, b) { return b.tokens - a.tokens; });
+  return {
+    calls: d.totals.calls || 0, pt: pt, ct: ct, tokens: pt + ct,
+    estCalls: d.totals.est || 0, cost: cost,
+    costToday: td.pt / 1e6 * avgIn + td.ct / 1e6 * avgOut,
+    todayTokens: td.pt + td.ct, todayCalls: td.calls, days: days, bots: bots
+  };
+}
+function fmtTokens(n) {
+  n = n || 0;
+  if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + 'k';
+  return String(n);
+}
+function fmtMoney(v) {
+  v = v || 0;
+  if (v <= 0) return '¥0';
+  if (v < 0.01) return '¥' + v.toFixed(4);
+  if (v < 1) return '¥' + v.toFixed(3);
+  if (v < 100) return '¥' + v.toFixed(2);
+  return '¥' + v.toFixed(0);
+}
+function renderUsagePanel() {
+  var box = document.getElementById('usageCards'); if (!box) return;
+  var s = usageSummary();
+  box.innerHTML = [
+    { val: fmtTokens(s.tokens), lbl: '累计 Token', trend: '输入 ' + fmtTokens(s.pt) + ' · 输出 ' + fmtTokens(s.ct) },
+    { val: s.calls.toLocaleString(), lbl: '累计调用（次）', trend: s.estCalls ? s.estCalls + ' 次为估算值' : '全部为服务端实测' },
+    { val: fmtTokens(s.todayTokens), lbl: '今日 Token', trend: s.todayCalls + ' 次调用' },
+    { val: fmtMoney(s.cost), lbl: '累计费用（估）', trend: '今日约 ' + fmtMoney(s.costToday) }
+  ].map(function (c) {
+    return '<div class="usage-card"><div class="val">' + c.val + '</div><div class="lbl">' + escapeHtml(c.lbl)
+      + '</div><div class="trend">' + escapeHtml(c.trend) + '</div></div>';
+  }).join('');
+  var mix = document.getElementById('usageMix'), hint = document.getElementById('usageHint');
+  if (!mix) return;
+  if (!s.tokens) {
+    mix.innerHTML = '<div class="empty-tip" style="padding:18px 10px">还没有用量数据，去工作台聊几句，这里会显示真实 Token 消耗与费用估算</div>';
+    if (hint) hint.textContent = '';
+    return;
+  }
+  var COLORS = ['#8b5cf6', '#6366f1', '#30d358', '#f59e0b', '#ec4899'];
+  var top = s.bots.slice(0, 5), rest = s.bots.slice(5).reduce(function (a, x) { return a + x.tokens; }, 0);
+  var segs = top.map(function (x, i) { return { name: x.name, tokens: x.tokens, color: COLORS[i % COLORS.length] }; });
+  if (rest) segs.push({ name: '其他机器人', tokens: rest, color: '#64748b' });
+  var total = s.tokens || 1;
+  mix.innerHTML = '<div class="usage-bar">' + segs.map(function (g) {
+    return '<i style="width:' + (g.tokens / total * 100).toFixed(2) + '%;background:' + g.color
+      + '" title="' + escapeAttr(g.name + ' · ' + fmtTokens(g.tokens) + ' token') + '"></i>';
+  }).join('') + '</div><div class="usage-legend">' + segs.map(function (g) {
+    return '<span><em style="background:' + g.color + '"></em>' + escapeHtml(g.name) + ' · ' + fmtTokens(g.tokens)
+      + '（' + (g.tokens / total * 100).toFixed(1) + '%）</span>';
+  }).join('') + '</div>';
+  if (hint) {
+    hint.textContent = '近 7 天用量 ' + fmtTokens(s.days.reduce(function (a, d) { return a + d.tokens; }, 0)) + ' token。'
+      + '费用按各模型参考单价加权估算，仅为量级参考、非账单金额。'
+      + (s.estCalls ? '其中 ' + s.estCalls + ' 次调用服务端未返回 usage，已按字符数估算。' : '');
+  }
+}
+function resetUsage() {
+  if (!confirm('确定清空本机的 Token 用量统计吗？此操作不可恢复。')) return;
+  _usageCache = null; _usageCacheWho = null;
+  try { __storage.removeItem(userScopedKey('usage')); } catch (e) { }
+  renderUsagePanel(); toast('已清空用量统计', 'ok');
+}
+
 function renderAnalytics() {
   // 统计卡片（基于真实 bots 数据）
   const totalCalls = bots.reduce((s, b) => s + (b.u || 0), 0);
@@ -7804,6 +8467,8 @@ function renderAnalytics() {
   document.getElementById('statCards').innerHTML = cards.map(c => `<div class="stat-card">
     <div class="val">${c.val}</div><div class="lbl">${c.lbl}</div><div class="trend">↑ ${escapeHtml(c.trend)}</div></div>`).join('');
 
+  // Token 用量与费用（来自真实的 usage 采集）
+  renderUsagePanel();
   // 折线图：调用量趋势（基于 bots 的 u 分布生成 7 天）
   renderLineChart();
   // 占比分布
