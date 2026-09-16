@@ -1099,6 +1099,21 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .ctxp-row.open .ctxp-pre{display:block}
 .ctxp-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--sub)}
 .ctxp-legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px}
+/* ---------- 数据安全：本机自动备份 / 存储占用（数据备份与迁移面板内） ---------- */
+.bk-sec{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.bk-title{display:flex;align-items:baseline;gap:6px;font-size:13px;font-weight:500;color:var(--txt);margin-bottom:6px}
+.bk-sub{font-size:11.5px;font-weight:400;color:var(--sub)}
+.bk-list{display:flex;flex-direction:column;gap:6px;max-height:170px;overflow-y:auto}
+.bk-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;background:var(--fill);font-size:12.5px;color:var(--txt)}
+.bk-row .bk-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.bk-row .bk-size{flex:0 0 auto;min-width:54px;text-align:right;color:var(--sub);font-size:11.5px;font-variant-numeric:tabular-nums}
+.bk-mini{flex:0 0 auto;padding:3px 9px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--txt);font-size:11.5px;cursor:pointer}
+.bk-mini:hover{background:var(--fill-strong)}
+.bk-mini.danger{color:var(--danger);border-color:var(--danger)}
+.bk-empty{padding:10px;border-radius:10px;background:var(--fill);color:var(--sub);font-size:12px;text-align:center}
+.bk-bar{display:flex;height:8px;border-radius:5px;overflow:hidden;background:var(--fill);margin:8px 0 6px}
+.bk-bar i{display:block;height:100%}
+.bk-dir{margin-top:8px;font-size:11px;color:var(--sub);word-break:break-all}
 </style>
 </head>
 <body>
@@ -1735,8 +1750,39 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
       <input id="importConfigFile" type="file" accept="application/json,.json" style="display:none">
     </div>
     <div class="hint" style="font-size:11.5px;color:var(--sub)">提示：① 导出请在「数据多的源」（如双击本地文件打开）操作；② <b style="color:var(--txt)">导入前先登录</b>（否则数据无法绑定到账号）；③ 再到目标源登录后导入。两端都是同一个源（都从 localhost 导出/导入）就会「没区别」。</div>
+
+    <div class="bk-sec" id="bkSec" style="display:none">
+      <div class="bk-title">🛡️ 本机自动备份<span class="bk-sub" id="bkMeta"></span></div>
+      <div class="hint" style="font-size:11.5px;margin:2px 0 8px">每次写盘前自动快照一份，保留最近 <b id="bkKeep">12</b> 份。这是防 <b style="color:var(--txt)">data.json 写坏 / 误删</b>的本地兜底，与上面的「导出文件」互补。</div>
+      <div class="bk-list" id="bkList"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" onclick="bkNow()">🛡️ 立即备份</button>
+        <button class="btn btn-ghost btn-sm" onclick="bkRefresh()">🔄 刷新</button>
+      </div>
+      <div class="hint bk-dir" id="bkDir"></div>
+    </div>
+
+    <div class="bk-sec">
+      <div class="bk-title">📦 存储占用<span class="bk-sub" id="bkUsageSum"></span></div>
+      <div class="bk-list" id="bkUsageList"></div>
+      <div class="hint" id="bkUsageTip" style="font-size:11.5px;margin-top:8px"></div>
+    </div>
+
     <div class="mbox-foot">
       <button class="btn btn-ghost" onclick="closeDataMigrate()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 通用单行输入弹窗（替代 prompt） ==================== -->
+<div class="modal" id="nameInputModal">
+  <div class="mbox" style="width:380px">
+    <h2 id="nameInputTitle">重命名</h2>
+    <div class="hint" id="nameInputHint" style="margin:2px 0 10px">输入后按 Enter 确认，Esc 取消。</div>
+    <input id="nameInputField" type="text" maxlength="60" style="width:100%" onkeydown="nameInputKey(event)">
+    <div class="mbox-foot">
+      <button class="btn btn-ghost" onclick="closeNameInput()">取消</button>
+      <button class="btn btn-primary" onclick="confirmNameInput()">确定</button>
     </div>
   </div>
 </div>
@@ -5510,8 +5556,16 @@ function cardMenu(e, id) {
       toast(`已进入「${b.n}」的对话`, '');
     }
     if (act === 'edit' && b) {
-      const v = prompt('重命名机器人', b.n);
-      if (v !== null) { const nv = v.trim().slice(0, 30); if (nv) { b.n = nv; b.updatedAt = Date.now(); saveBots(); renderGrid(); if (currentId === id) refreshWorkspace(); toast('已重命名', 'ok'); } }
+      // 不用 prompt：桌面端（WebView2）下它是 no-op，点了像没反应且无报错。
+      // 会话重命名早已改成行内编辑，这里统一走通用单行输入弹窗。
+      openNameInput('重命名机器人', b.n, function (v) {
+        const nv = String(v || '').trim().slice(0, 30);
+        if (!nv || nv === b.n) return;
+        b.n = nv; b.updatedAt = Date.now();
+        saveBots(); renderGrid();
+        if (currentId === id) refreshWorkspace();
+        toast('已重命名为「' + nv + '」', 'ok');
+      });
     }
     if (act === 'copy' && b) {
       const nb = JSON.parse(JSON.stringify(b));
@@ -7437,18 +7491,242 @@ function importAllConfig(file) {
       const botNow = bots.length;
       const who = currentUser ? currentUser.username : '';
       toast('已导入 ' + count + ' 项配置，已合并到账号「' + who + '」，共 ' + botNow + ' 个机器人，即将刷新…', 'ok');
-      setTimeout(function () { location.reload(); }, 900);
+      _reloadAfterImport();
     } catch (e) { toast('解析失败：' + e.message, 'err'); }
   };
   reader.readAsText(file);
+}
+// 导入后要刷新页面，但桌面版的注入数据是 main() 启动时写死在 HTML 里的 ——
+// 直接 location.reload() 会读回「导入前」的旧快照，于是导入看起来没生效，
+// 之后任何一次写盘又会把旧数据覆盖回文件。所以先让宿主按最新数据重写注入页，再刷新。
+function _reloadAfterImport() {
+  const go = function () { location.reload(); };
+  let host = null;
+  try { host = bcHostApi(); } catch (e) { host = null; }
+  if (!host || typeof host.bc_sync_page !== 'function') { setTimeout(go, 900); return; }
+  _bkCall('bc_sync_page').then(function () { setTimeout(go, 400); })
+    .catch(function () { toast('本地页面同步失败；数据已写入，但刷新后可能仍显示旧值', 'err'); setTimeout(go, 900); });
 }
 document.getElementById('importConfigFile').addEventListener('change', function (e) {
   const f = e.target.files[0]; if (f) importAllConfig(f); e.target.value = '';
 });
 // 顶栏「💾 备份」专用弹窗
-function openDataMigrate() { document.getElementById('dataMigrateModal').classList.add('on'); }
+function openDataMigrate() {
+  document.getElementById('dataMigrateModal').classList.add('on');
+  try { bkRefresh(); } catch (e) { }
+  try { renderStorageUsage(); } catch (e) { }
+}
 function closeDataMigrate() { document.getElementById('dataMigrateModal').classList.remove('on'); }
+
+// ==================== 本机自动备份（桌面版专属） ====================
+// 桌面版把 localStorage 落到 %APPDATA%\BotCraft\data.json，宿主每次写盘前会先给
+// 「即将被覆盖的那一份」拍个快照，保留最近若干份 —— 这是防「文件写坏 / 误删 / 改错」
+// 的本地兜底，和上面的「导出文件」互补（那个是手动的、可带走的）。
+// 浏览器直接打开时没有宿主桥，整块隐藏，行为与以前一致。
+function bcHostApi() {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.bc_backup_list) return window.pywebview.api;
+  } catch (e) { }
+  return null;
+}
+function _bkCall(name, arg) {
+  const a = bcHostApi();
+  if (!a || typeof a[name] !== 'function') return Promise.reject(new Error('no-host'));
+  try { return Promise.resolve(a[name](arg)); } catch (e) { return Promise.reject(e); }
+}
+function fmtBkSize(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+function _bkRender(payload) {
+  payload = payload || {};
+  const items = payload.items || [];
+  const keepEl = document.getElementById('bkKeep');
+  if (keepEl && payload.keep) keepEl.textContent = payload.keep;
+  const meta = document.getElementById('bkMeta');
+  if (meta) meta.textContent = '· 共 ' + items.length + ' 份';
+  const list = document.getElementById('bkList');
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = '<div class="bk-empty">还没有备份。下次写盘时会自动生成，也可以点「立即备份」。</div>';
+    return;
+  }
+  list.innerHTML = items.map(function (it, i) {
+    return '<div class="bk-row">'
+      + '<span class="bk-name">' + escapeHtml(it.at || it.name || '') + (i === 0 ? ' · 最新' : '') + '</span>'
+      + '<span class="bk-size">' + fmtBkSize(it.size) + '</span>'
+      + '<button class="bk-mini" onclick="bkRestore(\'' + escapeAttr(it.name || '') + '\')">回滚</button>'
+      + '<button class="bk-mini danger" onclick="bkDelete(\'' + escapeAttr(it.name || '') + '\')">删除</button>'
+      + '</div>';
+  }).join('');
+}
+function bkRefresh() {
+  const sec = document.getElementById('bkSec');
+  const list = document.getElementById('bkList');
+  if (!sec || !list) return;
+  if (!bcHostApi()) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  list.innerHTML = '<div class="bk-empty">读取中…</div>';
+  _bkCall('bc_backup_list').then(function (res) {
+    res = res || {};
+    const dir = document.getElementById('bkDir');
+    if (dir) dir.textContent = '备份目录：' + (res.dir || '');
+    _bkRender(res);
+  }).catch(function () {
+    list.innerHTML = '<div class="bk-empty">读取失败（宿主未就绪）</div>';
+  });
+}
+function bkNow() {
+  if (!bcHostApi()) { toast('本机自动备份仅在桌面版可用', 'err'); return; }
+  toast('正在备份…', '');
+  _bkCall('bc_backup_now').then(function (res) {
+    if (res && res.ok) { toast('已生成备份快照', 'ok'); _bkRender(res); }
+    else toast('备份失败', 'err');
+  }).catch(function () { toast('备份失败', 'err'); });
+}
+// 回滚：宿主侧会把当前状态先存一份（名字带 pre-restore）再覆盖，所以点错也能退回来。
+// 宿主同时重写了注入页，所以这里的 reload 拿到的就是回滚后的数据（否则会读回旧快照）。
+function bkRestore(name) {
+  if (!name) return;
+  if (!confirm('回滚到这个备份？\n\n' + name + '\n\n当前数据会先被自动备份一份（名字带 pre-restore），然后才被这个备份覆盖。')) return;
+  toast('正在回滚…', '');
+  _bkCall('bc_backup_restore', name).then(function (res) {
+    if (!res || !res.ok) { toast('回滚失败：' + ((res && res.err) || '未知错误'), 'err'); return; }
+    toast('已回滚 ' + (res.keys || 0) + ' 项，正在重新加载…', 'ok');
+    setTimeout(function () { location.reload(); }, 800);
+  }).catch(function () { toast('回滚失败', 'err'); });
+}
+function bkDelete(name) {
+  if (!name) return;
+  if (!confirm('删除这个备份？\n\n' + name + '\n\n删除后无法恢复这一份。')) return;
+  _bkCall('bc_delete_backup', name).then(function (res) {
+    if (res && res.ok) { toast('已删除备份', 'ok'); _bkRender(res); }
+    else toast('删除失败', 'err');
+  }).catch(function () { toast('删除失败', 'err'); });
+}
+
+// ==================== 存储占用与预警（只读统计） ====================
+// 口径说明：localStorage 按 UTF-16 计，1 字符 = 2 字节；这里统计**全部**键
+// （含 usage.* —— 账号页那个 accountStorageUsage 只算 botcraft.*.<用户名>，会漏掉用量）。
+function _lsAllKeys() {
+  try { return (storage.keys ? storage.keys() : []) || []; } catch (e) { return []; }
+}
+// 从机器人数据里量出「内联媒体」的体量：语音/图片是以 base64 直接塞在消息里的，
+// 这才是数据文件膨胀的主因，必须和正文分开计量，否则看不出该清谁。
+function _mediaChars(botsRaw) {
+  let bots;
+  try { bots = JSON.parse(botsRaw); } catch (e) { return 0; }
+  if (!Array.isArray(bots)) return 0;
+  const MEDIA_KEYS = ['audio', 'images', 'image', 'video', 'videos', 'files', 'attachments'];
+  let total = 0;
+  function scanMsg(m) {
+    if (!m || typeof m !== 'object') return;
+    MEDIA_KEYS.forEach(function (kk) {
+      const val = m[kk];
+      if (typeof val === 'string') total += val.length;
+      else if (Array.isArray(val)) val.forEach(function (x) { if (typeof x === 'string') total += x.length; });
+      else if (val && typeof val === 'object') {
+        Object.keys(val).forEach(function (sk) { if (typeof val[sk] === 'string') total += val[sk].length; });
+      }
+    });
+  }
+  bots.forEach(function (b) {
+    if (!b || typeof b !== 'object') return;
+    (b.history || []).forEach(scanMsg);
+    (b.sessions || []).forEach(function (s) { ((s && s.history) || []).forEach(scanMsg); });
+  });
+  return total;
+}
+function storageUsageDetail() {
+  const out = { bytes: 0, keys: 0, media: 0, text: 0, other: 0, big: [], botsKeys: 0 };
+  const keys = _lsAllKeys();
+  for (let i = 0; i < keys.length; i++) {
+    const k = String(keys[i]);
+    let v = '';
+    try { v = storage.getItem(k) || ''; } catch (e) { v = ''; }
+    const n = (k.length + v.length) * 2;
+    out.bytes += n;
+    out.keys++;
+    if (k.indexOf('botcraft.bots.') === 0) {
+      const mediaChars = _mediaChars(v);
+      const mediaBytes = mediaChars * 2;
+      out.media += mediaBytes;
+      out.text += Math.max(0, n - mediaBytes);
+      out.botsKeys++;
+      out.big.push({ k: k, bytes: n, media: mediaBytes });
+    } else {
+      out.other += n;
+    }
+  }
+  out.big.sort(function (a, b) { return b.bytes - a.bytes; });
+  return out;
+}
+function renderStorageUsage() {
+  const list = document.getElementById('bkUsageList');
+  const sum = document.getElementById('bkUsageSum');
+  const tip = document.getElementById('bkUsageTip');
+  if (!list) return;
+  const d = storageUsageDetail();
+  if (sum) sum.textContent = '· ' + fmtAccountBytes(d.bytes) + ' · ' + d.keys + ' 个键';
+  const pct = d.bytes ? Math.round(d.media / d.bytes * 100) : 0;
+  const seg = function (v) { return d.bytes ? Math.max(0, Math.round(v / d.bytes * 100)) : 0; };
+  list.innerHTML =
+    '<div class="bk-bar">'
+    + '<i style="width:' + seg(d.media) + '%;background:var(--warn)"></i>'
+    + '<i style="width:' + seg(d.text) + '%;background:var(--brand)"></i>'
+    + '<i style="width:' + seg(d.other) + '%;background:var(--sub)"></i>'
+    + '</div>'
+    + '<div class="bk-row"><span class="bk-name">内联媒体（语音 / 图片 base64）</span><span class="bk-size">' + fmtAccountBytes(d.media) + '</span></div>'
+    + '<div class="bk-row"><span class="bk-name">对话正文</span><span class="bk-size">' + fmtAccountBytes(d.text) + '</span></div>'
+    + '<div class="bk-row"><span class="bk-name">其它（账号 / 设置 / 用量）</span><span class="bk-size">' + fmtAccountBytes(d.other) + '</span></div>';
+  if (!tip) return;
+  if (d.bytes > 4 * 1048576) {
+    tip.innerHTML = '<b style="color:var(--danger)">⚠️ 占用已超过 4 MB。</b>数据每次读写都要整份序列化，继续增长会明显拖慢启动与写盘。建议先「导出全部配置」留一份，再清掉不需要的会话。';
+  } else if (pct >= 50) {
+    tip.innerHTML = '<b style="color:var(--warn)">⚠️ 内联媒体占了 ' + pct + '%。</b>语音与图片是以 base64 直接存在数据文件里的，一条长音频就能有几百 KB。清掉不再需要的会话是最有效的瘦身方式。';
+  } else {
+    tip.innerHTML = '占用正常。打开这个面板时会自动读一遍本地数据，只统计、不修改。';
+  }
+}
+
 document.getElementById('dataMigrateModal').addEventListener('click', function (e) { if (e.target.id === 'dataMigrateModal') closeDataMigrate(); });
+
+// ==================== 通用单行输入弹窗（替代 prompt） ====================
+// 桌面端（pywebview / WebView2）下 window.prompt 是 no-op：返回 undefined 且不报错，
+// 用户点了「重命名」像没反应。会话重命名早已改行内编辑，卡片菜单这处是漏网的，
+// 统一走这个自有弹窗。别退回 prompt。
+let _nameInputCb = null;
+function openNameInput(title, value, onOk, hint) {
+  _nameInputCb = (typeof onOk === 'function') ? onOk : null;
+  const t = document.getElementById('nameInputTitle');
+  const i = document.getElementById('nameInputField');
+  const h = document.getElementById('nameInputHint');
+  if (t) t.textContent = title || '输入';
+  if (h) h.textContent = hint || '输入后按 Enter 确认，Esc 取消。';
+  if (i) i.value = value || '';
+  const m = document.getElementById('nameInputModal');
+  if (m) m.classList.add('on');
+  setTimeout(function () { if (i) { i.focus(); i.select(); } }, 60);
+}
+function closeNameInput() {
+  const m = document.getElementById('nameInputModal');
+  if (m) m.classList.remove('on');
+  _nameInputCb = null;
+}
+function confirmNameInput() {
+  const i = document.getElementById('nameInputField');
+  const v = i ? String(i.value || '') : '';
+  const cb = _nameInputCb;
+  closeNameInput();
+  if (cb) { try { cb(v); } catch (e) { console.error('[nameInput]', e); } }
+}
+function nameInputKey(e) {
+  if (e.key === 'Enter') { e.preventDefault(); confirmNameInput(); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeNameInput(); }
+}
+document.getElementById('nameInputModal').addEventListener('click', function (e) { if (e.target.id === 'nameInputModal') closeNameInput(); });
 
 // ==================== 提示词 / 知识库 / 插件 ====================
 function renderKbPanel(b) {
@@ -9488,6 +9766,8 @@ window.openSettings = openSettings; window.closeSettings = closeSettings;
 window.saveSettings = saveSettings; window.testConnection = testConnection;
 window.toggleFavorite = toggleFavorite;
 window.toggleCmdK = toggleCmdK; window.exportWorkflow = exportWorkflow; window.importWorkflowFromFile = importWorkflowFromFile; window.exportAllConfig = exportAllConfig; window.importAllConfig = importAllConfig; window.openDataMigrate = openDataMigrate; window.closeDataMigrate = closeDataMigrate;
+window.bkRefresh = bkRefresh; window.bkNow = bkNow; window.bkRestore = bkRestore; window.bkDelete = bkDelete; window.renderStorageUsage = renderStorageUsage; window.storageUsageDetail = storageUsageDetail;
+window.openNameInput = openNameInput; window.closeNameInput = closeNameInput; window.confirmNameInput = confirmNameInput; window.nameInputKey = nameInputKey;
 window.publishAllBots = publishAllBots; window.publishTemplateBots = publishTemplateBots;
 window.openAccountPanel = openAccountPanel; window.closeAccountPanel = closeAccountPanel;
 window.saveAccountProfile = saveAccountProfile; window.changeAccountPassword = changeAccountPassword;
