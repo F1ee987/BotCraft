@@ -543,6 +543,29 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .chat-input button:active{filter:brightness(.94);transform:scale(.97)}
 .chat-input button:disabled{opacity:.4;cursor:not-allowed;filter:none}
 .chat-input .attach-btn{padding:0;width:44px;height:44px;border-radius:12px;background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .18s var(--ease)}
+/* 提示词库 + 斜杠指令 */
+.input-wrap{position:relative}
+.slash-menu{position:absolute;left:0;right:0;bottom:calc(100% + 10px);max-height:300px;overflow:auto;z-index:80;
+  padding:6px;border-radius:14px;background:var(--popover);border:1px solid var(--glass-border);box-shadow:var(--lg-shadow)}
+.slash-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13px;color:var(--txt);transition:background .13s var(--ease)}
+.slash-item:hover,.slash-item.on{background:var(--fill-strong)}
+.slash-ic{flex-shrink:0;width:24px;height:24px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;font-size:13px}
+.slash-name{font-weight:590;flex-shrink:0}
+.slash-txt{color:var(--sub);font-size:11.5px;margin-left:auto;max-width:56%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slash-hint{padding:7px 10px 4px;font-size:11px;color:var(--sub);border-top:1px solid var(--line);margin-top:5px}
+.slash-empty{padding:15px 10px;text-align:center;font-size:12px;color:var(--sub);line-height:1.7}
+.snip-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;background:var(--fill);border:1px solid transparent;transition:.15s var(--ease)}
+.snip-row:hover{border-color:var(--glass-border)}
+.snip-row.editing{display:block;background:var(--fill-strong)}
+.snip-ic{flex-shrink:0;width:30px;height:30px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:15px}
+.snip-main{flex:1;min-width:0}
+.snip-name{font-size:13px;font-weight:590;color:var(--txt)}
+.snip-tag{font-size:10px;color:var(--sub);border:1px solid var(--line);border-radius:5px;padding:0 5px;margin-left:6px;font-weight:400}
+.snip-text{font-size:11.5px;color:var(--sub);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.snip-x{border:0;background:none;color:var(--sub);cursor:pointer;font-size:13px;padding:3px 5px;border-radius:7px;font-family:inherit;flex-shrink:0}
+.snip-x:hover{background:var(--fill-strong);color:var(--txt)}
+.snip-inp{padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font-size:12.5px;font-family:inherit;box-sizing:border-box}
+.snip-inp:focus{outline:none;border-color:var(--brand)}
 .chat-input .attach-btn:hover{background:var(--fill-hover)}
 .input-wrap{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
 .img-preview{display:flex;gap:8px;flex-wrap:wrap}
@@ -613,6 +636,23 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg-act:hover{background:var(--fill-strong);color:var(--brand)}
 .msg-act:active{transform:scale(.97)}
 .msg-act[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}
+/* 回答下方的「参考来源」条：展开可看命中片段与原文 */
+.kb-cite{margin-top:9px;padding-top:8px;border-top:1px dashed var(--line)}
+.kb-cite-head{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:980px;border:1px solid var(--line);
+  background:var(--fill);color:var(--sub);font-size:11.5px;font-weight:590;cursor:pointer;font-family:inherit;transition:.15s var(--ease)}
+.kb-cite-head:hover{background:var(--fill-strong);color:var(--brand);border-color:var(--brand)}
+.kb-cite-head .kb-caret{display:inline-block;transition:transform .18s var(--ease)}
+.kb-cite-head.open .kb-caret{transform:rotate(180deg)}
+.kb-cite-body{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.kb-cite-row{padding:8px 11px;border-radius:10px;background:var(--fill);border:1px solid transparent;transition:.15s var(--ease)}
+.kb-cite-row:hover{border-color:var(--glass-border)}
+.kb-cite-name{font-size:11.5px;font-weight:590;color:var(--txt)}
+.kb-cite-meta{font-size:10.5px;color:var(--sub);margin-left:7px}
+.kb-cite-text{font-size:12px;color:var(--sub);line-height:1.62;margin-top:4px;white-space:pre-wrap;word-break:break-word}
+.kb-cite-text.full{color:var(--txt)}
+.kb-cite-more{margin-top:5px;border:0;background:none;color:var(--brand);font-size:11.5px;cursor:pointer;padding:0;font-family:inherit}
+.kb-cite-more:hover{text-decoration:underline}
+.kb-cite-empty{font-size:11.5px;color:var(--sub)}
 /* 编辑消息弹窗 */
 .edit-msg-ta{width:100%;min-height:132px;max-height:44vh;resize:vertical;box-sizing:border-box;border-radius:12px;padding:11px 13px;
   background:var(--fill);color:var(--txt);border:1px solid var(--line);font-size:13px;line-height:1.6;font-family:inherit}
@@ -1136,12 +1176,53 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 </div>
 
 <div class="modal" id="kbModal">
-  <div class="mbox" style="width:640px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+  <div class="mbox" style="width:640px;max-width:92vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px">
       <h2 id="kbPrevTitle" style="font-size:16px">知识库预览</h2>
-      <button class="btn btn-ghost" onclick="document.getElementById('kbModal').classList.remove('on')">关闭</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-ghost btn-sm" id="kbEditBtn" onclick="kbToggleEdit()">✏️ 编辑</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeKbModal()">关闭</button>
+      </div>
     </div>
     <div id="kbPrevBody" style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--txt);max-height:60vh;overflow:auto"></div>
+    <div id="kbEditWrap" style="display:none">
+      <div class="hint" id="kbEditHint" style="margin:0 0 8px;font-size:11.5px"></div>
+      <textarea id="kbEditText" spellcheck="false" style="width:100%;height:52vh;box-sizing:border-box;padding:11px 13px;border-radius:12px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:13px;line-height:1.7;resize:vertical;font-family:inherit"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick="kbCancelEdit()">取消</button>
+        <button class="btn btn-primary btn-sm" onclick="kbSaveEdit()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="kbUrlModal">
+  <div class="mbox" style="width:560px;max-width:92vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px">
+      <h2 style="font-size:16px">🔗 从网址导入</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">关闭</button>
+    </div>
+    <div class="hint" style="font-size:11.5px;margin:0 0 10px">抓取网页正文并建成知识库文档。部分站点会阻止跨域抓取，此时会提示你直接粘贴正文——粘贴同样可以导入。</div>
+    <input id="kbUrlInput" type="text" spellcheck="false" placeholder="https://example.com/article" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit">
+    <textarea id="kbUrlPaste" spellcheck="false" placeholder="把网页正文粘贴到这里，再点「导入」" style="display:none;width:100%;box-sizing:border-box;height:200px;margin-top:9px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;line-height:1.65;resize:vertical;font-family:inherit"></textarea>
+    <div style="display:flex;gap:8px;margin-top:11px;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">取消</button>
+      <button class="btn btn-primary btn-sm" id="kbUrlBtn" onclick="kbFetchUrl()">抓取并导入</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="snipModal">
+  <div class="mbox" style="width:620px;max-width:92vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px">
+      <h2 style="font-size:16px">✦ 提示词库</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeSnipPanel()">关闭</button>
+    </div>
+    <div class="hint" style="font-size:11.5px;margin:0 0 11px">点「插入」把指令写进输入框；在输入框里打 <b>/</b> 会唤起同一份清单，↑↓ 选择、Enter 插入。</div>
+    <div id="snipList" style="max-height:46vh;overflow:auto;display:flex;flex-direction:column;gap:6px"></div>
+    <div style="margin-top:11px;display:flex;justify-content:flex-end">
+      <button class="btn btn-primary btn-sm" onclick="snipNew()">＋ 新建指令</button>
+    </div>
   </div>
 </div>
 
@@ -1356,11 +1437,13 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
         <button class="attach-btn" id="recBtn" type="button" title="录音（再次点击停止）" onclick="toggleRecord()">🎤</button>
         <button class="attach-btn" id="vidBtn" type="button" title="发送视频（自动抽帧给视觉模型）" onclick="document.getElementById('vidInput').click()">🎬</button>
         <input type="file" id="vidInput" accept="video/*" multiple style="display:none" onchange="onVideoSelect(event)">
+        <button class="attach-btn" id="snippetBtn" type="button" title="提示词库（也可在输入框打 / 唤起）" onclick="openSnippetPanel()">✦</button>
         <div class="input-wrap">
           <div class="img-preview" id="imgPreview"></div>
           <div class="audio-preview" id="audioPreview"></div>
           <div class="video-preview" id="videoPreview"></div>
-          <textarea id="msgInput" rows="1" placeholder="输入消息测试你的机器人…（可粘贴 / 拖入图片或视频，🎤 录音，Enter 发送，Shift+Enter 换行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}" oninput="autoGrowInput()" onpaste="onImagePaste(event)" ondrop="onImageDrop(event)" ondragover="onImageDragOver(event)"></textarea>
+          <div class="slash-menu" id="slashMenu" style="display:none"></div>
+          <textarea id="msgInput" rows="1" placeholder="输入消息…（Enter 发送，Shift+Enter 换行；打 / 唤起提示词指令，可粘贴或拖入图片 / 视频）" onkeydown="return msgKeyDown(event)" oninput="onMsgInput()" onpaste="onImagePaste(event)" ondrop="onImageDrop(event)" ondragover="onImageDragOver(event)"></textarea>
         </div>
         <button id="sendBtn" onclick="sendMsg()">发送</button>
       </div>
@@ -1390,7 +1473,10 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
   <main class="main" id="page-knowledge" style="display:none">
     <div class="page-head">
       <div><h1>知识库</h1><div class="sub">为你的机器人注入专属知识</div></div>
-      <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="document.getElementById('kbImport').click()">＋ 导入文档</button>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="openKbUrl()">🔗 网址导入</button>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('kbImport').click()">＋ 导入文档</button>
+      </div>
     <input type="file" id="kbImport" accept=".txt,.md,.markdown,.csv,.json,text/*" multiple style="display:none">
     </div>
     <div id="kbList"></div>
@@ -2340,6 +2426,15 @@ window.__storage = __storage;
       const MAX_KB_LEN = 6000;
       const safeKctx = kctx.length > MAX_KB_LEN ? kctx.slice(0, MAX_KB_LEN) + '\n…（知识库内容过长已截断）' : kctx;
       if (safeKctx) pushSec('kb', '\n【知识库】以下是已挂载知识库的完整正文，请直接作为回答依据：\n' + safeKctx + '\n\n注意：知识库内容已随本条系统提示一并提供，用户无需再次上传或粘贴相同内容；除非知识库确实为空，否则不要向用户索要文件或文本。');
+      // 走一次检索并登记命中片段，供回答下方标注引用来源。
+      // 注入内容仍是全量（保证回答质量不因改检索而退化），检索只用于「告诉用户依据在哪」。
+      // 预览/压缩预演不算真实生成，跳过以免污染引用记录。
+      if (!(opts && opts.preview) && typeof window.searchKBHits === 'function') {
+        try {
+          var _lastMe = (bot.history || []).slice().reverse().find(function (m) { return m.role === 'me' && m.text; });
+          if (_lastMe && _lastMe.text) window.kbPushHits(window.searchKBHits(bot, _lastMe.text, 5));
+        } catch (e) { }
+      }
     }
     if (bot && bot.plugins && bot.plugins.length) {
       var realTools = ['网页搜索', '联网检索', '天气查询', '图片生成'];
@@ -3785,6 +3880,230 @@ function saveKB() {
 function flushKB() { if (_saveKBTimer) { clearTimeout(_saveKBTimer); _saveKBTimer = null; } _writeKB(); }
 window.addEventListener('beforeunload', flushKB);
 function kbById(id) { return ALL_KB.find(function (x) { return x.id === id; }); }
+
+// ==================== 提示词片段库 + 斜杠指令 ====================
+// 同一份数据两个入口：既是「✦ 提示词库」里可点选插入的条目，也是输入框打 / 时唤起的指令清单。
+var SNIPPET_SEED = [
+  { id: 'sp_sum', ic: '📝', name: '总结', text: '请用要点形式总结上面的内容，保留关键结论、数字与待办事项。' },
+  { id: 'sp_tr', ic: '🌐', name: '翻译', text: '把下面的内容翻译成中文（若原文是中文则译为英文），保留原文语气与专有名词：\n\n' },
+  { id: 'sp_tbl', ic: '📊', name: '表格', text: '把上述信息整理成 Markdown 表格，列名清晰，按重要度排序。' },
+  { id: 'sp_polish', ic: '✨', name: '润色', text: '请润色下面的文字：去掉 AI 腔与套话，让表达自然、具体、有观点，不要改变原意。\n\n' },
+  { id: 'sp_short', ic: '✂️', name: '精简', text: '把上面的内容压缩到大约一半篇幅，只保留最有价值的信息，不要丢关键数字。' },
+  { id: 'sp_expand', ic: '🔍', name: '扩写', text: '把上面的内容扩写成更完整的版本，补充细节、例子与数据支撑。' },
+  { id: 'sp_steps', ic: '🪜', name: '步骤', text: '把上面内容拆成可执行步骤，每一步写清「做什么、产出什么、注意什么」。' },
+  { id: 'sp_review', ic: '🔎', name: '挑错', text: '请审阅上面的内容，指出事实错误、逻辑漏洞与不严谨表述，并逐条给出修改建议。' },
+  { id: 'sp_mail', ic: '📧', name: '邮件', text: '把上面内容改写成一封得体的邮件：主题明确、正文简洁、结尾给出明确的下一步。' },
+  { id: 'sp_code', ic: '💻', name: '代码', text: '请给出可直接运行的代码，注明依赖与运行方式，并说明边界情况和可能的坑。' }
+];
+SNIPPET_SEED.forEach(function (s) { s.builtin = true; });
+
+var SNIPPETS = [];
+var _slashIdx = 0, _slashList = [], _slashMuteVal = '';
+
+function loadSnippets() {
+  try {
+    SNIPPETS = JSON.parse(localStorage.getItem(userScopedKey('snippets')) || '[]');
+    if (!Array.isArray(SNIPPETS)) SNIPPETS = [];
+  } catch (e) { SNIPPETS = []; }
+  var exist = {}; SNIPPETS.forEach(function (x) { if (x && x.id) exist[x.id] = 1; });
+  SNIPPET_SEED.forEach(function (s) { if (!exist[s.id]) SNIPPETS.unshift(JSON.parse(JSON.stringify(s))); });
+}
+function saveSnippets() {
+  try { localStorage.setItem(userScopedKey('snippets'), JSON.stringify(SNIPPETS)); }
+  catch (e) { toast('提示词保存失败（存储已满？）', 'err'); }
+}
+function snippetById(id) { return SNIPPETS.find(function (x) { return x.id === id; }); }
+function snippetNewId() { return 'sp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+
+// ---------- 输入框键盘 / 插入 ----------
+function msgKeyDown(e) {
+  if (slashIsOpen()) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); slashMove(1); return false; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); slashMove(-1); return false; }
+    if (e.key === 'Enter') { e.preventDefault(); slashAccept(); return false; }
+    if (e.key === 'Escape') { e.preventDefault(); slashClose(true); return false; }
+  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); return false; }
+  return true;
+}
+function onMsgInput() { autoGrowInput(); slashUpdate(); }
+
+function insertSnippetText(text, label) {
+  var inp = document.getElementById('msgInput'); if (!inp) return;
+  var cur = inp.value || '';
+  var st = (typeof inp.selectionStart === 'number') ? inp.selectionStart : cur.length;
+  var en = (typeof inp.selectionEnd === 'number') ? inp.selectionEnd : cur.length;
+  if (en < st) { var t0 = st; st = en; en = t0; }
+  // 正在打斜杠命令时，连同「/命令」一起替换掉，避免残留半截命令名
+  var m = /(^|[\s])\/([^\s\/]*)$/.exec(cur.slice(0, st));
+  if (m) st = st - m[2].length - 1;
+  if (st < 0) st = 0;
+  var before = cur.slice(0, st), after = cur.slice(en);
+  var ins = String(text || '');
+  if (before && !/\s$/.test(before)) ins = ' ' + ins;
+  inp.value = before + ins + after;
+  var pos = (before + ins).length;
+  try { inp.setSelectionRange(pos, pos); } catch (e) { }
+  try { inp.focus(); } catch (e) { }
+  autoGrowInput();
+  if (label) toast('已插入「' + label + '」', 'ok', 1500);
+}
+
+// ---------- 斜杠指令菜单 ----------
+function slashMenuEl() { return document.getElementById('slashMenu'); }
+function slashIsOpen() { var m = slashMenuEl(); return !!(m && m.style.display !== 'none'); }
+function slashQuery() {
+  var inp = document.getElementById('msgInput'); if (!inp) return null;
+  var cur = inp.value || '';
+  var st = inp.selectionStart || 0;
+  // 只在行首或空白之后输入 / 才唤起，避免「10/100」这类正常文本误触发
+  var m = /(^|[\s])\/([^\s\/]*)$/.exec(cur.slice(0, st));
+  return m ? m[2] : null;
+}
+function slashUpdate() {
+  var m = slashMenuEl(); if (!m) return;
+  var q = slashQuery();
+  if (q === null) { m.style.display = 'none'; _slashIdx = 0; _slashList = []; _slashMuteVal = ''; return; }
+  // 用户按 Esc 主动关过菜单：只要输入值还是当时那一份（或在其后继续输入）就保持静音，
+  // 一旦删短了就恢复响应 —— 否则 Esc 之后再也唤不出菜单。
+  if (_slashMuteVal) {
+    var inp0 = document.getElementById('msgInput');
+    var cur0 = inp0 ? (inp0.value || '') : '';
+    if (cur0.length >= _slashMuteVal.length && cur0.indexOf(_slashMuteVal) === 0) { m.style.display = 'none'; return; }
+    _slashMuteVal = '';
+  }
+  var ql = q.toLowerCase();
+  _slashList = SNIPPETS.filter(function (s) {
+    if (!ql) return true;
+    return String(s.name || '').toLowerCase().indexOf(ql) >= 0
+      || String(s.text || '').toLowerCase().indexOf(ql) >= 0;
+  }).slice(0, 12);
+  if (!_slashList.length) {
+    m.innerHTML = '<div class="slash-empty">没有匹配「/' + escapeHtml(q) + '」的指令<br><span style="opacity:.75">可在「✦ 提示词库」里新建</span></div>';
+    m.style.display = ''; _slashIdx = 0;
+    return;
+  }
+  if (_slashIdx >= _slashList.length || _slashIdx < 0) _slashIdx = 0;
+  m.innerHTML = _slashList.map(function (s, i) {
+    return '<div class="slash-item' + (i === _slashIdx ? ' on' : '') + '" data-si="' + i + '">'
+      + '<span class="slash-ic">' + escapeHtml(s.ic || '✨') + '</span>'
+      + '<span class="slash-name">/' + escapeHtml(s.name) + '</span>'
+      + '<span class="slash-txt">' + escapeHtml(String(s.text || '').replace(/\n/g, ' ')) + '</span>'
+      + '</div>';
+  }).join('') + '<div class="slash-hint">↑↓ 选择 · Enter 插入 · Esc 关闭 · 在「✦ 提示词库」中管理</div>';
+  m.style.display = '';
+  m.querySelectorAll('[data-si]').forEach(function (el) {
+    el.onclick = function () { _slashIdx = +el.getAttribute('data-si'); slashAccept(); };
+  });
+}
+function slashMove(d) {
+  if (!_slashList.length) return;
+  _slashIdx = (_slashIdx + d + _slashList.length) % _slashList.length;
+  var m = slashMenuEl(); if (!m) return;
+  m.querySelectorAll('.slash-item').forEach(function (el, i) { el.classList.toggle('on', i === _slashIdx); });
+  var on = m.querySelector('.slash-item.on');
+  if (on && on.scrollIntoView) { try { on.scrollIntoView({ block: 'nearest' }); } catch (e) { } }
+}
+function slashAccept() {
+  var s = _slashList[_slashIdx];
+  if (!s) { slashClose(); return; }
+  slashClose();
+  insertSnippetText(s.text, s.name);
+}
+function slashClose(mute) {
+  var m = slashMenuEl();
+  if (m) m.style.display = 'none';
+  _slashIdx = 0; _slashList = [];
+  if (mute) {
+    var inp = document.getElementById('msgInput');
+    _slashMuteVal = inp ? (inp.value || '') : '';
+  } else {
+    _slashMuteVal = '';
+  }
+}
+
+// ---------- 提示词库面板 ----------
+var _snipEditing = null;
+function openSnippetPanel() {
+  _snipEditing = null;
+  slashClose();
+  renderSnipList();
+  var m = document.getElementById('snipModal'); if (m) m.classList.add('on');
+}
+function closeSnipPanel() {
+  _snipEditing = null;
+  var m = document.getElementById('snipModal'); if (m) m.classList.remove('on');
+}
+function snipNew() {
+  _snipEditing = 'new';
+  renderSnipList();
+  var i = document.getElementById('snipNameInp'); if (i) i.focus();
+}
+function snipEdit(id) { _snipEditing = id; renderSnipList(); }
+function snipCancelEdit() { _snipEditing = null; renderSnipList(); }
+function snipDelete(id) {
+  var s = snippetById(id); if (!s) return;
+  if (s.builtin) { toast('内置指令不可删除', 'err'); return; }
+  if (!confirm('删除指令「' + s.name + '」？')) return;
+  SNIPPETS = SNIPPETS.filter(function (x) { return x.id !== id; });
+  saveSnippets(); renderSnipList();
+  toast('已删除', 'ok');
+}
+function snipInsert(id) {
+  var s = snippetById(id); if (!s) return;
+  closeSnipPanel();
+  insertSnippetText(s.text, s.name);
+}
+function snipSaveEdit(id) {
+  var g = function (elId) { var el = document.getElementById(elId); return el ? el.value : ''; };
+  var nm = String(g('snipNameInp')).trim();
+  var ic = String(g('snipIcInp')).trim() || '✨';
+  var tx = String(g('snipTextInp')).trim();
+  if (!nm) { toast('请填写指令名', 'err'); return; }
+  if (!tx) { toast('请填写指令内容', 'err'); return; }
+  if (SNIPPETS.some(function (s) { return s.name === nm && s.id !== id; })) { toast('已有同名指令「' + nm + '」', 'err'); return; }
+  if (id) {
+    var s = snippetById(id); if (!s) return;
+    s.name = nm; s.ic = ic; s.text = tx;
+  } else {
+    SNIPPETS.push({ id: snippetNewId(), ic: ic, name: nm, text: tx, custom: true });
+  }
+  saveSnippets();
+  _snipEditing = null;
+  renderSnipList();
+  toast(id ? '已保存' : '已创建指令「' + nm + '」', 'ok');
+}
+function snipEditRow(s) {
+  var isNew = !s;
+  return '<div class="snip-row editing">'
+    + '<div style="display:flex;gap:7px;margin-bottom:7px">'
+    + '<input class="snip-inp" id="snipNameInp" style="flex:1" maxlength="20" placeholder="指令名（如：周报）" value="' + (s ? escapeAttr(s.name) : '') + '">'
+    + '<input class="snip-inp" id="snipIcInp" style="flex:0 0 64px;text-align:center" maxlength="2" placeholder="图标" value="' + (s ? escapeAttr(s.ic || '') : '✨') + '">'
+    + '</div>'
+    + '<textarea class="snip-inp" id="snipTextInp" style="width:100%;height:92px;resize:vertical;line-height:1.6" placeholder="指令内容 —— 会插入到输入框的文本">' + escapeHtml(s ? (s.text || '') : '') + '</textarea>'
+    + '<div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end">'
+    + '<button class="btn btn-ghost btn-sm" onclick="snipCancelEdit()">取消</button>'
+    + '<button class="btn btn-primary btn-sm" onclick="snipSaveEdit(' + (isNew ? 'null' : '\'' + s.id + '\'') + ')">' + (isNew ? '创建' : '保存') + '</button>'
+    + '</div></div>';
+}
+function renderSnipList() {
+  var box = document.getElementById('snipList'); if (!box) return;
+  var rows = SNIPPETS.map(function (s) {
+    if (_snipEditing === s.id) return snipEditRow(s);
+    return '<div class="snip-row">'
+      + '<div class="snip-ic">' + escapeHtml(s.ic || '✨') + '</div>'
+      + '<div class="snip-main">'
+      + '<div class="snip-name">' + escapeHtml(s.name) + (s.builtin ? '<span class="snip-tag">内置</span>' : '') + '</div>'
+      + '<div class="snip-text">' + escapeHtml(String(s.text || '').replace(/\n/g, ' ').slice(0, 78)) + '</div>'
+      + '</div>'
+      + '<button class="btn btn-primary btn-sm" onclick="snipInsert(\'' + s.id + '\')">插入</button>'
+      + '<button class="snip-x" title="编辑" onclick="snipEdit(\'' + s.id + '\')">✏️</button>'
+      + (s.builtin ? '' : '<button class="snip-x" title="删除" onclick="snipDelete(\'' + s.id + '\')">🗑️</button>')
+      + '</div>';
+  }).join('');
+  if (_snipEditing === 'new') rows = snipEditRow(null) + rows;
+  box.innerHTML = rows || '<div class="slash-empty">还没有指令，点下方「＋ 新建指令」添加</div>';
+}
 const CHANNELS = ['网页嵌入', 'API 接口', '飞书', '微信公众号', '企业微信'];
 
 // ==================== 状态 ====================
@@ -4434,7 +4753,7 @@ async function login(username, password) {
 function logout() {
   currentUser = null; sessionToken = '';
   storage.removeItem(LS_SESSION);
-  bots = []; favorites = new Set(); currentId = null; ALL_KB = [];
+  bots = []; favorites = new Set(); currentId = null; ALL_KB = []; SNIPPETS = [];
   renderGrid(); updateStats(); updateFavPage();
   refreshWorkspace();
   showAuthMask();
@@ -4586,6 +4905,7 @@ function onLogin() {
   try { loadBots(); } catch (e) { console.error('[onLogin] loadBots', e); }
   try { loadFavorites(); } catch (e) { console.error('[onLogin] loadFavorites', e); }
   try { loadKB(); } catch (e) { console.error('[onLogin] loadKB', e); }
+  try { loadSnippets(); } catch (e) { console.error('[onLogin] loadSnippets', e); }
   try { renderGrid(); } catch (e) { console.error('[onLogin] renderGrid', e); }
   try { updateStats(); } catch (e) { console.error('[onLogin] updateStats', e); }
   try { updateFavPage(); } catch (e) { console.error('[onLogin] updateFavPage', e); }
@@ -5960,7 +6280,7 @@ function renderHistory(b) {
       }
       var bt = m.text || '';
       var bh = bt.length > MSG_FOLD_LEN ? renderMarkdown(bt.slice(0, MSG_FOLD_LEN)) + _foldHtml(i, bt.length) : renderMarkdown(bt);
-      return '<div class="msg bot" data-mi="' + i + '">' + _body(escapeHtml(m.who || b.n), bh) + '</div>';
+      return '<div class="msg bot" data-mi="' + i + '">' + _body(escapeHtml(m.who || b.n), bh) + _kbCiteHtml(m.kbHits) + '</div>';
     }).join('');
   }
   chat.querySelectorAll('.typing').forEach(t => t.remove());
@@ -6058,6 +6378,53 @@ function renderQuickBar() {
     };
     bar.appendChild(btn);
   });
+}
+// ---------- 回答下方的「参考来源」----------
+// 只渲染来源元数据（文档名 / 段落序号 / 相关度 / 摘要），原文按需从 ALL_KB 取回，
+// 因此每条消息不会为引用再存一份正文。
+function _kbCiteHtml(hits) {
+  if (!hits || !hits.length) return '';
+  var rows = hits.map(function (h) {
+    var chunk = (+h.i || 0);
+    var sc = (typeof h.s === 'number') ? h.s : 0;
+    var sum = String(h.x || '');
+    return '<div class="kb-cite-row" data-doc="' + escapeAttr(h.d || '') + '" data-chunk="' + chunk + '" data-x="' + escapeAttr(sum) + '">'
+      + '<div><span class="kb-cite-name">《' + escapeHtml(h.n || '知识库') + '》</span>'
+      + '<span class="kb-cite-meta">第 ' + chunk + ' 段 · 相关度 ' + sc.toFixed(2) + '</span></div>'
+      + '<div class="kb-cite-text">' + escapeHtml(sum) + (sum.length >= 40 ? '…' : '') + '</div>'
+      + '<button class="kb-cite-more" type="button" onclick="kbCiteText(this)">查看原文</button>'
+      + '</div>';
+  }).join('');
+  return '<div class="kb-cite">'
+    + '<button class="kb-cite-head" type="button" onclick="kbCiteToggle(this)">\uD83D\uDCDA 参考来源 · 命中 ' + hits.length + ' 处 <span class="kb-caret">▾</span></button>'
+    + '<div class="kb-cite-body" style="display:none">' + rows + '</div>'
+    + '</div>';
+}
+function kbCiteToggle(btn) {
+  if (!btn) return;
+  var box = btn.parentNode;
+  var body = box ? box.querySelector('.kb-cite-body') : null;
+  if (!body) return;
+  var willOpen = body.style.display === 'none';
+  body.style.display = willOpen ? '' : 'none';
+  btn.classList.toggle('open', willOpen);
+}
+function kbCiteText(btn) {
+  var row = (btn && btn.closest) ? btn.closest('.kb-cite-row') : null;
+  if (!row) return;
+  var box = row.querySelector('.kb-cite-text'); if (!box) return;
+  if (btn.getAttribute('data-full') === '1') {
+    box.textContent = row.getAttribute('data-x') || '';
+    box.classList.remove('full');
+    btn.textContent = '查看原文'; btn.setAttribute('data-full', '');
+    return;
+  }
+  var full = (typeof window.kbChunkOf === 'function')
+    ? window.kbChunkOf(row.getAttribute('data-doc'), +row.getAttribute('data-chunk')) : '';
+  if (!full) { toast('该段落已不可用（文档可能已被修改或删除）', 'err'); return; }
+  box.textContent = full;
+  box.classList.add('full');
+  btn.textContent = '收起原文'; btn.setAttribute('data-full', '1');
 }
 function attachCopyBtns() {
   var chat = document.getElementById('chat'); if (!chat) return;
@@ -6430,8 +6797,14 @@ async function sendMsg() {
 }
 // 生成一次回复并写回 b.history。
 // 「发送 / 重新生成 / 编辑重发」三条入口共用它，保证工作流、生图、插件、错误处理与排队行为完全一致。
+// 取本次生成的知识库引用快照（无命中则空数组），挂到 bot 消息上供渲染「参考来源」
+function _kbSnap() {
+  try { return (window.kbSnapshotHits ? window.kbSnapshotHits() : []); } catch (e) { return []; }
+}
 async function runReply(b, opt) {
   opt = opt || {};
+  // 每次生成前清空引用缓冲：上一次的命中绝不能串到这一条回答上
+  try { if (window.kbClearHits) window.kbClearHits(); } catch (e) { }
   const activeBot = resolveHandoff(b) || b;  // 工作流含「机器人」节点则转交目标机器人应答
   setChatHeader(activeBot);
   const chat = document.getElementById('chat'); if (!chat) return;
@@ -6508,7 +6881,7 @@ async function runReply(b, opt) {
         }
         scrollChatToBottom();
       });
-      b.history.push({ role: 'bot', text: result.final, who: activeBot.n, t: Date.now() });
+      b.history.push({ role: 'bot', text: result.final, who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
       // 整段重绘：一次性替换 innerHTML，同时清掉 prog/cur/typing。
       // 不要先手动 remove 气泡（会造成「高度骤减→再恢复」的可见抽动）。
       renderHistory(b);
@@ -6557,8 +6930,11 @@ async function runReply(b, opt) {
       } catch (e) { }
     }
     span.innerHTML = renderMarkdown(full);
-    b.history.push({ role: 'bot', text: full, who: activeBot.n, t: Date.now() });
+    b.history.push({ role: 'bot', text: full, who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
     bubble.querySelector('.who').textContent = activeBot.n; // 保持
+    // 引用来源条：追加到气泡内容末尾（复制/重新生成按钮随后由 attachCopyBtns 追加）
+    var _citeHtml = _kbCiteHtml(_kbSnap());
+    if (_citeHtml) bubble.insertAdjacentHTML('beforeend', _citeHtml);
     activeBot.u = (activeBot.u || 0) + 1;
     activeBot.updatedAt = Date.now(); saveBots();
     attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b);
@@ -7233,6 +7609,7 @@ const CMDK_COMMANDS = [
   { ic: '⭐', label: '我的收藏', hint: '', act: 'favorites' },
   { ic: '🗂', label: '会话管理（切换 / 搜索历史）', hint: '', act: 'sessions' },
   { ic: '🔁', label: '重新生成上一条回复', hint: '', act: 'regen' },
+  { ic: '⚡', label: '提示词库 / 斜杠指令', hint: '也可在输入框打 /', act: 'snippets' },
   { ic: '📤', label: '导出当前对话（Markdown）', hint: '', act: 'exportChat' },
   { ic: '📋', label: '复制全部对话', hint: '', act: 'copyChat' },
   { ic: '🗑️', label: '清空当前对话', hint: '', act: 'clear' },
@@ -7300,6 +7677,7 @@ function execCmdK(it) {
     case 'settings': openSettings(); break;
     case 'regen': regenLastReply(); break;
     case 'sessions': openSessPanel(); break;
+    case 'snippets': openSnippetPanel(); break;
     case 'exportChat': exportChatMd(); break;
     case 'copyChat': copyAllChat(); break;
     case 'account': openAccountPanel(); break;
@@ -7695,33 +8073,82 @@ document.querySelectorAll('.toolbar .chip').forEach(chip => {
 });
 
 // ==================== 知识库 / 插件页面 ====================
+function kbInvalidateCache() { try { if (window.kbInvalidate) window.kbInvalidate(); } catch (e) { } }
 function renderKbList() {
   const box = document.getElementById('kbList'); if (!box) return;
   if (!ALL_KB.length) {
-    box.innerHTML = `<div class="empty-tip" style="padding:40px 10px;text-align:center;color:var(--sub)">还没有知识库文档<br>点击右上角「＋ 导入文档」上传 TXT / Markdown / CSV / JSON</div>`;
+    box.innerHTML = `<div class="empty-tip" style="padding:40px 10px;text-align:center;color:var(--sub)">还没有知识库文档<br>点击右上角「＋ 导入文档」上传 TXT / Markdown / CSV / JSON，或用「🔗 网址导入」抓取网页正文</div>`;
     return;
   }
   box.innerHTML = ALL_KB.map(k => `<div class="list-row" data-id="${k.id}" onclick="openKbPreview('${k.id}')" style="cursor:pointer">
     <div class="ic">${k.type === 'csv' ? '📊' : k.type === 'json' ? '🧩' : '📄'}</div>
     <div class="info"><h4>${escapeHtml(k.name)}</h4><p>${k.builtin ? '内置 · 系统预设' : (k.type.toUpperCase() + ' · ' + fmtSize(k.size) + ' · ' + (k.updatedAt ? new Date(k.updatedAt).toLocaleDateString() : ''))}</p></div>
     <span class="st" style="color:var(--ok)">可用</span>
-    ${k.builtin ? '<span class="st" style="color:var(--sub)">内置</span>' : '<span class="act" data-del="' + k.id + '" title="删除">🗑️</span>'}
+    ${k.builtin ? '<span class="st" style="color:var(--sub)">内置</span>' : ''}
+    <span class="act" data-ren="${k.id}" title="重命名">✏️</span>
+    ${k.builtin ? '' : '<span class="act" data-del="' + k.id + '" title="删除">🗑️</span>'}
   </div>`).join('');
+  box.querySelectorAll('[data-ren]').forEach(el => {
+    el.onclick = (e) => { e.stopPropagation(); kbRename(el.dataset.ren); };
+  });
   box.querySelectorAll('[data-del]').forEach(el => {
     el.onclick = (e) => {
       e.stopPropagation();
       const id = el.dataset.del;
+      const k = kbById(id);
+      const used = bots.filter(b => (b.knowledges || []).indexOf(id) >= 0).map(b => b.n).slice(0, 5);
+      var ask = '确定删除知识库文档「' + (k ? k.name : '') + '」吗？此操作不可撤销。';
+      if (used.length) ask += '\n\n该文档正被以下机器人使用，删除后会从它们身上一并摘除：\n· ' + used.join('\n· ');
+      if (!confirm(ask)) return;
       ALL_KB = ALL_KB.filter(x => x.id !== id);
       saveKB();
-      bots.forEach(b => { if (b.knowledges) b.knowledges = b.knowledges.filter(k => k !== id); });
+      bots.forEach(b => { if (b.knowledges) b.knowledges = b.knowledges.filter(k2 => k2 !== id); });
       saveBots();
       renderKbList();
+      kbInvalidateCache();
       toast('已删除知识库文档', 'ok');
     };
   });
 }
+function kbRename(id) {
+  var row = document.querySelector('.list-row[data-id="' + id + '"]');
+  if (!row) return;
+  var h4 = row.querySelector('.info h4'); if (!h4 || h4.dataset.editing === '1') return;
+  h4.dataset.editing = '1';
+  var cur = h4.textContent || '';
+  var inp = document.createElement('input');
+  inp.type = 'text'; inp.value = cur;
+  inp.style.cssText = 'width:100%;box-sizing:border-box;padding:4px 8px;border-radius:8px;border:1px solid var(--brand);background:var(--fill);color:var(--txt);font-size:13px;font-weight:590;font-family:inherit';
+  h4.textContent = '';
+  h4.appendChild(inp);
+  inp.focus(); inp.select();
+  var done = function (save) {
+    if (h4.dataset.editing !== '1') return;   // Enter 之后的 blur 不再重复处理
+    h4.dataset.editing = '';
+    var v = (inp.value || '').trim();
+    if (save && v && v !== cur) {
+      var k = kbById(id);
+      if (k) {
+        k.name = v; k.updatedAt = Date.now();
+        saveKB(); flushKB();
+        kbInvalidateCache();
+        toast('已重命名为「' + v + '」', 'ok');
+      }
+    }
+    renderKbList();
+  };
+  inp.onkeydown = function (e) {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); done(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); done(false); }
+  };
+  inp.onclick = function (e) { e.stopPropagation(); };
+  inp.onblur = function () { done(true); };
+}
+var _kbEditId = null;
 function openKbPreview(id) {
   var k = kbById(id); if (!k) return;
+  _kbEditId = id;
   document.getElementById('kbPrevTitle').textContent = k.name;
   var body = document.getElementById('kbPrevBody');
   if (k.type === 'csv') {
@@ -7739,7 +8166,69 @@ function openKbPreview(id) {
   } else {
     body.textContent = k.content;
   }
+  _kbSetEditMode(false);
   document.getElementById('kbModal').classList.add('on');
+}
+// ---------- 文档编辑（预览/编辑同弹窗切换，减少用户的心智跳转）----------
+function closeKbModal() {
+  document.getElementById('kbModal').classList.remove('on');
+  _kbEditId = null;
+}
+function _kbSetEditMode(on) {
+  var prev = document.getElementById('kbPrevBody'), wrap = document.getElementById('kbEditWrap'), btn = document.getElementById('kbEditBtn');
+  if (prev) prev.style.display = on ? 'none' : '';
+  if (wrap) wrap.style.display = on ? '' : 'none';
+  if (btn) btn.textContent = on ? '\uD83D\uDC41 预览' : '\u270F\uFE0F 编辑';
+}
+function kbToggleEdit() {
+  var k = kbById(_kbEditId); if (!k) return;
+  var wrap = document.getElementById('kbEditWrap');
+  if (wrap && wrap.style.display !== 'none') {
+    _kbSetEditMode(false);
+    document.getElementById('kbPrevTitle').textContent = k.name;
+    return;
+  }
+  if (k.builtin) {
+    // 内置文档是系统预设：直接改会让「内置」名不副实，且应用升级时可能被覆盖 —— 改为另存副本
+    if (!confirm('「' + k.name + '」是内置文档，不能直接修改（应用升级时可能被覆盖）。\n\n是否另存为一份可自由编辑的副本？')) return;
+    k = kbCloneDoc(k);
+    _kbEditId = k.id;
+    renderKbList();
+    toast('已创建副本，可直接编辑', 'ok');
+  }
+  var hint = document.getElementById('kbEditHint');
+  if (hint) hint.textContent = '当前文档：' + k.name + ' · ' + String(k.content || '').length + ' 字符 —— 保存后检索索引立即重建，回答会按新内容引用';
+  document.getElementById('kbPrevTitle').textContent = k.name + ' · 编辑';
+  document.getElementById('kbEditText').value = k.content || '';
+  _kbSetEditMode(true);
+}
+function kbCancelEdit() {
+  var k = kbById(_kbEditId);
+  if (k) document.getElementById('kbPrevTitle').textContent = k.name;
+  _kbSetEditMode(false);
+}
+function kbSaveEdit() {
+  var k = kbById(_kbEditId); if (!k) return;
+  var ta = document.getElementById('kbEditText');
+  var v = ta ? ta.value : '';
+  if (!v.trim()) { toast('内容不能为空', 'err'); return; }
+  k.content = v;
+  k.size = v.length;
+  k.updatedAt = Date.now();
+  saveKB(); flushKB();
+  kbInvalidateCache();   // 必须清缓存，否则改完内容仍按旧索引检索
+  renderKbList();
+  openKbPreview(k.id);
+  toast('已保存 · 检索索引已重建', 'ok');
+}
+function kbCloneDoc(k) {
+  var id = 'kb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  var nm = String(k.name || '未命名').replace(/（内置）$/, '') + '（副本）';
+  var rec = { id: id, name: nm, type: k.type || 'txt', size: (k.content || '').length, updatedAt: Date.now(), content: k.content || '' };
+  ALL_KB.push(rec);
+  saveKB(); flushKB();
+  kbInvalidateCache();
+  return kbById(id) || rec;
 }
 
 function fmtSize(bytes) {
@@ -7758,11 +8247,107 @@ function importKbFile(file) {
     const ext = (name.split('.').pop() || '').toLowerCase();
     const type = (ext === 'csv') ? 'csv' : (ext === 'json') ? 'json' : 'txt';
     ALL_KB.push({ id: 'kb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, type: type, size: file.size, updatedAt: Date.now(), content: content });
-    saveKB(); renderKbList();
+    saveKB(); flushKB(); kbInvalidateCache(); renderKbList();
     toast('已导入：' + name, 'ok');
   };
   reader.onerror = () => toast('文件读取失败', 'err');
   reader.readAsText(file);
+}
+
+// ---------- 从网址导入 ----------
+function openKbUrl() {
+  var m = document.getElementById('kbUrlModal'); if (!m) return;
+  var i = document.getElementById('kbUrlInput'); if (i) i.value = '';
+  var p = document.getElementById('kbUrlPaste'); if (p) { p.value = ''; p.style.display = 'none'; }
+  var b = document.getElementById('kbUrlBtn'); if (b) { b.disabled = false; b.textContent = '抓取并导入'; }
+  m.classList.add('on');
+  setTimeout(function () { if (i) i.focus(); }, 60);
+}
+function closeKbUrl() {
+  var m = document.getElementById('kbUrlModal'); if (m) m.classList.remove('on');
+}
+async function kbFetchUrl() {
+  var inp = document.getElementById('kbUrlInput');
+  var url = ((inp && inp.value) || '').trim();
+  var paste = document.getElementById('kbUrlPaste');
+  var pasted = paste ? paste.value.trim() : '';
+  // 已经贴了正文就直接导入，省掉一次注定失败的抓取
+  if (pasted) { kbImportUrlText(url, pasted, ''); closeKbUrl(); return; }
+  if (!/^https?:\/\//i.test(url)) { toast('请填写以 http:// 或 https:// 开头的完整网址', 'err'); return; }
+  var btn = document.getElementById('kbUrlBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '抓取中…'; }
+  try {
+    var res = await fetch(url, { method: 'GET' });
+    if (!res || !res.ok) throw new Error('HTTP ' + ((res && res.status) || '?'));
+    var html = await res.text();
+    var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+    var title = tm ? _decodeEntities(tm[1]).replace(/\s+/g, ' ').trim() : '';
+    var text = _htmlToText(html);
+    if (!text || text.length < 60) throw new Error('未能从该页面提取到有效正文（可能整页由脚本渲染）');
+    kbImportUrlText(url, text, title);
+    closeKbUrl();
+  } catch (e) {
+    toast('抓取失败：' + (e && e.message ? e.message : e) + '　可展开下方输入框粘贴正文导入', 'err', 6500);
+    if (paste) {
+      paste.style.display = '';
+      paste.placeholder = '把网页正文粘贴到这里，再点「抓取并导入」即可导入';
+      try { paste.focus(); } catch (e2) { }
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '抓取并导入'; }
+  }
+}
+function _decodeEntities(s) {
+  return String(s || '')
+    .replace(/&nbsp;/gi, ' ').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"').replace(/&#39;/g, "'").replace(/&apos;/gi, "'")
+    .replace(/&#(\d+);/g, function (m, d) { try { return String.fromCodePoint(+d); } catch (e) { return m; } })
+    .replace(/&amp;/gi, '&');   // 放最后，避免把 &amp;lt; 解成 <
+}
+function _htmlToText(html) {
+  var s = String(html || '');
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  s = s.replace(/<(script|style|noscript|svg|iframe|head|nav|footer)[^>]*>[\s\S]*?<\/\1>/gi, ' ');
+  // 块级标签先转换行，否则整页会挤成一行，分块检索会失效
+  s = s.replace(/<br\s*\/?>/gi, '\n');
+  s = s.replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote|dd|dt)[^>]*>/gi, '\n');
+  s = s.replace(/<[^>]+>/g, '');
+  s = _decodeEntities(s);
+  s = s.replace(/[ \t\u00a0]+/g, ' ');
+  s = s.replace(/ *\n */g, '\n');
+  s = s.replace(/\n{3,}/g, '\n\n');
+  return s.trim();
+}
+function kbImportUrlText(url, text, title) {
+  var body = String(text || '').trim();
+  if (!body) { toast('没有可导入的内容', 'err'); return; }
+  var MAX = 200 * 1024;
+  if (body.length > MAX) body = body.slice(0, MAX) + '\n\n…（内容过长已截断）';
+  var nm = String(title || '').trim() || _kbNameFromUrl(url) || '网页导入';
+  nm = nm.replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (url && body.indexOf('来源：') !== 0) body = '来源：' + url + '\n\n' + body;
+  ALL_KB.push({
+    id: 'kb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: nm, type: 'txt', size: body.length, updatedAt: Date.now(),
+    content: body, sourceUrl: url || ''
+  });
+  saveKB(); flushKB();
+  kbInvalidateCache();
+  renderKbList();
+  toast('已从网址导入：' + nm, 'ok');
+}
+// 页面没有 title 时，用「路径尾 · 主机名」生成可读名。
+// 不能直接拿 URL 去清洗非法字符——那样会变成 "https ex.com b"，用户认不出是什么。
+function _kbNameFromUrl(url) {
+  var u = String(url || '');
+  var m = /^https?:\/\/([^\/?#]+)(\/[^?#]*)?/i.exec(u);
+  if (!m) return u;
+  var host = m[1] || '';
+  var segs = String(m[2] || '').split('/').filter(Boolean);
+  var last = segs.length ? segs[segs.length - 1] : '';
+  try { last = decodeURIComponent(last); } catch (e) { }
+  last = last.replace(/\.(html?|php|aspx?|jsp|md)$/i, '');
+  return last ? (last + ' · ' + host) : host;
 }
 const kbImportEl = document.getElementById('kbImport');
 if (kbImportEl) kbImportEl.addEventListener('change', e => { Array.from(e.target.files || []).forEach(importKbFile); e.target.value = ''; });
@@ -8985,11 +9570,18 @@ window.__debug = {
     return chunks.length ? chunks : [(text || '')];
   }
   function _buildKBIndex(bot) {
-    var raw = (bot.knowledges || []).map(function (id) {
-      var r = (typeof kbById === 'function') ? kbById(id) : null; return r ? r.content : '';
-    }).filter(Boolean).join('\n\n');
-    if (!raw.trim()) return { chunks: [], tfs: [], idf: {}, n: 0 };
-    var chunks = _chunkText(raw, 400, 80);
+    // 逐文档分块并保留来源。旧写法把所有文档 join 成一大段再分块，
+    // 来源信息在索引阶段就丢了，导致回答无法标注「参考了哪份文档的哪一段」。
+    var metas = [];
+    (bot.knowledges || []).forEach(function (id) {
+      var r = (typeof kbById === 'function') ? kbById(id) : null;
+      if (!r || !r.content) return;
+      _chunkText(r.content, 400, 80).forEach(function (ch, ci) {
+        metas.push({ t: ch, d: r.id || id, n: r.name || '未命名文档', i: ci });
+      });
+    });
+    if (!metas.length) return { chunks: [], metas: [], tfs: [], idf: {}, n: 0 };
+    var chunks = metas.map(function (m) { return m.t; });
     var df = {}, tfs = chunks.map(function (ch) {
       var toks = _tokenize(ch), tf = {}, total = toks.length || 1;
       toks.forEach(function (t) { tf[t] = (tf[t] || 0) + 1; });
@@ -8998,7 +9590,7 @@ window.__debug = {
     });
     var n = chunks.length, idf = {};
     Object.keys(df).forEach(function (t) { idf[t] = Math.log((1 + n) / (1 + df[t])) + 1; });
-    return { chunks: chunks, tfs: tfs, idf: idf, n: n };
+    return { chunks: chunks, metas: metas, tfs: tfs, idf: idf, n: n };
   }
   var _kbCache = {};
   function _kbIndexFor(bot) {
@@ -9014,17 +9606,68 @@ window.__debug = {
     Object.keys(b).forEach(function (t) { nb += b[t] * b[t]; });
     if (!na || !nb) return 0; return dot / (Math.sqrt(na) * Math.sqrt(nb));
   }
-  function searchKB(bot, query, k) {
+  function searchKBHits(bot, query, k) {
     k = k || 5;
     var idx = _kbIndexFor(bot);
     if (!idx.n) return [];
     var qt = _tokenize(query), qtf = {}, total = qt.length || 1;
     qt.forEach(function (t) { qtf[t] = (qtf[t] || 0) + 1; });
     var qv = {}; Object.keys(qtf).forEach(function (t) { qv[t] = qtf[t] / total * (idx.idf[t] || 0); });
-    var scored = idx.chunks.map(function (ch, i) { return { ch: ch, score: _cosine(qv, idx.tfs[i]) }; });
+    var scored = idx.chunks.map(function (ch, i) { return { ch: ch, i: i, score: _cosine(qv, idx.tfs[i]) }; });
     scored.sort(function (a, b) { return b.score - a.score; });
-    return scored.filter(function (s) { return s.score > 0; }).slice(0, k).map(function (s) { return s.ch; });
+    var terms = Object.keys(qtf);
+    return scored.filter(function (s) { return s.score > 0; }).slice(0, k).map(function (s) {
+      var m = (idx.metas && idx.metas[s.i]) || {};
+      return { text: s.ch, score: s.score, docId: m.d || '', docName: m.n || '', chunk: (m.i || 0) + 1, terms: terms };
+    });
   }
+  // 保持旧签名（只返回片段文本），工作流注入沿用；新增的结构化版本见 searchKBHits
+  function searchKB(bot, query, k) {
+    return searchKBHits(bot, query, k).map(function (h) { return h.text; });
+  }
+
+  // ---------- 引用来源记录（供回答下方标注「参考了哪份文档的哪一段」） ----------
+  // 每次生成前清空，生成中累积，生成结束由调用方取快照挂到该条消息上。
+  var _kbHitsBuf = null;
+  function kbClearHits() { _kbHitsBuf = []; }
+  function kbPushHits(hits) {
+    if (!_kbHitsBuf) _kbHitsBuf = [];
+    (hits || []).forEach(function (h) {
+      if (!h || !h.text) return;
+      var dup = _kbHitsBuf.some(function (x) { return x.docId === h.docId && x.chunk === h.chunk; });
+      if (!dup) _kbHitsBuf.push(h);
+    });
+    _kbHitsBuf.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+    if (_kbHitsBuf.length > 8) _kbHitsBuf = _kbHitsBuf.slice(0, 8);
+  }
+  // 落盘只存「来源指针 + 摘要」，正文按需从 ALL_KB 实时取，避免每条消息再存一份全文
+  function kbSnapshotHits() {
+    return (_kbHitsBuf || []).slice(0, 5).map(function (h) {
+      return {
+        d: h.docId, n: h.docName, i: h.chunk,
+        s: Math.round((h.score || 0) * 1000) / 1000,
+        x: String(h.text || '').replace(/\s+/g, ' ').slice(0, 40)
+      };
+    });
+  }
+  // 按「文档 id + 片段序号」取回原文；文档被改写后序号可能错位，取不到由调用方降级
+  function kbChunkOf(docId, chunkNo) {
+    var k = (typeof kbById === 'function') ? kbById(docId) : null;
+    if (!k || !k.content) return '';
+    var chs = _chunkText(k.content, 400, 80);
+    return chs[chunkNo - 1] || '';
+  }
+  // 文档改动后必须让检索索引与缓存失效，否则改完内容仍按旧索引回答
+  function kbInvalidate(docId) {
+    _kbCache = {};
+    return docId;
+  }
+  window.searchKBHits = searchKBHits;
+  window.kbClearHits = kbClearHits;
+  window.kbPushHits = kbPushHits;
+  window.kbSnapshotHits = kbSnapshotHits;
+  window.kbChunkOf = kbChunkOf;
+  window.kbInvalidate = kbInvalidate;
 
   // ---------- 桥接：全局请求函数（退化 BotCraftAI.chat） ----------
   window.BotCraftAI_request = (function () {
@@ -9352,8 +9995,14 @@ window.__debug = {
       var kbCtx = '';
       if (injectKB) {
         var queryForKB = (role === 'retrieve' && prev && prev !== userMsg) ? prev : (prev || userMsg);
-        var hits = searchKB(bot, queryForKB, 5);
-        if (hits.length) kbCtx = '\n【相关知识库（Top-5 相关片段）】\n' + hits.map(function (c, idx) { return '（片段' + (idx + 1) + '）\n' + c; }).join('\n\n') + '\n';
+        var hits = searchKBHits(bot, queryForKB, 5);
+        if (hits.length) {
+          kbCtx = '\n【相关知识库（Top-5 相关片段）】\n' + hits.map(function (h, idx) {
+            return '（片段' + (idx + 1) + '·来自《' + (h.docName || '知识库') + '》第' + (h.chunk || 0) + '段）\n' + h.text;
+          }).join('\n\n') + '\n';
+          // 登记命中，回答下方会标注来源（多节点命中自动去重合并）
+          try { if (window.kbPushHits) window.kbPushHits(hits); } catch (e) { }
+        }
         // 联网检索：开启 webSearch 时附加实时检索片段
         if (bot.webSearch) {
           try {
