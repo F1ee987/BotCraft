@@ -289,6 +289,35 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .acct-go{font-size:11px;color:var(--brand);flex:0 0 auto}
 .acct-empty{padding:9px 11px;font-size:11.5px;color:var(--sub);line-height:1.55}
 .acct-add{margin-top:2px;color:var(--brand);font-weight:590}
+/* 菜单里的「我的账号」入口：整块可点，右侧给出「编辑 →」 */
+.pop-menu .acct-me{display:flex;align-items:center;gap:10px;width:100%}
+.acct-me-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.acct-me-txt b{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-me-txt i{font-size:11px;color:var(--sub);font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ============ 账号信息面板 ============ */
+.acct-head{display:flex;align-items:center;gap:16px;margin:16px 0 4px}
+.acct-avatar-lg{width:76px;height:76px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:600;color:#fff;background:linear-gradient(180deg,#5e5ce6,#4845d2);background-size:cover;background-position:center;box-shadow:var(--lg-top),0 6px 18px rgba(0,0,0,.24)}
+.acct-head-name{font-size:19px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-head-sub{font-size:12.5px;color:var(--sub);margin-top:4px;word-break:break-all;line-height:1.5}
+.acct-sec{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.acct-sec-t{font-size:11.5px;font-weight:700;color:var(--sub);letter-spacing:.06em;margin-bottom:11px}
+.acct-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
+.acct-stat{background:var(--fill);border-radius:10px;padding:9px 11px;min-width:0}
+.acct-stat b{display:block;font-size:14.5px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-stat span{font-size:11px;color:var(--sub)}
+.acct-hint{font-size:11.5px;color:var(--sub);line-height:1.6;margin-top:9px}
+.acct-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.acct-two{grid-template-columns:1fr}}
+.swatch-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.swatch{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;transition:.15s var(--ease)}
+.swatch:hover{transform:scale(1.1)}
+.swatch.on{border-color:var(--txt)}
+.emoji-pick{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
+.emoji-pick button{width:31px;height:31px;border-radius:9px;background:var(--fill);border:1px solid transparent;font-size:15px;line-height:1;cursor:pointer;padding:0;color:var(--txt);font-weight:600;transition:.15s var(--ease)}
+.emoji-pick button:hover{background:var(--fill-hover)}
+.emoji-pick button.on{border-color:var(--brand)}
+.acct-pass-msg{font-size:12px;margin-top:9px;display:none}
 
 /* ============ 登录 ============ */
 .auth-mask{display:none;position:fixed;inset:0;z-index:90;background:rgba(13,13,16,.78);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);align-items:center;justify-content:center;flex-direction:column;gap:10px;text-align:center;padding:20px}
@@ -1562,6 +1591,64 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
     <div class="hint" style="font-size:11.5px;color:var(--sub)">提示：① 导出请在「数据多的源」（如双击本地文件打开）操作；② <b style="color:var(--txt)">导入前先登录</b>（否则数据无法绑定到账号）；③ 再到目标源登录后导入。两端都是同一个源（都从 localhost 导出/导入）就会「没区别」。</div>
     <div class="mbox-foot">
       <button class="btn btn-ghost" onclick="closeDataMigrate()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 账号信息面板（资料 / 头像 / 数据概览 / 改密码） ==================== -->
+<div class="modal" id="acctModal">
+  <div class="mbox" style="width:560px">
+    <h2>👤 账号信息</h2>
+    <div class="acct-head">
+      <div class="acct-avatar-lg" id="acctAvatarLg">A</div>
+      <div style="flex:1;min-width:0">
+        <div class="acct-head-name" id="acctHeadName">—</div>
+        <div class="acct-head-sub" id="acctHeadSub">—</div>
+      </div>
+    </div>
+
+    <div class="acct-sec">
+      <div class="acct-sec-t">资料</div>
+      <div class="acct-two">
+        <div class="field"><label>昵称</label><input id="acctDisplayName" maxlength="24" placeholder="留空则显示用户名" oninput="renderAcctHeader()"></div>
+        <div class="field"><label>邮箱（可选）</label><input id="acctEmail" type="email" placeholder="you@example.com" oninput="renderAcctHeader()"></div>
+      </div>
+      <div class="field" style="margin-top:14px"><label>头像配色</label>
+        <div class="swatch-row" id="acctSwatches"></div>
+      </div>
+      <div class="field" style="margin-top:14px"><label>头像图案</label>
+        <div class="emoji-pick" id="acctEmojis"></div>
+        <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('acctAvatarFile').click()">⬆️ 上传图片</button>
+          <button class="btn btn-ghost btn-sm" onclick="resetAccountAvatar()">↺ 恢复默认</button>
+          <input id="acctAvatarFile" type="file" accept="image/*" style="display:none" onchange="onAccountAvatarFile(this)">
+        </div>
+        <div class="acct-hint">图片会居中裁成方形并压缩到 128×128 存本机，不会上传到任何服务器。</div>
+      </div>
+    </div>
+
+    <div class="acct-sec">
+      <div class="acct-sec-t">账号数据</div>
+      <div class="acct-grid" id="acctStats"></div>
+      <div class="acct-hint" id="acctStorageHint"></div>
+    </div>
+
+    <div class="acct-sec">
+      <div class="acct-sec-t">修改密码</div>
+      <div class="acct-two">
+        <div class="field"><label>当前密码</label><input id="acctPassOld" type="password" autocomplete="current-password"></div>
+        <div class="field"><label>新密码</label><input id="acctPassNew" type="password" placeholder="至少 6 位" autocomplete="new-password"></div>
+      </div>
+      <div class="field" style="margin-top:12px"><label>确认新密码</label><input id="acctPassNew2" type="password" autocomplete="new-password"></div>
+      <div class="acct-pass-msg" id="acctPassMsg"></div>
+      <div class="mbox-foot" style="margin-top:12px">
+        <button class="btn btn-ghost" id="acctPassBtn" onclick="changeAccountPassword()">更新密码</button>
+      </div>
+    </div>
+
+    <div class="mbox-foot" style="margin-top:14px">
+      <button class="btn btn-ghost" onclick="closeAccountPanel()">关闭</button>
+      <button class="btn btn-primary" onclick="saveAccountProfile()">保存资料</button>
     </div>
   </div>
 </div>
@@ -4166,7 +4253,11 @@ async function register(username, email, password) {
   if (p.length < 6) { toast('密码至少 6 位', 'err'); return { ok: false, msg: '密码至少 6 位' }; }
   if (users.some(x => x.username.toLowerCase() === u.toLowerCase())) { return { ok: false, msg: '用户名已存在' }; }
   const { hash, salt } = await hashPassword(p);
-  users.push({ username: u, email: e, pwdHash: hash, salt, createdAt: Date.now() });
+  // displayName / avatar 为后续「账号信息」面板预留：老数据没有这两个字段时按默认渲染（见 avatarOf / displayNameOf）
+  users.push({
+    username: u, email: e, pwdHash: hash, salt, createdAt: Date.now(), lastLoginAt: Date.now(),
+    displayName: '', avatar: { kind: 'letter', value: '', bg: 'violet' },
+  });
   saveUsers();
   migrateGuestDataTo(u);
   await login(u, p);
@@ -4179,6 +4270,9 @@ async function login(username, password) {
   if (!user) { return { ok: false, msg: '用户不存在' }; }
   const { hash } = await hashPassword(p, user.salt);
   if (hash !== user.pwdHash) { return { ok: false, msg: '密码错误' }; }
+  // 最近登录时间：账号信息面板的数据概览要用（老数据缺这个字段不影响登录）
+  user.lastLoginAt = Date.now();
+  saveUsers();
   currentUser = { username: user.username, email: user.email };
   sessionToken = uidHex(18);
   saveSession({ username: user.username, token: sessionToken, loginAt: Date.now() });
@@ -4454,26 +4548,319 @@ async function submitAuth() {
   }
 }
 
+// ==================== 账号信息：头像 / 昵称 / 资料 ====================
+// 账号表里除 username/pwdHash/salt/createdAt 外，新增三个「资料」字段：
+//   displayName  昵称（可空 → 回落用户名）
+//   email        邮箱（注册时可选，这里可补填/修改）
+//   avatar       { kind:'letter'|'emoji'|'image', value, bg }
+// 老数据（升级前注册的账号）没有这些字段，一律走默认值渲染，不做破坏性迁移。
+const AVATAR_BGS = [
+  { id: 'violet', css: 'linear-gradient(180deg,#5e5ce6,#4845d2)' },
+  { id: 'blue',   css: 'linear-gradient(180deg,#4b9bff,#2f6fdb)' },
+  { id: 'teal',   css: 'linear-gradient(180deg,#34d0c3,#1a9c92)' },
+  { id: 'green',  css: 'linear-gradient(180deg,#3ddc84,#25a95f)' },
+  { id: 'amber',  css: 'linear-gradient(180deg,#ffb340,#e08700)' },
+  { id: 'rose',   css: 'linear-gradient(180deg,#ff6b8a,#e03d63)' },
+  { id: 'plum',   css: 'linear-gradient(180deg,#c07bff,#8b3fd1)' },
+  { id: 'slate',  css: 'linear-gradient(180deg,#8e93a8,#5b6070)' },
+];
+const AVATAR_EMOJIS = ['🐱', '🐼', '🦊', '🐧', '🐳', '🦉', '🚀', '🌱', '☕', '🎧'];
+const AVATAR_DEFAULT = { kind: 'letter', value: '', bg: 'violet' };
+// 头像图片白名单：只接受本机 canvas 生成的 base64 图，杜绝把任意字符串塞进 style
+const AVATAR_IMG_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+
+function findUser(username) {
+  if (!username) return null;
+  const k = String(username).toLowerCase();
+  return users.find(function (x) { return x && String(x.username).toLowerCase() === k; }) || null;
+}
+function avatarOf(user) {
+  const a = (user && user.avatar) || {};
+  const kind = (a.kind === 'emoji' || a.kind === 'image') ? a.kind : 'letter';
+  const value = (kind === 'image')
+    ? (AVATAR_IMG_RE.test(String(a.value || '')) ? String(a.value) : '')   // 非法图片数据直接丢弃
+    : (a.value ? String(a.value) : '');
+  const bg = AVATAR_BGS.some(function (x) { return x.id === a.bg; }) ? a.bg : AVATAR_DEFAULT.bg;
+  return { kind: (kind === 'image' && !value) ? 'letter' : kind, value: value, bg: bg };
+}
+function avatarBgCss(id) {
+  const hit = AVATAR_BGS.find(function (x) { return x.id === id; });
+  return (hit || AVATAR_BGS[0]).css;
+}
+function displayNameOf(user) {
+  if (!user) return '';
+  const n = String(user.displayName || '').trim();
+  return n || String(user.username || '');
+}
+function avatarInitial(user) {
+  const n = displayNameOf(user).trim();
+  return (n.slice(0, 1) || '?').toUpperCase();
+}
+// 头像 DOM 片段。第 3 个参数用于塞额外属性（如 id），文字一律转义后再进属性/文本。
+function avatarHtml(user, cls, extraAttr) {
+  const a = avatarOf(user);
+  const name = escapeAttr(displayNameOf(user));
+  const attr = extraAttr ? (' ' + extraAttr) : '';
+  if (a.kind === 'image' && a.value) {
+    return `<div class="${cls || 'avatar'}"${attr} title="${name}" style="background-image:url('${a.value}')"></div>`;
+  }
+  const face = (a.kind === 'emoji' && a.value) ? a.value : avatarInitial(user);
+  return `<div class="${cls || 'avatar'}"${attr} title="${name}" style="background:${avatarBgCss(a.bg)}">${escapeHtml(face)}</div>`;
+}
+
+// ---------- 存储占用：只统计属于该账号的 key（userScopedKey 都是 base.用户名 结尾） ----------
+function accountStorageUsage(username) {
+  let bytes = 0, keys = 0;
+  try {
+    const all = (storage.keys ? storage.keys() : []) || [];
+    const suffix = '.' + username;
+    for (let i = 0; i < all.length; i++) {
+      const k = String(all[i]);
+      if (k.indexOf('botcraft.') !== 0) continue;
+      if (k.slice(-suffix.length) !== suffix) continue;
+      const v = storage.getItem(k) || '';
+      bytes += (k.length + v.length) * 2;   // localStorage 按 UTF-16 计，1 字符 2 字节
+      keys++;
+    }
+  } catch (e) { }
+  return { bytes: bytes, keys: keys };
+}
+function fmtAccountBytes(n) {
+  if (!n) return '0 KB';
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+
+// ---------- 面板渲染 ----------
+let acctDraft = null;   // 面板内的头像草稿：点「保存资料」才写回账号表
+
+function openAccountPanel() {
+  if (!currentUser) { openAuth('login'); return; }
+  const row = findUser(currentUser.username) || { username: currentUser.username, email: currentUser.email || '' };
+  acctDraft = avatarOf(row);
+  const dn = document.getElementById('acctDisplayName');
+  const em = document.getElementById('acctEmail');
+  if (dn) dn.value = row.displayName || '';
+  if (em) em.value = row.email || '';
+  ['acctPassOld', 'acctPassNew', 'acctPassNew2'].forEach(function (id) {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const msg = document.getElementById('acctPassMsg');
+  if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+  renderAcctSwatches(); renderAcctEmojis(); renderAcctHeader(); renderAccountStats();
+  const modal = document.getElementById('acctModal');
+  if (modal) modal.classList.add('on');
+}
+function closeAccountPanel() {
+  const modal = document.getElementById('acctModal');
+  if (modal) modal.classList.remove('on');
+  acctDraft = null;
+}
+function renderAcctSwatches() {
+  const box = document.getElementById('acctSwatches');
+  if (!box) return;
+  const cur = (acctDraft || AVATAR_DEFAULT).bg;
+  box.innerHTML = AVATAR_BGS.map(function (b) {
+    return `<button class="swatch${b.id === cur ? ' on' : ''}" style="background:${b.css}" title="${escapeAttr(b.id)}" onclick="pickAvatarBg('${b.id}')"></button>`;
+  }).join('');
+}
+function renderAcctEmojis() {
+  const box = document.getElementById('acctEmojis');
+  if (!box) return;
+  const cur = acctDraft || AVATAR_DEFAULT;
+  const html = [`<button class="${cur.kind === 'letter' ? 'on' : ''}" title="用昵称首字" onclick="pickAvatarLetter()">Aa</button>`]
+    .concat(AVATAR_EMOJIS.map(function (e) {
+      const on = (cur.kind === 'emoji' && cur.value === e) ? ' on' : '';
+      return `<button class="${on.trim()}" onclick="pickAvatarEmoji('${e}')">${e}</button>`;
+    })).join('');
+  box.innerHTML = html;
+}
+function renderAcctHeader() {
+  if (!currentUser) return;
+  const row = findUser(currentUser.username) || { username: currentUser.username, email: currentUser.email || '' };
+  const draft = acctDraft || avatarOf(row);
+  const dnEl = document.getElementById('acctDisplayName');
+  const emEl = document.getElementById('acctEmail');
+  const dn = ((dnEl && dnEl.value) || '').trim() || displayNameOf(row);
+  const em = ((emEl && emEl.value) || '').trim();
+  const big = document.getElementById('acctAvatarLg');
+  if (big) {
+    if (draft.kind === 'image' && draft.value) {
+      big.style.background = 'none';
+      big.style.backgroundImage = "url('" + draft.value + "')";
+      big.textContent = '';
+    } else {
+      big.style.backgroundImage = 'none';
+      big.style.background = avatarBgCss(draft.bg);
+      big.textContent = (draft.kind === 'emoji' && draft.value) ? draft.value : ((dn.slice(0, 1) || '?').toUpperCase());
+    }
+  }
+  const nm = document.getElementById('acctHeadName');
+  if (nm) nm.textContent = dn;
+  const sub = document.getElementById('acctHeadSub');
+  if (sub) sub.textContent = '@' + String(row.username || '') + ' · ' + (em || row.email || '未填写邮箱');
+}
+function renderAccountStats() {
+  const box = document.getElementById('acctStats');
+  if (!box || !currentUser) return;
+  const u = findUser(currentUser.username) || {};
+  const usage = accountStorageUsage(currentUser.username);
+  const items = [
+    ['注册时间', u.createdAt ? new Date(u.createdAt).toLocaleDateString('zh-CN') : '未记录'],
+    ['最近登录', u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('zh-CN') : '本次'],
+    ['机器人', bots.length + ' 个'],
+    ['知识库', ALL_KB.length + ' 份'],
+    ['收藏', favorites.size + ' 个'],
+    ['占用空间', fmtAccountBytes(usage.bytes)],
+  ];
+  box.innerHTML = items.map(function (it) {
+    return `<div class="acct-stat"><b>${escapeHtml(it[1])}</b><span>${escapeHtml(it[0])}</span></div>`;
+  }).join('');
+  const hint = document.getElementById('acctStorageHint');
+  if (hint) hint.textContent = '以上为本机账号「' + String(currentUser.username) + '」的数据，分布在 ' + usage.keys + ' 个本地存储项中，不会上传到任何服务器。';
+}
+function pickAvatarBg(id) {
+  if (!acctDraft) return;
+  acctDraft.bg = AVATAR_BGS.some(function (x) { return x.id === id; }) ? id : acctDraft.bg;
+  renderAcctSwatches(); renderAcctHeader();
+}
+function pickAvatarLetter() {
+  acctDraft = { kind: 'letter', value: '', bg: (acctDraft && acctDraft.bg) || AVATAR_DEFAULT.bg };
+  renderAcctEmojis(); renderAcctHeader();
+}
+function pickAvatarEmoji(em) {
+  acctDraft = { kind: 'emoji', value: String(em || ''), bg: (acctDraft && acctDraft.bg) || AVATAR_DEFAULT.bg };
+  renderAcctEmojis(); renderAcctHeader();
+}
+function resetAccountAvatar() {
+  acctDraft = { kind: 'letter', value: '', bg: AVATAR_DEFAULT.bg };
+  renderAcctSwatches(); renderAcctEmojis(); renderAcctHeader();
+  toast('已恢复默认头像，点「保存资料」生效', '');
+}
+// 上传图片：居中裁方 → 压到 128×128 → 存 base64（再压一道防撑爆 localStorage）
+function onAccountAvatarFile(input) {
+  const f = input && input.files && input.files[0];
+  if (input) input.value = '';
+  if (!f) return;
+  if (!/^image\//.test(f.type || '')) { toast('请选择图片文件', 'err'); return; }
+  if (f.size > 6 * 1024 * 1024) { toast('图片过大（限 6MB）', 'err'); return; }
+  const reader = new FileReader();
+  reader.onload = function () {
+    const img = new Image();
+    img.onload = function () {
+      try {
+        const S = 128;
+        const cv = document.createElement('canvas');
+        cv.width = S; cv.height = S;
+        const ctx = cv.getContext('2d');
+        const side = Math.min(img.width || S, img.height || S);
+        ctx.drawImage(img, ((img.width || side) - side) / 2, ((img.height || side) - side) / 2, side, side, 0, 0, S, S);
+        let url = cv.toDataURL('image/jpeg', 0.86);
+        if (url.length > 60000) url = cv.toDataURL('image/jpeg', 0.6);
+        if (!AVATAR_IMG_RE.test(url)) { toast('图片处理失败，请换一张', 'err'); return; }
+        acctDraft = { kind: 'image', value: url, bg: (acctDraft && acctDraft.bg) || AVATAR_DEFAULT.bg };
+        renderAcctEmojis(); renderAcctHeader();
+        toast('图片已就绪，点「保存资料」生效', 'ok');
+      } catch (e) { toast('图片处理失败：' + (e && e.message ? e.message : e), 'err'); }
+    };
+    img.onerror = function () { toast('无法识别该图片文件', 'err'); };
+    img.src = String(reader.result);
+  };
+  reader.onerror = function () { toast('读取文件失败', 'err'); };
+  reader.readAsDataURL(f);
+}
+function saveAccountProfile() {
+  if (!currentUser) { openAuth('login'); return; }
+  const row = findUser(currentUser.username);
+  if (!row) { toast('账号记录已失效，请重新登录', 'err'); return; }
+  const dnEl = document.getElementById('acctDisplayName');
+  const emEl = document.getElementById('acctEmail');
+  const dn = ((dnEl && dnEl.value) || '').trim();
+  const em = ((emEl && emEl.value) || '').trim();
+  if (dn.length > 24) { toast('昵称最多 24 个字符', 'err'); return; }
+  if (em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { toast('邮箱格式不正确', 'err'); return; }
+  row.displayName = dn;
+  row.email = em;
+  row.avatar = acctDraft ? { kind: acctDraft.kind, value: acctDraft.value, bg: acctDraft.bg } : avatarOf(row);
+  saveUsers();
+  currentUser = { username: row.username, email: em };
+  // 会话表（顶栏切换账号列表）里的邮箱同步更新，否则切换列表还显示旧邮箱
+  try {
+    saveSessions(loadSessions().map(function (s) {
+      return (s && s.username === row.username) ? { username: s.username, email: em, token: s.token } : s;
+    }));
+  } catch (e) { }
+  renderUserMenu(); renderAcctHeader();
+  toast('账号信息已保存', 'ok');
+}
+// 改密码：先验旧密码（同一盐哈希比对），通过后换新盐重算存储
+async function changeAccountPassword() {
+  if (!currentUser) { openAuth('login'); return; }
+  const row = findUser(currentUser.username);
+  if (!row) { toast('账号记录已失效，请重新登录', 'err'); return; }
+  const o = document.getElementById('acctPassOld');
+  const n1 = document.getElementById('acctPassNew');
+  const n2 = document.getElementById('acctPassNew2');
+  const msg = document.getElementById('acctPassMsg');
+  const oldP = o ? o.value : '', np = n1 ? n1.value : '', np2 = n2 ? n2.value : '';
+  function bad(t) {
+    if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--danger)'; msg.textContent = '⚠️ ' + t; }
+    toast(t, 'err');
+  }
+  function good(t) {
+    if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--ok)'; msg.textContent = '✅ ' + t; }
+  }
+  if (!oldP) return bad('请输入当前密码');
+  if (String(np).length < 6) return bad('新密码至少 6 位');
+  if (np !== np2) return bad('两次输入的新密码不一致');
+  if (np === oldP) return bad('新密码不能与当前密码相同');
+  const btn = document.getElementById('acctPassBtn');
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '正在加密…'; }
+  try {
+    const chk = await hashPassword(oldP, row.salt);
+    if (chk.hash !== row.pwdHash) return bad('当前密码不正确');
+    const fresh = await hashPassword(np);   // 换新盐，等价于重置凭据
+    row.pwdHash = fresh.hash; row.salt = fresh.salt;
+    saveUsers();
+    if (o) o.value = ''; if (n1) n1.value = ''; if (n2) n2.value = '';
+    good('密码已更新，下次登录请使用新密码');
+    toast('密码已更新', 'ok');
+  } catch (e) {
+    bad('修改失败：' + (e && e.message ? e.message : e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
 // ==================== 顶栏用户头像菜单 ====================
 function renderUserMenu() {
   const wrap = document.getElementById('userMenuWrap');
   if (!wrap) return;
   if (!currentUser) { wrap.innerHTML = `<button class="btn btn-primary btn-sm" onclick="openAuth('login')">登录 / 注册</button>`; return; }
-  const init = currentUser.username.slice(0, 1).toUpperCase();
+  const me = findUser(currentUser.username) || { username: currentUser.username, email: currentUser.email || '' };
   const others = loadSessions().filter(s => s.username !== currentUser.username);
   const accountsHtml = others.length
-    ? others.map(s => `<button class="acct-row" onclick="switchToUser('${escapeHtml(s.username)}')">
-        <span class="avatar sm">${escapeHtml((s.username.slice(0, 1) || '?').toUpperCase())}</span>
-        <span class="acct-name">${escapeHtml(s.username)}</span>
+    ? others.map(s => {
+        const row = findUser(s.username) || { username: s.username };
+        return `<button class="acct-row" onclick="switchToUser('${escapeHtml(s.username)}')">
+        ${avatarHtml(row, 'avatar sm')}
+        <span class="acct-name">${escapeHtml(displayNameOf(row))}</span>
         <span class="acct-go">切换 →</span>
-      </button>`).join('')
+      </button>`;
+      }).join('')
     : `<div class="acct-empty">本机暂无其他已认证账号<br><span style="opacity:.7">点下方「添加其他账号」后可快速切换</span></div>`;
-  wrap.innerHTML = `<div class="avatar" id="avatarBtn" title="${escapeHtml(currentUser.username)}">${init}</div>
+  wrap.innerHTML = `${avatarHtml(me, 'avatar', 'id="avatarBtn"')}
     <div class="pop-menu" id="userPop" style="display:none;top:64px;right:20px">
-      <div style="padding:10px 12px;font-size:12px;color:var(--sub);border-bottom:1px solid var(--line)">
-        <div style="color:var(--txt);font-weight:700;font-size:13px">${escapeHtml(currentUser.username)}</div>
-        ${escapeHtml(currentUser.email || '未填写邮箱')}
-      </div>
+      <button class="acct-me" onclick="openAccountPanel()">
+        ${avatarHtml(me, 'avatar sm')}
+        <span class="acct-me-txt">
+          <b>${escapeHtml(displayNameOf(me))}</b>
+          <i>${escapeHtml(me.email || '未填写邮箱')}</i>
+        </span>
+        <span class="acct-go">编辑 →</span>
+      </button>
       <div class="pop-label">切换账号</div>
       ${accountsHtml}
       <button class="acct-add" onclick="openAuth('login');renderUserMenu()">＋ 添加其他账号</button>
@@ -6351,6 +6738,8 @@ document.addEventListener('keydown', e => {
 const CMDK_COMMANDS = [
   { ic: '＋', label: '创建机器人', hint: '新建', act: 'create' },
   { ic: '⚙️', label: '模型设置', hint: '', act: 'settings' },
+  { ic: '👤', label: '账号信息（资料 / 改密码）', hint: '', act: 'account' },
+  { ic: '🚪', label: '退出登录', hint: '', act: 'logout' },
   { ic: '🏠', label: '回到首页', hint: '', act: 'home' },
   { ic: '📊', label: '数据分析', hint: '', act: 'analytics' },
   { ic: '🎨', label: '模板广场', hint: '', act: 'templates' },
@@ -6420,6 +6809,11 @@ function execCmdK(it) {
   switch (it.act) {
     case 'create': openCreate(); break;
     case 'settings': openSettings(); break;
+    case 'account': openAccountPanel(); break;
+    case 'logout':
+      if (!currentUser) { toast('当前未登录', 'err'); break; }
+      if (confirm('确定退出账号「' + currentUser.username + '」吗？本机数据会保留，重新登录即可继续。')) logout();
+      break;
     case 'home': go('home'); break;
     case 'analytics': go('analytics'); break;
     case 'templates': go('templates'); break;
@@ -7842,6 +8236,11 @@ window.saveSettings = saveSettings; window.testConnection = testConnection;
 window.toggleFavorite = toggleFavorite;
 window.toggleCmdK = toggleCmdK; window.exportWorkflow = exportWorkflow; window.importWorkflowFromFile = importWorkflowFromFile; window.exportAllConfig = exportAllConfig; window.importAllConfig = importAllConfig; window.openDataMigrate = openDataMigrate; window.closeDataMigrate = closeDataMigrate;
 window.publishAllBots = publishAllBots; window.publishTemplateBots = publishTemplateBots;
+window.openAccountPanel = openAccountPanel; window.closeAccountPanel = closeAccountPanel;
+window.saveAccountProfile = saveAccountProfile; window.changeAccountPassword = changeAccountPassword;
+window.pickAvatarBg = pickAvatarBg; window.pickAvatarLetter = pickAvatarLetter; window.pickAvatarEmoji = pickAvatarEmoji;
+window.resetAccountAvatar = resetAccountAvatar; window.onAccountAvatarFile = onAccountAvatarFile;
+window.renderAcctHeader = renderAcctHeader; window.avatarHtml = avatarHtml;
 window.toggleTheme = toggleTheme; window.applyTheme = applyTheme; window.initTheme = initTheme;
 window.__debug = {
   getBots: () => bots,
