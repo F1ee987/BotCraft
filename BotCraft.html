@@ -280,6 +280,11 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .pop-menu button{padding:8px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:7px;font-size:13px;transition:background .15s var(--ease)}
 .pop-menu button:hover{background:var(--fill)}
 .pop-menu button.danger{color:var(--danger)}
+/* 账号菜单挂在 body 上（原因见 renderUserMenu 的注释），层级要「在顶栏之上、
+   各种遮罩之下」：60 高于 .topbar(50)，低于 .auth-mask/.ctxp(90)、.modal(100)、
+   .cmdk(150) —— 下拉菜单不该浮在弹窗遮罩上面。
+   卡片菜单继续用 .pop-menu 的 200（它在卡片区，从不与弹窗同屏）。 */
+#userPop{z-index:60}
 /* 顶栏账号切换下拉 */
 .pop-label{font-size:11px;color:var(--sub);padding:7px 11px 3px;letter-spacing:.04em}
 .avatar.sm{height:24px;width:24px;font-size:11px;flex:0 0 auto}
@@ -5391,8 +5396,22 @@ function renderUserMenu() {
       </button>`;
       }).join('')
     : `<div class="acct-empty">本机暂无其他已认证账号<br><span style="opacity:.7">点下方「添加其他账号」后可快速切换</span></div>`;
-  wrap.innerHTML = `${avatarHtml(me, 'avatar', 'id="avatarBtn"')}
-    <div class="pop-menu" id="userPop" style="display:none;top:64px;right:20px">
+  wrap.innerHTML = avatarHtml(me, 'avatar', 'id="avatarBtn"');
+  /* ⚠️ 菜单必须挂在 document.body 上，**不能**留在 #userMenuWrap 里。
+     .topbar 带 backdrop-filter，这让它同时变成两样东西：
+       ① backdrop root —— 菜单自己的 backdrop-filter 只能采到 root 内部的背景，
+          而菜单渲染在顶栏**下方**（root 之外），等于没有可模糊的底 → 模糊形同失效，
+          56% 半透明的底就把下面 .chat-head 的按钮原样透出来，看着就是「UI 重叠」；
+       ② position:fixed 的包含块 —— 内联的 top/right 不再是视口坐标。
+     佐证：同一样式的卡片菜单（cardMenu()）一直是 appendChild 到 body 上的，它从来没这问题。
+     所以这里对齐 cardMenu 的写法：建好挂 body，位置用 getBoundingClientRect 现算。 */
+  const stale = document.getElementById('userPop');
+  if (stale) stale.remove();
+  const pop = document.createElement('div');
+  pop.className = 'pop-menu';
+  pop.id = 'userPop';
+  pop.style.display = 'none';
+  pop.innerHTML = `
       <button class="acct-me" onclick="openAccountPanel()">
         ${avatarHtml(me, 'avatar sm')}
         <span class="acct-me-txt">
@@ -5404,29 +5423,56 @@ function renderUserMenu() {
       <div class="pop-label">切换账号</div>
       ${accountsHtml}
       <button class="acct-add" onclick="openAuth('login');renderUserMenu()">＋ 添加其他账号</button>
-      <button class="danger" onclick="logout()">退出登录</button>
-    </div>`;
+      <button class="danger" onclick="logout()">退出登录</button>`;
+  document.body.appendChild(pop);
+  // 点菜单里任何一项就收起。展开账号面板 / 登录弹窗都从这一层触发，
+  // 菜单不收会悬在遮罩上方（下拉菜单的常规行为本来也是点完即收）。
+  pop.addEventListener('click', () => { pop.style.display = 'none'; });
   const avatarBtn = document.getElementById('avatarBtn');
-  const pop = document.getElementById('userPop');
-  if (avatarBtn && pop) {
+  if (avatarBtn) {
     avatarBtn.onclick = (e) => {
       e.stopPropagation();
-      const showing = pop.style.display !== 'none';
-      pop.style.display = showing ? 'none' : '';
-      if (!showing) {
-        setTimeout(() => {
-          const onDocClick = (ev) => {
-            if (!wrap.contains(ev.target)) {
-              pop.style.display = 'none';
-              document.removeEventListener('click', onDocClick);
-            }
-          };
-          document.addEventListener('click', onDocClick);
-        }, 0);
-      }
+      if (pop.style.display !== 'none') { pop.style.display = 'none'; return; }
+      placeUserPop();
+      setTimeout(() => {
+        const onDocClick = (ev) => {
+          // 菜单已不在 wrap 里，判定「点在外面」要同时看 wrap 和 pop
+          if (!wrap.contains(ev.target) && !pop.contains(ev.target)) {
+            pop.style.display = 'none';
+            document.removeEventListener('click', onDocClick);
+          }
+        };
+        document.addEventListener('click', onDocClick);
+      }, 0);
     };
   }
 }
+
+/* 把账号菜单摆到头像正下方：右边缘对齐头像、落在顶栏之下，并夹在视口内。
+   菜单挂在 body 上（原因见 renderUserMenu），所以这里算出的就是视口坐标。 */
+function placeUserPop() {
+  const pop = document.getElementById('userPop');
+  const btn = document.getElementById('avatarBtn');
+  if (!pop || !btn) return;
+  pop.style.visibility = 'hidden';   // 先摆好再显示，避免在旧位置闪一下
+  pop.style.display = '';
+  pop.style.right = 'auto';
+  const r = btn.getBoundingClientRect();
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  const pad = 8;
+  const left = Math.max(pad, Math.min(r.right - w, innerWidth - w - pad));
+  let top = r.bottom + 8;
+  if (top + h > innerHeight - pad) top = Math.max(pad, innerHeight - h - pad);
+  pop.style.left = Math.round(left) + 'px';
+  pop.style.top = Math.round(top) + 'px';
+  pop.style.visibility = '';
+}
+
+// 窗口尺寸变化时菜单若开着就跟着挪，否则会挂在旧坐标上（顶栏是 sticky，会跟着动）
+window.addEventListener('resize', () => {
+  const pop = document.getElementById('userPop');
+  if (pop && pop.style.display !== 'none') placeUserPop();
+});
 function toggleFavorite(id) {
   if (favorites.has(id)) favorites.delete(id); else favorites.add(id);
   saveFavorites();
