@@ -6526,6 +6526,31 @@ function kbCiteText(btn) {
   box.classList.add('full');
   btn.textContent = '收起原文'; btn.setAttribute('data-full', '1');
 }
+// 取一条回复的「纯正文」，供复制用。
+// 不能直接取 msg.textContent：那是整个气泡节点的文本，会连说话人、
+// 「📚 参考来源」条、以及「🔄 重新生成 / 💿 复制」按钮的字一起塞进剪贴板。
+// 后两者是 .msg.bot 的子节点（见 renderHistory 里 _kbCiteHtml 的拼接位置）、
+// 落在 .msg-body 之外，所以先收窄到 .msg-body 就能甩掉；剩下的 .who 再单独剔除。
+function msgPlainText(msg) {
+  if (!msg) return '';
+  // 1) 流式输出中：span 里就是实时正文，最权威（此时 history 可能还没写完）
+  var st = msg.querySelector('.stream-text');
+  if (st) return st.textContent || '';
+  // 2) 能回到数据源就回数据源：折叠态、「已折叠…展开全文」按钮文字、
+  //    参考来源条一概不掺进来。注意 img-tip 之类的临时气泡没有 data-mi，
+  //    而 +null === 0，所以必须先把「没有属性」和「值就是 0」区分开。
+  var raw = msg.getAttribute('data-mi');
+  var mi = (raw === null || raw === '') ? NaN : +raw;
+  var b = getBot(currentId);
+  var m = (b && b.history && isFinite(mi)) ? b.history[mi] : null;
+  if (m && m.role !== 'me' && typeof m.text === 'string' && m.text) return m.text;
+  // 3) 兜底：克隆气泡正文后剔掉说话人与参考来源，别动原节点
+  var body = msg.querySelector('.msg-body');
+  if (!body) return msg.textContent || '';
+  var c = body.cloneNode(true);
+  c.querySelectorAll('.who, .kb-cite').forEach(function (el) { el.remove(); });
+  return c.textContent || '';
+}
 function attachCopyBtns() {
   var chat = document.getElementById('chat'); if (!chat) return;
   var _lastBot = _lastBotIndex(getBot(currentId));
@@ -6551,8 +6576,7 @@ function attachCopyBtns() {
     var copy = document.createElement('button');
     copy.className = 'msg-copy'; copy.textContent = '\uD83D\uDCBF 复制';
     copy.onclick = function () {
-      var st = msg.querySelector('.stream-text');
-      var text = st ? st.textContent : msg.textContent;
+      var text = msgPlainText(msg);
       var done = function () {
         toast('已复制回复', 'ok');
         copy.classList.add('copied');
