@@ -1,6 +1,6 @@
 # BotCraft
 
-AI 机器人搭建平台 —— **单文件**前端 SPA，在浏览器内可视化创建、测试、编排与发布机器人工作流。全部 UI、样式与逻辑内嵌于 `BotCraft.html`（约 600 KB，零构建、零依赖），双击即可运行，也适合静态托管分发；另提供桌面版 `BotCraft.exe`（pywebview 打包，双击即开、无需浏览器）。
+AI 机器人搭建平台 —— **单文件**前端 SPA，在浏览器内可视化创建、测试、编排与发布机器人工作流。全部 UI、样式与逻辑内嵌于 `BotCraft.html`（约 685 KB，零构建、零依赖），双击即可运行，也适合静态托管分发；另提供桌面版 `BotCraft.exe`（pywebview 打包，双击即开、无需浏览器）。
 
 ---
 
@@ -152,7 +152,7 @@ AI 机器人搭建平台 —— **单文件**前端 SPA，在浏览器内可视�
 ---
 
 ## 文件说明
-- `BotCraft.html` — 主应用（HTML/CSS/JS 全部内嵌，约 600 KB）。
+- `BotCraft.html` — 主应用（HTML/CSS/JS 全部内嵌，约 685 KB）。
 - `BotCraft.exe` — 桌面版（由 pywebview 打包，约 14 MB），双击即开、无需浏览器；已随仓库分发，需联网调用模型 API。数据写在 `%APPDATA%\BotCraft\data.json`，自动备份在 `%APPDATA%\BotCraft\backups\`。
 - `botcraft.ico` — 项目图标（多尺寸玻璃拟态机器人），用于桌面快捷方式与仓库标识。
 - `LICENSE` — MIT 许可证（允许商用、修改、分发）。
