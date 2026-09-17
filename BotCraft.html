@@ -659,7 +659,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .kb-cite-more:hover{text-decoration:underline}
 .kb-cite-empty{font-size:11.5px;color:var(--sub)}
 /* 编辑消息弹窗 */
-.edit-msg-ta{width:100%;min-height:132px;max-height:44vh;resize:vertical;box-sizing:border-box;border-radius:12px;padding:11px 13px;
+.edit-msg-ta{width:100%;min-height:132px;resize:none;box-sizing:border-box;border-radius:12px;padding:11px 13px;
   background:var(--fill);color:var(--txt);border:1px solid var(--line);font-size:13px;line-height:1.6;font-family:inherit}
 .edit-msg-ta:focus{outline:none;border-color:var(--brand)}
 .edit-msg-tip{font-size:12px;color:var(--sub);line-height:1.6;margin:0 0 12px}
@@ -725,7 +725,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .prompt-tpl:hover{background:var(--fill-strong);color:var(--txt)}
 .prompt-tpl.active{background:var(--brand);border-color:transparent;color:#fff}
 .prompt-tpl span{font-size:14px}
-#promptArea{width:100%;min-height:220px;padding:13px 15px;border-radius:12px;background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:13.5px;line-height:1.7;resize:vertical;transition:.18s var(--ease)}
+#promptArea{width:100%;min-height:220px;padding:13px 15px;border-radius:12px;background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:13.5px;line-height:1.7;resize:none;transition:.18s var(--ease)}
 #promptArea:focus{border-color:var(--brand);background:transparent;outline:none}
 #promptArea::placeholder{color:var(--sub);opacity:.7}
 .list-row{display:flex;align-items:center;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:10px;gap:14px}
@@ -835,7 +835,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .mem-search{width:100%;padding:9px 10px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit;margin-bottom:8px;transition:.18s var(--ease)}
 .mem-search:focus{outline:none;border-color:var(--brand);background:transparent}
 .batch-bar{display:flex;flex-direction:column;gap:8px}
-.batch-area{width:100%;min-height:140px;max-height:300px;resize:vertical;padding:11px 12px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;line-height:1.6;box-sizing:border-box;transition:.18s var(--ease)}
+.batch-area{width:100%;min-height:140px;resize:none;padding:11px 12px;border:1px solid transparent;border-radius:10px;background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;line-height:1.6;box-sizing:border-box;transition:.18s var(--ease)}
 .batch-area:focus{outline:none;border-color:var(--brand);background:transparent}
 .batch-ctrls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
 .batch-chk{font-size:12px;color:var(--sub);display:flex;align-items:center;gap:5px;cursor:pointer}
@@ -1119,6 +1119,13 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .bk-bar{display:flex;height:8px;border-radius:5px;overflow:hidden;background:var(--fill);margin:8px 0 6px}
 .bk-bar i{display:block;height:100%}
 .bk-dir{margin-top:8px;font-size:11px;color:var(--sub);word-break:break-all}
+/* 自适应高度输入框：高度交给 autoGrowTa() 按内容算，所以禁用手动拖拽 ——
+   两套机制并存会出现「拖大了、一打字又跳回内容高度」的怪现象。
+   这条必须留在样式表末尾：它要盖住前面 `.batch-area` / `.field textarea` /
+   `.edit-msg-ta` 里同特异性 (0,1,1) 的 resize:vertical。ID 选择器特异性更高
+   （#promptArea 的 resize、#snipTextInp 的内联 resize）已在原处改掉。
+   各框原有的 min-height 一概保留，当高度下限。 */
+textarea[data-grow]{resize:none;box-sizing:border-box}
 </style>
 </head>
 <body>
@@ -1347,7 +1354,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
       <div class="tab-panel" id="wsPromptBody" style="display:none">
         <div style="font-size:12px;color:var(--sub);margin-bottom:10px">定义机器人的人设与回复规则，支持变量如 {{user_input}}、{{user_name}}</div>
         <div class="prompt-templates" id="promptTpls"></div>
-        <textarea id="promptArea" placeholder="例如：你是一个智能客服，请用专业友好的语气回答…"></textarea>
+        <textarea id="promptArea" data-grow data-grow-max="560" placeholder="例如：你是一个智能客服，请用专业友好的语气回答…"></textarea>
         <div style="font-size:11px;color:var(--sub);margin-top:8px" id="promptCount">0 字</div>
       </div>
       <div class="tab-panel" id="wsKbBody" style="display:none">
@@ -1381,7 +1388,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
         <div class="tab-panel" id="wsBatchBody" style="display:none">
           <div style="font-size:12px;color:var(--sub);margin-bottom:12px">把一批问题交给当前机器人逐个处理。每条输入独立调用（不共享上下文），结果与进度实时显示，跑完可导出 CSV / JSON / Markdown。</div>
           <div class="batch-bar">
-            <textarea id="batchInput" class="batch-area" placeholder="每行一个问题，例如：&#10;帮我写一句种草文案&#10;给新手介绍这个产品&#10;总结三个卖点" oninput="updateBatchCount()"></textarea>
+            <textarea id="batchInput" class="batch-area" data-grow data-grow-max="320" placeholder="每行一个问题，例如：&#10;帮我写一句种草文案&#10;给新手介绍这个产品&#10;总结三个卖点" oninput="updateBatchCount()"></textarea>
           </div>
           <div class="batch-ctrls">
             <label class="batch-chk"><input type="checkbox" id="batchSkipHeader" onchange="updateBatchCount()"> 首行作为标题（跳过）</label>
@@ -1463,7 +1470,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
           <div class="audio-preview" id="audioPreview"></div>
           <div class="video-preview" id="videoPreview"></div>
           <div class="slash-menu" id="slashMenu" style="display:none"></div>
-          <textarea id="msgInput" rows="1" placeholder="输入消息…（Enter 发送，Shift+Enter 换行；打 / 唤起提示词指令，可粘贴或拖入图片 / 视频）" onkeydown="return msgKeyDown(event)" oninput="onMsgInput()" onpaste="onImagePaste(event)" ondrop="onImageDrop(event)" ondragover="onImageDragOver(event)"></textarea>
+          <textarea id="msgInput" data-grow data-grow-max="160" rows="1" placeholder="输入消息…（Enter 发送，Shift+Enter 换行；打 / 唤起提示词指令，可粘贴或拖入图片 / 视频）" onkeydown="return msgKeyDown(event)" oninput="onMsgInput()" onpaste="onImagePaste(event)" ondrop="onImageDrop(event)" ondragover="onImageDragOver(event)"></textarea>
         </div>
         <button id="sendBtn" onclick="sendMsg()">发送</button>
       </div>
@@ -1568,7 +1575,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
     <h2>创建机器人</h2>
     <div class="hint">填写基本信息，几分钟即可拥有一个智能助手</div>
     <div class="field" id="field-name"><label>名称 <span style="color:var(--warn)">*</span></label><input id="f-name" placeholder="例如：我的客服助手" maxlength="30"><div class="err" style="color:var(--danger);font-size:11.5px;margin-top:5px;display:none">请填写机器人名称（1-30 字）</div></div>
-    <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:var(--danger);font-size:11.5px;margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
+    <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" data-grow data-grow-max="200" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:var(--danger);font-size:11.5px;margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
     <div class="field"><label>头像</label>
       <div class="color-pick" id="colors">
         <div class="c on" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)" data-c=""></div>
@@ -1857,7 +1864,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
   <div class="mbox" style="width:620px">
     <h2>✏️ 编辑消息并重发</h2>
     <p class="edit-msg-tip">保存后这条消息会被替换为新内容，<b>它之后的对话记录将被清除</b>，然后重新请求模型回答。</p>
-    <textarea class="edit-msg-ta" id="editMsgTa" placeholder="输入新的消息内容…"></textarea>
+    <textarea class="edit-msg-ta" id="editMsgTa" data-grow data-grow-max="420" placeholder="输入新的消息内容…"></textarea>
     <div class="toolbar" style="margin:14px 0 0;justify-content:flex-end">
       <button class="btn btn-ghost" type="button" onclick="closeEditMsg()">取消</button>
       <button class="btn btn-primary" type="button" id="editMsgSaveBtn" onclick="confirmEditMsg()">保存并重发</button>
@@ -3086,8 +3093,8 @@ window.__storage = __storage;
     html += brandField('一句话定位', 'pitch', _br.pitch);
     html += brandField('Slogan', 'slogan', _br.slogan);
     html += brandField('语气 / 风格', 'tone', _br.tone);
-    html += '<label class="brand-area"><span>产品 / 服务</span><textarea id="brandProducts" class="mem-text" style="min-height:54px" oninput="setBrand(\'products\',this.value)">' + escapeHtml(_br.products || '') + '</textarea></label>';
-    html += '<label class="brand-area"><span>禁忌（不要说的话 / 事）</span><textarea id="brandTaboo" class="mem-text" style="min-height:54px" oninput="setBrand(\'taboo\',this.value)">' + escapeHtml(_br.taboo || '') + '</textarea></label>';
+    html += '<label class="brand-area"><span>产品 / 服务</span><textarea id="brandProducts" class="mem-text" data-grow data-grow-max="220" style="min-height:54px" oninput="setBrand(\'products\',this.value)">' + escapeHtml(_br.products || '') + '</textarea></label>';
+    html += '<label class="brand-area"><span>禁忌（不要说的话 / 事）</span><textarea id="brandTaboo" class="mem-text" data-grow data-grow-max="220" style="min-height:54px" oninput="setBrand(\'taboo\',this.value)">' + escapeHtml(_br.taboo || '') + '</textarea></label>';
     html += '<label class="brand-area"><span>官网 / 链接</span><input id="brandLinks" class="mem-add" style="flex:none;width:100%" value="' + escapeAttr(_br.links || '') + '" oninput="setBrand(\'links\',this.value)"></label>';
     html += '<button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%" onclick="exportTemplate()">💾 导出为模板</button>';
     html += '</div>';
@@ -4131,7 +4138,7 @@ function snipEditRow(s) {
     + '<input class="snip-inp" id="snipNameInp" style="flex:1" maxlength="20" placeholder="指令名（如：周报）" value="' + (s ? escapeAttr(s.name) : '') + '">'
     + '<input class="snip-inp" id="snipIcInp" style="flex:0 0 64px;text-align:center" maxlength="2" placeholder="图标" value="' + (s ? escapeAttr(s.ic || '') : '✨') + '">'
     + '</div>'
-    + '<textarea class="snip-inp" id="snipTextInp" style="width:100%;height:92px;resize:vertical;line-height:1.6" placeholder="指令内容 —— 会插入到输入框的文本">' + escapeHtml(s ? (s.text || '') : '') + '</textarea>'
+    + '<textarea class="snip-inp" id="snipTextInp" data-grow data-grow-max="300" style="width:100%;min-height:92px;line-height:1.6" placeholder="指令内容 —— 会插入到输入框的文本">' + escapeHtml(s ? (s.text || '') : '') + '</textarea>'
     + '<div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end">'
     + '<button class="btn btn-ghost btn-sm" onclick="snipCancelEdit()">取消</button>'
     + '<button class="btn btn-primary btn-sm" onclick="snipSaveEdit(' + (isNew ? 'null' : '\'' + s.id + '\'') + ')">' + (isNew ? '创建' : '保存') + '</button>'
@@ -6598,12 +6605,73 @@ function attachCopyBtns() {
     msg.appendChild(copy);
   });
 }
-function autoGrowInput() {
-  var el = document.getElementById('msgInput');
+// ==================== 输入框自适应高度 ====================
+// 高度跟着内容走：写完变高、删掉变矮，到 data-grow-max 才停住并转为内部滚动。
+// 两个反直觉、但必须守住的点：
+//  1) 每次都要先把 height 置回 'auto' 再读 scrollHeight —— 否则读到的是被上一次设下的
+//     height 撑住的值（scrollHeight 不会小于当前高度），于是删字时只增不减。
+//  2) 框藏在 display:none 的面板 / 弹窗里时 offsetHeight 与 scrollHeight 都是 0，
+//     算出来必然是错的（会缩到下限高度）；此时直接跳过，等它显示出来再算一次 ——
+//     显隐路径很多（切 tab、开弹窗、切机器人…），所以下面挂了统一的重算时机。
+function autoGrowTa(el) {
   if (!el) return;
+  if (!el.offsetHeight && !el.scrollHeight) return;          // 不可见：别写坏高度
+  var max = parseInt(el.getAttribute('data-grow-max') || '', 10) || 320;
+  // 先收掉滚动条再量高度：滚动条会占掉 clientHeight，让下面的 border 补偿算多
+  el.style.overflowY = 'hidden';
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  // 不管是 border-box 还是 content-box，这个差值都等于上下 border（外加水平滚动条，
+  // textarea 一般没有）。不补的话贴边时会压掉 1-2px 内容，表现为「明明只有一行，
+  // 却冒出一条滚动条」。
+  var extra = el.offsetHeight - el.clientHeight;
+  var h = Math.ceil(el.scrollHeight + extra);
+  el.style.height = Math.min(h, max) + 'px';
+  el.style.overflowY = h > max ? 'auto' : 'hidden';
 }
+
+// 重算页面上所有自适应输入框（省略 root 即整篇文档）
+function growAllTAs(root) {
+  var list = (root || document).querySelectorAll('textarea[data-grow]');
+  for (var i = 0; i < list.length; i++) autoGrowTa(list[i]);
+}
+
+// 聊天输入框：保留原名 —— 发送后清空、切机器人回填、插图预览这些既有调用点都靠它
+// 把框缩回去（那些是直接赋值 value，不触发 input 事件，事件委托收不到）。
+function autoGrowInput() {
+  autoGrowTa(document.getElementById('msgInput'));
+}
+window.autoGrowTa = autoGrowTa;
+window.growAllTAs = growAllTAs;
+
+(function () {
+  var timer = 0;
+  function isGrowTa(t) {
+    return !!t && t.tagName === 'TEXTAREA' && t.hasAttribute('data-grow');
+  }
+  // 用事件委托而不是逐个绑 oninput：品牌记忆、提示词库弹窗里的框都是 innerHTML
+  // 后生成的，逐个绑必漏。
+  document.addEventListener('input', function (e) {
+    if (isGrowTa(e.target)) autoGrowTa(e.target);
+  });
+  // 中文输入法：拼音串还在候选框里时 WebView2 不一定派发 input，补一次
+  document.addEventListener('compositionend', function (e) {
+    if (isGrowTa(e.target)) autoGrowTa(e.target);
+  });
+  // 宽度变了折行数就变，必须重算；限频，免得拖窗口时反复强制布局
+  window.addEventListener('resize', function () {
+    clearTimeout(timer);
+    timer = setTimeout(function () { growAllTAs(); }, 150);
+  });
+  // 面板 / 弹窗的显隐路径很多（切 tab、开弹窗、切机器人…），逐个挂钩必漏；统一在点击后
+  // 补算一次。用捕获阶段，免得被某处的 stopPropagation 挡掉。全篇 data-grow 只有个位数
+  // 元素，这点开销可忽略。
+  document.addEventListener('click', function () {
+    setTimeout(function () { growAllTAs(); }, 0);
+  }, true);
+  // 首次：把已落盘的长文本（人设提示词等）在打开时就撑开
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { growAllTAs(); });
+  else growAllTAs();
+})();
 
 // ==================== 多模态：图片输入 ====================
 function readImageAsDataURL(file) {
@@ -7199,6 +7267,8 @@ function openEditMsg(i) {
     if (!ta) return;
     ta.focus();
     try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) { }
+    // 弹窗刚打开、且内容已回填：让编辑框直接按整条消息的高度张开
+    autoGrowTa(ta);
   }, 30);
 }
 function closeEditMsg() {
@@ -8903,6 +8973,9 @@ function switchWsTab(t) {
   if (t === 'versions') { if (b) renderVersionPanel(b); }
   if (t === 'batch') { if (b) renderBatchPanel(b); }
   closeWsMore();
+  // 面板刚由 display:none 切成可见，此时才量得到真实内容高度 —— 提示词 / 批量的
+  // 输入框就活在这些面板里，不在这里补一次，切过来时会停在旧高度上。
+  growAllTAs();
 }
 function openWsMore() {
   const menu = document.getElementById('wsMoreMenu'); const btn = document.getElementById('wsTabMore'); if (!menu || !btn) return;
