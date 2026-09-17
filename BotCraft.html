@@ -6607,26 +6607,44 @@ function attachCopyBtns() {
 }
 // ==================== 输入框自适应高度 ====================
 // 高度跟着内容走：写完变高、删掉变矮，到 data-grow-max 才停住并转为内部滚动。
-// 两个反直觉、但必须守住的点：
+// 三个反直觉、但必须守住的点：
 //  1) 每次都要先把 height 置回 'auto' 再读 scrollHeight —— 否则读到的是被上一次设下的
 //     height 撑住的值（scrollHeight 不会小于当前高度），于是删字时只增不减。
 //  2) 框藏在 display:none 的面板 / 弹窗里时 offsetHeight 与 scrollHeight 都是 0，
 //     算出来必然是错的（会缩到下限高度）；此时直接跳过，等它显示出来再算一次 ——
 //     显隐路径很多（切 tab、开弹窗、切机器人…），所以下面挂了统一的重算时机。
+//  3) 只写 style.height 在**纵向 flex 容器**里是无效的：`.chat-input textarea{flex:1}`
+//     展开成 `flex:1 1 0%`，flex-basis 为 0 时主尺寸由「剩余空间」决定，height 属性
+//     根本不参与（连 flex-shrink:0 都救不回来）——框会永远停在 CSS 的 min-height，
+//     多行文案被裁在框里、右侧只冒出一条滚动条。所以同一高度必须同时钉到
+//     min-height / max-height 上：flex 算法会用它去夹住被压缩后的主尺寸。
 function autoGrowTa(el) {
   if (!el) return;
   if (!el.offsetHeight && !el.scrollHeight) return;          // 不可见：别写坏高度
   var max = parseInt(el.getAttribute('data-grow-max') || '', 10) || 320;
+  // 上一轮钉下的 min/max 先摘掉，否则下面读到的 cssMin 是上一轮写下的值
+  el.style.minHeight = '';
+  el.style.maxHeight = '';
   // 先收掉滚动条再量高度：滚动条会占掉 clientHeight，让下面的 border 补偿算多
   el.style.overflowY = 'hidden';
   el.style.height = 'auto';
+  // 各框 CSS 里的 min-height（人设 220 / 批量 140 / 编辑消息 132 / 聊天 44…）是设计
+  // 下限：下面钉 min/max 会覆盖 CSS，所以得先把原值读出来带着走，否则内容少时
+  // 会把框压得比设计更矮。'auto' 时 parseFloat 得 NaN，兜 0。
+  var cssMin = parseFloat(getComputedStyle(el).minHeight) || 0;
   // 不管是 border-box 还是 content-box，这个差值都等于上下 border（外加水平滚动条，
   // textarea 一般没有）。不补的话贴边时会压掉 1-2px 内容，表现为「明明只有一行，
   // 却冒出一条滚动条」。
   var extra = el.offsetHeight - el.clientHeight;
   var h = Math.ceil(el.scrollHeight + extra);
-  el.style.height = Math.min(h, max) + 'px';
-  el.style.overflowY = h > max ? 'auto' : 'hidden';
+  if (h < cssMin) h = cssMin;
+  var clipped = h > max;
+  if (clipped) h = max;
+  el.style.height = h + 'px';
+  // 见上面第 3 条：这两行是「在 flex 容器里也能长高」的唯一保障，别删。
+  el.style.minHeight = h + 'px';
+  el.style.maxHeight = h + 'px';
+  el.style.overflowY = clipped ? 'auto' : 'hidden';
 }
 
 // 重算页面上所有自适应输入框（省略 root 即整篇文档）
