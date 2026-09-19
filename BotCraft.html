@@ -779,6 +779,13 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg.bot a{color:var(--brand-text);text-decoration:underline;text-underline-offset:2px}
 .msg.bot a:hover{opacity:.82}
 .msg.bot pre.md-code{position:relative;padding-top:34px}
+/* 块内 <code> 必须「素着」，底色由外层 pre 独家提供。
+   起因：`.msg code`（行内代码样式）与 `body .msg code`（下沉层）这两条规则
+   都会命中代码块内部的 <code> —— 而 <code> 是 inline 元素，它的 background
+   和 padding 只覆盖「有内容的行片段」、不铺满行宽，于是**前导缩进空格也被一起染色**，
+   再叠在 pre 的块级底色上，就成了每行文字下面一块带圆角的阶梯状暗色。
+   观感上像是「空格带了阴影」，实际是空格被染了底色。缩进越深，色块越往右退。 */
+.msg.bot pre.md-code code{background:none;padding:0;border-radius:0;font-size:inherit}
 .msg.bot pre.md-code[data-lang]::before{content:attr(data-lang);position:absolute;top:10px;left:12px;right:auto;font-size:10px;letter-spacing:.5px;color:var(--sub);opacity:.75;text-transform:uppercase;pointer-events:none}
 .msg.bot pre.md-code .md-copy{position:absolute;top:7px;right:9px;z-index:2;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:590;cursor:pointer;background:var(--fill);color:var(--sub);border:1px solid transparent;transition:.15s var(--ease)}
 .msg.bot pre.md-code .md-copy:hover{background:var(--fill-strong);color:var(--brand-text)}
