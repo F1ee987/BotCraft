@@ -1,0 +1,125 @@
+{
+  "name": "BotCraft 官方示例插件源",
+  "updated": "2026-09-19",
+  "plugins": [
+    {
+      "id": "weather",
+      "name": "实时天气",
+      "version": "1.0.0",
+      "icon": "🌤️",
+      "category": "数据",
+      "desc": "按城市查当前气温、体感、湿度、风力（open-meteo）",
+      "cap": "先用地名检索接口把城市换成经纬度，再取当前实况；返回气温、体感温度、湿度、风速与天气代码。接口免 Key 且支持跨域，桌面版与浏览器版都能用。",
+      "author": "BotCraft 示例",
+      "permissions": {
+        "domains": [
+          "geocoding-api.open-meteo.com",
+          "api.open-meteo.com"
+        ],
+        "readChat": false
+      },
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "查询指定城市的当前天气",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string",
+                "description": "城市名，如 上海"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ],
+      "code": "plugin.register('get_weather', async function (args, ctx) {\n  var city = String((args && args.city) || '').trim();\n  if (!city) return { error: '缺少参数 city，例如 {\"city\":\"上海\"}' };\n  var g = await plugin.host.fetch('https://geocoding-api.open-meteo.com/v1/search?name='\n    + encodeURIComponent(city) + '&count=1&language=zh&format=json');\n  var gj = JSON.parse(g.text);\n  var f = gj && gj.results && gj.results[0];\n  if (!f) return { error: '查不到这个城市：' + city };\n  var w = await plugin.host.fetch('https://api.open-meteo.com/v1/forecast?latitude=' + f.latitude\n    + '&longitude=' + f.longitude\n    + '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m'\n    + '&timezone=auto');\n  var c = (JSON.parse(w.text) || {}).current || {};\n  return {\n    city: f.name, country: f.country || '', lat: f.latitude, lon: f.longitude,\n    temperature: c.temperature_2m, feelsLike: c.apparent_temperature,\n    humidity: c.relative_humidity_2m, wind: c.wind_speed_10m, weatherCode: c.weather_code\n  };\n});\n"
+    },
+    {
+      "id": "exchange-rate",
+      "name": "汇率查询",
+      "version": "1.0.0",
+      "icon": "💱",
+      "category": "数据",
+      "desc": "查两种货币的实时汇率，可换算金额（open.er-api）",
+      "cap": "以基准币种拉取整张汇率表再取目标币种，支持同时给出换算后的金额。接口免 Key 且支持跨域，桌面版与浏览器版都能用。",
+      "author": "BotCraft 示例",
+      "permissions": {
+        "domains": [
+          "open.er-api.com"
+        ],
+        "readChat": false
+      },
+      "tools": [
+        {
+          "name": "get_rate",
+          "description": "查询汇率，例如 USD 兑 CNY；可传 amount 换算金额",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "description": "源币种，如 USD"
+              },
+              "to": {
+                "type": "string",
+                "description": "目标币种，如 CNY"
+              },
+              "amount": {
+                "type": "number",
+                "description": "可选，要换算的金额"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ]
+          }
+        }
+      ],
+      "code": "plugin.register('get_rate', async function (args, ctx) {\n  var from = String((args && args.from) || 'USD').toUpperCase();\n  var to = String((args && args.to) || 'CNY').toUpperCase();\n  var r = await plugin.host.fetch('https://open.er-api.com/v6/latest/' + from);\n  var j = JSON.parse(r.text);\n  if (!j || j.result !== 'success') return { error: '汇率接口返回异常' };\n  var rate = j.rates && j.rates[to];\n  if (rate == null) return { error: '不支持的币种：' + to };\n  return {\n    from: from, to: to, rate: rate,\n    amount: (args && args.amount) ? (Number(args.amount) * rate) : null,\n    updatedAt: j.time_last_update_utc || ''\n  };\n});\n"
+    },
+    {
+      "id": "express-track",
+      "name": "快递查询",
+      "version": "1.0.0",
+      "icon": "📦",
+      "category": "数据",
+      "desc": "按单号查快递轨迹（快递100，仅桌面版可用）",
+      "cap": "传入单号与快递公司，返回最新状态与完整轨迹。该接口不返回跨域头，浏览器直接打开 HTML 时会被拦，只有桌面版 exe（走 Python 侧网络代理）能调通——正好用来验证两种运行环境的差异。",
+      "author": "BotCraft 示例",
+      "permissions": {
+        "domains": [
+          "www.kuaidi100.com"
+        ],
+        "readChat": false
+      },
+      "tools": [
+        {
+          "name": "track_express",
+          "description": "查询快递轨迹，需提供单号；公司可用中文名或拼音代号",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "string",
+                "description": "快递单号"
+              },
+              "company": {
+                "type": "string",
+                "description": "快递公司，如 圆通 / yuantong"
+              }
+            },
+            "required": [
+              "number"
+            ]
+          }
+        }
+      ],
+      "code": "// 注意：快递 100 的查询接口不返回 Access-Control-Allow-Origin，\n// 因此在浏览器里直接打开 BotCraft.html 时会被跨域策略拦掉；\n// 桌面版 exe 走 Python 侧代理（不受同源限制）可以正常调用。\nvar COM = { '圆通': 'yuantong', '中通': 'zhongtong', '申通': 'shentong',\n            '韵达': 'yunda', '顺丰': 'shunfeng', '京东': 'jd', 'EMS': 'ems' };\nplugin.register('track_express', async function (args, ctx) {\n  var no = String((args && args.number) || '').trim();\n  var com = String((args && args.company) || '').trim();\n  if (!no) return { error: '缺少参数 number（快递单号）' };\n  var code = COM[com] || com;\n  var r = await plugin.host.fetch('https://www.kuaidi100.com/query?type=' + encodeURIComponent(code)\n    + '&postid=' + encodeURIComponent(no) + '&temp=' + Math.random());\n  var j = JSON.parse(r.text);\n  if (!j || j.message !== 'ok') return { error: (j && j.message) || '查询失败，请检查单号与快递公司' };\n  return {\n    company: j.com || com, number: j.nu || no, state: j.state || '',\n    status: j.status || '',\n    traces: (j.data || []).map(function (t) { return (t.time || '') + '  ' + (t.context || ''); })\n  };\n});\n"
+    }
+  ]
+}

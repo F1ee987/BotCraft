@@ -196,6 +196,63 @@ AI 机器人搭建平台 —— **单文件**前端 SPA，在浏览器内可视�
 
 ---
 
+## 第三方插件（沙箱）
+
+内置插件（网页搜索、图片生成、PDF 解析、天气查询、日历/提醒、代码执行器）是**写死在页面里的能力开关** —— 点「安装」只是往 localStorage 记个名字，代码本来就在这份 HTML 里。
+
+第三方插件是另一回事：**代码真的从外部来**。所以整个设计只围绕一个问题——凭什么敢跑它。
+
+### 防线
+
+唯一一道防线是 iframe 的 `sandbox` 属性，且**绝不给 `allow-same-origin`**。沙箱内的 JS 因此处于唯一源（opaque origin），访问 `parent.localStorage`、`parent.document` 会直接抛 `SecurityError` —— API Key 与全部机器人数据都在 parent 这边，沙箱够不着。
+
+规范说会拦，不等于这台机器的内核真会拦。所以**每次安装前都会实跑一次隔离自检**：在真沙箱里试着摸 `parent.localStorage`，摸得到就拒绝安装。验证放在用户机器上、每次都做。
+
+插件能做的事只有三件，安装前会逐条列出来让你确认：
+
+| 能力 | 约束 |
+|---|---|
+| 联网 | 只能访问插件自己声明的域名，精确匹配或子域匹配（声明 `example.com` 允许 `api.example.com`，但不会误放 `evilfoo.com`），越界直接回绝而不代发 |
+| 声明工具 | 供模型调用或手动试跑 |
+| 读取当前对话 | 需插件声明 `readChat`，未声明时传进去的是空数组 |
+
+没有插件独立存储，拿不到 DOM，拿不到主应用数据。
+
+### 两种运行环境的联网差异
+
+| | 桌面版 exe | 浏览器打开 HTML |
+|---|---|---|
+| 通道 | Python 侧 `bc_http()` 代理（`urllib`，不受同源策略约束） | 页面 `fetch`，Origin 为 `null` |
+| 可用接口 | 任意 | 只有返回 `Access-Control-Allow-Origin` 的 |
+
+`examples/plugins/` 下的三个示例正好覆盖两种：`weather` 与 `exchange-rate` 的接口返回 `ACAO: *`，两边都能用；`express-track`（快递 100）不返回跨域头，**只有桌面版能调通**。
+
+Python 侧另有硬约束（不依赖页面侧的白名单）：只放行 http/https、拒绝内网与回环地址、超时 20 秒、响应体上限 2 MB、不转发 `Origin`/`Referer`。
+
+### 怎么装
+
+1. **注册表**：插件中心顶部填一个注册表 JSON 地址，点「拉取」即可浏览安装。`examples/plugins/registry.json` 就是一份自包含的示例（内嵌三个插件），托管到任意静态地址后填进来即可。注册表项也可以只放元数据 + `url`，代码在确认安装时才拉取。
+2. **单个链接**：「从链接安装」，粘贴插件 JSON 的地址。
+3. **本地文件**：「导入本地文件」，选一个 `.json`。
+
+插件包格式（`.json`）：
+
+```json
+{
+  "id": "weather", "name": "实时天气", "version": "1.0.0",
+  "icon": "🌤️", "category": "数据", "desc": "…", "cap": "…", "author": "…",
+  "permissions": { "domains": ["api.open-meteo.com"], "readChat": false },
+  "tools": [{ "name": "get_weather", "description": "查询城市天气", "parameters": { "type": "object" } }],
+  "code": "plugin.register('get_weather', async function (args, ctx) { … });"
+}
+```
+
+`id` 只允许 `[a-z0-9][a-z0-9._-]{1,48}`，代码上限 200 KB。沙箱内可用 `plugin.host.fetch(url, opts)` 联网、`plugin.register(name, fn)` 声明工具。
+
+> ⚠️ 插件是外部代码，只装你信得过的来源。装之前看清楚它要访问哪些域名。
+
+---
+
 ## 文件说明
 - `BotCraft.html` — 主应用（HTML/CSS/JS 全部内嵌，约 989 KB；其中约 245 KB 是内嵌的等宽字体 base64）。
 - `BotCraft.exe` — 桌面版（由 pywebview + PyInstaller 打包，约 14.1 MB），双击即开、无需浏览器；已随仓库分发，需联网调用模型 API。数据写在 `%APPDATA%\BotCraft\data.json`，自动备份在 `%APPDATA%\BotCraft\backups\`。

@@ -1,0 +1,44 @@
+{
+  "id": "exchange-rate",
+  "name": "汇率查询",
+  "version": "1.0.0",
+  "icon": "💱",
+  "category": "数据",
+  "desc": "查两种货币的实时汇率，可换算金额（open.er-api）",
+  "cap": "以基准币种拉取整张汇率表再取目标币种，支持同时给出换算后的金额。接口免 Key 且支持跨域，桌面版与浏览器版都能用。",
+  "author": "BotCraft 示例",
+  "permissions": {
+    "domains": [
+      "open.er-api.com"
+    ],
+    "readChat": false
+  },
+  "tools": [
+    {
+      "name": "get_rate",
+      "description": "查询汇率，例如 USD 兑 CNY；可传 amount 换算金额",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "源币种，如 USD"
+          },
+          "to": {
+            "type": "string",
+            "description": "目标币种，如 CNY"
+          },
+          "amount": {
+            "type": "number",
+            "description": "可选，要换算的金额"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      }
+    }
+  ],
+  "code": "plugin.register('get_rate', async function (args, ctx) {\n  var from = String((args && args.from) || 'USD').toUpperCase();\n  var to = String((args && args.to) || 'CNY').toUpperCase();\n  var r = await plugin.host.fetch('https://open.er-api.com/v6/latest/' + from);\n  var j = JSON.parse(r.text);\n  if (!j || j.result !== 'success') return { error: '汇率接口返回异常' };\n  var rate = j.rates && j.rates[to];\n  if (rate == null) return { error: '不支持的币种：' + to };\n  return {\n    from: from, to: to, rate: rate,\n    amount: (args && args.amount) ? (Number(args.amount) * rate) : null,\n    updatedAt: j.time_last_update_utc || ''\n  };\n});\n"
+}
