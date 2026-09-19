@@ -10,12 +10,13 @@
 67%、眼按 16px 网格反推成 2.5px），且以目标尺寸的 8 倍绘制再降采样 —— 512→16 是
 32 倍降采样，会把 2px 级特征平均成灰雾。
 
-产物（三处必须同步，脚本一把改完）：
+产物（四处必须同步，脚本一把改完）：
   1. botcraft.ico              —— 源，16/24/32/48/64/128/256 共 7 档
   2. BotCraft/botcraft.ico     —— 打包用（build_run.py --icon 指向这里）
   3. BotCraft/BotCraft.html    —— 内联 favicon（base64，就地替换而非「有就跳过」）
+  4. BotCraft/BotCraft.html    —— 界面品牌标记 .logo .dot 的内联 SVG（顶栏 + 登录页两处）
 
-用法：python gen_icon.py            # 生成 ico + 注入 favicon + 出预览图
+用法：python gen_icon.py            # 生成 ico + 注入 favicon + 注入 logo + 出预览图
       python gen_icon.py --dry      # 只出预览图，不写 ico/HTML
 """
 import base64
@@ -173,6 +174,92 @@ def inject_favicon(ico_bytes):
     return action, n, len(link)
 
 
+# ---------------------------------------------------------------- 界面品牌标记
+# .logo .dot（顶栏 + 登录页两处的 `<div class="dot">…</div>`）的内联 SVG。
+# 与图标本体同源：机器人脸几何、圆角比例 RADIUS_R、底色渐变方向（135° 对角）。
+#
+# 为什么不直接套主版几何：界面标记实际只有 28 CSS 像素，而 Windows 常见 100% 缩放
+# （DPR=1）—— 主版天线 0.032×28 = 0.9px 会被抗锯齿摊成一道灰雾，与「16px 不该画
+# 天线」是同一条判据（见 _icon_cand.py 的四方案实测）。故按 28px 重算：杆 0.068、
+# 灯 0.052、脸放宽到 0.155~0.845，保证 DPR=1 下仍能读出「天线 + 扁头 + 两点眼」。
+# 几何对比与实尺寸排版观感见 build_exe/_dot_geom.png。
+#
+# 底色走 CSS 变量而非写死 #6366f1：浅色主题会把 --brand/--brand-hi 整体加深
+# （#8b5cf6→#7c3aed），写死会让 logo 在浅色底上过亮；而且 --brand-hi 目前唯一的
+# 使用点就是这里，写死等于把它变成零引用的死令牌 —— 正是前一轮刚清理过的那类问题。
+LOGO_VIEWBOX = 32                    # SVG 内部坐标系（取 8 的倍数，便于与 0~1 比例互转）
+LOGO_DOT = 28                        # CSS 里 .logo .dot 的像素尺寸（守卫会核对）
+
+LOGO_GEOM = {
+    'rx': RADIUS_R,                       # 底：圆角比例，与图标同
+    'ant': (0.170, 0.320, 0.068),         # 天线杆：y1, y2, 线宽
+    'lamp': (0.122, 0.052),               # 信号灯：圆心 y, 半径
+    'face': (0.155, 0.310, 0.845, 0.750),  # 脸：x1, y1, x2, y2
+    'face_r': 0.155,                      # 脸的圆角
+    'eye': (0.078, 0.125, 0.530),         # 眼：半径, 左右偏移, 圆心 y
+}
+
+# 只匹配 `<div class="dot">`（空元素或已含一处 svg）—— .line-chart 的 `<circle class="dot">`
+# 与 .ctxp-dot 都不是这个写法，不会被误伤。
+LOGO_RE = re.compile(r'<div class="dot">(?:\s*<svg\b.*?</svg>\s*)?</div>', re.S)
+
+
+def logo_svg(gid):
+    """生成一处 .logo .dot 的内联 SVG。
+
+    gid 必须逐处不同：同一文档里重复 id，第二个 <linearGradient> 会被忽略，
+    第二个 logo 的底色引用到第一个的渐变（视觉上碰巧一样，但文档是坏的）。
+    """
+    v = float(LOGO_VIEWBOX)
+    g = LOGO_GEOM
+    q = lambda t: ('%.2f' % (t * v)).rstrip('0').rstrip('.')
+
+    fx1, fy1, fx2, fy2 = g['face']
+    ay1, ay2, aw = g['ant']
+    lcy, lr = g['lamp']
+    er, edx, ecy = g['eye']
+    ex1, ex2 = 0.5 - edx, 0.5 + edx
+
+    return (
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 %d %d'"
+        " aria-hidden='true' focusable='false'>"
+        "<defs><linearGradient id='%s' x1='0' y1='0' x2='1' y2='1'>"
+        "<stop offset='0' style='stop-color:var(--brand-hi)'/>"
+        "<stop offset='1' style='stop-color:var(--brand)'/>"
+        "</linearGradient></defs>"
+        "<rect width='%d' height='%d' rx='%s' fill='url(#%s)'/>"
+        "<path d='M%s %sV%s' stroke='#fff' stroke-width='%s'/>"
+        "<circle cx='%s' cy='%s' r='%s' fill='#c4b5fd'/>"
+        "<rect x='%s' y='%s' width='%s' height='%s' rx='%s' fill='#fff'/>"
+        "<circle cx='%s' cy='%s' r='%s' fill='#1e202e'/>"
+        "<circle cx='%s' cy='%s' r='%s' fill='#1e202e'/>"
+        "</svg>"
+    ) % (LOGO_VIEWBOX, LOGO_VIEWBOX, gid, LOGO_VIEWBOX, LOGO_VIEWBOX,
+         q(g['rx']), gid,
+         q(0.5), q(ay1), q(ay2), q(aw),
+         q(0.5), q(lcy), q(lr),
+         q(fx1), q(fy1), q(fx2 - fx1), q(fy2 - fy1), q(g['face_r']),
+         q(ex1), q(ecy), q(er), q(ex2), q(ecy), q(er))
+
+
+def inject_logo():
+    """把两处 .logo .dot 就地替换成内联 SVG（幂等：第二次跑匹配到已注入的那份）。"""
+    with open(HTML, 'r', encoding='utf-8', newline='') as f:
+        h = f.read()
+    seen = [0]
+
+    def rep(_m):
+        seen[0] += 1
+        return '<div class="dot">' + logo_svg('bcLogoG%d' % seen[0]) + '</div>'
+
+    h2, n = LOGO_RE.subn(rep, h)
+    if n != 2:
+        raise SystemExit('<div class="dot"> 命中 %d 处（预期 2：顶栏 + 登录页），拒绝写入' % n)
+    with open(HTML, 'w', encoding='utf-8', newline='') as f:
+        f.write(h2)
+    return n, len(logo_svg('bcLogoG1'))
+
+
 if __name__ == '__main__':
     dry = '--dry' in sys.argv
     frames = [render(s) for s in SIZES]
@@ -194,5 +281,7 @@ if __name__ == '__main__':
 
     action, n, linklen = inject_favicon(ico)
     print('favicon    : %s x%d  (link %d 字符)' % (action, n, linklen))
+    ln, svglen = inject_logo()
+    print('logo       : INJECTED x%d  (每处 svg %d 字符)' % (ln, svglen))
     print('html bytes : %d' % os.path.getsize(HTML))
     print('GEN_ICON_OK')
