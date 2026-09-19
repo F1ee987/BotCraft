@@ -4435,13 +4435,27 @@ function renderMarkdown(text) {
   if (text == null) return '';
   text = String(text);
   const codeBlocks = [];
-  let src = text.replace(/```(\w*)\n([\s\S]*?)```/g, function (_, lang, code) {
+  function pushCodeBlock(lang, code) {
     const id = codeBlocks.length;
-    const safe = escapeHtml(code.replace(/\n$/, ''));
+    // \r\n → \n：Windows 粘贴或读文件进来的内容带 \r，浏览器渲染时虽会规范化，
+    // 但「复制」按钮取的是原始字符串，留着会让粘贴出去的东西带脏字符。
+    const safe = escapeHtml(code.replace(/\r\n?/g, '\n').replace(/\n$/, ''));
     const copyBtn = '<button type="button" class="md-copy" onclick="copyCodeBlock(this)" aria-label="复制代码">📋 复制</button>';
     codeBlocks.push('<pre class="md-code"' + (lang ? ' data-lang="' + escapeAttr(lang) + '"' : '') + '>' + copyBtn + '<code>' + safe + '</code></pre>');
     return '\u0000CB' + id + '\u0000';
-  });
+  }
+  // 围栏识别（2026-09-19 修。原实现只用 \w 匹配语言名、只认 LF 换行，四处漏）：
+  //   ① 语言名不能用 \w —— objective-c / c++ / c# / docker-compose / text/plain
+  //      里的 - + # / 都不在 \w 内，正则停在语言名中间，接着要求换行就失败，
+  //      整块漏成普通文本，用户看到的是原样的反引号。
+  //   ② 围栏行尾要允许尾随空格（语言名后面多一个空格就失效）。
+  //   ③ 换行要允许 CRLF —— Windows 粘贴或读文件必带 \r，\r 正好卡在语言名与 \n
+  //      之间，「从 Windows 复制的 yaml」整块不渲染。这是最常见的一种。
+  //   ④ 未闭合围栏按 CommonMark 延伸到文末，而不是原样显示。
+  let src = text.replace(/```([^\s`]*)[^\S\r\n]*\r?\n([\s\S]*?)(?:\r?\n)?```/g,
+    function (_, lang, code) { return pushCodeBlock(lang, code); });
+  src = src.replace(/```([^\s`]*)[^\S\r\n]*\r?\n([\s\S]*)$/,
+    function (_, lang, code) { return pushCodeBlock(lang, code); });
   const inlineCodes = [];
   src = src.replace(/`([^`\n]+)`/g, function (_, code) {
     const id = inlineCodes.length;
