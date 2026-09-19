@@ -1561,6 +1561,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="usage-cards" id="usageCards"></div>
       <div id="usageMix"></div>
       <p style="font-size:11.5px;color:var(--sub);margin:10px 0 0" id="usageHint"></p>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="resetUsage()" title="清空本机记录的 Token 用量统计（只动统计，不动对话与配置）">🗑 清空用量统计</button>
+      </div>
     </div>
     <div class="charts">
       <div class="chart-box">
@@ -1805,6 +1808,19 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="bk-title">📦 存储占用<span class="bk-sub" id="bkUsageSum"></span></div>
       <div class="bk-list" id="bkUsageList"></div>
       <div class="hint" id="bkUsageTip" style="font-size:11.5px;margin-top:8px"></div>
+      <!-- 上面回答「哪里大」，这里回答「清哪里」—— 占用面板原先只有诊断这一半 -->
+      <div class="bk-title" style="margin-top:12px">🧹 可清理的内联媒体</div>
+      <div class="bk-list" id="bkTrimList"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="bkTrimAllBtn" onclick="trimAllMediaAsk()" title="把所有对话里的语音与配图 base64 换成文字占位；消息文字、时间、角色全部保留">🧹 清理全部内联媒体</button>
+      </div>
+      <div class="hint" style="font-size:11.5px;margin-top:8px">清理只动<b style="color:var(--txt)">媒体本体</b>（语音音频、配图原图）：那条消息会显示为「（内联媒体已清理）」，文字内容一字不动。</div>
+    </div>
+
+    <div class="bk-sec">
+      <div class="bk-title">⚠️ 应急恢复</div>
+      <div class="hint" style="font-size:11.5px;margin:2px 0 8px">当数据损坏导致 <b style="color:var(--txt)">打不开 / 一直卡在登录页 / 界面空白</b> 时使用：清空本机全部数据并重启界面。清空前会自动留一份 <b style="color:var(--txt)">pre-emergency</b> 备份，可从上面的「本机自动备份」里找回。</div>
+      <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="emergencyReset()" title="清空本机全部数据并重启界面（清空前自动备份）">⚠️ 应急恢复（清空全部数据）</button>
     </div>
 
     <div class="mbox-foot">
@@ -3749,10 +3765,39 @@ function saveInstalledPlugins() {
   try { localStorage.setItem(key, JSON.stringify([...installedPlugins])); } catch (e) { }
 }
 function installPlugin(n) { installedPlugins.add(n); saveInstalledPlugins(); }
+// 哪些机器人正在启用这个插件。卸载要按它做级联 —— 只查当前机器人会漏掉别的机器人，
+// 留下「已从插件市场卸载、却仍挂在某个机器人身上」的幽灵启用态。
+function pluginUsedBy(n) {
+  return bots.filter(b => b && Array.isArray(b.plugins) && b.plugins.includes(n));
+}
+// 卸载 = 从「已安装」集合移除 + 取消所有机器人对它的启用。
+// 此前这个函数写好了却没有任何调用点，插件卡片又与它严格三态对应
+// （未安装 / 已安装 / 已启用），导致「已安装」是条单向路：装过就再也回不去，
+// 除非手动清 localStorage。现在由 uninstallPluginAsk() 接上入口。
 function uninstallPlugin(n) {
   installedPlugins.delete(n); saveInstalledPlugins();
+  const used = pluginUsedBy(n);
+  used.forEach(b => {
+    b.plugins = b.plugins.filter(x => x !== n);
+    if (n === '网页搜索') b.webSearch = false;
+    b.updatedAt = Date.now();
+  });
+  if (used.length) saveBots();
+  return used;
+}
+// 卸载入口：先把影响面说清楚（有几个机器人在用）再动手。
+// 卸载是可逆的（随时能重装），用普通 confirm 即可，不必上强确认。
+function uninstallPluginAsk(n) {
+  const used = pluginUsedBy(n);
+  const extra = used.length
+    ? '\n\n它正被 ' + used.length + ' 个机器人启用：' + used.map(b => '「' + b.n + '」').join('、') + '，卸载会一并取消启用。'
+    : '';
+  if (!confirm('确定卸载插件「' + n + '」吗？' + extra + '\n\n卸载后可随时重新安装。')) return;
+  uninstallPlugin(n);
+  renderPluginGrid();
   const b = getBot(currentId);
-  if (b && b.plugins.includes(n)) { b.plugins = b.plugins.filter(x => x !== n); if (n === '网页搜索') b.webSearch = false; b.updatedAt = Date.now(); saveBots(); }
+  if (b) { renderCtxBar(b); renderKbPanel(b); }
+  toast('已卸载「' + n + '」', 'ok');
 }
 
 // ==================== 文体模板（写作风格市场） ====================
@@ -4696,7 +4741,6 @@ async function pbkdf2Native(password, saltBytes) {
 // 纯 JS PBKDF2-HMAC-SHA256（无需 crypto.subtle，file:// 也能跑）
 function hexToBytes(hex) { const b = new Uint8Array(hex.length / 2); for (let i = 0; i < b.length; i++) b[i] = parseInt(hex.substr(i * 2, 2), 16); return b; }
 function bytesToHex(b) { return [...b].map(x => x.toString(16).padStart(2, '0')).join(''); }
-function fnv1a(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; } return h >>> 0; }
 async function pbkdf2Fallback(password, saltBytes) {
   // SubtleCrypto 不可用时（如 file:// 双击打开）的纯 JS 降级实现。
   // 迭代 10000 次 = OWASP 推荐下限，对本地演示账户足够安全；
@@ -7741,6 +7785,7 @@ function openDataMigrate() {
   document.getElementById('dataMigrateModal').classList.add('on');
   try { bkRefresh(); } catch (e) { }
   try { renderStorageUsage(); } catch (e) { }
+  try { renderStorageTrim(); } catch (e) { }
 }
 function closeDataMigrate() { document.getElementById('dataMigrateModal').classList.remove('on'); }
 
@@ -7839,17 +7884,30 @@ function bkDelete(name) {
 function _lsAllKeys() {
   try { return (storage.keys ? storage.keys() : []) || []; } catch (e) { return []; }
 }
+// 内嵌在消息正文里的 data: URI（配图最常见，形如 ![配图](data:image/jpeg;base64,...)）。
+// 统计与清理**必须共用这一个正则**：两边口径一旦不一致，就会出现「清掉了一大块、
+// 面板数字却没怎么动」这种自相矛盾的反馈。
+var MEDIA_DATA_URI_RE = /data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
+// 结构化媒体字段（语音 audio[]、附件等）。
+var MEDIA_FIELD_KEYS = ['audio', 'image', 'images', 'video', 'videos', 'files', 'attachments'];
+var MEDIA_PLACEHOLDER = '（内联媒体已清理）';
+
 // 从机器人数据里量出「内联媒体」的体量：语音/图片是以 base64 直接塞在消息里的，
 // 这才是数据文件膨胀的主因，必须和正文分开计量，否则看不出该清谁。
 function _mediaChars(botsRaw) {
   let bots;
   try { bots = JSON.parse(botsRaw); } catch (e) { return 0; }
   if (!Array.isArray(bots)) return 0;
-  const MEDIA_KEYS = ['audio', 'images', 'image', 'video', 'videos', 'files', 'attachments'];
   let total = 0;
   function scanMsg(m) {
     if (!m || typeof m !== 'object') return;
-    MEDIA_KEYS.forEach(function (kk) {
+    // 内嵌在正文里的图片也必须计入。此前只扫结构化字段，于是 markdown 配图
+    // （实测两张 jpeg 共 157KB）一个字节都不算，面板把媒体占比报低。
+    if (typeof m.text === 'string' && m.text.indexOf('data:') >= 0) {
+      const hits = m.text.match(MEDIA_DATA_URI_RE);
+      if (hits) hits.forEach(function (h) { total += h.length; });
+    }
+    MEDIA_FIELD_KEYS.forEach(function (kk) {
       const val = m[kk];
       if (typeof val === 'string') total += val.length;
       else if (Array.isArray(val)) val.forEach(function (x) { if (typeof x === 'string') total += x.length; });
@@ -7911,10 +7969,127 @@ function renderStorageUsage() {
   if (d.bytes > 4 * 1048576) {
     tip.innerHTML = '<b style="color:var(--danger)">⚠️ 占用已超过 4 MB。</b>数据每次读写都要整份序列化，继续增长会明显拖慢启动与写盘。建议先「导出全部配置」留一份，再清掉不需要的会话。';
   } else if (pct >= 50) {
-    tip.innerHTML = '<b style="color:var(--warn)">⚠️ 内联媒体占了 ' + pct + '%。</b>语音与图片是以 base64 直接存在数据文件里的，一条长音频就能有几百 KB。清掉不再需要的会话是最有效的瘦身方式。';
+    tip.innerHTML = '<b style="color:var(--warn)">⚠️ 内联媒体占了 ' + pct + '%。</b>语音与图片是以 base64 直接存在数据文件里的，一条长音频就能有几百 KB。点下面的<b style="color:var(--txt)">「清理全部内联媒体」</b>能立刻瘦下来，消息文字不受影响。';
   } else {
-    tip.innerHTML = '占用正常。打开这个面板时会自动读一遍本地数据，只统计、不修改。';
+    tip.innerHTML = '占用正常。打开面板只读一遍本地数据做统计，不会自动改动任何东西。';
   }
+}
+
+// ==================== 存储瘦身：清理内联媒体 ====================
+// 「📦 存储占用」此前只有「读」这半边：它把内联媒体 / 对话正文 / 其它拆得清清楚楚，
+// 提示语也写着「清掉不需要的会话最有效」，却没有任何能点的动作 —— 用户知道哪里大也没辙。
+// 这半边补在这里：既能一键清全部，也能按会话逐个清。
+// 清理只动媒体本体（语音音频、配图原图），消息的文字、时间、角色一律保留。
+
+// 单个会话的体量与「可释放量」（字符数；展示时 ×2 换成与占用面板一致的字节口径）。
+// 可释放量用「假设真清一遍会掉多少」来算，而不是另写一套遍历去累加 —— 统计与清理
+// 一旦各维护一份规则，迟早会分叉，出现「预计释放 300KB、实际只掉 200KB」这种自相矛盾
+// 的反馈（清不干净通常是漏了某种承载媒体，而漏在哪只有跑一遍才知道）。
+// 代价是一次深拷贝，在面板里点一次的量级完全可以忽略。
+function _sessionSize(s) {
+  var chars = 0, media = 0;
+  if (!s || typeof s !== 'object') return { chars: 0, media: 0 };
+  try { chars = JSON.stringify(s).length; } catch (e) { chars = 0; }
+  try {
+    var copy = JSON.parse(JSON.stringify(s));
+    var before = JSON.stringify(copy).length;
+    stripSessionMedia(copy);
+    media = Math.max(0, before - JSON.stringify(copy).length);
+  } catch (e) { media = 0; }
+  return { chars: chars, media: media };
+}
+
+// 就地把一个会话里的媒体换成占位文本，返回净释放的字符数。
+// 只清「确实是 data: URI」的片段 —— 媒体字段里存的也可能是个外链 URL，那不是内联媒体，
+// 清掉等于把有用的东西删了。
+function stripSessionMedia(s) {
+  var freed = 0;
+  ((s && s.history) || []).forEach(function (m) {
+    if (!m || typeof m !== 'object') return;
+    if (typeof m.text === 'string' && m.text.indexOf('data:') >= 0) {
+      var before = m.text.length;
+      m.text = m.text.replace(MEDIA_DATA_URI_RE, MEDIA_PLACEHOLDER);
+      freed += before - m.text.length;
+    }
+    MEDIA_FIELD_KEYS.forEach(function (kk) {
+      var val = m[kk];
+      if (typeof val === 'string' && /^data:/.test(val)) {
+        freed += val.length - MEDIA_PLACEHOLDER.length;
+        m[kk] = MEDIA_PLACEHOLDER;
+      } else if (Array.isArray(val)) {
+        val.forEach(function (x, i) {
+          if (typeof x === 'string' && /^data:/.test(x)) {
+            freed += x.length - MEDIA_PLACEHOLDER.length;
+            val[i] = MEDIA_PLACEHOLDER;
+          }
+        });
+      }
+    });
+  });
+  return freed;
+}
+
+// 所有「含媒体」的会话，按可释放量降序
+function sessionTrimList() {
+  var out = [];
+  (bots || []).forEach(function (b) {
+    if (!b || typeof b !== 'object') return;
+    ((b.sessions) || []).forEach(function (s) {
+      var st = _sessionSize(s);
+      if (st.media > 0) out.push({ bot: b, s: s, chars: st.chars, media: st.media });
+    });
+  });
+  out.sort(function (a, b) { return b.media - a.media; });
+  return out;
+}
+
+function renderStorageTrim() {
+  var host = document.getElementById('bkTrimList');
+  if (!host) return;
+  var list = sessionTrimList();
+  var allBtn = document.getElementById('bkTrimAllBtn');
+  if (!list.length) {
+    host.innerHTML = '<div class="bk-row"><span class="bk-name">没有可清理的内联媒体</span></div>';
+    if (allBtn) allBtn.disabled = true;
+    return;
+  }
+  if (allBtn) allBtn.disabled = false;
+  host.innerHTML = list.slice(0, 6).map(function (x, i) {
+    return '<div class="bk-row">'
+      + '<span class="bk-name" title="' + escapeAttr((x.bot.n || '') + ' · ' + sessionTitle(x.s)) + '">'
+      + escapeHtml(x.bot.n || '未命名机器人') + ' · ' + escapeHtml(sessionTitle(x.s)) + '</span>'
+      + '<span class="bk-size">' + fmtAccountBytes(x.media * 2) + '</span>'
+      + '<button class="btn btn-ghost btn-sm" onclick="trimOneAsk(' + i + ')">清理</button>'
+      + '</div>';
+  }).join('')
+    + (list.length > 6 ? '<div class="bk-row"><span class="bk-name">…另有 ' + (list.length - 6) + ' 个会话含媒体</span><span class="bk-size"></span></div>' : '');
+}
+
+// 用「列表下标」定位，而不是把 bot/session 的 id 拼进内联 onclick：id 要穿过
+// HTML 属性 + JS 字符串两层上下文，拼串既容易出错又平白多一个注入面。
+// 列表是刚渲染出来的，且排序稳定，下标即取即用。
+function trimOneAsk(i) {
+  var x = sessionTrimList()[i];
+  if (!x) { toast('这个会话已经不在了，请刷新后重试', 'warn'); return; }
+  var label = (x.bot.n || '未命名机器人') + ' · ' + sessionTitle(x.s);
+  if (!confirm('清理「' + label + '」里的内联媒体？\n\n语音音频与配图原图会被替换成文字占位，消息文字、时间、角色全部保留。\n\n预计释放约 ' + fmtAccountBytes(x.media * 2) + '。此操作不可撤销。')) return;
+  var freed = stripSessionMedia(x.s);
+  x.bot.updatedAt = Date.now();
+  saveBots();
+  renderStorageUsage(); renderStorageTrim();
+  toast('已清理，释放约 ' + fmtAccountBytes(freed * 2), 'ok');
+}
+
+function trimAllMediaAsk() {
+  var list = sessionTrimList();
+  if (!list.length) { toast('没有可清理的内联媒体', 'warn'); return; }
+  var total = list.reduce(function (a, x) { return a + x.media; }, 0);
+  if (!confirm('清理全部 ' + list.length + ' 个会话里的内联媒体？\n\n语音音频与配图原图会被替换成文字占位，消息文字完整保留。\n\n预计释放约 ' + fmtAccountBytes(total * 2) + '。此操作不可撤销。')) return;
+  var freed = 0;
+  list.forEach(function (x) { freed += stripSessionMedia(x.s); x.bot.updatedAt = Date.now(); });
+  saveBots();
+  renderStorageUsage(); renderStorageTrim();
+  toast('已清理 ' + list.length + ' 个会话，释放约 ' + fmtAccountBytes(freed * 2), 'ok');
 }
 
 document.getElementById('dataMigrateModal').addEventListener('click', function (e) { if (e.target.id === 'dataMigrateModal') closeDataMigrate(); });
@@ -8867,8 +9042,14 @@ function renderPluginGrid() {
     const installed = installedPlugins.has(p.n);
     const enabled = !!(b && b.plugins.includes(p.n));
     let badge, action;
-    if (enabled) { badge = '🟢 已启用'; action = `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${escapeHtml(p.n)}')">取消启用</button>`; }
-    else if (installed) { badge = '✅ 已安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();enablePluginToBot('${escapeHtml(p.n)}')">启用到机器人</button>`; }
+    // 卸载按钮只在「已安装 / 已启用」两态出现 —— 「未安装」本就没什么可卸的。
+    // 注意插件名同时处在**两层上下文**里：外层是 HTML 属性（双引号包围），内层是
+    // JS 字符串（单引号包围），而 escapeHtml 只转义 & < >、不碰任何引号。眼下安全
+    // 只是因为插件名都是内置常量、不含引号；若将来要支持自定义插件名，必须换成
+    // data-* + 事件委托，别再往内联 onclick 里拼字符串。
+    const unBtn = `<button class="style-view-btn" onclick="event.stopPropagation();uninstallPluginAsk('${escapeHtml(p.n)}')">卸载</button>`;
+    if (enabled) { badge = '🟢 已启用'; action = `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${escapeHtml(p.n)}')">取消启用</button>` + unBtn; }
+    else if (installed) { badge = '✅ 已安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();enablePluginToBot('${escapeHtml(p.n)}')">启用到机器人</button>` + unBtn; }
     else { badge = '未安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();installAndEnable('${escapeHtml(p.n)}')">📦 安装并启用</button>`; }
     return `<div class="bot-card plugin-card" data-plug="${escapeAttr(p.n)}">
       <div class="bot-avatar" style="background:${p.c}">${p.ic}</div>
@@ -8914,8 +9095,9 @@ function openPluginDetail(n) {
   if (extra) extra.innerHTML = pluginDetailExtraHTML(n);
   if (n === '日历/提醒') renderRemindersInModal();
   const act = document.getElementById('pluginDetailAct');
-  if (enabled) act.innerHTML = `<button class="btn btn-ghost" onclick="closePluginDetail();disablePluginFromBot('${escapeHtml(n)}')">取消启用</button>`;
-  else if (installed) act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();enablePluginToBot('${escapeHtml(n)}')">启用到当前机器人</button>`;
+  const unBtn2 = `<button class="btn btn-ghost" style="margin-left:8px" onclick="uninstallPluginAsk('${escapeHtml(n)}');closePluginDetail()">卸载</button>`;
+  if (enabled) act.innerHTML = `<button class="btn btn-ghost" onclick="closePluginDetail();disablePluginFromBot('${escapeHtml(n)}')">取消启用</button>` + unBtn2;
+  else if (installed) act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();enablePluginToBot('${escapeHtml(n)}')">启用到当前机器人</button>` + unBtn2;
   else act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();installAndEnable('${escapeHtml(n)}')">📦 安装并启用</button>`;
   modal.classList.add('on');
 }
@@ -9568,7 +9750,6 @@ function renderAnalytics() {
   // 满意度柱状
   renderBarChart();
 }
-function seededRandom(seed) { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
 function renderLineChart() {
   const svg = document.getElementById('lineChart'); if (!svg) return;
   const W = 400, H = 180, pad = { l: 32, r: 12, t: 14, b: 24 };
@@ -9934,12 +10115,39 @@ function ensureVersion() {
   } catch (e) {}
 }
 function emergencyReset() {
-  // 应急：清空全部应用数据并刷新，解决因损坏残留数据导致的「进不去」问题
+  // 应急：清空全部应用数据并刷新，解决因损坏残留数据导致的「进不去」问题。
+  //
+  // ⚠️ 桌面版不能「清完再 reload」：注入数据是 build_exe.main() 启动时写死在
+  // %APPDATA%\BotCraft\BotCraft.html 里的，reload 读回的正是那份**启动旧快照**，
+  // 页面侧刚清掉的 key 会被原样灌回来（表现成「点了应急恢复，数据全在」）。
+  // 所以桌面版交给宿主 bc_factory_reset() 原子完成：清 _data → 写盘 → 重写注入页，
+  // 之后再 reload 才真的是空的；它还会在清空前自动留一份 pre-emergency 备份。
+  var hostApi = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+  if (window.__BC_HOST_STORAGE__ && hostApi && typeof hostApi.bc_factory_reset === 'function') {
+    if (!confirm('⚠️ 应急恢复\n\n将清空本机全部 BotCraft 数据：机器人、会话、知识库、收藏、账号与设置，然后重启界面。\n\n这是为「数据损坏导致打不开 / 一直卡在登录」准备的最后一招。\n\n清空前会自动备份当前数据一份（可在「本机自动备份」里找回）。\n\n确定继续？')) return;
+    Promise.resolve(hostApi.bc_factory_reset()).then(function () {
+      location.reload();
+    }).catch(function (e) {
+      toast('应急恢复失败：' + ((e && e.message) || e), 'err');
+    });
+    return;
+  }
+  // 浏览器直开（localStorage 就是真存储）：清掉再 reload 即可
+  if (!confirm('⚠️ 应急恢复\n\n将清空本浏览器里全部 BotCraft 数据并刷新界面。\n\n确定继续？')) return;
   try {
     ['botcraft.version','botcraft.users','botcraft.session','botcraft.bots','botcraft.favorites',
      'botcraft.ai.config.v1','botcraft.published'].forEach(function (k) { __storage.removeItem(k); });
-    // 清除所有按用户隔离的 key
-    try { for (var i = __storage.length - 1; i >= 0; i--) { var key = __storage.key(i); if (key && /^botcraft\.(bots|favorites)\./.test(key)) __storage.removeItem(key); } } catch (e) {}
+    // 清除所有按用户隔离的 key。
+    // 这里必须用 __storage.keys()：__storage 是本文件自定义的包装层，只暴露
+    // getItem/setItem/removeItem/clear/keys，**没有**原生 Storage 的 length 与 key(i)。
+    // 原先拿 length 减一往上找、再 key(i) 取名字的写法会得到 NaN，循环体一次都不执行
+    // —— 而且不抛错，被外层 catch 静默吞掉，看着像「跑过了」，其实一个隔离 key 都没清。
+    try {
+      var ks = __storage.keys();
+      for (var i = 0; i < ks.length; i++) {
+        if (/^botcraft\.(bots|favorites|sessions|plugins)\./.test(ks[i])) __storage.removeItem(ks[i]);
+      }
+    } catch (e) {}
   } catch (e) {}
   location.reload();
 }
