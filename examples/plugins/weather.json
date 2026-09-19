@@ -1,0 +1,36 @@
+{
+  "id": "weather",
+  "name": "实时天气",
+  "version": "1.0.0",
+  "icon": "🌤️",
+  "category": "数据",
+  "desc": "按城市查当前气温、体感、湿度、风力（open-meteo）",
+  "cap": "先用地名检索接口把城市换成经纬度，再取当前实况；返回气温、体感温度、湿度、风速与天气代码。接口免 Key 且支持跨域，桌面版与浏览器版都能用。",
+  "author": "BotCraft 示例",
+  "permissions": {
+    "domains": [
+      "geocoding-api.open-meteo.com",
+      "api.open-meteo.com"
+    ],
+    "readChat": false
+  },
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "查询指定城市的当前天气",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "城市名，如 上海"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      }
+    }
+  ],
+  "code": "plugin.register('get_weather', async function (args, ctx) {\n  var city = String((args && args.city) || '').trim();\n  if (!city) return { error: '缺少参数 city，例如 {\"city\":\"上海\"}' };\n  var g = await plugin.host.fetch('https://geocoding-api.open-meteo.com/v1/search?name='\n    + encodeURIComponent(city) + '&count=1&language=zh&format=json');\n  var gj = JSON.parse(g.text);\n  var f = gj && gj.results && gj.results[0];\n  if (!f) return { error: '查不到这个城市：' + city };\n  var w = await plugin.host.fetch('https://api.open-meteo.com/v1/forecast?latitude=' + f.latitude\n    + '&longitude=' + f.longitude\n    + '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m'\n    + '&timezone=auto');\n  var c = (JSON.parse(w.text) || {}).current || {};\n  return {\n    city: f.name, country: f.country || '', lat: f.latitude, lon: f.longitude,\n    temperature: c.temperature_2m, feelsLike: c.apparent_temperature,\n    humidity: c.relative_humidity_2m, wind: c.wind_speed_10m, weatherCode: c.weather_code\n  };\n});\n"
+}

@@ -1,0 +1,39 @@
+{
+  "id": "express-track",
+  "name": "快递查询",
+  "version": "1.0.0",
+  "icon": "📦",
+  "category": "数据",
+  "desc": "按单号查快递轨迹（快递100，仅桌面版可用）",
+  "cap": "传入单号与快递公司，返回最新状态与完整轨迹。该接口不返回跨域头，浏览器直接打开 HTML 时会被拦，只有桌面版 exe（走 Python 侧网络代理）能调通——正好用来验证两种运行环境的差异。",
+  "author": "BotCraft 示例",
+  "permissions": {
+    "domains": [
+      "www.kuaidi100.com"
+    ],
+    "readChat": false
+  },
+  "tools": [
+    {
+      "name": "track_express",
+      "description": "查询快递轨迹，需提供单号；公司可用中文名或拼音代号",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "description": "快递单号"
+          },
+          "company": {
+            "type": "string",
+            "description": "快递公司，如 圆通 / yuantong"
+          }
+        },
+        "required": [
+          "number"
+        ]
+      }
+    }
+  ],
+  "code": "// 注意：快递 100 的查询接口不返回 Access-Control-Allow-Origin，\n// 因此在浏览器里直接打开 BotCraft.html 时会被跨域策略拦掉；\n// 桌面版 exe 走 Python 侧代理（不受同源限制）可以正常调用。\nvar COM = { '圆通': 'yuantong', '中通': 'zhongtong', '申通': 'shentong',\n            '韵达': 'yunda', '顺丰': 'shunfeng', '京东': 'jd', 'EMS': 'ems' };\nplugin.register('track_express', async function (args, ctx) {\n  var no = String((args && args.number) || '').trim();\n  var com = String((args && args.company) || '').trim();\n  if (!no) return { error: '缺少参数 number（快递单号）' };\n  var code = COM[com] || com;\n  var r = await plugin.host.fetch('https://www.kuaidi100.com/query?type=' + encodeURIComponent(code)\n    + '&postid=' + encodeURIComponent(no) + '&temp=' + Math.random());\n  var j = JSON.parse(r.text);\n  if (!j || j.message !== 'ok') return { error: (j && j.message) || '查询失败，请检查单号与快递公司' };\n  return {\n    company: j.com || com, number: j.nu || no, state: j.state || '',\n    status: j.status || '',\n    traces: (j.data || []).map(function (t) { return (t.time || '') + '  ' + (t.context || ''); })\n  };\n});\n"
+}

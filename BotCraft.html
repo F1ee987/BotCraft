@@ -1729,6 +1729,23 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <!-- ==================== 插件 ==================== -->
   <main class="main" id="page-plugins" style="display:none">
     <div class="page-head"><div><h1>插件中心</h1><div class="sub">扩展机器人的能力边界</div></div></div>
+
+    <!-- 在线插件：填一个注册表地址即可联网拉取；也支持单个插件链接 / 本地 JSON 文件 -->
+    <div class="chart-box" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:600">在线插件源</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <div class="search-bar" style="max-width:280px"><input id="extSrcInput" placeholder="注册表 JSON 地址（https://…）" style="width:280px"></div>
+          <button class="btn btn-primary" id="extFetchBtn" onclick="fetchExtRegistry()">拉取</button>
+          <button class="btn btn-ghost" onclick="installExtFromUrlPrompt()">从链接安装</button>
+          <button class="btn btn-ghost" onclick="(document.getElementById('extFileInput')||{}).click&&document.getElementById('extFileInput').click()">导入本地文件</button>
+          <input type="file" id="extFileInput" accept=".json,application/json" style="display:none" onchange="importExtFile(event)">
+        </div>
+      </div>
+      <div class="hint" id="extSrcHint" style="margin-top:8px">第三方插件在隔离沙箱中运行，装之前会列出它要访问哪些域名、要不要读对话，由你确认后才装。</div>
+    </div>
+    <div class="grid" id="extOnlineGrid"></div>
+
     <div class="grid" id="pluginGrid"></div>
   </main>
 
@@ -3999,6 +4016,335 @@ function uninstallPluginAsk(n) {
   const b = getBot(currentId);
   if (b) { renderCtxBar(b); renderKbPanel(b); }
   toast('已卸载「' + n + '」', 'ok');
+}
+
+
+// ==================== 第三方插件（沙箱运行时） ====================
+// 内置插件（上面的 plugins 常量）是写死在页面里的能力开关：点「安装」只是往
+// localStorage 记个名字，代码本来就在这 1MB 的 HTML 里。这里的第三方插件是另一回事
+// ——**代码真的从外部来**，因此必须回答一个问题：凭什么敢跑它？
+//
+// 防线只有一条：iframe 的 sandbox 属性，且**绝不给 allow-same-origin**。
+// 沙箱里的 JS 因此处于唯一源（opaque origin），访问 parent.localStorage、
+// parent.document 会直接抛 SecurityError；API Key 与全部机器人数据都在
+// parent 这边，沙箱够不着。
+//
+// 但「规范说会拦」不等于「这台机器的这个内核真会拦」。所以每次安装前先实跑一次
+// probeSandboxIsolation()：在真沙箱里试着摸 parent.localStorage，摸到了就拒绝安装。
+// 把验证放在用户机器上、每次都做，比在任何一处测一次都可靠。
+//
+// 沙箱里能做的事严格限定为三件（装的时候会逐条列出来给你确认）：
+//   1. 联网——但只能访问插件自己声明的域名，越界直接拒绝；
+//   2. 声明工具——供模型/手动调用；
+//   3. 读当前对话——仅本次调用传进去的那几条消息。
+// 没有插件独立存储，没有 DOM，没有主应用数据。
+
+const EXT_STORE_KEY = 'botcraft.plugins.ext.v1';   // 已安装的第三方插件包
+const EXT_SRC_KEY = 'botcraft.plugins.source.v1';  // 插件源（注册表）地址
+const EXT_MAX_CODE = 200 * 1024;                   // 单份插件代码上限
+const EXT_CALL_TIMEOUT = 15000;                    // 单次工具调用超时（毫秒）
+
+let extPlugins = {};                    // id -> 插件包
+const extRuntimes = Object.create(null); // id -> 运行时（iframe + 待应答表）
+
+function _extKey() { return userScopedKey(EXT_STORE_KEY); }
+function _extSrcKey() { return userScopedKey(EXT_SRC_KEY); }
+function loadExtPlugins() {
+  try {
+    const o = JSON.parse(localStorage.getItem(_extKey()) || '{}');
+    extPlugins = (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+  } catch (e) { extPlugins = {}; }
+}
+function saveExtPlugins() { try { localStorage.setItem(_extKey(), JSON.stringify(extPlugins)); } catch (e) { } }
+function getExtSrc() { try { return localStorage.getItem(_extSrcKey()) || ''; } catch (e) { return ''; } }
+function setExtSrc(u) { try { localStorage.setItem(_extSrcKey(), String(u || '')); } catch (e) { } }
+
+// ---------- 清单校验 ----------
+// 外部输入，逐项卡死：id 决定存储键与沙箱标识，必须是有限字符集；
+// 代码有长度上限；域名白名单必须是字符串数组。
+const EXT_ID_RE = /^[a-z0-9][a-z0-9._-]{1,48}$/;
+function validatePluginPkg(p) {
+  if (!p || typeof p !== 'object') return '插件包不是合法对象';
+  const id = String(p.id || '').trim();
+  if (!EXT_ID_RE.test(id)) return '插件 id 不合法（只允许小写字母、数字、点、下划线、连字符，2-49 字符）';
+  if (!String(p.name || '').trim()) return '缺少插件名称';
+  if (!String(p.version || '').trim()) return '缺少版本号';
+  const code = String(p.code || '');
+  if (!code.trim()) return '插件代码为空';
+  if (code.length > EXT_MAX_CODE) return '插件代码超过 ' + Math.floor(EXT_MAX_CODE / 1024) + ' KB 上限';
+  if (p.tools != null) {
+    if (!Array.isArray(p.tools)) return 'tools 必须是数组';
+    for (const t of p.tools) {
+      if (!t || typeof t !== 'object' || !String(t.name || '').trim()) return 'tools 里存在缺少 name 的条目';
+    }
+  }
+  const perm = p.permissions || {};
+  if (perm.domains != null) {
+    if (!Array.isArray(perm.domains)) return 'permissions.domains 必须是数组';
+    for (const d of perm.domains) {
+      if (typeof d !== 'string' || !/^[a-z0-9.-]+$/i.test(d.trim())) return '域名白名单里有非法条目：' + String(d);
+    }
+  }
+  return '';
+}
+
+// ---------- 隔离自检 ----------
+// 在真沙箱里试着摸 parent 的 localStorage / document。摸得到 = 隔离失效 = 不许装。
+function probeSandboxIsolation() {
+  return new Promise(function (resolve) {
+    let fr = null, done = false, timer = null;
+    function finish(r) {
+      if (done) return; done = true;
+      window.removeEventListener('message', onMsg);
+      if (timer) clearTimeout(timer);
+      try { if (fr && fr.parentNode) fr.parentNode.removeChild(fr); } catch (e) { }
+      resolve(r);
+    }
+    function onMsg(e) {
+      const d = e.data;
+      if (d && d.__bcProbe) finish(d.r || null);
+    }
+    const probe = "(function(){var o={};"
+      + "try{parent.localStorage.getItem('x');o.parentLS='ALLOWED';}catch(e){o.parentLS='BLOCKED';}"
+      + "try{parent.document.title;o.parentDoc='ALLOWED';}catch(e){o.parentDoc='BLOCKED';}"
+      + "try{o.origin=String(location.origin);}catch(e){o.origin='ERR';}"
+      + "parent.postMessage({__bcProbe:1,r:o},'*');})();";
+    try {
+      fr = document.createElement('iframe');
+      fr.setAttribute('sandbox', 'allow-scripts');
+      fr.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+      fr.srcdoc = '<scr' + 'ipt>' + probe + '<\/scr' + 'ipt>';
+    } catch (e) { finish(null); return; }
+    window.addEventListener('message', onMsg);
+    timer = setTimeout(function () { finish(null); }, 5000);
+    document.body.appendChild(fr);
+  });
+}
+
+// ---------- 域名白名单 ----------
+function _urlHost(u) {
+  try { return new URL(String(u)).hostname; } catch (e) { return ''; }
+}
+// 精确匹配或子域匹配（声明 example.com 允许 api.example.com），不做后缀模糊匹配，
+// 否则声明 "foo.com" 就能摸到 "evilfoo.com"。
+function extDomainAllowed(pkg, u) {
+  const h = _urlHost(u);
+  if (!h) return false;
+  const list = ((pkg.permissions || {}).domains) || [];
+  const low = h.toLowerCase();
+  for (const d of list) {
+    const dd = String(d).trim().toLowerCase();
+    if (!dd) continue;
+    if (low === dd || low.endsWith('.' + dd)) return true;
+  }
+  return false;
+}
+
+// ---------- 宿主代发请求 ----------
+// exe 里走 pywebview 的 Python 代理（urllib 不受浏览器同源限制，任意域名可用）；
+// 浏览器直接打开 HTML 时没有这个桥，退回页面 fetch ——此时 Origin 为 null，
+// 只有返回 Access-Control-Allow-Origin:* 的接口才调得通，调不通会给明确报错。
+async function extHttp(url, opts) {
+  opts = opts || {};
+  const method = String(opts.method || 'GET').toUpperCase();
+  const headers = opts.headers || {};
+  let body = opts.body;
+  if (body != null && typeof body !== 'string') body = JSON.stringify(body);
+  const api = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+  if (api && typeof api.bc_http === 'function') {
+    const r = await api.bc_http(String(url), method, headers, body == null ? '' : body);
+    if (r && typeof r === 'object' && ('ok' in r)) return r;
+    throw new Error('桌面版网络代理返回异常');
+  }
+  const resp = await fetch(String(url), { method: method, headers: headers, body: body });
+  const text = await resp.text();
+  return { ok: resp.ok, status: resp.status, text: text };
+}
+
+// ---------- 沙箱文档 ----------
+// 沙箱内只暴露两个入口：plugin.register(name, fn) 声明工具、plugin.host.fetch 联网。
+// 插件代码用 new Function 执行——它能否越界完全由 sandbox 属性决定，不靠代码洁癖。
+function buildSandboxDoc(pkg) {
+  const bridge = "(function(){"
+    + "var ID=" + JSON.stringify(String(pkg.id)) + ";"
+    + "var seq=0,pending={},reg={};"
+    + "function send(type,payload){"
+    + " var mid='m'+(++seq);"
+    + " parent.postMessage({__bcPlugin:ID,mid:mid,type:type,payload:payload},'*');"
+    + " return new Promise(function(res,rej){"
+    + "  pending[mid]={res:res,rej:rej};"
+    + "  setTimeout(function(){if(pending[mid]){delete pending[mid];rej(new Error('宿主无响应，已超时'));}},25000);"
+    + " });}"
+    + "window.addEventListener('message',function(e){"
+    + " var d=e.data;if(!d||d.__bcPlugin!==ID)return;"
+    + " if(d.type==='resp'){var p=pending[d.mid];if(!p)return;delete pending[d.mid];"
+    + "   if(d.err)p.rej(new Error(d.err));else p.res(d.payload);return;}"
+    + " if(d.type==='invoke'){"
+    + "   var fn=reg[d.name];"
+    + "   if(!fn){parent.postMessage({__bcPlugin:ID,mid:d.mid,type:'resp',err:'未注册的工具：'+d.name},'*');return;}"
+    + "   Promise.resolve().then(function(){return fn(d.args||{},d.ctx||{});})"
+    + "     .then(function(v){parent.postMessage({__bcPlugin:ID,mid:d.mid,type:'resp',payload:v==null?null:v},'*');})"
+    + "     .catch(function(err){parent.postMessage({__bcPlugin:ID,mid:d.mid,type:'resp',err:String((err&&err.message)||err)},'*');});"
+    + " }});"
+    + "var host={fetch:function(u,o){return send('fetch',{url:String(u),opts:o||{}});},"
+    + "         log:function(){}"
+    + "};"
+    + "var plugin={register:function(n,f){reg[n]=f;},host:host,tool:function(n,f){reg[n]=f;}};"
+    + "try{(new Function('plugin','host'," + JSON.stringify(String(pkg.code)) + "))(plugin,host);}"
+    + "catch(e){parent.postMessage({__bcPlugin:ID,type:'boot',err:String((e&&e.message)||e)},'*');return;}"
+    + "parent.postMessage({__bcPlugin:ID,type:'ready',tools:Object.keys(reg)},'*');"
+    + "})();";
+  return '<!doctype html><meta charset="utf-8"><scr' + 'ipt>' + bridge + '<\/scr' + 'ipt>';
+}
+
+// ---------- 运行时 ----------
+function ensureExtRuntime(id) {
+  const pkg = extPlugins[id];
+  if (!pkg) return null;
+  if (extRuntimes[id]) return extRuntimes[id];
+  const rt = { id: id, frame: null, ready: false, tools: [], onReady: [] };
+  const fr = document.createElement('iframe');
+  fr.setAttribute('sandbox', 'allow-scripts');
+  fr.setAttribute('title', 'plugin-sandbox-' + id);
+  fr.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+  fr.srcdoc = buildSandboxDoc(pkg);
+  rt.frame = fr;
+  extRuntimes[id] = rt;
+  document.body.appendChild(fr);
+  return rt;
+}
+function disposeExtRuntime(id) {
+  const rt = extRuntimes[id];
+  if (!rt) return;
+  try { if (rt.frame && rt.frame.parentNode) rt.frame.parentNode.removeChild(rt.frame); } catch (e) { }
+  delete extRuntimes[id];
+}
+window.addEventListener('message', function (e) {
+  const d = e.data;
+  if (!d || typeof d !== 'object' || !d.__bcPlugin) return;
+  if (d.__bcProbe) return;                 // 自检消息，由 probeSandboxIsolation 自己收
+  const rt = extRuntimes[d.__bcPlugin];
+  const pkg = extPlugins[d.__bcPlugin];
+  if (!rt || !pkg) return;
+  if (d.type === 'ready') {
+    rt.ready = true; rt.tools = Array.isArray(d.tools) ? d.tools : [];
+    rt.onReady.forEach(function (f) { try { f(); } catch (err) { } }); rt.onReady = [];
+    return;
+  }
+  if (d.type === 'boot') { rt.bootErr = d.err || '插件初始化失败'; return; }
+  if (d.type !== 'fetch') return;
+  // 越界域名：直接回一个错误，不代发
+  if (!extDomainAllowed(pkg, d.payload && d.payload.url)) {
+    rt.frame.contentWindow.postMessage(
+      { __bcPlugin: d.__bcPlugin, mid: d.mid, type: 'resp',
+        err: '域名不在白名单内：' + (_urlHost(d.payload && d.payload.url) || '(无法解析)') }, '*');
+    return;
+  }
+  extHttp(d.payload.url, d.payload.opts || {}).then(function (r) {
+    rt.frame.contentWindow.postMessage({ __bcPlugin: d.__bcPlugin, mid: d.mid, type: 'resp', payload: r }, '*');
+  }).catch(function (err) {
+    rt.frame.contentWindow.postMessage(
+      { __bcPlugin: d.__bcPlugin, mid: d.mid, type: 'resp', err: String((err && err.message) || err) }, '*');
+  });
+});
+function waitExtReady(rt) {
+  return new Promise(function (resolve) {
+    if (rt.ready) return resolve(true);
+    if (rt.bootErr) return resolve(false);
+    const t = setTimeout(function () { resolve(false); }, 8000);
+    rt.onReady.push(function () { clearTimeout(t); resolve(true); });
+  });
+}
+// 调用插件工具。ctx 只带 readChat 权限允许的内容，其余一律不给。
+async function callExtTool(id, name, args, ctxMessages) {
+  const pkg = extPlugins[id];
+  if (!pkg) throw new Error('插件未安装：' + id);
+  const rt = ensureExtRuntime(id);
+  if (!rt) throw new Error('插件运行时创建失败');
+  const ok = await waitExtReady(rt);
+  if (!ok) throw new Error(rt.bootErr || '插件初始化超时');
+  const canRead = !!(pkg.permissions && pkg.permissions.readChat);
+  const ctx = { messages: canRead ? (ctxMessages || []) : [], canReadChat: canRead };
+  return new Promise(function (resolve, reject) {
+    const mid = 'h' + Date.now() + Math.random().toString(36).slice(2, 7);
+    let timer = null;
+    function onMsg(e) {
+      const d = e.data;
+      if (!d || d.__bcPlugin !== id || d.mid !== mid || d.type !== 'resp') return;
+      window.removeEventListener('message', onMsg);
+      if (timer) clearTimeout(timer);
+      if (d.err) reject(new Error(d.err)); else resolve(d.payload);
+    }
+    window.addEventListener('message', onMsg);
+    timer = setTimeout(function () {
+      window.removeEventListener('message', onMsg);
+      reject(new Error('工具调用超时（' + Math.floor(EXT_CALL_TIMEOUT / 1000) + ' 秒）'));
+    }, EXT_CALL_TIMEOUT);
+    rt.frame.contentWindow.postMessage(
+      { __bcPlugin: id, mid: mid, type: 'invoke', name: name, args: args || {}, ctx: ctx }, '*');
+  });
+}
+
+// ---------- 安装 / 卸载 ----------
+function extUsedBy(id) {
+  return bots.filter(b => b && Array.isArray(b.plugins) && b.plugins.indexOf('ext:' + id) >= 0);
+}
+async function installExtPlugin(pkg) {
+  const bad = validatePluginPkg(pkg);
+  if (bad) return { ok: false, err: bad };
+  const id = String(pkg.id).trim();
+  const probe = await probeSandboxIsolation();
+  if (!probe) return { ok: false, err: '沙箱自检无响应，已中止安装（当前环境可能不支持插件隔离）' };
+  if (probe.parentLS !== 'BLOCKED' || probe.parentDoc !== 'BLOCKED') {
+    return { ok: false, err: '沙箱自检未通过：插件能直接访问主页面数据，已中止安装' };
+  }
+  const doms = ((pkg.permissions || {}).domains) || [];
+  const lines = [];
+  lines.push('插件：' + pkg.name + '（' + pkg.version + '）');
+  if (pkg.author) lines.push('作者：' + pkg.author);
+  lines.push('');
+  lines.push('联网域名：' + (doms.length ? doms.join('、') : '（不联网）'));
+  lines.push('读取当前对话：' + ((pkg.permissions || {}).readChat ? '是' : '否'));
+  lines.push('可声明工具：' + (((pkg.tools || []).length) ? (pkg.tools || []).map(t => t.name).join('、') : '（未声明）'));
+  lines.push('');
+  lines.push('插件代码将在隔离沙箱中运行，无法读取你的 API Key 与其他机器人数据。');
+  if (!confirm('安装插件\n\n' + lines.join('\n') + '\n\n确定安装吗？')) return { ok: false, err: '', cancelled: true };
+  disposeExtRuntime(id);            // 同名覆盖安装：先销毁旧运行时
+  extPlugins[id] = {
+    id: id, name: String(pkg.name).trim(), version: String(pkg.version).trim(),
+    desc: String(pkg.desc || ''), cap: String(pkg.cap || ''), icon: String(pkg.icon || '🧩'),
+    category: String(pkg.category || '第三方'), author: String(pkg.author || ''),
+    homepage: String(pkg.homepage || ''), tools: pkg.tools || [],
+    permissions: pkg.permissions || {}, code: String(pkg.code), installedAt: Date.now()
+  };
+  saveExtPlugins();
+  return { ok: true, id: id };
+}
+function uninstallExtPlugin(id) {
+  disposeExtRuntime(id);
+  delete extPlugins[id];
+  saveExtPlugins();
+  const used = extUsedBy(id);
+  used.forEach(function (b) {
+    b.plugins = b.plugins.filter(x => x !== ('ext:' + id));
+    b.updatedAt = Date.now();
+  });
+  if (used.length) saveBots();
+  return used.length;
+}
+function uninstallExtAsk(id) {
+  const p = extPlugins[id];
+  if (!p) return;
+  const used = extUsedBy(id);
+  const extra = used.length
+    ? '\n\n它正被 ' + used.length + ' 个机器人启用：' + used.map(b => '「' + b.n + '」').join('、') + '，卸载会一并取消启用。'
+    : '';
+  if (!confirm('确定卸载第三方插件「' + p.name + '」吗？' + extra + '\n\n卸载后可随时重新安装。')) return;
+  const n = uninstallExtPlugin(id);
+  renderPluginGrid();
+  const b = getBot(currentId);
+  if (b) { renderCtxBar(b); renderKbPanel(b); }
+  toast('已卸载「' + p.name + '」' + (n ? '，并取消 ' + n + ' 个机器人的启用' : ''), 'ok');
 }
 
 // ==================== 文体模板（写作风格市场） ====================
@@ -8481,11 +8827,21 @@ function renderKbPanel(b) {
   }
   const pluginBody = document.getElementById('pluginBody');
   if (pluginBody) {
+    loadExtPlugins();
     let ph = plugins.map((p, i) => `<label class="kb-row" data-plug="${i}">
       <input type="checkbox" ${b.plugins.includes(p.n) ? 'checked' : ''}>
       <span>${p.ic} ${escapeHtml(p.n)}</span>
       <span class="kb-toggle">${b.plugins.includes(p.n) ? '已启用' : '点击启用'}</span>
     </label>`).join('');
+    ph += Object.keys(extPlugins).map(id => {
+      const p = extPlugins[id];
+      const on = b.plugins.indexOf('ext:' + id) >= 0;
+      return `<label class="kb-row" data-plug="ext:${escapeAttr(id)}">
+      <input type="checkbox" ${on ? 'checked' : ''}>
+      <span>${escapeHtml(p.icon || '🧩')} ${escapeHtml(p.name)}</span>
+      <span class="kb-toggle">${on ? '已启用' : '点击启用'}</span>
+    </label>`;
+    }).join('');
     ph += `<label class="kb-row" data-web="1" style="border:1px dashed var(--brand);background:var(--brand-tint)">
       <input type="checkbox" ${b.webSearch ? 'checked' : ''}>
       <span>🌐 联网检索</span>
@@ -8504,8 +8860,10 @@ document.addEventListener('change', e => {
   }
   const plRow = e.target.closest('#pluginBody [data-plug]');
   if (plRow && e.target.matches('input[type=checkbox]')) {
-    const p = plugins[+plRow.dataset.plug]; if (!p) return;
-    const set = new Set(b.plugins); e.target.checked ? set.add(p.n) : set.delete(p.n);
+    const key = String(plRow.dataset.plug || '');
+    const n = (key.indexOf('ext:') === 0) ? key : (plugins[+key] ? plugins[+key].n : null);
+    if (!n) return;
+    const set = new Set(b.plugins); e.target.checked ? set.add(n) : set.delete(n);
     b.plugins = [...set]; b.updatedAt = Date.now(); saveBots(); renderKbPanel(b); renderCtxBar(b); toast(e.target.checked ? '已启用插件' : '已卸载', 'ok'); return;
   }
   const webRow = e.target.closest('#pluginBody [data-web]');
@@ -9372,9 +9730,11 @@ if (kbImportEl) kbImportEl.addEventListener('change', e => { Array.from(e.target
 let _pluginFilter = '全部';
 function renderPluginGrid() {
   loadInstalledPlugins();
+  loadExtPlugins();
   const grid = document.getElementById('pluginGrid'); if (!grid) return;
   const b = getBot(currentId);
-  const cats = ['全部', ...Array.from(new Set(plugins.map(p => p.cat)))];
+  const extAll = Object.keys(extPlugins).map(k => extPlugins[k]);
+  const cats = ['全部', ...Array.from(new Set(plugins.map(p => p.cat).concat(extAll.map(p => p.category))))];
   const filtered = plugins.filter(p => _pluginFilter === '全部' || p.cat === _pluginFilter);
   const chips = cats.map(c => `<button class="chip ${_pluginFilter === c ? 'on' : ''}" data-cat="${escapeAttr(c)}">${escapeHtml(c)}</button>`).join('');
   const cards = filtered.map(p => {
@@ -9397,15 +9757,35 @@ function renderPluginGrid() {
       <div class="plugin-actions">${action}<button class="mini-x" title="查看详情" onclick="event.stopPropagation();openPluginDetail('${escapeHtml(p.n)}')">详情</button></div>
     </div>`;
   }).join('');
-  grid.innerHTML = `<div class="chip-row" style="grid-column:1 / -1">${chips}</div>` + cards;
+  const extCards = extAll.filter(p => _pluginFilter === '全部' || p.category === _pluginFilter).map(p => {
+    const id = String(p.id);
+    const key = 'ext:' + id;
+    const enabled = !!(b && b.plugins.indexOf(key) >= 0);
+    return `<div class="bot-card plugin-card" data-plug="${key}">
+      <div class="bot-avatar" style="background:linear-gradient(135deg,#8e7cff,#5b8def)">${escapeHtml(p.icon || '🧩')}</div>
+      <h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.desc || '')}</p>
+      <div class="bot-meta"><span class="plugin-cat">${escapeHtml(p.category || '第三方')}</span><span class="plugin-badge ${enabled ? 'on' : ''}">${enabled ? '🟢 已启用' : '已安装'}</span></div>
+      <div class="plugin-actions">
+        ${enabled
+          ? `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${key}')">取消启用</button>`
+          : `<button class="style-view-btn" onclick="event.stopPropagation();enablePluginToBot('${key}')">启用到机器人</button>`}
+        <button class="mini-x" title="查看详情" onclick="event.stopPropagation();openExtDetail('${id}')">详情</button>
+      </div>
+    </div>`;
+  }).join('');
+  grid.innerHTML = `<div class="chip-row" style="grid-column:1 / -1">${chips}</div>` + cards + extCards;
   grid.querySelectorAll('.chip-row .chip').forEach(ch => { ch.onclick = () => { _pluginFilter = ch.dataset.cat; renderPluginGrid(); }; });
-  grid.querySelectorAll('.plugin-card').forEach(el => { el.onclick = () => { const n = el.dataset.plug; if (n) openPluginDetail(n); }; });
+  grid.querySelectorAll('.plugin-card').forEach(el => { el.onclick = () => {
+    const n = el.dataset.plug; if (!n) return;
+    if (n.indexOf('ext:') === 0) openExtDetail(n.slice(4)); else openPluginDetail(n);
+  }; });
 }
 function enablePluginToBot(n) {
   const b = getBot(currentId);
   if (!requireLogin()) return;
   if (!b) { toast('请先打开一个机器人，再启用插件', 'err'); return; }
-  if (!installedPlugins.has(n)) installPlugin(n);
+  // 第三方插件以 ext:<id> 标识，不属于内置集合，别往 installedPlugins 里塞
+  if (n.indexOf('ext:') !== 0 && !installedPlugins.has(n)) installPlugin(n);
   if (!b.plugins.includes(n)) { b.plugins.push(n); if (n === '网页搜索') b.webSearch = true; b.updatedAt = Date.now(); saveBots(); }
   renderPluginGrid(); renderCtxBar(b); renderKbPanel(b);
   toast(`已启用「${n}」到「${b.n}」`, 'ok');
@@ -9419,6 +9799,25 @@ function disablePluginFromBot(n) {
   toast(`已取消启用「${n}」`, 'ok');
 }
 function installAndEnable(n) { enablePluginToBot(n); }
+// 第三方插件详情：复用内置插件的弹窗，工具区由 extDetailHTML 提供（可手动试跑）
+function openExtDetail(id) {
+  const p = extPlugins[id]; if (!p) return;
+  const modal = document.getElementById('pluginDetailModal');
+  if (!modal) { alert(p.name + '\n\n' + (p.cap || p.desc || '')); return; }
+  const b = getBot(currentId);
+  const enabled = !!(b && b.plugins.indexOf('ext:' + id) >= 0);
+  document.getElementById('pluginDetailTitle').textContent = (p.icon || '🧩') + ' ' + p.name;
+  document.getElementById('pluginDetailCat').textContent = p.category || '第三方';
+  document.getElementById('pluginDetailDesc').textContent = p.desc || '';
+  document.getElementById('pluginDetailCap').textContent = p.cap || p.desc || '';
+  const extra = document.getElementById('pluginDetailExtra');
+  if (extra) extra.innerHTML = extDetailHTML(id);
+  const act = document.getElementById('pluginDetailAct');
+  if (act) act.innerHTML = enabled
+    ? `<button class="btn btn-ghost" onclick="closePluginDetail();disablePluginFromBot('ext:${id}')">取消启用</button>`
+    : `<button class="btn btn-primary" onclick="closePluginDetail();enablePluginToBot('ext:${id}')">启用到当前机器人</button>`;
+  modal.classList.add('on');
+}
 function openPluginDetail(n) {
   const p = plugins.find(x => x.n === n); if (!p) return;
   const b = getBot(currentId);
@@ -9542,6 +9941,229 @@ function runCodeInSandbox(){
     out.style.color='var(--ok)'; out.textContent = logs.length? logs.join('\n') : '✓ 运行完成（无输出）';
   }catch(e){ out.style.color='var(--danger)'; out.textContent='✗ '+(e&&e.message?e.message:e); }
 }
+// ---------- 在线插件：注册表拉取与安装入口 ----------
+let _extOnline = [];   // 最近一次拉取到的在线插件列表
+
+function extOnlineRender() {
+  const grid = document.getElementById('extOnlineGrid');
+  if (!grid) return;
+  if (!_extOnline.length) { grid.innerHTML = ''; return; }
+  const installed = extPlugins;
+  grid.innerHTML = '<div style="grid-column:1 / -1;font-size:13px;font-weight:600;margin-bottom:2px">'
+    + '可安装（' + _extOnline.length + '）</div>'
+    + _extOnline.map(function (p, i) {
+      const has = !!(p && p.id && installed[p.id]);
+      const doms = ((p.permissions || {}).domains) || [];
+      return '<div class="bot-card plugin-card" data-extidx="' + i + '">'
+        + '<div class="bot-avatar" style="background:linear-gradient(135deg,#8e7cff,#5b8def)">' + escapeHtml(String(p.icon || '🧩')) + '</div>'
+        + '<h3>' + escapeHtml(String(p.name || p.id || '未命名')) + '</h3>'
+        + '<p>' + escapeHtml(String(p.desc || '').slice(0, 120)) + '</p>'
+        + '<div class="bot-meta"><span class="plugin-cat">' + escapeHtml(String(p.category || '第三方')) + '</span>'
+        + '<span class="plugin-badge ' + (has ? 'on' : '') + '">' + (has ? '已安装' : 'v' + escapeHtml(String(p.version || '?'))) + '</span></div>'
+        + '<div class="plugin-actions">'
+        + '<button class="style-view-btn" onclick="event.stopPropagation();installExtByIndex(' + i + ')">' + (has ? '重新安装' : '📦 安装') + '</button>'
+        + '<button class="mini-x" title="看它要什么权限" onclick="event.stopPropagation();showExtPerm(' + i + ')">权限</button>'
+        + '</div>'
+        + (doms.length ? '<div style="font-size:11px;color:var(--sub);margin-top:6px">联网：' + escapeHtml(doms.join('、')) + '</div>' : '')
+        + '</div>';
+    }).join('');
+  grid.querySelectorAll('.plugin-card').forEach(function (el) {
+    el.onclick = function () { const i = +el.dataset.extidx; if (_extOnline[i]) showExtPerm(i); };
+  });
+}
+
+function showExtPerm(i) {
+  const p = _extOnline[i]; if (!p) return;
+  const perm = p.permissions || {};
+  const doms = perm.domains || [];
+  const tools = p.tools || [];
+  alert('插件：' + (p.name || p.id) + ' v' + (p.version || '?')
+    + (p.author ? '\n作者：' + p.author : '')
+    + '\n\n联网域名：' + (doms.length ? doms.join('、') : '（不联网）')
+    + '\n读取当前对话：' + (perm.readChat ? '是' : '否')
+    + '\n声明工具：' + (tools.length ? tools.map(function (t) { return t.name; }).join('、') : '（无）')
+    + '\n\n说明：' + (p.cap || p.desc || '（无）'));
+}
+
+async function installExtByIndex(i) {
+  let p = _extOnline[i]; if (!p) return;
+  // 注册表项常常只放元数据 + url（否则一份注册表要内嵌所有插件代码），
+  // 代码在确认安装前才拉取。元数据以注册表为准，code 以插件文件为准。
+  if (!p.code && p.url) {
+    try {
+      const r = await extHttp(String(p.url), { method: 'GET', headers: { 'Accept': 'application/json' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const full = JSON.parse(r.text);
+      if (!full || typeof full !== 'object') throw new Error('插件文件不是合法对象');
+      p = Object.assign({}, p, full);
+    } catch (e) {
+      toast('拉取插件代码失败：' + String((e && e.message) || e), 'err');
+      return;
+    }
+  }
+  await installExtFromPkg(p, 'registry');
+}
+
+// 从任意来源装一个插件包（注册表项 / 指定链接 / 本地文件），统一走校验+自检+授权
+async function installExtFromPkg(pkg, from) {
+  if (!requireLogin()) return;
+  try {
+    const r = await installExtPlugin(pkg);
+    if (r.cancelled) return;
+    if (!r.ok) { toast('安装失败：' + r.err, 'err'); return; }
+    toast('已安装「' + extPlugins[r.id].name + '」', 'ok');
+    if (from === 'registry') extOnlineRender();
+    renderPluginGrid();
+  } catch (e) {
+    toast('安装失败：' + ((e && e.message) || e), 'err');
+  }
+}
+
+function _parseRegistryPayload(text, url) {
+  let data;
+  try { data = JSON.parse(text); }
+  catch (e) { throw new Error('不是合法 JSON'); }
+  // 三种形态都认：裸数组 / {plugins:[...]} / 单个插件包
+  let list;
+  if (Array.isArray(data)) list = data;
+  else if (data && Array.isArray(data.plugins)) list = data.plugins;
+  else if (data && data.id && data.code) list = [data];
+  else throw new Error('注册表格式不认识（应为数组或含 plugins 字段的对象）');
+  return list.filter(function (p) { return p && typeof p === 'object'; });
+}
+
+async function fetchExtRegistry() {
+  if (!requireLogin()) return;
+  const el = document.getElementById('extSrcInput');
+  const hint = document.getElementById('extSrcHint');
+  const btn = document.getElementById('extFetchBtn');
+  const url = (el && el.value || '').trim();
+  if (!url) { toast('先填插件源地址', 'err'); if (el) el.focus(); return; }
+  if (!/^https?:\/\//i.test(url)) { toast('地址需以 http:// 或 https:// 开头', 'err'); return; }
+  setExtSrc(url);
+  if (btn) { btn.disabled = true; btn.textContent = '拉取中…'; }
+  if (hint) hint.textContent = '正在拉取 ' + url + ' …';
+  try {
+    const r = await extHttp(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _extOnline = _parseRegistryPayload(r.text, url);
+    extOnlineRender();
+    if (hint) hint.textContent = '已拉取到 ' + _extOnline.length + ' 个插件。装之前会列出权限让你确认。';
+    toast('拉取到 ' + _extOnline.length + ' 个插件', 'ok');
+  } catch (e) {
+    _extOnline = []; extOnlineRender();
+    const msg = String((e && e.message) || e);
+    // 浏览器版没有桌面代理，跨域失败是常态，把原因说透，别让人以为插件坏了
+    const extra = /Failed to fetch|NetworkError|TypeError/i.test(msg)
+      ? '（浏览器直接打开时受跨域限制，注册表接口需返回 Access-Control-Allow-Origin；桌面 exe 不受此限制）'
+      : '';
+    if (hint) hint.textContent = '拉取失败：' + msg + extra;
+    toast('拉取失败：' + msg, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '拉取'; }
+  }
+}
+
+async function installExtFromUrl(url) {
+  url = String(url || '').trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) { toast('地址需以 http:// 或 https:// 开头', 'err'); return; }
+  try {
+    const r = await extHttp(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const pkg = JSON.parse(r.text);
+    await installExtFromPkg(pkg, 'url');
+  } catch (e) {
+    toast('安装失败：' + String((e && e.message) || e), 'err');
+  }
+}
+// 走应用自己的输入弹窗（openNameInput），不用浏览器原生 prompt：
+// 原生弹窗在部分 WebView 里会被直接吞掉，也没法复用 Esc/Enter 与 hint 文案。
+function installExtFromUrlPrompt() {
+  if (!requireLogin()) return;
+  openNameInput('安装插件', '', function (v) { installExtFromUrl(v); },
+    '粘贴插件 JSON 的地址（https://…），确认后会先校验清单并列出权限。');
+}
+
+function importExtFile(ev) {
+  const input = ev && ev.target;
+  const f = input && input.files && input.files[0];
+  if (!f) return;
+  const fr = new FileReader();
+  fr.onload = function () {
+    try {
+      // 读的是 ArrayBuffer，必须先解码；直接 String(result) 会得到 "[object ArrayBuffer]"
+      const pkg = JSON.parse(_extDecodeBytes(fr.result));
+      installExtFromPkg(pkg, 'file');
+    } catch (e) { toast('解析失败：不是合法 JSON', 'err'); }
+  };
+  fr.onerror = function () { toast('读取文件失败', 'err'); };
+  // 与批量导入同款处理：中文 Windows 上另存的 JSON/CSV 常是 GBK，UTF-8 解出
+  // 替换字符才回退，GBK 是兜底不是首选
+  fr.readAsArrayBuffer(f);
+  input.value = '';
+}
+function _extDecodeBytes(buf) {
+  const u8 = new Uint8Array(buf);
+  let s = '';
+  try { s = new TextDecoder('utf-8', { fatal: false }).decode(u8); } catch (e) { s = ''; }
+  if (s && s.indexOf('\ufffd') < 0) return s;
+  try { return new TextDecoder('gbk').decode(u8); } catch (e) { return s; }
+}
+
+function extInitPage() {
+  loadExtPlugins();
+  const el = document.getElementById('extSrcInput');
+  if (el) el.value = getExtSrc();
+}
+
+// 第三方插件详情：列出工具，可手动试跑一次（不经过模型，先看插件本身对不对）
+function extDetailHTML(id) {
+  const p = extPlugins[id];
+  if (!p) return '';
+  const perm = p.permissions || {};
+  const doms = perm.domains || [];
+  const tools = p.tools || [];
+  let h = '<div style="font-size:12px;color:var(--sub);margin:12px 0 6px;font-weight:600">权限</div>'
+    + '<div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;line-height:1.8">'
+    + '联网域名：' + (doms.length ? escapeHtml(doms.join('、')) : '（不联网）') + '<br>'
+    + '读取当前对话：' + (perm.readChat ? '是' : '否') + '<br>'
+    + '作者：' + escapeHtml(p.author || '未署名') + '<br>'
+    + '版本：' + escapeHtml(p.version) + '</div>';
+  if (tools.length) {
+    h += '<div style="font-size:12px;color:var(--sub);margin:12px 0 6px;font-weight:600">工具（可手动试跑）</div>';
+    tools.forEach(function (t) {
+      const nm = escapeAttr(String(t.name));
+      h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
+        + '<code style="font-size:12px">' + escapeHtml(String(t.name)) + '</code>'
+        + '<span style="font-size:11.5px;color:var(--sub);flex:1;min-width:120px">' + escapeHtml(String(t.description || '')) + '</span>'
+        + '<button class="style-view-btn" onclick="event.stopPropagation();extTryTool(' + JSON.stringify(String(id)) + ',' + JSON.stringify(String(t.name)) + ')">试跑</button>'
+        + '</div>'
+        + '<textarea class="ext-arg" data-tool="' + nm + '" rows="2" style="width:100%;font-size:12px;margin-bottom:8px" placeholder=\'参数 JSON，例如 {"city":"上海"}\'></textarea>'
+        + '<div class="ext-out" data-out="' + nm + '" style="font-size:12px;color:var(--sub);word-break:break-all"></div>';
+    });
+  }
+  h += '<div style="margin-top:10px"><button class="btn btn-ghost" onclick="event.stopPropagation();uninstallExtAsk(' + JSON.stringify(String(id)) + ')">卸载此插件</button></div>';
+  return h;
+}
+
+async function extTryTool(id, name) {
+  // 工具名可能含引号/特殊字符，拼进 CSS 选择器既不安全也不好转义 —— 直接遍历比对
+  let box = null, out = null;
+  document.querySelectorAll('.ext-arg').forEach(function (el) { if (el.dataset.tool === name) box = el; });
+  document.querySelectorAll('.ext-out').forEach(function (el) { if (el.dataset.out === name) out = el; });
+  let args = {};
+  const raw = box ? String(box.value || '').trim() : '';
+  if (raw) { try { args = JSON.parse(raw); } catch (e) { if (out) out.textContent = '参数不是合法 JSON'; return; } }
+  if (out) out.textContent = '调用中…';
+  try {
+    const v = await callExtTool(id, name, args, []);
+    if (out) out.textContent = '返回：' + (typeof v === 'string' ? v : JSON.stringify(v));
+  } catch (e) {
+    if (out) out.textContent = '调用失败：' + String((e && e.message) || e);
+  }
+}
+
 function pluginDetailExtraHTML(n){
   if(n==='日历/提醒') return remindersExtraHTML();
   if(n==='代码执行器') return codeRunnerExtraHTML();
