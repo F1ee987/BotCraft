@@ -1026,6 +1026,12 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .batch-st.running{color:var(--warn-text);background:var(--warn-bg)}
 .batch-st.ok{color:var(--ok-text);background:var(--ok-bg)}
 .batch-st.err{color:var(--danger-text);background:var(--danger-bg)}
+/* 降级：接口没通 / 没配 Key 时 chat 会返回 runFallback 的「演示回复」。单聊一眼
+   看得出敷衍，批量跑几十条没人逐条核对 —— 全绿但内容全是假的。故单列一档。
+   用虚线描边而不是纯色块：running 也是 warn 色，实心块容易看混。 */
+.batch-st.degraded{color:var(--warn-text);background:var(--warn-bg);outline:1px dashed var(--warn-text)}
+/* 停止后没轮到的那些：灰掉，不再伪装成「排队中」 */
+.batch-st.stopped{color:var(--sub);background:var(--fill);opacity:.6}
 .batch-in{padding:8px 12px;font-size:12.5px;color:var(--sub);white-space:pre-wrap;word-break:break-word}
 .batch-out{padding:8px 12px;font-size:13px;border-top:1px dashed var(--line);word-break:break-word}
 .batch-out pre{white-space:pre-wrap;background:var(--fill);padding:8px;border-radius:var(--r-sm);overflow:auto}
@@ -1597,7 +1603,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <div id="verList" style="margin-top:14px"></div>
         </div>
         <div class="tab-panel" id="wsBatchBody" style="display:none">
-          <div style="font-size:12px;color:var(--sub);margin-bottom:12px">把一批问题交给当前机器人逐个处理。每条输入独立调用（不共享上下文），结果与进度实时显示，跑完可导出 CSV / JSON / Markdown。</div>
+          <div style="font-size:12px;color:var(--sub);margin-bottom:12px">把一批问题交给当前机器人逐个处理。每条输入独立调用（不共享上下文），结果与进度实时显示，跑完可导出 CSV / JSON / Markdown。<br>调用失败或未配置 API Key 的条目会标为<span style="color:var(--warn-text)">降级</span>（内容是演示回复，不是模型输出），不会混在「成功」里。</div>
           <div class="batch-bar">
             <textarea id="batchInput" class="batch-area" data-grow data-grow-max="320" placeholder="每行一个问题，例如：&#10;帮我写一句种草文案&#10;给新手介绍这个产品&#10;总结三个卖点" oninput="updateBatchCount()"></textarea>
           </div>
@@ -3507,7 +3513,17 @@ window.__storage = __storage;
       console.warn('[ctx] 预压缩失败，按原策略发送：', e);
     }
     const messages = buildMessages(bot, history, opt && opt.toolCtx, opt && opt.imagePrompt);
+    // 降级可见化：没配 Key 和调用抛错这两条路径都会返回 runFallback 生成的「演示
+    // 回复」，而它跟真实输出一样只是个普通字符串，调用方无从分辨。单聊时人一眼看
+    // 得出敷衍，批量跑几十条却没人逐条核对 —— 结果是「全绿 + 全是假内容」，还能
+    // 一路导出成 CSV。所以这里主动回调告知，由调用方决定怎么标注（批量面板据此
+    // 记「降级」，不记「成功」）。
+    const notifyDegrade = function (err) {
+      if (typeof opt.onDegrade !== 'function') return;
+      try { opt.onDegrade(err || new Error('未配置 API Key')); } catch (e) { }
+    };
     if (!canCall()) {
+      notifyDegrade(null);
       return opt.stream ? fakeStream(messages) : runFallback(bot, history, messages);
     }
     try {
@@ -3516,6 +3532,7 @@ window.__storage = __storage;
       return res; // 非流式直接返回字符串
     } catch (err) {
       console.warn('[BotCraft AI] 调用失败，降级：', err);
+      notifyDegrade(err);
       return opt.stream ? fakeStream(messages, err) : runFallback(bot, history, messages, err);
     }
   }
@@ -4777,36 +4794,72 @@ function parseCsvLine(line) {
   }
   out.push(cur); return out;
 }
+// Excel 在中文 Windows 上「另存为 CSV」默认是 GBK/ANSI，而 FileReader.readAsText
+// 不给 encoding 时一律按 UTF-8 解 —— 导进来满屏乱码，还会原样送进模型。
+// 先按 UTF-8 解；一旦出现替换字符（U+FFFD，即「这个字节解不出来」）就回退 GBK 重解。
+function decodeTextBytes(buf) {
+  const bytes = new Uint8Array(buf);
+  let utf8 = '';
+  try { utf8 = new TextDecoder('utf-8').decode(bytes); } catch (e) { utf8 = ''; }
+  if (utf8.indexOf('\uFFFD') < 0) return { text: utf8, enc: 'UTF-8' };
+  try {
+    const gbk = new TextDecoder('gbk').decode(bytes);
+    if (gbk.indexOf('\uFFFD') < 0) return { text: gbk, enc: 'GBK' };
+  } catch (e) { /* 运行环境没带 GBK 解码器，保持 UTF-8 结果 */ }
+  return { text: utf8, enc: 'UTF-8（有无法解码的字节）' };
+}
 window.importBatchFile = function (e) {
   const f = e.target.files && e.target.files[0]; if (!f) return;
   const r = new FileReader();
   r.onload = function () {
-    const text = String(r.result || '');
-    const firstLine = (text.split(/\r?\n/)[0] || '');
-    const isCsv = /\.csv$/i.test(f.name) || (firstLine.indexOf(',') >= 0 && firstLine.split(',').length > 1);
+    const dec = decodeTextBytes(r.result);
+    const text = dec.text;
+    // 只认扩展名。原来还看「首行含逗号」——普通 txt 里写一句「写个文案，要活泼」
+    // 就会被判成 CSV，然后切列只取第一列，输入被拦腰截断且毫无提示。
+    const isCsv = /\.csv$/i.test(f.name);
     let inputs = [];
     if (isCsv) {
       const rows = text.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length; });
-      for (let i = 1; i < rows.length; i++) { const cells = parseCsvLine(rows[i]); if (cells.length && (cells[0] || '').trim()) inputs.push(cells[0].trim()); }
+      // 表头在这里不再偷偷跳掉（原来从 i=1 起读），交给「首行作为标题」那一个开关
+      // 统一管：否则 CSV 跳一次、复选框再跳一次，用户一勾就吃掉第一条真数据。
+      inputs = rows.map(function (row) { const cells = parseCsvLine(row); return (cells[0] || '').trim(); })
+        .filter(function (s) { return s.length; });
     } else {
       inputs = text.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length; });
     }
     const ta = document.getElementById('batchInput');
     if (ta) ta.value = (ta.value ? ta.value.replace(/\s*$/, '') + '\n' : '') + inputs.join('\n');
+    // CSV 几乎总带表头，故替用户把开关勾上（连表头一起导入，首行肉眼可见，想跑就取消勾选）
+    if (isCsv) { const chk = document.getElementById('batchSkipHeader'); if (chk) chk.checked = true; }
     updateBatchCount();
-    toast('已导入 ' + inputs.length + ' 条', 'ok');
+    const note = (isCsv ? '（CSV 取第 1 列，已勾选跳过表头）' : '') + (dec.enc === 'UTF-8' ? '' : ' · 按 ' + dec.enc + ' 解码');
+    toast('已导入 ' + inputs.length + ' 条' + note, 'ok');
   };
-  r.readAsText(f);
+  r.readAsArrayBuffer(f);
   e.target.value = '';
 };
 function clearBatchInput() { const ta = document.getElementById('batchInput'); if (ta) ta.value = ''; updateBatchCount(); }
 function clearBatchResults() { batchResults = []; renderBatchList(); }
 
+// 状态文案统一出口：列表、导出（CSV / Markdown）都从这里取，避免三处各写一套
+// 之后互相漂移 —— 导出的 CSV 里「degraded」这种机器码对人是看不懂的。
+function batchStText(st) {
+  return { queued: '排队', running: '运行中', ok: '成功', degraded: '降级', err: '失败', stopped: '已停止' }[st] || st;
+}
 function itemHtml(it) {
-  const stTxt = { queued: '排队', running: '运行中', ok: '成功', err: '失败' }[it.status] || it.status;
-  const outHtml = it.status === 'err'
-    ? '<div class="batch-out" style="color:#ff6b6b">调用失败：' + escapeHtml(it.err || '未知错误') + '</div>'
-    : (it.output ? '<div class="batch-out">' + renderMarkdown(it.output) + '</div>' : '<div class="batch-out" style="color:var(--sub)">（等待处理…）</div>');
+  const stTxt = batchStText(it.status);
+  let outHtml;
+  if (it.status === 'err') {
+    outHtml = '<div class="batch-out" style="color:#ff6b6b">调用失败：' + escapeHtml(it.err || '未知错误') + '</div>';
+  } else if (it.status === 'degraded') {
+    // 内容能看，但不是模型给的。说清来源，别让人把演示文本当结果导出去用。
+    outHtml = '<div class="batch-out" style="color:var(--warn-text)">⚠️ 降级为演示回复：' + escapeHtml(it.err || '未配置 API Key') + '</div>'
+      + '<div class="batch-out">' + renderMarkdown(it.output) + '</div>';
+  } else if (it.status === 'stopped') {
+    outHtml = '<div class="batch-out" style="color:var(--sub)">（已停止，本条未执行）</div>';
+  } else {
+    outHtml = it.output ? '<div class="batch-out">' + renderMarkdown(it.output) + '</div>' : '<div class="batch-out" style="color:var(--sub)">（等待处理…）</div>';
+  }
   return '<div class="batch-item" id="batchItem-' + it.idx + '">'
     + '<div class="batch-item-head"><span class="batch-idx">#' + it.idx + '</span>'
     + '<span class="batch-st ' + it.status + '">' + stTxt + '</span>'
@@ -4839,29 +4892,47 @@ window.startBatch = async function () {
   const inputs = getBatchInputs();
   if (!inputs.length) { toast('请先输入要批量处理的问题', 'warn'); return; }
   if (batchRunning) return;
+  // 没配 Key 时每条都会走 runFallback（演示回复），跑完一屏「成功」却没一句真话。
+  // 与其让人跑完才发现，不如现在拦一下；确认后仍可继续（用于试跑导入 / 导出链路）。
+  if (!BotCraftAI.canCall() && !confirm('当前未配置 API Key。\n批量的每一条输入都会返回「演示回复」，而不是模型输出。\n\n仍要继续吗？')) return;
   batchRunning = true; batchAC = new AbortController();
-  batchResults = inputs.map(function (inp, i) { return { idx: i + 1, input: inp, output: '', status: 'queued', err: '' }; });
+  batchResults = inputs.map(function (inp, i) { return { idx: i + 1, input: inp, output: '', status: 'queued', err: '', degraded: false }; });
   renderBatchList(); setBatchRunningUI(true); setBatchProgress(0, inputs.length);
   const total = inputs.length; let done = 0;
   for (let i = 0; i < inputs.length; i++) {
     if (!batchRunning) break;
     const item = batchResults[i];
-    item.status = 'running'; updateBatchItem(item);
+    item.status = 'running'; item.err = ''; item.degraded = false; updateBatchItem(item);
     try {
-      const out = await BotCraftAI.chat(b, [{ role: 'me', text: inputs[i] }], { stream: false, signal: batchAC.signal });
-      if (!batchRunning) { item.status = 'queued'; item.output = ''; }
-      else { item.output = (typeof out === 'string') ? out : String(out || ''); item.status = 'ok'; }
+      const out = await BotCraftAI.chat(b, [{ role: 'me', text: inputs[i] }], {
+        stream: false, signal: batchAC.signal,
+        // 降级留痕：chat 在「没配 Key」和「调用抛错」两种情况下都返回 fallback 文本，
+        // 不回调标记的话这一条会被记成「成功」。停止导致的 abort 也会走到这里，
+        // 但下面 !batchRunning 的分支会把它归到「已停止」，不会误标成降级。
+        onDegrade: function (e) { item.degraded = true; item.err = (e && e.message) ? e.message : '未配置 API Key'; }
+      });
+      if (!batchRunning) { item.status = 'stopped'; item.output = ''; item.degraded = false; }
+      else { item.output = (typeof out === 'string') ? out : String(out || ''); item.status = item.degraded ? 'degraded' : 'ok'; }
     } catch (err) {
-      if (!batchRunning) { item.status = 'queued'; item.output = ''; }
-      else { item.status = 'err'; item.err = (err && err.message) ? err.message : String(err); item.output = ''; }
+      if (!batchRunning) { item.status = 'stopped'; item.output = ''; item.degraded = false; }
+      else { item.status = 'err'; item.err = (err && err.message) ? err.message : String(err); item.output = ''; item.degraded = false; }
     }
-    done++; updateBatchItem(item); setBatchProgress(done, total);
+    updateBatchItem(item);
+    if (batchRunning) { done++; setBatchProgress(done, total); }
   }
-  batchRunning = false; setBatchRunningUI(false);
+  if (!batchRunning) {
+    // 停下来之后剩下的不能再显示「排队」——「排队」的意思是「马上会跑到」，
+    // 可循环已经退出了，它们永远不会动。标成「已停止」，界面才不骗人。
+    batchResults.forEach(function (r) { if (r.status === 'queued') r.status = 'stopped'; });
+  }
+  batchRunning = false; setBatchRunningUI(false); renderBatchList();
   const okc = batchResults.filter(function (r) { return r.status === 'ok'; }).length;
+  const degc = batchResults.filter(function (r) { return r.status === 'degraded'; }).length;
   const errc = batchResults.filter(function (r) { return r.status === 'err'; }).length;
-  if (errc === 0) toast('批量完成：' + okc + ' / ' + total + ' 条成功', 'ok');
-  else toast('批量结束：' + okc + ' 成功 / ' + errc + ' 失败', 'warn');
+  const stopc = batchResults.filter(function (r) { return r.status === 'stopped'; }).length;
+  const tail = (degc ? ' / ' + degc + ' 降级' : '') + (errc ? ' / ' + errc + ' 失败' : '') + (stopc ? ' / ' + stopc + ' 未执行' : '');
+  if (!degc && !errc && !stopc) toast('批量完成：' + okc + ' / ' + total + ' 条成功', 'ok');
+  else toast('批量结束：' + okc + ' 成功' + tail, 'warn');
 };
 window.stopBatch = function () {
   if (!batchRunning) return;
@@ -4884,17 +4955,17 @@ window.exportBatch = function (fmt) {
   const safe = String(bot.name || 'bot').replace(/[^\w一-龥-]/g, '') || 'bot';
   const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
   if (fmt === 'json') {
-    const data = batchResults.map(function (r) { return { idx: r.idx, input: r.input, output: r.output, status: r.status, error: r.err || '' }; });
+    const data = batchResults.map(function (r) { return { idx: r.idx, input: r.input, output: r.output, status: r.status, degraded: !!r.degraded, error: r.err || '' }; });
     downloadFile('批量结果_' + safe + '_' + ts + '.json', JSON.stringify(data, null, 2), 'application/json;charset=utf-8');
   } else if (fmt === 'csv') {
     const esc = function (s) { return '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"'; };
     const head = ['序号', '状态', '输入', '输出'].map(esc).join(',');
-    const rows = batchResults.map(function (r) { return [r.idx, r.status, r.input, r.output].map(esc).join(','); });
+    const rows = batchResults.map(function (r) { return [r.idx, batchStText(r.status), r.input, r.output].map(esc).join(','); });
     downloadFile('批量结果_' + safe + '_' + ts + '.csv', '﻿' + head + '\n' + rows.join('\n'), 'text/csv;charset=utf-8');
   } else {
     const lines = ['# 批量运行结果：' + (bot.name || '机器人'), '', '> 机器人：' + (bot.name || '-') + ' · 模型：' + (BotCraftAI.getConfig().model || '-') + ' · 时间：' + new Date().toLocaleString('zh-CN'), ''];
     batchResults.forEach(function (r) {
-      lines.push('## #' + r.idx + ' · ' + (r.status === 'ok' ? '成功' : r.status));
+      lines.push('## #' + r.idx + ' · ' + batchStText(r.status) + (r.degraded ? '（演示回复，非模型输出）' : ''));
       lines.push('**输入：** ' + r.input); lines.push(''); lines.push(r.output || (r.err || '(无输出)')); lines.push('');
     });
     downloadFile('批量结果_' + safe + '_' + ts + '.md', lines.join('\n'), 'text/markdown;charset=utf-8');
