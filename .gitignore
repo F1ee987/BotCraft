@@ -1,3 +1,8 @@
 # 改稿脚本在写盘前生成的还原点（BotCraft.html.bak-*）。
 # 它们是本地保险，不是产品文件，别提交进来。
 BotCraft.html.bak-*
+
+# gen_icon.py 既是命令行工具、也是几何的单一来源（build_exe/verify_logo.py 会 import 它
+# 来对账 LOGO_GEOM），所以每次跑守卫都会生成字节码缓存 —— 别提交。
+__pycache__/
+*.pyc
