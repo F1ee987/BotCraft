@@ -176,11 +176,13 @@ body::after{
    同屏数量可控（个位到十几个），是玻璃质感的主要来源；
    高频列表项（卡片 / 节点 / 消息 / 记忆条目）改用「半透明 + 边缘高光」模拟，
    它们背后本就是已模糊的父级玻璃，视觉同样是玻璃叠玻璃，却不会堆出上百个合成层。 */
+   ⚠️ 新增「半透明底的浮层」必须登记进这张清单，否则 56% 半透明的底会把背后内容
+   原样透出来（用户看到的「UI 重叠了」）。吸顶标题栏就属于这一类，别漏。 */
 body .topbar, body .sidebar, body .ws-side, body .mbox, body .toast, body .cmd-panel,
 body .pop-menu, body .ws-more-menu, body .bot-switch-menu, body .modal, body .modal-box,
 body .ctxp-box,
 body .stat-card, body .chart-box, body .brand-card,
-body .pub-card, body .batch-bar{
+body .pub-card, body .batch-bar, body .main.scrolled > .page-head{
   backdrop-filter: var(--glass-filter) !important;
   -webkit-backdrop-filter: var(--glass-filter) !important;
 }
@@ -388,11 +390,33 @@ body.embed-mode #wsName{font-size:15px}
 /* ============ 主内容 ============ */
 /* 主内容 = 悬浮圆角玻璃珠：与顶栏/侧栏同一家族，不再用通顶贴边直角板（此前视觉割裂）。
    背后只有柔和光晕，不挂 backdrop-filter（大面积模糊纯亏性能，也会劫持内部 position:fixed） */
-.main{flex:1;padding:16px 20px;min-width:0;overflow-x:hidden;overflow-y:auto;
+/* --mpx/--mpt = 内容珠的左右/顶部内边距。顶部那一份**不给容器**，留给页面标题栏
+   自己（见下面 .main > .page-head）——这是标题栏吸顶能贴住容器顶边的关键。 */
+.main{--mpx:20px;--mpt:16px;--ph-h:0px;flex:1;padding:0 var(--mpx) var(--mpt);min-width:0;
+  overflow-x:hidden;overflow-y:auto;
   margin:0 12px 12px 0;border-radius:18px;background:var(--glass-bg-hover);border:1px solid var(--glass-border)}
 .page-head{display:flex;align-items:center;margin-bottom:18px;gap:12px;flex-wrap:wrap}
 .page-head h1{font-size:28px;font-weight:700;letter-spacing:-.5px}
 .page-head .sub{color:var(--sub);font-size:14px;margin-top:2px}
+/* ============ 页面标题栏吸顶（2026-09：floating 悬浮 + sticky 吸顶固定） ============
+   滚动时标题栏浮在内容之上，滚回顶部自动落回（未滚动时完全透明，与没有它时一模一样）。
+   三条反直觉、全是真机实测出来的（`build_exe/_probe_sticky*.py`），改之前必读：
+   1) **sticky 的 inset 相对内容盒顶边**，不是 padding box。`.main` 原样保留 padding-top:16px
+      时，`top:0` 的标题栏会停在离容器内顶 **17px** 处（= border 1 + padding 16），
+      于是它上方留一条缝，滚过去的卡片会**从缝里露出来**（overflow 的裁剪边界是 padding box）。
+      所以正解是把容器的 padding-top 挪给标题栏（`--mpt`），而不是去调 `top`。
+   2) **负 margin 推不动停靠位置**。试过 `margin:-16px`，吸顶位置纹丝不动 —— 它只负责横向：
+      `-var(--mpx)` + 等量 padding，玻璃底才能铺到容器圆角边缘而不留两侧白边。
+   3) **底部间距必须凑回 18px**：`margin-bottom(2px) + padding-bottom(--mpt)`。
+      少了这条，标题栏一加 padding 就会把下方整块内容推下去（卡片网格下移 32px）。 */
+.main > .page-head{position:sticky;top:0;z-index:6;
+  margin:0 calc(-1 * var(--mpx)) 2px;padding:var(--mpt) var(--mpx);
+  border-radius:18px 18px 0 0;border-bottom:1px solid transparent;
+  transition:background-color .2s var(--ease),box-shadow .2s var(--ease),border-color .2s var(--ease)}
+/* 浮起态：由 JS 在 .main 上切 .scrolled（距顶 > 2px）。未滚动时上面那条边框是透明的，
+   所以静止页面不会有「多出来一条线」的突兀感。 */
+.main.scrolled > .page-head{background-color:var(--glass-bg-hover);background-image:var(--lg-spec);
+  border-bottom-color:var(--glass-border);box-shadow:var(--lg-float)}
 .search-bar{flex:1;max-width:320px;margin-left:auto;position:relative}
 .search-bar input{width:100%;padding:8px 14px 8px 34px;border-radius:10px;background:var(--fill);
   border:1px solid transparent;color:var(--txt);font-size:13px;transition:.18s var(--ease)}
@@ -717,7 +741,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .chip{padding:6px 14px;border-radius:980px;font-size:12.5px;cursor:pointer;transition:background .15s var(--ease),color .15s var(--ease);
   background:var(--fill);border:1px solid transparent;color:var(--sub)}
 .chip:hover,.chip.on{color:var(--txt);background:var(--fill-strong)}
-.batch-bar{display:flex;gap:10px;align-items:center;margin-bottom:16px;padding:12px 16px;border-radius:14px;background:var(--card);border:1px solid var(--line);position:sticky;top:0;z-index:5}
+/* top 用 --ph-h：标题栏吸顶后占住了 0..--ph-h，批量条必须从它下沿开始，
+   否则两条 sticky 会叠在一起（z-index 5 < 6，会被标题栏压住一半）。
+   --ph-h 由 JS(bindStickyHeads) 把标题栏高度写进 .main 的行内样式。 */
+.batch-bar{display:flex;gap:10px;align-items:center;margin-bottom:16px;padding:12px 16px;border-radius:14px;background:var(--card);border:1px solid var(--line);position:sticky;top:var(--ph-h,0px);z-index:5}
 .batch-bar #batchCount{font-size:13px;font-weight:600;color:var(--txt)}
 /* 提示词编辑区：模板 chips + 文本框 */
 .prompt-templates{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
@@ -978,7 +1005,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   .topbar{gap:8px;padding:0 12px}
   .sidebar{display:none}
   .main,.workspace{margin-left:12px}  /* 窄屏无侧栏，内容珠补齐左外边距 */
-  .main{padding:12px 14px}
+  .main{--mpx:14px;--mpt:12px}        /* 内边距全由变量驱动，吸顶标题栏的负 margin/自带 padding 自动跟随 */
   .grid{grid-template-columns:1fr}
   .charts{grid-template-columns:1fr}
   body:not(.embed-mode) .workspace{flex-direction:column}
@@ -5719,6 +5746,46 @@ function batchPublish() {
 
 // ==================== 页面切换 ====================
 const pages = ['home', 'workspace', 'templates', 'knowledge', 'plugins', 'favorites', 'analytics', 'styles'];
+/* ============ 页面标题栏吸顶：滚动才浮起（2026-09） ============
+   全部外观都在 CSS（`.main > .page-head` / `.main.scrolled > .page-head`），
+   JS 只负责两件事，改动时别把它俩搬进 CSS：
+     ① 距顶 > 2px 就给 .main 挂 .scrolled —— 用 2px 而不是 0，是因为
+        WebView2 的缩放滚动有时会停在 0.33px，用 0 判定会闪。
+     ② 把标题栏高度写进 `--ph-h`，让 .batch-bar 从标题栏下沿开始吸顶。
+   --ph-h 必须在页面**可见时**量：display:none 的页面 offsetHeight 恒为 0，
+   直接写进去批量条就会顶到 0 位和标题栏重叠，所以切页后要补量一次；
+   窗口 resize 会让标题换行（高度从 97 变更多），也要补量。 */
+function syncStickyHead(page) {
+  var list = page ? [document.getElementById('page-' + page)]
+                  : document.querySelectorAll('main.main');
+  Array.prototype.forEach.call(list, function (m) {
+    if (!m || !m.classList || !m.classList.contains('main')) return;
+    var ph = null, kids = m.children;
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].classList && kids[i].classList.contains('page-head')) { ph = kids[i]; break; }
+    }
+    if (!ph) return;
+    var h = ph.offsetHeight;
+    if (h && m.__bcPhH !== h) { m.__bcPhH = h; m.style.setProperty('--ph-h', h + 'px'); }
+    m.classList.toggle('scrolled', m.scrollTop > 2);
+  });
+}
+function bindStickyHeads() {
+  Array.prototype.forEach.call(document.querySelectorAll('main.main'), function (m) {
+    if (m.__bcStickyBound) return;
+    m.__bcStickyBound = true;
+    m.addEventListener('scroll', function () {
+      m.classList.toggle('scrolled', m.scrollTop > 2);
+    }, { passive: true });
+  });
+  syncStickyHead();
+}
+window.syncStickyHead = syncStickyHead;
+window.bindStickyHeads = bindStickyHeads;
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindStickyHeads);
+else bindStickyHeads();
+window.addEventListener('resize', function () { syncStickyHead(); });
+
 function go(p) {
   var _navEl = document.querySelector('.nav'); if (_navEl) _navEl.classList.remove('open');
   pages.forEach(pg => {
@@ -5734,6 +5801,7 @@ function go(p) {
   if (p === 'templates') renderTplGrid();
   if (p === 'styles') renderStyleGrid();
   if (p === 'home') { renderGrid(); syncEmptyHome(); }
+  syncStickyHead(p);   /* 切页后补量标题栏高度（隐藏时量出来是 0） */
 }
 function toggleNav() { var n = document.querySelector('.nav'); if (n) n.classList.toggle('open'); }
 
