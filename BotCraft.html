@@ -3430,7 +3430,7 @@ window.__storage = __storage;
     var rd = new FileReader();
     rd.onload = function () {
       try {
-        var obj = JSON.parse(String(rd.result || '{}'));
+        var obj = JSON.parse(decodeTextBytes(rd.result).text || '{}');
         var arr = Array.isArray(obj) ? obj : (obj && obj.items) || [];
         if (!arr.length) { toast('文件里没有可导入的记忆', 'warn'); return; }
         if (!b.memory) b.memory = { enabled: true, items: [], lastUpdate: 0, _seenLen: 0, pending: false };
@@ -3448,7 +3448,7 @@ window.__storage = __storage;
         toast('导入完成：新增 ' + Math.max(0, b.memory.items.length - before) + ' 条，当前共 ' + b.memory.items.length + ' 条', 'ok');
       } catch (e) { toast('导入失败：不是有效的记忆 JSON', 'err'); }
     };
-    rd.readAsText(file);
+    rd.readAsArrayBuffer(file);  // 按字节读，编码交给 decodeTextBytes 判定（UTF-8 优先，坏了才回退 GBK）
     input.value = '';
   }
 
@@ -3483,7 +3483,7 @@ window.__storage = __storage;
     var r = new FileReader();
     r.onload = function () {
       try {
-        var obj = JSON.parse(r.result);
+        var obj = JSON.parse(decodeTextBytes(r.result).text);
         if (!obj || obj.kind !== 'botcraft-template') { toast('文件不是有效的 BotCraft 模板', 'err'); return; }
         if (!obj.ic) obj.ic = ''; if (!obj.c) obj.c = 'var(--brand)';
         var arr = getUserTpls(); arr.push(obj); saveUserTpls(arr);
@@ -3491,7 +3491,7 @@ window.__storage = __storage;
         toast('已导入模板：' + (obj.n || '未命名'), 'ok');
       } catch (e) { toast('模板解析失败', 'err'); }
     };
-    r.readAsText(f); input.value = '';
+    r.readAsArrayBuffer(f); input.value = '';
   }
   // 支持流式与非流式。stream=true 时返回 AsyncIterable<string>
   async function chat(bot, history, opt) {
@@ -5199,14 +5199,68 @@ function userScopedKey(base) { return currentUser ? (base + '.' + currentUser.us
 const LS_KEY_USER = () => userScopedKey(LS_KEY);
 const LS_FAV_USER = () => userScopedKey(LS_FAV);
 
+// ==================== 读盘/写盘失败的可观测性 ====================
+// 这一块存在的理由：原来「读盘失败」和「写盘失败」都被 catch(e){} 吞掉，
+// 用户看到的现象是「一切正常」，实际是数据读不出来 / 存不进去 —— 属于最坏的一类
+// 缺陷：不崩、不报错，只是结果悄悄不可信。
+let _botsWriteBlocked = false;   // 读盘失败且备份不成功 → 挂起自动保存，宁可不存也不覆盖
+let _botsWriteWarned = false;    // 写盘失败提示节流，避免高频 saveBots 刷屏
+
+// 机器人数据读不出来时的处理。核心原则：绝不写盘覆盖。
+// 原来走的是「catch 吞掉 → 落到演示种子 → saveBots() 落盘」，用户什么都没做，
+// 几十个机器人与全部聊天记录就被演示数据静默顶掉了，且没有任何提示。
+function _botsLoadFailed(raw, reason) {
+  let saved = false;
+  let key = 'bc.datarecover.' + ((currentUser && currentUser.username) || 'anon');
+  try { storage.setItem(key, raw); saved = true; } catch (e) { saved = false; }
+  bots = SEED_BOTS.map(b => normalize(b));   // 先让界面可用
+  if (saved) {
+    try {
+      toast('⚠️ 机器人数据读取失败（' + reason + '）。原数据已另存为「' + key + '」，'
+        + '当前界面显示的是示例机器人 —— 你原来的记录没有被删除，请到「设置 → 数据」导出排查。', 'err', 15000);
+    } catch (e) { }
+  } else {
+    _botsWriteBlocked = true;
+    try {
+      toast('⚠️ 机器人数据读取失败（' + reason + '），且备份也写不进去（存储空间可能已满）。'
+        + '为避免覆盖你原来的数据，已暂停自动保存。', 'err', 20000);
+    } catch (e) { }
+  }
+}
+
+// 写盘失败（几乎总是 localStorage 配额满）。原来完全静默：用户改了半天配置、
+// 聊了几十条，界面一切正常，一刷新全没了。
+function _botsWriteFailed(e) {
+  if (_botsWriteWarned) return;
+  _botsWriteWarned = true;
+  setTimeout(function () { _botsWriteWarned = false; }, 20000);  // 20 秒内只提示一次
+  try {
+    toast('⚠️ 保存失败：' + ((e && e.message) || e) + '。浏览器存储空间可能已满，'
+      + '本次改动没有写入磁盘 —— 请到「设置 → 数据」导出备份并清理后再试。', 'err', 15000);
+  } catch (e2) { }
+}
+
 function loadBots() {
   if (!currentUser) { bots = []; return; }
-  try {
-    const raw = storage.getItem(LS_KEY_USER());
-    if (raw) { bots = JSON.parse(raw).map(normalize); return; }
-  } catch (e) { }
-  bots = SEED_BOTS.map(b => normalize(b));
-  saveBots();
+  let raw = null;
+  try { raw = storage.getItem(LS_KEY_USER()); } catch (e) { raw = null; }
+  if (!raw) { bots = SEED_BOTS.map(b => normalize(b)); saveBots(); return; }   // 真的没有数据：首次使用
+  let arr = null;
+  try { arr = JSON.parse(raw); }
+  catch (e) { _botsLoadFailed(raw, 'JSON 解析失败：' + ((e && e.message) || e)); return; }
+  if (!Array.isArray(arr)) { _botsLoadFailed(raw, '数据结构异常，预期是机器人数组'); return; }
+  // 逐条归一化：单条记录坏掉只丢这一条。原来是一条坏 → .map 整体抛错 → 全军覆没。
+  const out = []; let bad = 0;
+  arr.forEach(function (it) {
+    if (!it || typeof it !== 'object' || Array.isArray(it)) { bad++; return; }
+    try { out.push(normalize(it)); } catch (e) { bad++; }
+  });
+  bots = out;
+  if (bad && !out.length) {
+    try { toast('⚠️ 全部 ' + bad + ' 条机器人记录都无法读取，已跳过。磁盘上的原始数据仍然保留，未被覆盖。', 'err', 15000); } catch (e) { }
+  } else if (bad) {
+    try { toast('已跳过 ' + bad + ' 条损坏的机器人记录，其余 ' + out.length + ' 条正常载入', 'warn', 8000); } catch (e) { }
+  }
 }
 // 每个机器人最多保留最近 N 条聊天历史，防止记录无限增长导致 JSON 序列化/写入越来越慢（越用越卡的根因）
 const HISTORY_LIMIT = 100;
@@ -5227,6 +5281,7 @@ let _saveBotsTimer = null;
 function runIdle(fn) { if (window.requestIdleCallback) requestIdleCallback(fn, { timeout: 1000 }); else setTimeout(fn, 0); }
 function _writeBots() {
   if (EMBED_MODE) return; // 嵌入模式为临时会话，不写回任何来源的 localStorage
+  if (_botsWriteBlocked) return; // 读盘失败且备份也没成功：宁可不保存，也不拿演示数据覆盖用户原记录
   bots.forEach(_trimHistory);
   // 多会话去重：当前会话的内容由 b.history 承载，写盘前把它从 sessions 里摘掉，
   // 否则同一份历史会被序列化两次（localStorage 占用直接翻倍）。同步 + finally 保证一定还原。
@@ -5240,8 +5295,8 @@ function _writeBots() {
   var _json = null;
   try { _json = JSON.stringify(bots); }
   finally { _held.forEach(function (p) { p[0].history = p[1]; }); }
-  if (!currentUser) { try { storage.setItem(LS_KEY, _json); } catch (e) { } return; }
-  try { storage.setItem(LS_KEY_USER(), _json); } catch (e) { }
+  if (!currentUser) { try { storage.setItem(LS_KEY, _json); } catch (e) { _botsWriteFailed(e); } return; }
+  try { storage.setItem(LS_KEY_USER(), _json); } catch (e) { _botsWriteFailed(e); }
 }
 // 合并写入：高频调用（发消息 / 编辑 / 拖拽等）先在 200ms 内合并，再延到空闲时段序列化落盘；关闭页面前强制同步落盘。
 function saveBots() {
@@ -7386,6 +7441,10 @@ async function sendMsg() {
   renderQuickBar(); saveBots();
   await runReply(b, { text: v, entry: entry });
 }
+// 这个机器人当前是否还显示在屏幕上。生成是后台异步的，用户随时可能切走，
+// 而界面更新类操作（整段重绘 / 快捷栏 / 滚动到底）一旦落到当前窗口就会张冠李戴。
+function isBotOnScreen(b) { return !!b && !!currentId && b.id === currentId; }
+
 // 生成一次回复并写回 b.history。
 // 「发送 / 重新生成 / 编辑重发」三条入口共用它，保证工作流、生图、插件、错误处理与排队行为完全一致。
 // 取本次生成的知识库引用快照（无命中则空数组），挂到 bot 消息上供渲染「参考来源」
@@ -7394,6 +7453,16 @@ function _kbSnap() {
 }
 async function runReply(b, opt) {
   opt = opt || {};
+  // 捕获本次生成所属的会话历史。切换会话时 switchSession / newSession 会把 b.history
+  // 重新指向另一个数组，收尾若还往 b.history 里 push，这条回答就落到别的会话去了 ——
+  // 用户切回原会话只见提问不见回答，新会话里凭空多出一条回答。
+  const _histRef = b.history;
+  // 本次生成的界面更新是否还该落在当前窗口。必须同时看机器人与会话：
+  // 生成期间用户可能换机器人，也可能在同一机器人里换会话，两种情况 b 都已不在屏幕上。
+  // 原来收尾无条件 renderHistory(b)，而 renderHistory 就是 chat.innerHTML = b.history，
+  // 于是 A 的整段对话会被画进 B 的窗口，看起来像两个机器人的记录串在了一起。
+  const _onScreen = function () { return currentId === b.id && b.history === _histRef; };
+  const _scrollChat = function (force) { if (_onScreen()) scrollChatToBottom(force); };
   // 每次生成前清空引用缓冲：上一次的命中绝不能串到这一条回答上
   try { if (window.kbClearHits) window.kbClearHits(); } catch (e) { }
   const activeBot = resolveHandoff(b) || b;  // 工作流含「机器人」节点则转交目标机器人应答
@@ -7408,7 +7477,7 @@ async function runReply(b, opt) {
   const typing = document.createElement('div');
   typing.className = 'typing';
   typing.innerHTML = '<div class="msg-body"><span class="dots"><span></span><span></span><span></span></span></div>';
-  chat.appendChild(typing); scrollChatToBottom();
+  chat.appendChild(typing); _scrollChat();
   setSendingUI(true);
 
   const aiBot = toAIBot(b);
@@ -7428,7 +7497,7 @@ async function runReply(b, opt) {
     imgTip.className = 'msg bot img-tip';
     imgTip.id = 'imgTip_' + b.history.length;
     imgTip.innerHTML = _body(escapeHtml(activeBot.n), hasImagePlugin ? '🎨 已接收到配图需求，正在生成图片，请稍候…' : '🎨 检测到你想要图片，正在直接生成，请稍候…');
-    chat.appendChild(imgTip); scrollChatToBottom();
+    chat.appendChild(imgTip); _scrollChat();
   }
 
   try {
@@ -7441,13 +7510,13 @@ async function runReply(b, opt) {
       const prog = document.createElement('div');
       prog.className = 'msg bot';
       prog.innerHTML = _body(escapeHtml(activeBot.n), '<div class="wf-progress">🔄 工作流执行中（0/' + aiBot.nodes.length + '）…</div>');
-      chat.appendChild(prog); scrollChatToBottom();
+      chat.appendChild(prog); _scrollChat();
       // 流式输出气泡：当前节点的模型回复逐字显示，避免「干等」
       const cur = document.createElement('div');
       cur.className = 'msg bot';
       cur.style.display = 'none';
       cur.innerHTML = _body('', '<div class="wf-stream-body"></div>');
-      chat.appendChild(cur); scrollChatToBottom();
+      chat.appendChild(cur); _scrollChat();
       const curWho = cur.querySelector('.who');
       const curBody = cur.querySelector('.wf-stream-body');
       var _lastPaint = 0;
@@ -7465,34 +7534,35 @@ async function runReply(b, opt) {
           curBody.textContent = '';
         } else if (st.phase === 'token') {
           var _now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-          if (_now - _lastPaint > 24) { _lastPaint = _now; curBody.textContent = st.text; scrollChatToBottom(); }
+          if (_now - _lastPaint > 24) { _lastPaint = _now; curBody.textContent = st.text; _scrollChat(); }
         } else if (st.phase === 'done' && st.role && st.role !== 'start' && st.role !== 'human') {
           curBody.innerHTML = renderMarkdown(st.text || curBody.textContent);
-          scrollChatToBottom();
+          _scrollChat();
         }
-        scrollChatToBottom();
+        _scrollChat();
       });
-      b.history.push({ role: 'bot', text: result.final, who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
+      _histRef.push({ role: 'bot', text: result.final, who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
       // 整段重绘：一次性替换 innerHTML，同时清掉 prog/cur/typing。
       // 不要先手动 remove 气泡（会造成「高度骤减→再恢复」的可见抽动）。
-      renderHistory(b);
-      if (result.logs && result.logs.length) { renderRunLogs(result.logs); }
+      if (_onScreen()) {
+        renderHistory(b);
+        if (result.logs && result.logs.length) { renderRunLogs(result.logs); }
+      }
       activeBot.u = (activeBot.u || 0) + 1;
       activeBot.updatedAt = Date.now(); saveBots();
-      attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b);
-      scrollChatToBottom(true); // 所有 DOM 变更完成后统一落底
+      if (_onScreen()) { attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b); _scrollChat(true); } // 所有 DOM 变更完成后统一落底
       // 若已启动图片生成，完成后把图追加到聊天记录（若 AI 已自己贴图则不再重复追加）
       if (imagePromise) {
         try {
           const imgUrl = await imagePromise;
           if (imgUrl) {
-            document.querySelectorAll('.img-tip').forEach(el => el.remove());
+            if (_onScreen()) document.querySelectorAll('.img-tip').forEach(el => el.remove());
             if (!hasImageMarkdown(result.final)) {
-              b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
-              renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
+              _histRef.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
+              if (_onScreen()) { renderHistory(b); attachCopyBtns(); renderQuickBar(); _scrollChat(true); }
             }
-          } else { appendImageError('未返回图片地址', activeBot.n); }
-        } catch (e) { console.warn('[图片生成] 失败：', e); appendImageError(e && e.message ? e.message : e, activeBot.n); }
+          } else if (_onScreen()) { appendImageError('未返回图片地址', activeBot.n); }
+        } catch (e) { console.warn('[图片生成] 失败：', e); if (_onScreen()) appendImageError(e && e.message ? e.message : e, activeBot.n); }
       }
     } else {
       // 普通对话：启用真实插件（联网检索 / 天气查询）时，先执行工具并把结果注入上下文
@@ -7510,7 +7580,7 @@ async function runReply(b, opt) {
     for await (const chunk of stream) {
       full += chunk;
       const _now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      if (_now - _lastPaint > 24) { _lastPaint = _now; span.textContent = full; scrollChatToBottom(); }
+      if (_now - _lastPaint > 24) { _lastPaint = _now; span.textContent = full; _scrollChat(); }
     }
     // 日历/提醒插件：解析模型返回的 [REMINDER: 标题 | 时间] 标记并真实存储
     if ((activeBot.plugins || []).indexOf('日历/提醒') >= 0) {
@@ -7521,27 +7591,26 @@ async function runReply(b, opt) {
       } catch (e) { }
     }
     span.innerHTML = renderMarkdown(full);
-    b.history.push({ role: 'bot', text: full, who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
+    _histRef.push({ role: 'bot', text: full, who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
     bubble.querySelector('.who').textContent = activeBot.n; // 保持
     // 引用来源条：追加到气泡内容末尾（复制/重新生成按钮随后由 attachCopyBtns 追加）
     var _citeHtml = _kbCiteHtml(_kbSnap());
     if (_citeHtml) bubble.insertAdjacentHTML('beforeend', _citeHtml);
     activeBot.u = (activeBot.u || 0) + 1;
     activeBot.updatedAt = Date.now(); saveBots();
-    attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b);
-    scrollChatToBottom(true); // 复制按钮/快捷栏等所有 DOM 变更完成后再统一落底，避免分段跳动
+    if (_onScreen()) { attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b); _scrollChat(true); } // 复制按钮/快捷栏等所有 DOM 变更完成后再统一落底，避免分段跳动
     // 若已启动图片生成，完成后把图追加到聊天记录（若 AI 已自己贴图则不再重复追加）
     if (imagePromise) {
       try {
         const imgUrl = await imagePromise;
         if (imgUrl) {
-          document.querySelectorAll('.img-tip').forEach(el => el.remove());
+          if (_onScreen()) document.querySelectorAll('.img-tip').forEach(el => el.remove());
           if (!hasImageMarkdown(full)) {
-            b.history.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
-            renderHistory(b); attachCopyBtns(); renderQuickBar(); scrollChatToBottom(true);
+            _histRef.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
+            if (_onScreen()) { renderHistory(b); attachCopyBtns(); renderQuickBar(); _scrollChat(true); }
           }
-        } else { appendImageError('未返回图片地址', activeBot.n); }
-      } catch (e) { console.warn('[图片生成] 失败：', e); appendImageError(e && e.message ? e.message : e, activeBot.n); }
+        } else if (_onScreen()) { appendImageError('未返回图片地址', activeBot.n); }
+      } catch (e) { console.warn('[图片生成] 失败：', e); if (_onScreen()) appendImageError(e && e.message ? e.message : e, activeBot.n); }
     }
     }
   } catch (err) {
@@ -7551,12 +7620,13 @@ async function runReply(b, opt) {
       const _real = (err && err.message) ? err.message : (err ? String(err) : '未知错误');
       toast('模型调用失败：' + _real, 'err');
       const _hint = (typeof apiErrHint === 'function') ? apiErrHint(err) : '请检查「设置」中的 API Key、接口地址与模型名是否正确，或稍后重试。';
-      b.history.push({ role: 'bot', text: '⚠️ 调用失败：' + _real + '\n\n' + _hint });
+      _histRef.push({ role: 'bot', text: '⚠️ 调用失败：' + _real + '\n\n' + _hint });
     }
-    renderHistory(b); saveBots();
+    if (_onScreen()) renderHistory(b);
+    saveBots();
   } finally {
     sending = false; abortCtrl = null; setSendingUI(false);
-    _maybeNameSession(b);   // 首条用户消息自动成为会话名（只在没名字时写一次）
+    if (_onScreen()) _maybeNameSession(b);   // 首条用户消息自动成为会话名（只在没名字时写一次）；切走后再来命名，命中的是别人的会话
     // 非串行模式：自动发送排队的消息，保持顺序处理
     if (!getSerialInput() && pendingQueue.length) {
       const next = pendingQueue.shift();
@@ -7944,7 +8014,7 @@ function importWorkflowFromFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const data = JSON.parse(String(reader.result));
+      const data = JSON.parse(decodeTextBytes(reader.result).text);
       const b = getBot(currentId); if (!b) return;
       if (data.workflow && Array.isArray(data.workflow.nodes)) {
         b.nodes = data.workflow.nodes.map(n => ({ lbl: n.lbl || '💬 消息', h: n.h || '节点', p: n.p || '' }));
@@ -7956,7 +8026,7 @@ function importWorkflowFromFile(file) {
       } else { toast('JSON 中未找到 workflow.nodes', 'err'); }
     } catch (e) { toast('解析失败：' + e.message, 'err'); }
   };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
 document.getElementById('importFile').addEventListener('change', e => {
   const f = e.target.files[0]; if (f) importWorkflowFromFile(f); e.target.value = '';
@@ -8015,7 +8085,7 @@ function importAllConfig(file) {
   const reader = new FileReader();
   reader.onload = function () {
     try {
-      const payload = JSON.parse(String(reader.result));
+      const payload = JSON.parse(decodeTextBytes(reader.result).text);
       const data = (payload && payload.data && typeof payload.data === 'object') ? payload.data : payload;
       let count = 0;
       Object.keys(data).forEach(function (k) {
@@ -8033,7 +8103,7 @@ function importAllConfig(file) {
       _reloadAfterImport();
     } catch (e) { toast('解析失败：' + e.message, 'err'); }
   };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
 // 导入后要刷新页面，但桌面版的注入数据是 main() 启动时写死在 HTML 里的 ——
 // 直接 location.reload() 会读回「导入前」的旧快照，于是导入看起来没生效，
@@ -9190,7 +9260,7 @@ function importKbFile(file) {
   if (file.size > MAX) { toast('文件过大（>300KB），请拆分后导入', 'err'); return; }
   const reader = new FileReader();
   reader.onload = () => {
-    let content = String(reader.result || '');
+    let content = decodeTextBytes(reader.result).text || '';
     const name = file.name || '未命名文档';
     const ext = (name.split('.').pop() || '').toLowerCase();
     const type = (ext === 'csv') ? 'csv' : (ext === 'json') ? 'json' : 'txt';
@@ -9199,7 +9269,7 @@ function importKbFile(file) {
     toast('已导入：' + name, 'ok');
   };
   reader.onerror = () => toast('文件读取失败', 'err');
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
 
 // ---------- 从网址导入 ----------
@@ -10090,7 +10160,7 @@ let DATASET = null;
 function parseDatasetFile(file) {
   const reader = new FileReader();
   reader.onload = function () {
-    const text = String(reader.result || '');
+    const text = decodeTextBytes(reader.result).text || '';
     let rows = [], cols = [];
     if (/\.json$/i.test(file.name)) {
       try { const j = JSON.parse(text); if (Array.isArray(j)) rows = j; else if (j && typeof j === 'object') rows = [j]; }
@@ -10109,7 +10179,7 @@ function parseDatasetFile(file) {
     toast('已载入 ' + rows.length + ' 条记录', 'ok');
   };
   reader.onerror = function () { toast('文件读取失败', 'err'); };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
 function renderDataset() {
   if (!DATASET) return;
