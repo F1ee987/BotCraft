@@ -1276,10 +1276,12 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 :root{
   --ctx1:#8b5cf6; --ctx2:#a78bfa; --ctx3:#f472b6; --ctx4:#fb923c; --ctx5:#38bdf8;
   --ctx6:#34d399; --ctx7:#94a3b8; --ctx8:#facc15; --ctx9:#f87171; --ctx10:#2dd4bf;
+  --ctx11:#c084fc; --ctx12:#818cf8;
 }
 [data-theme="light"]{
   --ctx1:#7c3aed; --ctx2:#9333ea; --ctx3:#db2777; --ctx4:#ea580c; --ctx5:#0284c7;
   --ctx6:#059669; --ctx7:#64748b; --ctx8:#ca8a04; --ctx9:#dc2626; --ctx10:#0d9488;
+  --ctx11:#a855f7; --ctx12:#4f46e5;
 }
 .ctx-wrap{display:flex;flex-direction:column;gap:var(--sp-2);width:100%;min-width:0}
 .ctx-head{display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap;font-size:11.5px;color:var(--sub)}
@@ -1573,6 +1575,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <div class="prompt-templates" id="promptTpls"></div>
         <textarea id="promptArea" data-grow data-grow-max="560" placeholder="例如：你是一个智能客服，请用专业友好的语气回答…"></textarea>
         <div style="font-size:11px;color:var(--sub);margin-top:8px" id="promptCount">0 字</div>
+        <div id="expertiseBox"></div>
+        <div id="genParamsBox"></div>
       </div>
       <div class="tab-panel" id="wsKbBody" style="display:none">
         <div style="font-size:12px;color:var(--sub);margin-bottom:10px">勾选要挂载到当前机器人的知识库</div>
@@ -2147,6 +2151,99 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 <script>
 'use strict';
 
+// ==================== 机器人专精（expertise）与生成参数 ====================
+// 【为什么定义在这里】必须落在**最早的脚本块顶层**，不能放进后面的块：
+// 本页有三个 script 块，块之间只有 var / function 声明互相可见（const/let 不跨块），
+// 且后块要等前块执行完才存在。下面这些函数同时被
+//   block1 的 buildCtxSections / chat、
+//   block2 的机器人数据层、
+//   block3 的 runWorkflow
+// 调用，放在最前面可彻底消除「依赖后块先加载」的隐性顺序错误 ——
+// 这类错误的症状是 ReferenceError，而语法检查发现不了（假绿）。
+// ==================== 机器人专精（expertise）与生成参数 ====================
+// 专精卡 = 「这个机器人擅长什么」的结构化声明。它必须满足两条性质：
+//   ① 渲染单一来源 —— 单节点路径与多节点工作流都调 expertiseBlock()，
+//      绝不允许各拼一遍（历史上两套 system 拼装逻辑就是这样漂移的：
+//      默认走的多节点路径既不注入节点任务、也丢了品牌档案）。
+//   ② 可缺省 —— 用户不填就等于没有专长卡，提示词里不出现空标题。
+var EXP_FIELDS = [
+  { k: 'field', label: '擅长领域', hint: '一句话说清它专攻什么，例如「跨境电商售后纠纷、退换货政策」' },
+  { k: 'method', label: '工作方式', hint: '用什么方法做事，例如「先复述问题确认理解，再给方案，结论前置」' },
+  { k: 'output', label: '输出规范', hint: '产出长什么样，例如「分点作答、每点不超过两行、给出可执行动作」' },
+  { k: 'avoid', label: '明确不做', hint: '越界与禁忌，例如「不承诺赔偿金额、不编造物流单号与政策条款」' }
+];
+// 归一化：幂等，脏数据也能安全渲染。每次渲染都跑一遍，保证「预览 = 发送」。
+function normExpertise(x) {
+  if (!x || typeof x !== 'object') return null;
+  var out = {}, any = false;
+  EXP_FIELDS.forEach(function (f) {
+    var v = (x[f.k] === null || x[f.k] === undefined) ? '' : String(x[f.k]);
+    v = v.replace(/\r\n?/g, '\n').trim();
+    // 单字段限长：专长卡要进系统提示，不能让一份贴进来的长文吃掉上下文预算
+    if (v.length > 600) v = v.slice(0, 600) + '…';
+    out[f.k] = v;
+    if (v) any = true;
+  });
+  return any ? out : null;
+}
+function hasExpertise(b) { return !!(b && normExpertise(b.expertise)); }
+// 专长卡的唯一渲染入口。两条提示词路径都必须调它。
+function expertiseBlock(b) {
+  var e = normExpertise(b && b.expertise);
+  if (!e) return '';
+  var lines = ['【专精设定】你的专长与工作边界（当与通用习惯冲突时以本节为准）：'];
+  EXP_FIELDS.forEach(function (f) { if (e[f.k]) lines.push('· ' + f.label + '：' + e[f.k]); });
+  return lines.join('\n');
+}
+// 温度归一：0 是合法值（要最确定性的输出），**绝不能用 || 兜底** —— 那正是本项目踩过的坑。
+// 越界值一律视为未设置并回落全局，避免把接口打成 400。
+function normBotTemp(x) {
+  if (x === null || x === undefined || x === '') return null;
+  var n = Number(x);
+  if (!isFinite(n) || n < 0 || n > 2) return null;
+  return Math.round(n * 100) / 100;
+}
+// 该机器人的生成参数：只返回**显式设置过**的项，其余交给全局 cfg。
+function botGenOpts(b) {
+  var o = {};
+  if (!b) return o;
+  var m = (b.model === null || b.model === undefined) ? '' : String(b.model).trim();
+  if (m) o.model = m;
+  var t = normBotTemp(b.temperature);
+  if (t !== null) o.temperature = t;
+  return o;
+}
+// 节点自身的任务描述。多节点工作流里每个节点都会拿到这一句 ——
+// 它是作者在编排面板上写的「这一步到底干什么」，此前从未进入过提示词，
+// 只在流程图与提示词预览里出现（预览里有、发送时没有，属于骗人型不一致）。
+function nodeTaskBlock(node) {
+  if (!node) return '';
+  var h = ((node.h === null || node.h === undefined) ? '' : String(node.h)).trim();
+  var p = ((node.p === null || node.p === undefined) ? '' : String(node.p)).replace(/\r\n?/g, '\n').trim();
+  if (!h && !p) return '';
+  var s = '【本步骤任务】你正在执行工作流节点';
+  if (h) s += '「' + h + '」';
+  s += '。';
+  if (p) s += '\n本节点的职责：' + p;
+  return s;
+}
+// 品牌档案的唯一渲染入口：单节点路径与多节点工作流共用。
+// 原文案原样保留（含前导换行），保证单节点路径的输出逐字节不变。
+function brandBlock(b) {
+  var br = b && b.brand;
+  if (!br || !(br.name || br.pitch || br.slogan || br.tone || br.taboo || br.products || br.links)) return '';
+  var bL = [];
+  if (br.name) bL.push('品牌名称：' + br.name);
+  if (br.pitch) bL.push('一句话定位：' + br.pitch);
+  if (br.slogan) bL.push('Slogan：' + br.slogan);
+  if (br.tone) bL.push('语气/风格：' + br.tone);
+  if (br.products) bL.push('产品/服务：' + br.products);
+  if (br.taboo) bL.push('禁忌（不要说的话/事）：' + br.taboo);
+  if (br.links) bL.push('链接：' + br.links);
+  return '\n【品牌档案】请始终以该客户的品牌身份与调性作答，避免与品牌调性冲突的表达：\n' + bL.join('\n');
+}
+'use strict';
+
 // ==================== 安全存储层（兼容 file://） ====================
 // 双击以 file:// 打开时，部分浏览器禁用 localStorage（返回 null），
 // 此时所有 getItem/setItem 会抛 SecurityError，导致初始化中断、
@@ -2303,11 +2400,15 @@ window.__storage = __storage;
   // prio 越小越重要；0 为保护区，预算再紧也不裁剪
   var CTX_SECTIONS = [
     { k: 'prompt', label: '人设提示词', prio: 0, color: 'var(--ctx1)' },
+    // 专精设定同属保护区：它就是人设的一部分，被裁掉等于白写
+    { k: 'expertise', label: '专精设定', prio: 0, color: 'var(--ctx11)' },
     { k: 'brand', label: '品牌档案', prio: 0, color: 'var(--ctx2)' },
     { k: 'tail', label: '固定收尾', prio: 0, color: 'var(--ctx7)' },
     { k: 'style', label: '写作风格', prio: 1, color: 'var(--ctx8)' },
     { k: 'plugin', label: '插件说明', prio: 1, color: 'var(--ctx5)' },
     { k: 'image', label: '配图说明', prio: 1, color: 'var(--ctx4)' },
+    // 节点任务是「这一步具体干什么」的直接执行指令，比流程总述更该留
+    { k: 'nodetask', label: '节点任务', prio: 1, color: 'var(--ctx12)' },
     { k: 'flow', label: '工作流设定', prio: 2, color: 'var(--ctx9)' },
     { k: 'memory', label: '长期记忆', prio: 2, color: 'var(--ctx3)' },
     { k: 'tool', label: '工具结果', prio: 3, color: 'var(--ctx10)' },
@@ -2728,6 +2829,8 @@ window.__storage = __storage;
       secs.push({ k: k, text: t, i: secs.length });
     }
     pushSec('prompt', (bot && bot.prompt) || '你是一个有用的助手。');
+    // 专精卡紧随人设：它比知识库/记忆更「属于这个机器人」
+    pushSec('expertise', expertiseBlock(bot));
     if (bot && bot.knowledges && bot.knowledges.length) {
       const kctx = bot.knowledges.map(id => kbById(id)).filter(Boolean).map(rec => '【' + rec.name + '】\n' + rec.content).join('\n\n');
       // 知识库整体截断：保留条目完整性，总长在 6000 字符以内，避免挂载大知识库后撑爆上下文
@@ -2792,17 +2895,7 @@ window.__storage = __storage;
         pushSec('flow', '\n【处理流程】请按以下工作流节点顺序组织回答：' + bot.nodes.map(n => n.h).join(' → ') + '。其中「检索知识」指从上方【知识库】中查找相关正文（内容已附上），不要把它理解为“向用户索取文件/附件”；只有知识库为空时才需要向用户询问。');
       }
     }
-    if (bot && bot.brand && (bot.brand.name || bot.brand.pitch || bot.brand.slogan || bot.brand.tone || bot.brand.taboo || bot.brand.products || bot.brand.links)) {
-      var br = bot.brand, bL = [];
-      if (br.name) bL.push('品牌名称：' + br.name);
-      if (br.pitch) bL.push('一句话定位：' + br.pitch);
-      if (br.slogan) bL.push('Slogan：' + br.slogan);
-      if (br.tone) bL.push('语气/风格：' + br.tone);
-      if (br.products) bL.push('产品/服务：' + br.products);
-      if (br.taboo) bL.push('禁忌（不要说的话/事）：' + br.taboo);
-      if (br.links) bL.push('链接：' + br.links);
-      pushSec('brand', '\n【品牌档案】请始终以该客户的品牌身份与调性作答，避免与品牌调性冲突的表达：\n' + bL.join('\n'));
-    }
+    pushSec('brand', brandBlock(bot));
     pushSec('tail', '\n请用专业、友好的语气回答，回答尽量简洁清晰。若用户使用代码相关需求，请用代码块包裹。');
     return secs;
   }
@@ -3487,6 +3580,7 @@ window.__storage = __storage;
       n: bot.n, d: bot.d, ic: bot.ic, c: bot.c, prompt: bot.prompt,
       nodes: (bot.nodes || []).map(stripNode), plugins: bot.plugins || [], knowledges: bot.knowledges || [],
       model: bot.model, brand: bot.brand || {}, styleText: bot.styleText || '', styleId: bot.styleId || '',
+      expertise: normExpertise(bot.expertise), temperature: normBotTemp(bot.temperature),
       channels: bot.channels || [], memoryEnabled: !!(bot.memory && bot.memory.enabled), src: '我的'
     };
     var blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
@@ -3544,7 +3638,10 @@ window.__storage = __storage;
       return opt.stream ? fakeStream(messages) : runFallback(bot, history, messages);
     }
     try {
-      const res = await request(messages, opt.signal, opt.stream, cfg.model);
+      // 该机器人自己的模型/温度优先，未设置才回落全局
+      // （此前一律传 cfg.model，b.model 这个字段从头到尾没被用过）
+      const _gen = botGenOpts(bot);
+      const res = await request(messages, opt.signal, opt.stream, _gen.model || cfg.model, _gen);
       if (opt.stream && res && typeof res[Symbol.asyncIterator] === 'function') return res;
       return res; // 非流式直接返回字符串
     } catch (err) {
@@ -3581,15 +3678,21 @@ window.__storage = __storage;
   }
   function getProviders() { return PROVIDERS; }
 
-  async function request(messages, signal, stream, forceModel) {
+  // gen（可选）：该机器人的生成参数覆盖 { temperature }。模型仍走 forceModel 位置参数。
+  async function request(messages, signal, stream, forceModel, gen) {
     const url = (cfg.proxyURL && !cfg.directCall)
       ? cfg.proxyURL
       : cfg.baseURL.replace(/\/$/, '') + '/chat/completions';
 
+    // 温度：机器人显式设置过就用它的 —— 0 是合法值（要最确定性的输出），
+    // 必须显式判 null，绝不能用 || 兜底（本项目踩过这个坑）。未设置才回落全局。
+    var _bt = (gen && gen.temperature !== null && gen.temperature !== undefined)
+      ? Number(gen.temperature) : NaN;
+    if (!isFinite(_bt)) _bt = Number(cfg.temperature) || 0.7;
     const body = {
       model: forceModel || cfg.model,
       messages: messages,
-      temperature: Number(cfg.temperature) || 0.7,
+      temperature: _bt,
       max_tokens: Number(cfg.maxTokens) || 2048,
       stream: !!stream,
     };
@@ -3943,23 +4046,23 @@ const ORCH_BY_NAME = {
 };
 
 const SEED_BOTS = [
-  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['builtin_manual_v3', 'builtin_aftersale'], model: 'gpt-4o-mini' },
-  { n: '产品文案生成器', d: '根据卖点一键生成小红书/抖音种草文案', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#30d158,#32ade6)', tag: '已发布', u: 320, t: '95%', prompt: '你是数据分析师，能解读数据并给出关键结论。', nodes: ORCH_BY_NAME['数据报表分析师'], plugins: ['代码执行器'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与发音', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', tag: '已发布', u: 2105, t: '97%', prompt: '你是资深工程师，擅长解释、调试、重构代码。', nodes: ORCH_BY_NAME['代码助手'], plugins: ['代码执行器', '网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#4dd0e1,#7c4dff)', tag: '草稿', u: 0, t: '—', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', nodes: ORCH_BY_NAME['旅行规划师'], plugins: ['天气查询', '网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '会议纪要整理', d: '上传录音/文字，自动提炼待办与结论', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', u: 88, t: '85%', prompt: '你负责整理会议纪要，提炼结论与待办事项。', nodes: ORCH_BY_NAME['会议纪要整理'], plugins: ['PDF 解析'], knowledges: [], model: 'gpt-4o-mini' },
-  { n: '求职简历优化', d: '基于 JD 智能改写简历，提升通过率', ic: '💼', c: 'linear-gradient(135deg,#a1887f,#795548)', tag: '已发布', u: 410, t: '90%', prompt: '你帮用户基于 JD 优化简历，突出匹配亮点。', nodes: ORCH_BY_NAME['求职简历优化'], plugins: ['网页搜索'], knowledges: [], model: 'gpt-4o-mini' },
+  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['builtin_manual_v3', 'builtin_aftersale'], temperature: 0.3, expertise: { field: '订单状态、物流异常、退换货政策、产品参数咨询（3C 与家用电器为主）', method: '先确认身份与订单号，再判断问题类型；能查的按知识库原文答复，查不到的明说需要人工核实。一次只问一个必要信息，不要连珠炮追问', output: '先给结论或可执行动作（如「7 天内可以退」），再给依据；每段不超过 3 行；不堆敬语与客套', avoid: '不编造订单状态、物流单号、赔付金额与政策条款；不替客户承诺时限；不确定就转人工，不要猜' } },
+  { n: '产品文案生成器', d: '根据卖点一键生成小红书/抖音种草文案', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], temperature: 0.9, expertise: { field: '小红书 / 抖音 / 视频号的种草文案与标题、卖点提炼', method: '先问清平台、人群、核心卖点、篇幅再动笔；用具体场景与具体感受代替形容词堆砌；标题给 3 个不同方向的备选', output: '标题候选 3 条 + 正文（短句分行，可用 emoji）+ 3-5 个话题标签；正文按平台常见长度控制（小红书 200-500 字）', avoid: '不写「最好」「第一」等绝对化用语与任何功效承诺；不虚构使用体验与他人评价；不写平台明令禁止的诱导话术' } },
+  { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#30d158,#32ade6)', tag: '已发布', u: 320, t: '95%', prompt: '你是数据分析师，能解读数据并给出关键结论。', nodes: ORCH_BY_NAME['数据报表分析师'], plugins: ['代码执行器'], knowledges: [], temperature: 0.2, expertise: { field: '经营与表格数据的口径核对、指标计算、异常发现与结论提炼', method: '先确认字段口径与时间范围，再算指标，再找异常，最后给结论；严格区分「数据说了什么」与「我推测什么」', output: '结论先行（3 条以内）→ 关键指标表格 → 异常点与可能原因 → 下一步可执行动作', avoid: '不在口径不明时下结论；不把相关性说成因果；不编造未提供的数据；不为了结论好看而调整口径' } },
+  { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与发音', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], temperature: 0.7, expertise: { field: '日常与职场情景英语口语（A1-B2 水平）', method: '用英语推进情景对话，保持角色与场景连贯；每轮只纠 1-2 个最重要的问题，避免打断表达流畅度', output: '① 用英语回应并延续情景 ② 用中文简短说明哪里不对、为什么 ③ 给一个更地道的替代表达', avoid: '不用中文代替英语对话；不一次纠正全部错误；不点评口音（纯文本场景无从判断）；不假装自己是真人老师' } },
+  { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', tag: '已发布', u: 2105, t: '97%', prompt: '你是资深工程师，擅长解释、调试、重构代码。', nodes: ORCH_BY_NAME['代码助手'], plugins: ['代码执行器', '网页搜索'], knowledges: [], temperature: 0.2, expertise: { field: 'Python / JavaScript / 前端与脚本类问题的解释、调试、重构', method: '先明确输入输出与完整报错信息，再定位最小复现，最后给可运行的完整片段；每处改动说明改在哪、为什么', output: '先给修复后的可运行代码，再解释原因；代码用代码块并标明语言；指出边界情况与潜在坑', avoid: '不臆测未提供的库版本与运行环境（需要时先问或明写假设）；不拿伪代码冒充可运行成品；不确定就说不确定' } },
+  { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#4dd0e1,#7c4dff)', tag: '草稿', u: 0, t: '—', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', nodes: ORCH_BY_NAME['旅行规划师'], plugins: ['天气查询', '网页搜索'], knowledges: [], temperature: 0.6, expertise: { field: '国内外自由行的行程编排、预算估算、交通与季节权衡', method: '先收齐目的地、天数、预算、同行人、节奏偏好；按地理邻近排天，避免来回穿越；每天留 1-2 小时机动时间', output: '行程表（按天：上午/下午/晚上 + 交通方式 + 预计耗时）+ 预算拆分（交通/住宿/餐饮/门票）+ 3 条注意事项', avoid: '不编造具体票价、班次与营业时间（未联网核实的一律标注「需核实」）；不推荐明显超出预算的方案；不隐瞒签证与季节风险' } },
+  { n: '会议纪要整理', d: '上传录音/文字，自动提炼待办与结论', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', u: 88, t: '85%', prompt: '你负责整理会议纪要，提炼结论与待办事项。', nodes: ORCH_BY_NAME['会议纪要整理'], plugins: ['PDF 解析'], knowledges: [], temperature: 0.2, expertise: { field: '会议记录转写稿的整理、决议与待办提炼', method: '先分清「讨论过程」与「结论」；每条待办必须绑到责任人与时间，识别不出就标「待确认」而不替人补', output: '① 结论与决议（编号）② 待办表（事项 / 责任人 / 时间）③ 待确认事项 ④ 风险与分歧意见', avoid: '不把讨论中的观点写成已定决议；不臆测责任人；不遗漏反对意见；不美化发言内容' } },
+  { n: '求职简历优化', d: '基于 JD 智能改写简历，提升通过率', ic: '💼', c: 'linear-gradient(135deg,#a1887f,#795548)', tag: '已发布', u: 410, t: '90%', prompt: '你帮用户基于 JD 优化简历，突出匹配亮点。', nodes: ORCH_BY_NAME['求职简历优化'], plugins: ['网页搜索'], knowledges: [], temperature: 0.4, expertise: { field: '简历与目标岗位 JD 的匹配度诊断、亮点提炼与经历改写', method: '先提取 JD 的硬性要求与关键词，对照简历找缺失与冗余，再用「动作 + 量化结果」重写相关经历', output: '① 匹配度诊断（符合 / 缺失 / 可强化）② 逐条改写建议（原文 → 改写后 → 改动依据）③ 需要用户补充的信息', avoid: '不编造经历、学历、数据与项目成果；不做美化到失真的改写；不替用户决定是否隐瞒某段经历' } },
 ];
 
 const tpls = [
-  { n: '电商智能客服', d: '支持订单查询、退换货、商品推荐', ic: '🛒', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。', nodes: ORCH_BY_NAME['电商智能客服'] },
-  { n: '知识库问答', d: '基于企业文档的 RAG 检索增强问答', ic: '📚', c: 'linear-gradient(135deg,#30d158,#32ade6)', prompt: '你是企业知识库助手，严格基于提供的文档作答。', nodes: ORCH_BY_NAME['知识库问答'] },
-  { n: '短视频脚本生成', d: '输入主题自动产出分镜与台词', ic: '🎬', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', prompt: '你是短视频编导，产出吸睛的分镜脚本与台词。', nodes: ORCH_BY_NAME['短视频脚本生成'] },
-  { n: '邮件自动回复', d: '理解邮件意图并草拟专业回复', ic: '📧', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', prompt: '你是邮件助理，草拟得体、专业的邮件回复。', nodes: ORCH_BY_NAME['邮件自动回复'] },
-  { n: '翻译官', d: '支持 30+ 语言互译，保留语气风格', ic: '🌐', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。', nodes: ORCH_BY_NAME['翻译官'] },
-  { n: '情感陪伴助手', d: '温暖倾听，提供情绪价值与建议', ic: '💬', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', prompt: '你是温暖的倾听者，给予情绪支持与实用建议。', nodes: ORCH_BY_NAME['情感陪伴助手'] },
+  { n: '电商智能客服', d: '支持订单查询、退换货、商品推荐', ic: '🛒', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。', nodes: ORCH_BY_NAME['电商智能客服'], temperature: 0.3, expertise: { field: '店铺售前咨询、订单与退换货、促销规则解释', method: '先判断问题属于售前 / 售中 / 售后，再依据商品信息与店铺规则作答；需要多轮收集的信息一次只问一个', output: '直接给答案或动作，再补依据；附上下一步操作路径（如「在订单页点申请退货」）', avoid: '不承诺平台未承诺的赔付与时效；不编造库存、价格与优惠力度；不引导站外交易；不评价竞品' } },
+  { n: '知识库问答', d: '基于企业文档的 RAG 检索增强问答', ic: '📚', c: 'linear-gradient(135deg,#30d158,#32ade6)', prompt: '你是企业知识库助手，严格基于提供的文档作答。', nodes: ORCH_BY_NAME['知识库问答'], temperature: 0.2, expertise: { field: '企业文档、手册、规范类内容的检索与严谨作答', method: '只依据提供的知识库片段作答；先定位最相关的片段再组织语言；找不到依据就直说找不到', output: '答案 + 明确标注依据（哪份文档、哪一段）；信息不足时列出「还缺什么」而不是勉强作答', avoid: '不用通用常识补全文档里没有的内容；不把相邻主题的内容当答案；不编造条款编号与出处' } },
+  { n: '短视频脚本生成', d: '输入主题自动产出分镜与台词', ic: '🎬', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', prompt: '你是短视频编导，产出吸睛的分镜脚本与台词。', nodes: ORCH_BY_NAME['短视频脚本生成'], temperature: 0.9, expertise: { field: '抖音 / 视频号 30-60 秒短视频的分镜脚本与口播台词', method: '前 3 秒必须给钩子；按「钩子 → 冲突或信息 → 转折 → 行动号召」结构推进；每一镜标注时长与画面', output: '分镜表（镜号 / 时长 / 画面 / 口播 / 字幕）+ 拍摄提示；各镜时长合计与目标时长一致', avoid: '不写无法实拍的画面（依赖大量特效或特殊场地）；不用绝对化与违规话术；不照搬已有热门脚本原句' } },
+  { n: '邮件自动回复', d: '理解邮件意图并草拟专业回复', ic: '📧', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', prompt: '你是邮件助理，草拟得体、专业的邮件回复。', nodes: ORCH_BY_NAME['邮件自动回复'], temperature: 0.3, expertise: { field: '商务往来邮件的意图理解与得体回复草拟', method: '先判断对方诉求与期待动作，再确定回复姿态（接受 / 协商 / 婉拒 / 追问）；一封信只处理一个主题', output: '主题行 + 正文（称呼、开头一句直入主题、正文分点、明确下一步、落款）+ 发送前需你确认的事项', avoid: '不替用户做出未经授权的承诺（价格、交期、责任界定）；不用过度热情的营销腔；不臆测对方未说明的背景' } },
+  { n: '翻译官', d: '支持 30+ 语言互译，保留语气风格', ic: '🌐', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。', nodes: ORCH_BY_NAME['翻译官'], temperature: 0.2, expertise: { field: '中英日韩等常见语种互译，含商务、技术、日常文体', method: '先判断语种与文体，再按目标语言的表达习惯翻译而非逐字直译；保留原文格式与专有名词', output: '译文；专有名词与把握不足处标注原文；必要时补一句「可替代译法」供选择', avoid: '不擅自增删内容或改变语气强度；数字、单位、代码与链接原样保留；不确定的术语要标注而不是猜一个' } },
+  { n: '情感陪伴助手', d: '温暖倾听，提供情绪价值与建议', ic: '💬', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', prompt: '你是温暖的倾听者，给予情绪支持与实用建议。', nodes: ORCH_BY_NAME['情感陪伴助手'], temperature: 0.8, expertise: { field: '情绪倾诉陪伴、压力与关系困扰的倾听', method: '先接住情绪再谈事情；不急着给建议，对方明确要建议时才给；用对方的原话回述以确认理解', output: '共情回应（回述对方的处境与感受）→ 如需，给 1-2 个当下可做的小建议 → 一个开放的追问', avoid: '不诊断心理疾病、不推荐任何药物；不说「这没什么大不了」这类否定感受的话；不代替专业心理咨询；不追问对方不愿说的细节' } },
 ];
 
 const plugins = [
@@ -4999,9 +5102,19 @@ function _initSessions(b) {
 }
 function normalize(b) {
   var res = {
-    id: uid(), color: '', model: 'gpt-4o-mini', history: [], prompt: SAMPLE_PROMPT,
+    id: uid(), color: '', model: '', history: [], prompt: SAMPLE_PROMPT,
     nodes: DEFAULT_WORKFLOW.slice(), plugins: [], knowledges: [], channels: ['网页嵌入', 'API 接口'], createdAt: Date.now(), updatedAt: Date.now(), styleText: '', styleId: '', webSearch: false, memory: { enabled: true, items: [], lastUpdate: 0, _seenLen: 0, pending: false }, brand: {}, versions: [], ...b,
   };
+  // 专长卡与生成参数显式归一：...b 展开可能带来脏数据（旧数据没有这两个字段、
+  // 或从外部导入的形状不对），归一后渲染与发送才是同一份口径
+  res.expertise = normExpertise(res.expertise);
+  res.temperature = normBotTemp(res.temperature);
+  // 模型迁移：model 此前是「名义字段」—— 写入它的只有出厂默认、创建时的全局快照、
+  // 模板与导入，全项目**没有任何界面能改它**，所以它从未承载过用户意图。
+  // 现在它会真的生效，沿用旧值会让「全局已换成 DeepSeek，机器人却仍去打
+  // gpt-4o-mini」直接变成 404。因此无 modelExplicit 标记的一律清空（跟随全局）。
+  // 今后用户显式选过模型的机器人会带这个标记，永不被清。幂等，不依赖版本号或时间。
+  if (!res.modelExplicit) res.model = '';
   // 兼容旧机器人：为没有显式 role 的节点按标题推断并写回，避免所有节点都变成通用 step
   if (res.nodes && Array.isArray(res.nodes)) {
     res.nodes = res.nodes.map(function (n) {
@@ -5023,7 +5136,9 @@ function normalize(b) {
 
 // ==================== 版本管理（快照 / 回滚） ====================
 // 每个机器人持有 versions:[]，每条 = { v, at, note, snap }；snap 为配置深拷贝。
-// 模型是全局配置，不进快照（避免机器人级快照覆盖全局 cfg.model，复现之前的同步 bug）。
+// 模型/温度现在是「机器人级可选覆盖」，快照带上它们回滚才完整。
+// 与旧注释担心的同步 bug 不冲突：applyRestore 只写 b.* 字段，从不触碰全局 cfg，
+// 因此机器人回滚不会改动「设置」里的全局默认模型。
 const VERSION_LIMIT = 30;
 function snapshotBot(b) {
   if (!b) return null;
@@ -5035,6 +5150,8 @@ function snapshotBot(b) {
     brand: JSON.parse(JSON.stringify(b.brand || {})),
     styleText: b.styleText || '', styleId: b.styleId || '',
     channels: JSON.parse(JSON.stringify(b.channels || [])),
+    expertise: normExpertise(b.expertise),
+    model: b.model || '', temperature: normBotTemp(b.temperature),
   };
 }
 function pushVersion(b, note) {
@@ -5060,6 +5177,9 @@ function applyRestore(b, v) {
   b.brand = JSON.parse(JSON.stringify(s.brand || {}));
   b.styleText = s.styleText || ''; b.styleId = s.styleId || '';
   b.channels = JSON.parse(JSON.stringify(s.channels || []));
+  b.expertise = normExpertise(s.expertise);
+  b.model = s.model || '';
+  b.temperature = normBotTemp(s.temperature);
   b.updatedAt = Date.now();
   saveBots();
   return true;
@@ -6609,12 +6729,17 @@ function refreshWorkspace() {
   const st = document.getElementById('chatStatus');
   if (st) st.textContent = BotCraftAI.canCall() ? '在线 · 调用真实模型' : '演示模式 · 本地回复';
   const topTag = document.getElementById('topModelTag');
-  if (topTag) topTag.textContent = ((typeof resolveModelLabel === 'function' ? resolveModelLabel(BotCraftAI.getConfig().model) : (BotCraftAI.getConfig().model || 'gpt-4o-mini')) || 'gpt-4o-mini');
+  if (topTag) {
+    // 显示这个机器人真正会用的模型（它自己的优先，否则全局默认）
+    const _effModel = ((b.model === null || b.model === undefined) ? '' : String(b.model).trim()) || BotCraftAI.getConfig().model;
+    topTag.textContent = ((typeof resolveModelLabel === 'function' ? resolveModelLabel(_effModel) : (_effModel || 'gpt-4o-mini')) || 'gpt-4o-mini');
+  }
   renderNodes(b);
   renderHistory(b);
   const promptArea = document.getElementById('promptArea');
   if (promptArea) { promptArea.value = b.prompt; updatePromptCount(); }
   renderKbPanel(b); renderPromptTpls();
+  renderExpertisePanel(b); renderGenParamsPanel(b);
   renderBotSwitcher(); renderCtxBar(b);
   // 切换机器人时，若正停留在记忆/文体 Tab，立即跟随刷新为当前机器人的对应内容
   if (window.renderMemoryPanelIfOpen) window.renderMemoryPanelIfOpen(b);
@@ -7203,6 +7328,105 @@ var PROMPT_TEMPLATES = [
   { n: '心理咨询', ic: '🤝', t: '你是倾听型心理咨询师，先共情再引导，提供可操作的调节方法，不替代专业治疗。' },
   { n: '英文写作', ic: '🖋️', t: '你是英文写作润色专家，优化语法、地道表达与逻辑，并解释修改原因。' }
 ];
+// ==================== 专精编辑区 / 运行参数 ====================
+// 专长卡是「这个机器人擅长什么」的声明，直接进系统提示；模型与温度是它的运行参数。
+// 切机器人时整体重绘（只改 value 会在切换时串台 —— 本项目修过这类问题）。
+function renderExpertisePanel(b) {
+  var box = document.getElementById('expertiseBox');
+  if (!box) return;
+  if (!b) { box.innerHTML = ''; return; }
+  var e = normExpertise(b.expertise) || {};
+  var rows = EXP_FIELDS.map(function (f) {
+    var val = e[f.k] || '';
+    var head = '<div style="font-size:12px;color:var(--sub);margin-bottom:4px">' + escapeHtml(f.label) + '</div>';
+    var st = 'width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit';
+    if (f.k === 'field') {
+      return '<div style="margin-bottom:10px">' + head
+        + '<input class="exp-in" data-exp="field" value="' + escapeAttr(val) + '" placeholder="' + escapeAttr(f.hint) + '" style="' + st + '">'
+        + '</div>';
+    }
+    return '<div style="margin-bottom:10px">' + head
+      + '<textarea class="exp-in" data-exp="' + f.k + '" placeholder="' + escapeAttr(f.hint) + '" style="' + st + ';min-height:54px;resize:vertical">'
+      + escapeHtml(val) + '</textarea></div>';
+  }).join('');
+  box.innerHTML = '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">'
+    + '<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px">🎯 专精设定</div>'
+    + '<div style="font-size:11px;color:var(--sub);margin-bottom:10px">回答这个机器人「擅长什么、怎么做、不做什么」。每次请求都会连同人设一起发送。</div>'
+    + rows
+    + '<div id="expHint" style="font-size:11px;color:var(--sub)">' + expHintText(b) + '</div>'
+    + '</div>';
+}
+function expHintText(b) {
+  return hasExpertise(b)
+    ? '✅ 已生效：专精设定会注入系统提示'
+    : '留空则不设专精，机器人按通用助手作答';
+}
+// 运行参数：模型与温度都支持「跟随全局」，且能随时退回跟随
+function renderGenParamsPanel(b) {
+  var box = document.getElementById('genParamsBox');
+  if (!box) return;
+  if (!b) { box.innerHTML = ''; return; }
+  var cfg = BotCraftAI.getConfig();
+  var prov = (BotCraftAI.getProviders ? BotCraftAI.getProviders()[cfg.provider] : null) || { models: [] };
+  var models = prov.models || [];
+  var cur = (b.model === null || b.model === undefined) ? '' : String(b.model).trim();
+  var opts = ['<option value="">跟随全局默认（' + escapeHtml(cfg.model || '未设置') + '）</option>'];
+  models.forEach(function (m) {
+    opts.push('<option value="' + escapeAttr(m) + '"' + (m === cur ? ' selected' : '') + '>' + escapeHtml(m) + '</option>');
+  });
+  if (cur && models.indexOf(cur) < 0) {
+    opts.push('<option value="' + escapeAttr(cur) + '" selected>' + escapeHtml(cur) + '（自定义）</option>');
+  }
+  var t = normBotTemp(b.temperature);
+  var followed = (t === null);
+  var rangeVal = followed ? (Number(cfg.temperature) || 0.7) : t;
+  var st = 'width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px';
+  box.innerHTML = '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">'
+    + '<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px">⚙️ 运行参数</div>'
+    + '<div style="font-size:11px;color:var(--sub);margin-bottom:10px">不选就跟随「设置」里的全局默认。给机器人的模型换服务商后会自动跟随，不会卡在旧模型名上。</div>'
+    + '<div style="font-size:12px;color:var(--sub);margin-bottom:4px">模型</div>'
+    + '<select id="botModelSel" style="' + st + '">' + opts.join('') + '</select>'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 4px">'
+    + '<span style="font-size:12px;color:var(--sub)">温度</span>'
+    + '<span style="font-size:12px;color:var(--txt)"><span id="botTempVal">' + tempLabel(b, cfg) + '</span>'
+    + (followed ? '' : ' <span id="botTempClear" title="改回跟随全局" style="cursor:pointer;color:var(--sub);margin-left:6px">↺</span>')
+    + '</span></div>'
+    + '<input type="range" id="botTempRange" min="0" max="1.5" step="0.05" value="' + rangeVal + '" style="width:100%">'
+    + '<div style="font-size:11px;color:var(--sub);margin-top:4px">越低越稳定（翻译 / 代码 / 数据），越高越发散（文案 / 创意）。拖动即覆盖全局。</div>'
+    + '</div>';
+  var sel = document.getElementById('botModelSel');
+  if (sel) sel.onchange = function () {
+    var bb = getBot(currentId); if (!bb) return;
+    bb.model = sel.value || '';
+    // 只有用户真的选了模型才打标记；被打过标记的机器人在数据迁移里不会被清空
+    bb.modelExplicit = !!sel.value;
+    bb.updatedAt = Date.now(); saveBots();
+    toast(sel.value ? ('已指定模型：' + sel.value) : '已改为跟随全局默认模型', 'ok');
+  };
+  var rng = document.getElementById('botTempRange');
+  var lbl = document.getElementById('botTempVal');
+  // 拖动时只改文字，不重绘面板（重绘会让滑块失去拖拽焦点）
+  if (rng) rng.oninput = function () { if (lbl) lbl.textContent = Number(rng.value).toFixed(2); };
+  if (rng) rng.onchange = function () {
+    var bb = getBot(currentId); if (!bb) return;
+    bb.temperature = normBotTemp(rng.value);
+    bb.updatedAt = Date.now(); saveBots();
+    renderGenParamsPanel(bb);
+    toast(BotCraftAI.getConfig().fastReply ? '已保存（快速模式）' : '已保存该机器人的温度', 'ok');
+  };
+  var clr = document.getElementById('botTempClear');
+  if (clr) clr.onclick = function () {
+    var bb = getBot(currentId); if (!bb) return;
+    bb.temperature = null; bb.updatedAt = Date.now(); saveBots();
+    renderGenParamsPanel(bb);
+    toast('温度已改回跟随全局', 'ok');
+  };
+}
+function tempLabel(b, cfg) {
+  var t = normBotTemp(b && b.temperature);
+  if (t === null) return '跟随全局（' + (Number(cfg.temperature) || 0.7) + '）';
+  return String(t);
+}
 function renderPromptTpls() {
   var box = document.getElementById('promptTpls'); if (!box) return;
   box.innerHTML = '';
@@ -7235,10 +7459,15 @@ let _recorder = null, _recChunks = [], _recStream = null, _recTimer = null;
 let abortCtrl = null;
 
 function toAIBot(b) {
+  var gen = botGenOpts(b);
   return {
     name: b.n, prompt: b.prompt || SAMPLE_PROMPT,
     knowledges: b.knowledges || [], plugins: b.plugins || [],
-    nodes: b.nodes || DEFAULT_NODES, model: BotCraftAI.getConfig().model || 'gpt-4o-mini',
+    nodes: b.nodes || DEFAULT_NODES,
+    // 机器人自己的模型优先，未指定才回落全局默认（此前直接取全局，b.model 形同虚设）
+    model: gen.model || BotCraftAI.getConfig().model || 'gpt-4o-mini',
+    temperature: (gen.temperature === undefined) ? null : gen.temperature,
+    expertise: normExpertise(b.expertise),
     styleText: b.styleText || '', webSearch: !!b.webSearch,
     memory: b.memory || { enabled: true, items: [], lastUpdate: 0, _seenLen: 0, pending: false },
   };
@@ -8329,7 +8558,7 @@ function exportWorkflow() {
   if (!b) { toast('请先选择或创建一个机器人', 'err'); return; }
   const data = {
     botName: b.n, exportedAt: new Date().toISOString(),
-    model: BotCraftAI.getConfig().model || b.model,
+    model: b.model || BotCraftAI.getConfig().model,
     workflow: { nodes: b.nodes || [], prompt: b.prompt, knowledges: b.knowledges, plugins: b.plugins },
   };
   _exportJson = JSON.stringify(data, null, 2);
@@ -8363,10 +8592,19 @@ function importWorkflowFromFile(file) {
       const data = JSON.parse(decodeTextBytes(reader.result).text);
       const b = getBot(currentId); if (!b) return;
       if (data.workflow && Array.isArray(data.workflow.nodes)) {
-        b.nodes = data.workflow.nodes.map(n => ({ lbl: n.lbl || '💬 消息', h: n.h || '节点', p: n.p || '' }));
+        // 保留节点上除 lbl/h/p 之外的声明（role / bot / note / autoReview）：
+        // 此前只取三个字段，导入后节点角色只能靠正则去猜，
+        // 「意图识别 / 检索 / 审批」这类专精语义会整批丢失
+        b.nodes = data.workflow.nodes.map(function (n) {
+          n = n || {};
+          return Object.assign({}, n, { lbl: n.lbl || '💬 消息', h: n.h || '节点', p: n.p || '' });
+        });
         if (data.workflow.prompt) b.prompt = data.workflow.prompt;
         if (data.workflow.knowledges) b.knowledges = data.workflow.knowledges;
         if (data.workflow.plugins) b.plugins = data.workflow.plugins;
+        if (data.workflow.expertise) b.expertise = normExpertise(data.workflow.expertise);
+        if (data.workflow.temperature !== undefined) b.temperature = normBotTemp(data.workflow.temperature);
+        if (data.workflow.model) b.model = String(data.workflow.model);
         b.updatedAt = Date.now(); saveBots(); refreshWorkspace();
         toast(`已导入「${data.botName || '工作流'}」`, 'ok');
       } else { toast('JSON 中未找到 workflow.nodes', 'err'); }
@@ -8884,6 +9122,24 @@ document.addEventListener('input', e => {
     _promptTimer = setTimeout(() => { try { saveBots(); } catch (e) {} }, 400);
   }
 });
+// 专精字段：打字只更新内存 + 防抖落盘；只改末尾那行提示文案，不重绘面板
+// （重绘会把输入框换掉导致失焦，这是内联编辑最容易踩的坑）
+let _expTimer = null;
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (!el || !el.classList || !el.classList.contains('exp-in')) return;
+  const b = getBot(currentId); if (!b) return;
+  var cur = normExpertise(b.expertise) || { field: '', method: '', output: '', avoid: '' };
+  var key = el.dataset ? el.dataset.exp : '';
+  if (!key) return;
+  cur[key] = el.value;
+  b.expertise = normExpertise(cur);   // 四项全空时自动归一为 null
+  b.updatedAt = Date.now();
+  const hint = document.getElementById('expHint');
+  if (hint) hint.textContent = expHintText(b);
+  clearTimeout(_expTimer);
+  _expTimer = setTimeout(() => { try { saveBots(); } catch (e) {} }, 400);
+});
 
 // ==================== 创建向导 ====================
 let selColor = '';
@@ -9130,7 +9386,8 @@ function submitCreate() {
   const base = {
     n: finalName.slice(0, 30), d: desc || '一个全新的机器人', ic: icon, c: bg,
     tag: '草稿', u: 0, t: '—', prompt: prompt, history: [], plugins: [], knowledges: [],
-    model: BotCraftAI.getConfig().model || 'gpt-4o-mini', fromTemplate: !!tpl,
+    // 留空 = 跟随全局默认。创建时快照一个模型名，会在用户日后换服务商时变成 404
+    model: '', fromTemplate: !!tpl,
   };
   if (mode !== 'template') { base.nodes = DEFAULT_NODES.slice(); }
   else if (tpl && tpl.nodes && tpl.nodes.length) { base.nodes = tpl.nodes; }
@@ -9188,7 +9445,8 @@ function renderTplGrid() {
       const i = +card.dataset.tpl; const t = tpls[i]; if (!t) return;
       const nb = normalize({
         n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿', u: 0, t: '—',
-        prompt: t.prompt, nodes: (t.nodes && t.nodes.length ? t.nodes : DEFAULT_NODES.slice()), history: [], plugins: [], knowledges: [], model: BotCraftAI.getConfig().model || 'gpt-4o-mini',
+        prompt: t.prompt, nodes: (t.nodes && t.nodes.length ? t.nodes : DEFAULT_NODES.slice()), history: [], plugins: [], knowledges: [],
+        model: t.model || '', modelExplicit: !!t.model,
         fromTemplate: true,
       });
       bots.unshift(nb); currentFilter = 'all';
@@ -9203,7 +9461,9 @@ function renderTplGrid() {
       const i = +card.dataset.bot; const src = bots[i]; if (!src) return;
       const nb = normalize({
         n: (src.n + ' 副本').slice(0, 30), d: src.d, ic: src.ic || '', c: src.c || 'var(--brand)', tag: '草稿', u: 0, t: '—',
-        prompt: src.prompt, nodes: (src.nodes || []).slice(), history: [], plugins: (src.plugins || []).slice(), knowledges: (src.knowledges || []).slice(), model: src.model || BotCraftAI.getConfig().model || 'gpt-4o-mini',
+        prompt: src.prompt, nodes: (src.nodes || []).slice(), history: [], plugins: (src.plugins || []).slice(), knowledges: (src.knowledges || []).slice(),
+        model: src.model || '', modelExplicit: !!src.model,
+        expertise: normExpertise(src.expertise), temperature: normBotTemp(src.temperature),
       });
       bots.unshift(nb); currentFilter = 'all';
       saveBots(); renderGrid(); updateStats(); openBot(nb.id);
@@ -9217,7 +9477,8 @@ function renderTplGrid() {
       const i = +card.dataset.pub; const t = getPubTpls()[i]; if (!t) return;
       const nb = normalize({
         n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿', u: 0, t: '—',
-        prompt: t.prompt, nodes: (t.nodes || []).slice(), history: [], plugins: (t.plugins || []).slice(), knowledges: (t.knowledges || []).slice(), model: t.model || BotCraftAI.getConfig().model || 'gpt-4o-mini',
+        prompt: t.prompt, nodes: (t.nodes || []).slice(), history: [], plugins: (t.plugins || []).slice(), knowledges: (t.knowledges || []).slice(),
+        model: t.model || '', modelExplicit: !!t.model,
         fromTemplate: true,
       });
       bots.unshift(nb); currentFilter = 'all';
@@ -9355,7 +9616,9 @@ function botToPubTpl(b) {
   return {
     id: uid(), n: b.n, d: b.d || '', ic: b.ic || '', c: b.c || 'var(--brand)',
     prompt: b.prompt || '', nodes: (b.nodes || []).slice(), plugins: (b.plugins || []).slice(),
-    knowledges: (b.knowledges || []).slice(), model: BotCraftAI.getConfig().model || 'gpt-4o-mini',
+    knowledges: (b.knowledges || []).slice(),
+    model: b.model || BotCraftAI.getConfig().model || 'gpt-4o-mini',
+    expertise: normExpertise(b.expertise), temperature: normBotTemp(b.temperature),
     publishedAt: Date.now(),
   };
 }
@@ -10196,6 +10459,7 @@ function switchWsTab(t) {
   const target = document.getElementById(TAB_MAP[t]); if (target) target.style.display = 'block';
   const b = getBot(currentId);
   if (t === 'kb' || t === 'plugin') { if (b) renderKbPanel(b); }
+  if (t === 'prompt') { if (b) { renderExpertisePanel(b); renderGenParamsPanel(b); } }
   if (t === 'style') { if (b) renderStyleWorkspacePanel(b); }
   if (t === 'memory') { if (b) renderMemoryPanel(b); }
   if (t === 'publish') renderChannels();
@@ -10343,6 +10607,7 @@ function downloadFile(name, content, type) {
 function encodeBotCfg(b) {
   var cfg = {
     n: b.n, ic: b.ic || '', c: b.c || '', model: b.model, provider: b.provider,
+    expertise: normExpertise(b.expertise), temperature: normBotTemp(b.temperature),
     prompt: b.prompt, nodes: b.nodes, plugins: b.plugins || [], knowledges: (b.knowledges || []),
     kbText: (b.knowledges || []).map(function (id) { var r = kbById(id); return r ? ('【' + r.name + '】\n' + r.content) : null; }).filter(Boolean),
     styleText: b.styleText || '', styleId: b.styleId || '', webSearch: !!b.webSearch,
@@ -11707,6 +11972,17 @@ window.__debug = {
       } else {
         sys = (bot.prompt || '你是一个有用的助手。') + '\n\n' + roleDesc;
       }
+      // 专精卡 / 节点任务 / 品牌档案 —— 三者都走各自的单一渲染入口。
+      // 这条路径（默认路径：fastReply=false 且节点数 >1）此前只有 bot.prompt + 通用角色描述，
+      // 于是「翻译官」和「文案生成器」的撰写节点收到的是同一句「你是正文撰写专家」。
+      var _expBlk = expertiseBlock(bot);
+      if (_expBlk) sys += '\n\n' + _expBlk;
+      var _taskBlk = nodeTaskBlock(node);
+      if (_taskBlk) sys += '\n\n' + _taskBlk;
+      var _brandBlk = brandBlock(bot);
+      // brandBlock 的契约是「含前导换行」（单节点路径要逐字节沿用原文案），
+      // 这里只补一个换行，否则会多出一个空行
+      if (_brandBlk) sys += '\n' + _brandBlk;
       if (kbCtx) {
         // 工作流每个节点都会注入一份知识库/联网结果，对小上下文模型（本地/代理）做硬截断，避免 400/413
         const KB_BUDGET = 16000;
@@ -11751,7 +12027,10 @@ window.__debug = {
         } else {
           // 流式调用：逐字回传，避免「干等 20s」的体感卡顿（超时也从 60s 放宽到 120s）
           var _req = (window.BotCraftAI && window.BotCraftAI.request) ? window.BotCraftAI.request : window.BotCraftAI_request;
-          var _it = await _req(messages, null, true);
+          // 多节点路径同样带上该机器人的模型与温度（此前只传 3 个参数，一律用全局）
+          var _gen = botGenOpts(bot);
+          var _gm = (window.BotCraftAI && BotCraftAI.getConfig) ? (BotCraftAI.getConfig().model || '') : '';
+          var _it = await _req(messages, null, true, _gen.model || _gm, _gen);
           out = '';
           if (_it && typeof _it[Symbol.asyncIterator] === 'function') {
             for await (var _ch of _it) {
