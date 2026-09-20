@@ -3998,8 +3998,8 @@ const ORCH_BY_NAME = {
     { lbl: '🗺️ 行程', h: '生成行程', p: '排日程与预算', role: 'draft' },
   ],
   '会议纪要整理': [
-    { lbl: '🟢 开始', h: '上传记录', p: '接收录音或文字', role: 'start' },
-    { lbl: '📄 解析', h: '转写解析', p: '理清议题与发言' },
+    { lbl: '🟢 开始', h: '提交记录', p: '接收会议文字稿', role: 'start' },
+    { lbl: '📄 解析', h: '梳理议题', p: '理清议题与发言' },
     { lbl: '🎯 提炼', h: '提炼要点', p: '结论/决议/待办', role: 'generate' },
     { lbl: '✅ 核对', h: '核对确认', p: '去重纠错', role: 'review' },
   ],
@@ -4046,22 +4046,22 @@ const ORCH_BY_NAME = {
 };
 
 const SEED_BOTS = [
-  { n: '智能客服助手', d: '自动应答订单、售后、产品咨询，支持转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['builtin_manual_v3', 'builtin_aftersale'], temperature: 0.3, expertise: { field: '订单状态、物流异常、退换货政策、产品参数咨询（3C 与家用电器为主）', method: '先确认身份与订单号，再判断问题类型；能查的按知识库原文答复，查不到的明说需要人工核实。一次只问一个必要信息，不要连珠炮追问', output: '先给结论或可执行动作（如「7 天内可以退」），再给依据；每段不超过 3 行；不堆敬语与客套', avoid: '不编造订单状态、物流单号、赔付金额与政策条款；不替客户承诺时限；不确定就转人工，不要猜' } },
-  { n: '产品文案生成器', d: '根据卖点一键生成小红书/抖音种草文案', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], temperature: 0.9, expertise: { field: '小红书 / 抖音 / 视频号的种草文案与标题、卖点提炼', method: '先问清平台、人群、核心卖点、篇幅再动笔；用具体场景与具体感受代替形容词堆砌；标题给 3 个不同方向的备选', output: '标题候选 3 条 + 正文（短句分行，可用 emoji）+ 3-5 个话题标签；正文按平台常见长度控制（小红书 200-500 字）', avoid: '不写「最好」「第一」等绝对化用语与任何功效承诺；不虚构使用体验与他人评价；不写平台明令禁止的诱导话术' } },
+  { n: '智能客服助手', d: '3C 家电的订单、售后与产品咨询应答，可转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['builtin_manual_v3', 'builtin_aftersale'], temperature: 0.3, expertise: { field: '订单状态、物流异常、退换货政策、产品参数咨询（3C 与家用电器为主）', method: '先确认身份与订单号，再判断问题类型；能查的按知识库原文答复，查不到的明说需要人工核实。一次只问一个必要信息，不要连珠炮追问', output: '先给结论或可执行动作（如「7 天内可以退」），再给依据；每段不超过 3 行；不堆敬语与客套', avoid: '不编造订单状态、物流单号、赔付金额与政策条款；不替客户承诺时限；不确定就转人工，不要猜' } },
+  { n: '产品文案生成器', d: '根据卖点生成小红书图文种草文案与标题', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], temperature: 0.9, expertise: { field: '小红书等图文平台的种草文案、标题与卖点提炼', method: '先问清平台、人群、核心卖点、篇幅再动笔；用具体场景与具体感受代替形容词堆砌；标题给 3 个不同方向的备选', output: '标题候选 3 条 + 正文（短句分行，可用 emoji）+ 3-5 个话题标签；正文按平台常见长度控制（小红书 200-500 字）', avoid: '不写「最好」「第一」等绝对化用语与任何功效承诺；不虚构使用体验与他人评价；不写平台明令禁止的诱导话术' } },
   { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#30d158,#32ade6)', tag: '已发布', u: 320, t: '95%', prompt: '你是数据分析师，能解读数据并给出关键结论。', nodes: ORCH_BY_NAME['数据报表分析师'], plugins: ['代码执行器'], knowledges: [], temperature: 0.2, expertise: { field: '经营与表格数据的口径核对、指标计算、异常发现与结论提炼', method: '先确认字段口径与时间范围，再算指标，再找异常，最后给结论；严格区分「数据说了什么」与「我推测什么」', output: '结论先行（3 条以内）→ 关键指标表格 → 异常点与可能原因 → 下一步可执行动作', avoid: '不在口径不明时下结论；不把相关性说成因果；不编造未提供的数据；不为了结论好看而调整口径' } },
-  { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与发音', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], temperature: 0.7, expertise: { field: '日常与职场情景英语口语（A1-B2 水平）', method: '用英语推进情景对话，保持角色与场景连贯；每轮只纠 1-2 个最重要的问题，避免打断表达流畅度', output: '① 用英语回应并延续情景 ② 用中文简短说明哪里不对、为什么 ③ 给一个更地道的替代表达', avoid: '不用中文代替英语对话；不一次纠正全部错误；不点评口音（纯文本场景无从判断）；不假装自己是真人老师' } },
+  { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与用词', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], temperature: 0.7, expertise: { field: '日常与职场情景英语口语（A1-B2 水平）', method: '用英语推进情景对话，保持角色与场景连贯；每轮只纠 1-2 个最重要的问题，避免打断表达流畅度', output: '① 用英语回应并延续情景 ② 用中文简短说明哪里不对、为什么 ③ 给一个更地道的替代表达', avoid: '不用中文代替英语对话；不一次纠正全部错误；不点评口音（纯文本场景无从判断）；不假装自己是真人老师' } },
   { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', tag: '已发布', u: 2105, t: '97%', prompt: '你是资深工程师，擅长解释、调试、重构代码。', nodes: ORCH_BY_NAME['代码助手'], plugins: ['代码执行器', '网页搜索'], knowledges: [], temperature: 0.2, expertise: { field: 'Python / JavaScript / 前端与脚本类问题的解释、调试、重构', method: '先明确输入输出与完整报错信息，再定位最小复现，最后给可运行的完整片段；每处改动说明改在哪、为什么', output: '先给修复后的可运行代码，再解释原因；代码用代码块并标明语言；指出边界情况与潜在坑', avoid: '不臆测未提供的库版本与运行环境（需要时先问或明写假设）；不拿伪代码冒充可运行成品；不确定就说不确定' } },
   { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#4dd0e1,#7c4dff)', tag: '草稿', u: 0, t: '—', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', nodes: ORCH_BY_NAME['旅行规划师'], plugins: ['天气查询', '网页搜索'], knowledges: [], temperature: 0.6, expertise: { field: '国内外自由行的行程编排、预算估算、交通与季节权衡', method: '先收齐目的地、天数、预算、同行人、节奏偏好；按地理邻近排天，避免来回穿越；每天留 1-2 小时机动时间', output: '行程表（按天：上午/下午/晚上 + 交通方式 + 预计耗时）+ 预算拆分（交通/住宿/餐饮/门票）+ 3 条注意事项', avoid: '不编造具体票价、班次与营业时间（未联网核实的一律标注「需核实」）；不推荐明显超出预算的方案；不隐瞒签证与季节风险' } },
-  { n: '会议纪要整理', d: '上传录音/文字，自动提炼待办与结论', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', u: 88, t: '85%', prompt: '你负责整理会议纪要，提炼结论与待办事项。', nodes: ORCH_BY_NAME['会议纪要整理'], plugins: ['PDF 解析'], knowledges: [], temperature: 0.2, expertise: { field: '会议记录转写稿的整理、决议与待办提炼', method: '先分清「讨论过程」与「结论」；每条待办必须绑到责任人与时间，识别不出就标「待确认」而不替人补', output: '① 结论与决议（编号）② 待办表（事项 / 责任人 / 时间）③ 待确认事项 ④ 风险与分歧意见', avoid: '不把讨论中的观点写成已定决议；不臆测责任人；不遗漏反对意见；不美化发言内容' } },
+  { n: '会议纪要整理', d: '粘贴会议文字稿，自动提炼结论与待办', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', u: 88, t: '85%', prompt: '你负责整理会议纪要，提炼结论与待办事项。', nodes: ORCH_BY_NAME['会议纪要整理'], plugins: [], knowledges: [], temperature: 0.2, expertise: { field: '会议记录转写稿的整理、决议与待办提炼', method: '先分清「讨论过程」与「结论」；每条待办必须绑到责任人与时间，识别不出就标「待确认」而不替人补', output: '① 结论与决议（编号）② 待办表（事项 / 责任人 / 时间）③ 待确认事项 ④ 风险与分歧意见', avoid: '不把讨论中的观点写成已定决议；不臆测责任人；不遗漏反对意见；不美化发言内容' } },
   { n: '求职简历优化', d: '基于 JD 智能改写简历，提升通过率', ic: '💼', c: 'linear-gradient(135deg,#a1887f,#795548)', tag: '已发布', u: 410, t: '90%', prompt: '你帮用户基于 JD 优化简历，突出匹配亮点。', nodes: ORCH_BY_NAME['求职简历优化'], plugins: ['网页搜索'], knowledges: [], temperature: 0.4, expertise: { field: '简历与目标岗位 JD 的匹配度诊断、亮点提炼与经历改写', method: '先提取 JD 的硬性要求与关键词，对照简历找缺失与冗余，再用「动作 + 量化结果」重写相关经历', output: '① 匹配度诊断（符合 / 缺失 / 可强化）② 逐条改写建议（原文 → 改写后 → 改动依据）③ 需要用户补充的信息', avoid: '不编造经历、学历、数据与项目成果；不做美化到失真的改写；不替用户决定是否隐瞒某段经历' } },
 ];
 
 const tpls = [
-  { n: '电商智能客服', d: '支持订单查询、退换货、商品推荐', ic: '🛒', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。', nodes: ORCH_BY_NAME['电商智能客服'], temperature: 0.3, expertise: { field: '店铺售前咨询、订单与退换货、促销规则解释', method: '先判断问题属于售前 / 售中 / 售后，再依据商品信息与店铺规则作答；需要多轮收集的信息一次只问一个', output: '直接给答案或动作，再补依据；附上下一步操作路径（如「在订单页点申请退货」）', avoid: '不承诺平台未承诺的赔付与时效；不编造库存、价格与优惠力度；不引导站外交易；不评价竞品' } },
+  { n: '电商智能客服', d: '店铺售前导购与促销优惠规则解答', ic: '🛒', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。', nodes: ORCH_BY_NAME['电商智能客服'], temperature: 0.3, expertise: { field: '店铺售前导购、商品推荐、促销与优惠规则解释', method: '先判断问题属于售前 / 售中 / 售后，再依据商品信息与店铺规则作答；需要多轮收集的信息一次只问一个', output: '直接给答案或动作，再补依据；附上下一步操作路径（如「在订单页点申请退货」）', avoid: '不承诺平台未承诺的赔付与时效；不编造库存、价格与优惠力度；不引导站外交易；不评价竞品' } },
   { n: '知识库问答', d: '基于企业文档的 RAG 检索增强问答', ic: '📚', c: 'linear-gradient(135deg,#30d158,#32ade6)', prompt: '你是企业知识库助手，严格基于提供的文档作答。', nodes: ORCH_BY_NAME['知识库问答'], temperature: 0.2, expertise: { field: '企业文档、手册、规范类内容的检索与严谨作答', method: '只依据提供的知识库片段作答；先定位最相关的片段再组织语言；找不到依据就直说找不到', output: '答案 + 明确标注依据（哪份文档、哪一段）；信息不足时列出「还缺什么」而不是勉强作答', avoid: '不用通用常识补全文档里没有的内容；不把相邻主题的内容当答案；不编造条款编号与出处' } },
   { n: '短视频脚本生成', d: '输入主题自动产出分镜与台词', ic: '🎬', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', prompt: '你是短视频编导，产出吸睛的分镜脚本与台词。', nodes: ORCH_BY_NAME['短视频脚本生成'], temperature: 0.9, expertise: { field: '抖音 / 视频号 30-60 秒短视频的分镜脚本与口播台词', method: '前 3 秒必须给钩子；按「钩子 → 冲突或信息 → 转折 → 行动号召」结构推进；每一镜标注时长与画面', output: '分镜表（镜号 / 时长 / 画面 / 口播 / 字幕）+ 拍摄提示；各镜时长合计与目标时长一致', avoid: '不写无法实拍的画面（依赖大量特效或特殊场地）；不用绝对化与违规话术；不照搬已有热门脚本原句' } },
   { n: '邮件自动回复', d: '理解邮件意图并草拟专业回复', ic: '📧', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', prompt: '你是邮件助理，草拟得体、专业的邮件回复。', nodes: ORCH_BY_NAME['邮件自动回复'], temperature: 0.3, expertise: { field: '商务往来邮件的意图理解与得体回复草拟', method: '先判断对方诉求与期待动作，再确定回复姿态（接受 / 协商 / 婉拒 / 追问）；一封信只处理一个主题', output: '主题行 + 正文（称呼、开头一句直入主题、正文分点、明确下一步、落款）+ 发送前需你确认的事项', avoid: '不替用户做出未经授权的承诺（价格、交期、责任界定）；不用过度热情的营销腔；不臆测对方未说明的背景' } },
-  { n: '翻译官', d: '支持 30+ 语言互译，保留语气风格', ic: '🌐', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。', nodes: ORCH_BY_NAME['翻译官'], temperature: 0.2, expertise: { field: '中英日韩等常见语种互译，含商务、技术、日常文体', method: '先判断语种与文体，再按目标语言的表达习惯翻译而非逐字直译；保留原文格式与专有名词', output: '译文；专有名词与把握不足处标注原文；必要时补一句「可替代译法」供选择', avoid: '不擅自增删内容或改变语气强度；数字、单位、代码与链接原样保留；不确定的术语要标注而不是猜一个' } },
+  { n: '翻译官', d: '多语种互译，保留语气与文体风格', ic: '🌐', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。', nodes: ORCH_BY_NAME['翻译官'], temperature: 0.2, expertise: { field: '中英日韩等常见语种互译，含商务、技术、日常文体', method: '先判断语种与文体，再按目标语言的表达习惯翻译而非逐字直译；保留原文格式与专有名词', output: '译文；专有名词与把握不足处标注原文；必要时补一句「可替代译法」供选择', avoid: '不擅自增删内容或改变语气强度；数字、单位、代码与链接原样保留；不确定的术语要标注而不是猜一个' } },
   { n: '情感陪伴助手', d: '温暖倾听，提供情绪价值与建议', ic: '💬', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', prompt: '你是温暖的倾听者，给予情绪支持与实用建议。', nodes: ORCH_BY_NAME['情感陪伴助手'], temperature: 0.8, expertise: { field: '情绪倾诉陪伴、压力与关系困扰的倾听', method: '先接住情绪再谈事情；不急着给建议，对方明确要建议时才给；用对方的原话回述以确认理解', output: '共情回应（回述对方的处境与感受）→ 如需，给 1-2 个当下可做的小建议 → 一个开放的追问', avoid: '不诊断心理疾病、不推荐任何药物；不说「这没什么大不了」这类否定感受的话；不代替专业心理咨询；不追问对方不愿说的细节' } },
 ];
 
@@ -4086,13 +4086,14 @@ function factoryExpertiseOf(name) {
 }
 
 const plugins = [
-  { n: '网页搜索', d: '实时联网获取最新信息', ic: '🔍', c: 'linear-gradient(135deg,#4dd0e1,#2bb5e8)', cat: '联网', cap: '调用 DuckDuckGo 即时答案接口实时检索网页摘要与相关条目，让机器人回答包含最新资讯。开启后，工作流会在撰写/润色步骤自动注入联网检索片段（与工作台「🌐 联网检索」开关联动）。' },
+  { n: '网页搜索', d: '实时联网获取最新信息', ic: '🔍', c: 'linear-gradient(135deg,#4dd0e1,#2bb5e8)', cat: '联网', cap: '调用 DuckDuckGo 即时答案接口实时检索网页摘要与相关条目，让机器人回答包含最新资讯。启用即为该机器人开启联网检索，工作流会在需要外部事实的步骤自动注入检索片段。' },
   { n: '图片生成', d: '调用文生图模型创作配图', ic: '🖼️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', cat: '内容', cap: '根据文本描述生成真实配图，适用于种草图文、海报、插画等场景。启用后，当用户请求配图/生图时，系统会自动调用文生图接口生成图片并直接展示在聊天中；未配置专用接口时默认使用 pollinations.ai 免费图床（无需 Key），也可在「设置」中接入 OpenAI Images 兼容接口（如部分国内网关）获得更高质量。' },
-  { n: 'PDF 解析', d: '读取上传的 PDF 文档内容', ic: '📕', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', cat: '文档', cap: '解析上传的 PDF 文档，提取正文与表格，供机器人基于文档内容问答、摘要、翻译。提示增强型：启用后模型会按「文档问答」方式组织回答；真正的 PDF 文本提取需在「设置」中接入 PDF 解析服务（当前为离线单文件，未内置 PDF.js）。' },
   { n: '天气查询', d: '获取全球城市实时天气', ic: '🌤️', c: 'linear-gradient(135deg,#7c4dff,#4dd0e1)', cat: '数据', cap: '调用天气接口，返回指定城市当前气温、天气、风力与未来预报，适合行程规划、生活助手类机器人。' },
   { n: '日历/提醒', d: '创建与管理日程提醒', ic: '📅', c: 'linear-gradient(135deg,#a1887f,#795548)', cat: '数据', cap: '创建提醒事项与日程，支持按时间触发，适合待办管理、日程助理类机器人。' },
-  { n: '代码执行器', d: '安全沙盒中运行代码片段', ic: '⚙️', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', cat: '开发', cap: '在隔离沙盒中运行 Python/JS 片段，用于计算、数据转换、图表生成。启用后机器人可声明执行代码并回传结果。' },
+  { n: '代码执行器', d: '安全沙盒中运行代码片段', ic: '⚙️', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', cat: '开发', cap: '在本地沙盒中试运行 JavaScript 片段（仅 JavaScript，不支持 Python），用于算法验证、数据转换与格式清洗。注意：当前只在插件详情面板手动运行，工作流不会自动执行代码。' },
 ];
+// 内置插件名单（由 plugins 派生，不手抄）：normalize 用它过滤已下架插件的幽灵声明
+const BUILTIN_PLUGIN_NAMES = plugins.map(function (p) { return p.n; });
 
 // 已安装插件（按用户持久化）
 let installedPlugins = new Set();
@@ -5125,6 +5126,21 @@ function normalize(b) {
     id: uid(), color: '', model: '', history: [], prompt: SAMPLE_PROMPT,
     nodes: DEFAULT_WORKFLOW.slice(), plugins: [], knowledges: [], channels: ['网页嵌入', 'API 接口'], createdAt: Date.now(), updatedAt: Date.now(), styleText: '', styleId: '', webSearch: false, memory: { enabled: true, items: [], lastUpdate: 0, _seenLen: 0, pending: false }, brand: {}, versions: [], ...b,
   };
+  // 插件表归一：过滤掉既不在内置表里、也不是第三方（ext:）的名字。
+  // 「声明了却根本没实现」比不声明更糟 —— 卡片上写着「已启用」，用户会以为真的能用。
+  if (!Array.isArray(res.plugins)) res.plugins = [];
+  res.plugins = res.plugins.filter(function (n) {
+    return n && (String(n).indexOf('ext:') === 0 || BUILTIN_PLUGIN_NAMES.indexOf(n) >= 0);
+  });
+  // 联网开关单一来源：「网页搜索」插件是唯一真相，webSearch 只是它的派生缓存。
+  // 此前 plugins 与 webSearch 由两个互不同步的界面控件各自写入，而且两条生成路径的
+  // 判据还不一致（工作流只看 webSearch，单节点路径取或）→ 出现「卡片显示已启用、
+  // 工作流却不联网」。这里统一派生，并双向迁移老数据，保证无损：
+  //   · plugins 有「网页搜索」而 webSearch=false → 补 true（声明就是用户意图）
+  //   · plugins 无而 webSearch=true → 补插件（老数据可能只开过那个已删掉的独立开关）
+  if (res.plugins.indexOf('网页搜索') >= 0) res.webSearch = true;
+  else if (res.webSearch) res.plugins = res.plugins.concat(['网页搜索']);
+  else res.webSearch = false;
   // 专长卡与生成参数显式归一：...b 展开可能带来脏数据（旧数据没有这两个字段、
   // 或从外部导入的形状不对），归一后渲染与发送才是同一份口径
   res.expertise = normExpertise(res.expertise);
@@ -7103,14 +7119,17 @@ function renderNodes(b) {
   bindNodeDrag(body, b);
   bindNodeEdit(body, b);
 }
+// 节点类型：**每一项都必须在执行引擎里真的有对应行为**，否则用户加了个节点，
+// 实际只是多跑一次普通模型调用 —— 那是误导。原先表里有四种类型在引擎里根本没有
+// 对应分支（消息、条件、插件、机器人转交），已移除；现表与 ROLE_SYSTEM 的 role 对齐。
 const NODE_TYPES = [
-  { lbl: '💬 消息', h: '消息节点', p: '向用户发送消息' },
   { lbl: '🧠 大模型', h: '大模型调用', p: '调用 LLM 生成内容' },
-  { lbl: '📚 知识库', h: '知识检索', p: '使用已挂载知识库正文' },
-  { lbl: '🔀 条件', h: '条件分支', p: '根据条件分流' },
-  { lbl: '🔗 插件', h: '调用插件', p: '执行插件工具' },
+  { lbl: '📚 知识库', h: '知识检索', p: '检索已挂载知识库并注入', role: 'retrieve' },
+  { lbl: '❓ 澄清', h: '需求澄清', p: '先向用户确认必要信息', role: 'clarify' },
+  { lbl: '🗂 大纲', h: '大纲设计', p: '先产出分点大纲再撰写', role: 'outline' },
+  { lbl: '✍️ 撰写', h: '撰写正文', p: '基于上下文产出完整内容', role: 'draft' },
+  { lbl: '✨ 润色', h: '润色质检', p: '去 AI 腔与套话，打磨成稿', role: 'review' },
   { lbl: '🟢 开始', h: '开始', p: '流程起点', role: 'start' },
-  { lbl: '机器人', h: '转交机器人', p: '转交给指定机器人应答', bot: '' },
   { lbl: '🧑‍⚖️ 审批', h: '人工审批', p: 'role:human 交付前暂停，人工确认/修改后再发出', role: 'human', note: '交付前请确认：无违规承诺、符合品牌调性、信息准确。', autoReview: true },
 ];
 function addNode() {
@@ -9111,11 +9130,6 @@ function renderKbPanel(b) {
       <span class="kb-toggle">${on ? '已启用' : '点击启用'}</span>
     </label>`;
     }).join('');
-    ph += `<label class="kb-row" data-web="1" style="border:1px dashed var(--brand);background:var(--brand-tint)">
-      <input type="checkbox" ${b.webSearch ? 'checked' : ''}>
-      <span>🌐 联网检索</span>
-      <span class="kb-toggle">${b.webSearch ? '已开启' : '点击开启'}</span>
-    </label>`;
     pluginBody.innerHTML = ph;
   }
 }
@@ -9133,12 +9147,12 @@ document.addEventListener('change', e => {
     const n = (key.indexOf('ext:') === 0) ? key : (plugins[+key] ? plugins[+key].n : null);
     if (!n) return;
     const set = new Set(b.plugins); e.target.checked ? set.add(n) : set.delete(n);
-    b.plugins = [...set]; b.updatedAt = Date.now(); saveBots(); renderKbPanel(b); renderCtxBar(b); toast(e.target.checked ? '已启用插件' : '已卸载', 'ok'); return;
-  }
-  const webRow = e.target.closest('#pluginBody [data-web]');
-  if (webRow && e.target.matches('input[type=checkbox]')) {
-    b.webSearch = !!e.target.checked; b.updatedAt = Date.now(); saveBots(); renderKbPanel(b); renderCtxBar(b);
-    toast(b.webSearch ? '已开启联网检索（工作流中自动附加实时结果）' : '已关闭联网检索', 'ok'); return;
+    b.plugins = [...set];
+    // 联网开关由「网页搜索」插件派生（派生规则见 normalize）。
+    // 插件 Tab 的勾选与插件详情弹窗都从这里走，避免出现「卡片说已启用、引擎却没联网」。
+    if (n === '网页搜索') b.webSearch = e.target.checked;
+    b.updatedAt = Date.now(); saveBots(); renderKbPanel(b); renderCtxBar(b);
+    toast(e.target.checked ? '已启用插件' : '已卸载', 'ok'); return;
   }
 });
 // promptArea：打字只更新内存，防抖(400ms)批量落盘，避免每按键全量序列化+重绘
@@ -11517,7 +11531,7 @@ window.__debug = {
   var ROLE_SYSTEM = {
     start: '你是流程起点，原样传递用户输入。',
     clarify: '你是需求澄清专家。针对用户需求，用要点列出：目标平台 / 人群 / 核心卖点 / 风格 / 篇幅 / 禁忌。只输出澄清要点，不写正文。',
-    outline: '你是大纲设计师。基于已有信息，先产出清晰的分点内容大纲，再进入撰写阶段。',
+    outline: '你是大纲设计师。基于已有信息与下方提供的参考资料，产出清晰的分点内容大纲（标题层级 + 每节要点）。只输出大纲，不写正文。',
     draft: '你是正文撰写专家。基于前面的需求澄清与大纲（如有），撰写完整、可用的最终草稿 / 正文。',
     review: '你是润色质检专家（去AI腔）。对前面的草稿做最终打磨：去掉套话、AI腔与空洞表述，让语言自然、有观点、有细节。直接输出最终成品，不要解释修改过程。',
     intent: '你是意图识别专家。请分析用户原始输入的核心意图 / 需求类型 / 任务领域。只输出一句简短结论（例如："英语口语练习-咖啡店点单"、"咨询订单状态"、"生成小红书种草文案"），不要回答用户、不要生成正文。',
@@ -11526,6 +11540,10 @@ window.__debug = {
     human: '这是人工审核节点，不需要模型生成内容，流程会在此暂停等待人工确认。',
     step: '你是内容生产流水线的一环。基于已有上下文，完成本步骤任务并输出结果。'
   };
+  // 「审批预审」是 review 语义的**第二处**用法（工作流节点之外）。这里显式命名并复用，
+  // 而不是在调用点悄悄写 ROLE_SYSTEM.review —— 否则下次有人改润色文案时，
+  // 不会知道它还牵着人工审批前的 AI 预审。
+  var APPROVAL_PREREVIEW_SYSTEM = ROLE_SYSTEM.review;
 
   // ---------- TF-IDF 知识库检索 ----------
   function _tokenize(text) {
@@ -11827,7 +11845,9 @@ window.__debug = {
   async function collectToolContext(bot, userMsg) {
     var parts = [];
     var plugins = (bot && bot.plugins) || [];
-    var wantWeb = (bot && bot.webSearch) || plugins.some(function (n) { return n === '网页搜索' || n === '联网检索'; });
+    // 判据与工作流引擎统一：只认 bot.webSearch（它是 plugins 的派生缓存，见 normalize）。
+    // 此前这里写成取或，导致同一个机器人「开快速回复」与「走工作流」时联网行为不一致。
+    var wantWeb = !!(bot && bot.webSearch);
     if (wantWeb) {
       try {
         var wh = await searchWeb(userMsg, 5);
@@ -11880,7 +11900,7 @@ window.__debug = {
           preBody.textContent = '预审中…';
           try {
             BotCraftAI.request([
-              { role: 'system', content: (ROLE_SYSTEM.review || '') + '\n\n请以「审批/质检」视角对下方草稿给出结论：第一行列【通过】或【需修改】，随后用 3-5 条要点说明风险与改进点（违规承诺、事实错误、品牌调性、语气、完整性）。不要重写全文，只给结论与要点。' },
+              { role: 'system', content: (APPROVAL_PREREVIEW_SYSTEM || '') + '\n\n请以「审批/质检」视角对下方草稿给出结论：第一行列【通过】或【需修改】，随后用 3-5 条要点说明风险与改进点（违规承诺、事实错误、品牌调性、语气、完整性）。不要重写全文，只给结论与要点。' },
               { role: 'user', content: (draft || '') }
             ]).then(function (out) {
               if (preBody) preBody.textContent = (out && out.trim()) ? out.trim() : '（无输出）';
@@ -11968,7 +11988,13 @@ window.__debug = {
         if (prev && prev !== userMsg) ctx += '\n\n【上一步（' + (nodes[i - 1] ? (nodes[i - 1].h || '上一步') : '上一步') + '）输出】\n' + prev;
       }
       // 只有真正需要查资料的节点才注入知识库/联网/天气；意图识别不需要
-      var injectKB = (role === 'retrieve' || role === 'draft' || role === 'generate' || role === 'review' || role === 'step');
+      // 注入白名单：只有「需要外部事实」的 role 才注入知识库/联网/天气。
+      // review 是润色质检 —— 只对前面的草稿做打磨、不引入新事实，刻意排除：
+      // 这既是它相对 draft/generate 的真实行为差异，也省下每轮一份知识库正文。
+      // outline 需要参考资料才能设计出贴合内容的大纲，纳入 —— 这样它与 clarify 不再同义。
+      // 注：draft / generate / step 三者行为相同是**有意为之**（都是「基于上下文产出完整
+      // 内容」，差别只在 ROLE_SYSTEM 的措辞与编排可读性），别再硬造差异。
+      var injectKB = (role === 'retrieve' || role === 'draft' || role === 'generate' || role === 'outline' || role === 'step');
       var kbCtx = '';
       if (injectKB) {
         var queryForKB = (role === 'retrieve' && prev && prev !== userMsg) ? prev : (prev || userMsg);
