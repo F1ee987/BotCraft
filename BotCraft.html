@@ -4065,6 +4065,26 @@ const tpls = [
   { n: '情感陪伴助手', d: '温暖倾听，提供情绪价值与建议', ic: '💬', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', prompt: '你是温暖的倾听者，给予情绪支持与实用建议。', nodes: ORCH_BY_NAME['情感陪伴助手'], temperature: 0.8, expertise: { field: '情绪倾诉陪伴、压力与关系困扰的倾听', method: '先接住情绪再谈事情；不急着给建议，对方明确要建议时才给；用对方的原话回述以确认理解', output: '共情回应（回述对方的处境与感受）→ 如需，给 1-2 个当下可做的小建议 → 一个开放的追问', avoid: '不诊断心理疾病、不推荐任何药物；不说「这没什么大不了」这类否定感受的话；不代替专业心理咨询；不追问对方不愿说的细节' } },
 ];
 
+// ==================== 出厂默认专精 ====================
+// 单一来源：由 SEED_BOTS + tpls **派生**，不要手抄第二份 —— 这个项目里「同一份文案
+// 写两遍」已经漂移过一次（默认路径与单节点路径各拼一遍 system 就是这么坏的）。
+// 用途：专精是后加的功能，升级上来的老机器人没有 expertise 字段，归一化时按名字补出厂默认；
+// 不补的话每个机器人的专精区都是空的，这个功能等于没上线。
+var FACTORY_EXPERTISE = (function () {
+  var m = {};
+  SEED_BOTS.concat(tpls).forEach(function (b) {
+    if (!b || !b.n || !b.expertise) return;
+    var k = String(b.n).trim().toLowerCase();
+    if (!m[k]) m[k] = b.expertise;            // 重名以先出现者为准（种子优先于模板）
+  });
+  return m;
+})();
+// 按名字取出厂专精；名字大小写与首尾空格容错（导入来的名字常带空格）
+function factoryExpertiseOf(name) {
+  if (name === null || name === undefined) return null;
+  return FACTORY_EXPERTISE[String(name).trim().toLowerCase()] || null;
+}
+
 const plugins = [
   { n: '网页搜索', d: '实时联网获取最新信息', ic: '🔍', c: 'linear-gradient(135deg,#4dd0e1,#2bb5e8)', cat: '联网', cap: '调用 DuckDuckGo 即时答案接口实时检索网页摘要与相关条目，让机器人回答包含最新资讯。开启后，工作流会在撰写/润色步骤自动注入联网检索片段（与工作台「🌐 联网检索」开关联动）。' },
   { n: '图片生成', d: '调用文生图模型创作配图', ic: '🖼️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', cat: '内容', cap: '根据文本描述生成真实配图，适用于种草图文、海报、插画等场景。启用后，当用户请求配图/生图时，系统会自动调用文生图接口生成图片并直接展示在聊天中；未配置专用接口时默认使用 pollinations.ai 免费图床（无需 Key），也可在「设置」中接入 OpenAI Images 兼容接口（如部分国内网关）获得更高质量。' },
@@ -5109,6 +5129,17 @@ function normalize(b) {
   // 或从外部导入的形状不对），归一后渲染与发送才是同一份口径
   res.expertise = normExpertise(res.expertise);
   res.temperature = normBotTemp(res.temperature);
+  // 「用户亲手设过专精」标记：把四个框清空 = 明确不要专精，
+  // 不能被下面的出厂兜底复活。与 modelExplicit 同一套思路。
+  res.expertiseExplicit = !!res.expertiseExplicit;
+  // 出厂默认专精兜底：老数据的机器人四项全空（专精是后加的功能），
+  // 按名字补出厂默认；只在「用户没碰过 + 四项全空」时补。
+  // res.expertise 此刻已归一：null 就代表四项全空。
+  // 幂等：补完即非空，再跑一遍不改任何值，不依赖版本号或时间。
+  if (!res.expertiseExplicit && !res.expertise) {
+    var _fexp = factoryExpertiseOf(res.n);
+    if (_fexp) res.expertise = normExpertise(_fexp);
+  }
   // 模型迁移：model 此前是「名义字段」—— 写入它的只有出厂默认、创建时的全局快照、
   // 模板与导入，全项目**没有任何界面能改它**，所以它从未承载过用户意图。
   // 现在它会真的生效，沿用旧值会让「全局已换成 DeepSeek，机器人却仍去打
@@ -9134,6 +9165,7 @@ document.addEventListener('input', e => {
   if (!key) return;
   cur[key] = el.value;
   b.expertise = normExpertise(cur);   // 四项全空时自动归一为 null
+  b.expertiseExplicit = true;         // 用户亲手改过（含清空）→ 出厂默认不再回填
   b.updatedAt = Date.now();
   const hint = document.getElementById('expHint');
   if (hint) hint.textContent = expHintText(b);
@@ -9447,6 +9479,7 @@ function renderTplGrid() {
         n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿', u: 0, t: '—',
         prompt: t.prompt, nodes: (t.nodes && t.nodes.length ? t.nodes : DEFAULT_NODES.slice()), history: [], plugins: [], knowledges: [],
         model: t.model || '', modelExplicit: !!t.model,
+        expertise: normExpertise(t.expertise), temperature: normBotTemp(t.temperature),
         fromTemplate: true,
       });
       bots.unshift(nb); currentFilter = 'all';
@@ -9479,6 +9512,7 @@ function renderTplGrid() {
         n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿', u: 0, t: '—',
         prompt: t.prompt, nodes: (t.nodes || []).slice(), history: [], plugins: (t.plugins || []).slice(), knowledges: (t.knowledges || []).slice(),
         model: t.model || '', modelExplicit: !!t.model,
+        expertise: normExpertise(t.expertise), temperature: normBotTemp(t.temperature),
         fromTemplate: true,
       });
       bots.unshift(nb); currentFilter = 'all';
