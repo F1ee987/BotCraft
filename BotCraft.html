@@ -647,9 +647,11 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
    交互模型（JS 同名注释块里有完整说明）：
      · 空白左键拖 = 平移；Shift+拖 = 框选；中键 / 空格 / 平移模式 = 平移
      · 滚轮 = 平移，Ctrl(⌘)+滚轮 = 以光标为锚缩放
-     · 拖卡片 = 自由摆放（坐标只是视图状态，引擎按数组顺序执行）
-     · 从端口圆点拖到另一个节点 = 把它排到自己后面（改执行顺序）
-   只画一条链：引擎本来就是串行的，画分叉等于骗人。
+     · 拖卡片 = 自由摆放（坐标只是视图状态，引擎按边推导执行次序）
+     · 从端口圆点拖到另一个节点 = 加一条有向边（真实数据流）；条件节点的不同
+       出口就是不同分支，成环 / 重复的连线会被拒并当场说明理由
+   连线就是数据流：引擎按边做拓扑调度、没走到的分支整条跳过，所以画出来的
+   分叉就是真的会走的分叉。
    面板从 display:none 切回来时量不到尺寸，所以 root 用绝对定位铺满，
    不依赖父级的 display 值（switchWsTab 会给父级写内联 display:block）。 */
 #wsFlowBody.cw-on{position:relative;overflow:hidden;padding:0;display:block}
@@ -5413,6 +5415,420 @@ function closeRunBox(btn) {
   if (box.parentNode) box.parentNode.removeChild(box);
 }
 
+/// FLOW V2 SEMANTIC LAYER ///
+// ===========================================================================
+// FlowV2 —— 编排数据模型、变量系统与执行语义
+// ---------------------------------------------------------------------------
+// 旧模型用「数组下标」兼任三件事：节点身份、执行顺序、数据传递（隐式的
+// prev = 上一步输出）。它能跑通是因为引擎本来就是纯串行 —— 一旦要表达分支，
+// 这三件事就必须拆开：
+//     1) 节点身份 → 稳定 id，标题随便改也不会断引用
+//     2) 执行顺序 → 显式有向边 b.edges，不再由数组顺序兼任
+//     3) 数据传递 → 命名变量池 vars，下游可引用任意上游
+// 这一层全部是纯函数：不碰 DOM、不发请求，所以能脱离界面单独测试。
+// 语义正确性由 test_flow.js 覆盖，界面代码里不要再复制一份判断。
+// ===========================================================================
+
+var FLOW_V2 = 2;
+var FLOW_KINDS_OK = { llm: 1, start: 1, end: 1, human: 1, cond: 1, loop: 1, code: 1, tool: 1, http: 1, sub: 1 };
+// role 里只有这两个算「节点种类」，其余（clarify / draft / review / outline /
+// intent / retrieve / generate）都是 llm 的子类型，只影响 system 措辞与上下文裁剪。
+// 迁移时**只看 role、不看标题** —— 按标题猜，会把历史上误加的「条件」节点悄悄改语义。
+var FLOW_ROLE_KIND = { start: 'start', human: 'human' };
+var FLOW_DEFAULT_OUT = { llm: 'text', start: 'text', human: 'text', cond: 'port', loop: 'items', code: 'result', tool: 'text', http: 'text', sub: 'text', end: 'text' };
+var FLOW_MAX_LOOP = 20;    // 单个循环节点的最大迭代次数
+var FLOW_MAX_CALLS = 200;  // 单次运行的最大节点执行次数（防循环把模型调用量放大）
+
+function flowKindOf(nd) {
+  if (!nd) return 'llm';
+  var k = String(nd.kind || '').toLowerCase();
+  if (k && FLOW_KINDS_OK[k]) return k;
+  var role = String(nd.role || '').toLowerCase();
+  return FLOW_ROLE_KIND[role] || 'llm';
+}
+
+function flowOutOf(nd) {
+  if (!nd) return 'text';
+  return String(nd.out || FLOW_DEFAULT_OUT[flowKindOf(nd)] || 'text');
+}
+
+function _flowPickId(used) {
+  for (var i = 1; i < 100000; i++) {
+    if (!used['n' + i]) { used['n' + i] = 1; return 'n' + i; }
+  }
+  var fb = 'n' + Date.now(); used[fb] = 1; return fb;
+}
+
+function flowNewId(b) {
+  var used = {};
+  ((b && b.nodes) || []).forEach(function (n) { if (n && n.id) used[n.id] = 1; });
+  return _flowPickId(used);
+}
+
+// 幂等迁移：给老数据补 id / kind / out / onError / edges。
+// 迁移前把原始 nodes 原样留一份到 _v1nodes —— 只作救急，不参与执行。
+// 注意：老数据的 edges 按数组顺序生成链式边，等价于旧引擎的串行语义，
+// 所以迁移后老机器人的执行顺序与产出不变（由 test_flow.js 的等价性用例兜住）。
+function flowEnsure(b) {
+  if (!b || !b.nodes || !b.nodes.length) return b;
+  if (b.flowV === FLOW_V2) return b;
+  try { if (!b._v1nodes) b._v1nodes = JSON.parse(JSON.stringify(b.nodes)); } catch (e) { }
+  var used = {};
+  b.nodes.forEach(function (nd) {
+    if (!nd || typeof nd !== 'object') return;
+    if (nd.id && !used[nd.id]) used[nd.id] = 1; else nd.id = '';
+  });
+  b.nodes.forEach(function (nd) {
+    if (!nd || typeof nd !== 'object') return;
+    if (!nd.id) nd.id = _flowPickId(used);
+    if (!nd.kind) nd.kind = flowKindOf(nd);
+    if (!nd.out) nd.out = FLOW_DEFAULT_OUT[nd.kind] || 'text';
+    if (!nd.onError) nd.onError = 'stop';
+  });
+  if (!Array.isArray(b.edges)) {
+    b.edges = [];
+    for (var i = 0; i + 1 < b.nodes.length; i++) {
+      b.edges.push({ from: b.nodes[i].id, to: b.nodes[i + 1].id, port: 0 });
+    }
+  }
+  b.flowV = FLOW_V2;
+  return b;
+}
+
+// 节点集被**整体替换**之后必须调用（撤销 / 版本回滚 / 模板套用 / 导入）。
+// 边是用 id 指认节点的 —— id 一换，旧边就全成了悬空边。悬空边会被
+// flowNormalizeEdges 静默丢掉，结果不是报错，而是「流程变成一堆没有先后关系的
+// 孤立节点、每个都跑一遍」，这是最难查的一类故障。所以宁可直接删干净：
+// 删掉之后 flowEnsure 会按新数组顺序重建链，恰好就是老语义（数组顺序）的忠实映射。
+function flowDropEdges(b) {
+  if (!b) return b;
+  delete b.edges;
+  delete b.flowV;
+  return b;
+}
+
+function flowById(b, id) {
+  var ns = (b && b.nodes) || [];
+  for (var i = 0; i < ns.length; i++) { if (ns[i] && ns[i].id === id) return ns[i]; }
+  return null;
+}
+
+function flowIdxOf(b, id) {
+  var ns = (b && b.nodes) || [];
+  for (var i = 0; i < ns.length; i++) { if (ns[i] && ns[i].id === id) return i; }
+  return -1;
+}
+
+// ---------- 图 ----------
+function flowEdgeKey(e) {
+  return String((e && e.from) || '') + '>' + String((e && e.to) || '') + '#' + Number((e && e.port) || 0);
+}
+
+// 去掉悬空边（端点已被删）与自环并去重，顺手把 port 规范成数字
+function flowNormalizeEdges(b) {
+  if (!b) return [];
+  if (!Array.isArray(b.edges)) b.edges = [];
+  var ids = {};
+  (b.nodes || []).forEach(function (n) { if (n && n.id) ids[n.id] = 1; });
+  var seen = {}, out = [];
+  b.edges.forEach(function (e) {
+    if (!e || !ids[e.from] || !ids[e.to] || e.from === e.to) return;
+    var port = Number(e.port) || 0;
+    var k = e.from + '>' + e.to + '#' + port;
+    if (seen[k]) return;
+    seen[k] = 1;
+    out.push({ from: e.from, to: e.to, port: port });
+  });
+  b.edges = out;
+  return out;
+}
+
+function flowDownstream(b, id) {
+  var adj = {};
+  ((b && b.edges) || []).forEach(function (e) { if (e) { (adj[e.from] = adj[e.from] || []).push(e.to); } });
+  var seen = {}, stack = (adj[id] || []).slice();
+  while (stack.length) {
+    var cur = stack.pop();
+    if (seen[cur]) continue;
+    seen[cur] = 1;
+    (adj[cur] || []).forEach(function (t) { if (!seen[t]) stack.push(t); });
+  }
+  return seen;
+}
+
+function flowUpstream(b, id) {
+  var rev = {};
+  ((b && b.edges) || []).forEach(function (e) { if (e) { (rev[e.to] = rev[e.to] || []).push(e.from); } });
+  var seen = {}, stack = (rev[id] || []).slice();
+  while (stack.length) {
+    var cur = stack.pop();
+    if (seen[cur]) continue;
+    seen[cur] = 1;
+    (rev[cur] || []).forEach(function (f) { if (!seen[f]) stack.push(f); });
+  }
+  return seen;
+}
+
+// 加 from→to 是否合法。旧模型下连线永远合法（只重排数组），
+// 改成有向图后**可能被拒**（成环），所以这里返回原因，让界面能说清为什么。
+function flowCanLink(b, from, to) {
+  if (!from || !to) return { ok: false, why: '缺少节点' };
+  if (from === to) return { ok: false, why: '不能连到自身' };
+  // 成环的判据方向别写反：加 from→to 会闭环的充要条件是 **to 已经能到达 from**
+  // （即 from 处在 to 的下游）。写成「to 在 from 的下游」会漏判 ——
+  // 用户连出环线时当场不报错，直到下一次运行才被告知「存在循环连线」，
+  // 那时已经很难看出是哪两条线绕出来的。
+  if (flowDownstream(b, to)[from]) return { ok: false, why: '会形成环：起点已经在目标节点的下游' };
+  return { ok: true };
+}
+
+// Kahn 拓扑排序。返回 { order, cycle }：cycle 非空表示这几张卡在环里、跑不起来。
+function flowPlan(b) {
+  var ns = (b && b.nodes) || [];
+  var ids = {}, indeg = {}, adj = {};
+  ns.forEach(function (n) { if (n && n.id) { ids[n.id] = 1; indeg[n.id] = 0; adj[n.id] = []; } });
+  var seenE = {};
+  ((b && b.edges) || []).forEach(function (e) {
+    if (!e || !ids[e.from] || !ids[e.to] || e.from === e.to) return;
+    var k = e.from + '>' + e.to;
+    if (seenE[k]) return;
+    seenE[k] = 1;
+    adj[e.from].push(e.to);
+    indeg[e.to]++;
+  });
+  var q = [];
+  ns.forEach(function (n) { if (n && n.id && indeg[n.id] === 0) q.push(n.id); });
+  var order = [];
+  while (q.length) {
+    var id = q.shift();
+    order.push(id);
+    (adj[id] || []).forEach(function (t) { indeg[t]--; if (indeg[t] === 0) q.push(t); });
+  }
+  var cycle = null;
+  if (order.length < Object.keys(ids).length) {
+    cycle = [];
+    ns.forEach(function (n) { if (n && n.id && order.indexOf(n.id) < 0) cycle.push(n.id); });
+  }
+  return { order: order, cycle: cycle };
+}
+
+// ---------- 变量 ----------
+// 每次新建正则：带 g 标志的正则对象有 lastIndex 状态，共用会在嵌套解析时串味
+function _flowRe() {
+  var re = /\{\{\s*([A-Za-z0-9_$.\-]+)\s*\}\}/g;
+  return re;
+}
+
+function flowTplRefs(s) {
+  var re = _flowRe(), out = [], m;
+  var str = String(s === null || s === undefined ? '' : s);
+  while ((m = re.exec(str))) out.push(m[1]);
+  return out;
+}
+
+function flowIsTpl(s) {
+  return _flowRe().test(String(s === null || s === undefined ? '' : s));
+}
+
+function _flowStr(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object') { try { return JSON.stringify(v); } catch (e) { return String(v); } }
+  return String(v);
+}
+
+function _flowFirstScalar(o) {
+  for (var k in o) {
+    if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
+    var v = o[k];
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v;
+  }
+  return null;
+}
+
+function flowVarGet(vars, path) {
+  if (!vars) return undefined;
+  var parts = String(path || '').split('.');
+  var root = vars[parts[0]];
+  if (root === undefined) return undefined;
+  if (parts.length === 1) {
+    if (root && typeof root === 'object') return (root.text !== undefined) ? root.text : _flowFirstScalar(root);
+    return root;
+  }
+  var cur = root;
+  for (var i = 1; i < parts.length; i++) {
+    if (cur === null || cur === undefined) return undefined;
+    cur = cur[parts[i]];
+  }
+  return cur;
+}
+
+// 未命中的引用**原样保留**（不静默替换成空串）—— 否则用户写错变量名时
+// 只会看到一句莫名其妙的提示词，查不出问题在哪。运行记录里会标出来。
+function flowResolve(s, vars) {
+  var str = String(s === null || s === undefined ? '' : s);
+  if (str.indexOf('{{') < 0) return str;
+  return str.replace(_flowRe(), function (all, path) {
+    var v = flowVarGet(vars, path);
+    return v === undefined ? all : _flowStr(v);
+  });
+}
+
+// 找出手写模板里引用了但本次运行没取到值的项（界面用来标黄）
+function flowMissingRefs(s, vars) {
+  var out = [];
+  flowTplRefs(s).forEach(function (p) {
+    if (flowVarGet(vars, p) === undefined && out.indexOf(p) < 0) out.push(p);
+  });
+  return out;
+}
+
+function _flowNum(v) {
+  var t = String(v === null || v === undefined ? '' : v).trim();
+  if (!t || !/^-?\d+(?:\.\d+)?$/.test(t)) return null;
+  return parseFloat(t);
+}
+
+// 条件表达式：支持 A == B / != / > / < / >= / <= 、A contains B、以及单值真值判断。
+// 刻意不做 eval —— 编排配置是可以从别人那儿导入的 JSON，不能当代码执行。
+// 空表达式 = 兜底分支，恒命中（让「否则」分支不用填条件）。
+function flowEvalCond(expr, vars) {
+  var raw = String(expr === null || expr === undefined ? '' : expr).trim();
+  if (!raw) return true;
+  var r = flowResolve(raw, vars).trim();
+  var m = /^([\s\S]*?)\s*(===|!==|==|!=|>=|<=|>|<)\s*([\s\S]*)$/.exec(r);
+  if (m) {
+    var ls = m[1].trim(), rs = m[3].trim(), op = m[2];
+    var ln = _flowNum(ls), rn = _flowNum(rs);
+    var eq;
+    if (ln !== null && rn !== null) eq = (ln === rn); else eq = (ls === rs);
+    if (op === '==' || op === '===') return eq;
+    if (op === '!=' || op === '!==') return !eq;
+    if (ln === null || rn === null) return false;   // 大小比较要求两边都能当数字
+    if (op === '>') return ln > rn;
+    if (op === '<') return ln < rn;
+    if (op === '>=') return ln >= rn;
+    if (op === '<=') return ln <= rn;
+  }
+  var mc = /^([\s\S]*?)\s+contains\s+([\s\S]*)$/i.exec(r);
+  if (mc) return mc[1].indexOf(mc[2]) >= 0;
+  if (/^(false|no|否|不是|无|0)$/i.test(r)) return false;
+  return !!r;   // 有内容即真
+}
+
+// 命中第几路分支：按顺序取第一个为真的，空条件（兜底）自然落在最后
+function flowPickBranch(nd, vars) {
+  var bs = (nd && nd.branches) || [];
+  for (var i = 0; i < bs.length; i++) {
+    if (flowEvalCond(bs[i] && bs[i].when, vars)) return i;
+  }
+  return -1;   // 没有兜底分支且全不命中 → 整条流程在此结束
+}
+
+// ---------- 分支与跳过传播 ----------
+function flowInEdges(b, id) {
+  return ((b && b.edges) || []).filter(function (e) { return e && e.to === id; });
+}
+
+// 节点被跳过 等价于 「它有入边、且所有入边都已 dead」。
+// 无入边 = 起点，永不跳过 —— 否则断开连线的孤立节点会被静默吞掉，看不出来。
+function flowNodeDead(b, id, edgeState) {
+  var ins = flowInEdges(b, id);
+  if (!ins.length) return false;
+  for (var i = 0; i < ins.length; i++) {
+    if (edgeState[flowEdgeKey(ins[i])] !== 'dead') return false;
+  }
+  return true;
+}
+
+// 条件节点命中第 keepPort 路后，其余分支的边全部标 dead
+function flowKillPorts(b, condId, keepPort, edgeState) {
+  ((b && b.edges) || []).forEach(function (e) {
+    if (!e || e.from !== condId) return;
+    if (Number(e.port || 0) !== Number(keepPort)) edgeState[flowEdgeKey(e)] = 'dead';
+  });
+  return edgeState;
+}
+
+// 把一个节点因跳过的连带影响写进 edgeState：它所有出边都 dead
+function flowKillOut(b, id, edgeState) {
+  ((b && b.edges) || []).forEach(function (e) {
+    if (e && e.from === id) edgeState[flowEdgeKey(e)] = 'dead';
+  });
+  return edgeState;
+}
+
+// ---------- 供界面用 ----------
+// 某个节点可引用的变量：用户输入 + 所有**上游可达**节点的输出。
+// 只列上游 —— DAG 里引用未来节点是无解的，早点在界面上挡掉比运行时才发现好。
+function flowVarList(b, id) {
+  var up = flowUpstream(b, id);
+  var list = [{ name: 'input.msg', label: '用户原始输入' }];
+  ((b && b.nodes) || []).forEach(function (n) {
+    if (!n || !n.id || n.id === id) return;
+    if (!up[n.id]) return;
+    var o = flowOutOf(n);
+    var title = n.h || n.lbl || n.id;
+    list.push({ name: n.id + '.' + o, label: title + ' · ' + o });
+    if (o !== 'text') list.push({ name: n.id + '.text', label: title + ' · 文本' });
+  });
+  return list;
+}
+
+// 该节点是否配了显式输入（配了就走变量，没配就走旧的 prev 语义，保证老数据不变）
+// 取模板的**原始值**（数组/对象原样返回），而不只是字符串化结果。
+// 循环要遍历数组、代码节点要收结构化入参，都靠它 —— 走 flowResolve 会被
+// JSON.stringify 成字符串，再解析回来既丢类型又容易踩转义。
+function flowTplValue(tpl, vars) {
+  var m = /^\s*\{\{\s*([A-Za-z0-9_$.\-]+)\s*\}\}\s*$/.exec(String(tpl === null || tpl === undefined ? '' : tpl));
+  if (m) return flowVarGet(vars, m[1]);
+  return flowResolve(tpl, vars);
+}
+
+function flowHasExplicitIn(nd) {
+  if (!nd) return false;
+  if (flowIsTpl(nd.p)) return true;
+  if (!nd['in'] || !nd['in'].length) return false;
+  for (var i = 0; i < nd['in'].length; i++) {
+    if (flowIsTpl(nd['in'][i] && nd['in'][i].from)) return true;
+  }
+  return false;
+}
+
+// 语义层对外暴露：界面与测试都从这里取，避免两处各写一份判断
+window.BotCraftFlow = {
+  V2: FLOW_V2,
+  ensure: flowEnsure,
+  dropEdges: flowDropEdges,
+  kindOf: flowKindOf,
+  outOf: flowOutOf,
+  newId: flowNewId,
+  byId: flowById,
+  idxOf: flowIdxOf,
+  edges: flowNormalizeEdges,
+  plan: flowPlan,
+  upstream: flowUpstream,
+  downstream: flowDownstream,
+  canLink: flowCanLink,
+  tplRefs: flowTplRefs,
+  isTpl: flowIsTpl,
+  resolve: flowResolve,
+  missingRefs: flowMissingRefs,
+  varGet: flowVarGet,
+  evalCond: flowEvalCond,
+  pickBranch: flowPickBranch,
+  edgeKey: flowEdgeKey,
+  inEdges: flowInEdges,
+  nodeDead: flowNodeDead,
+  killPorts: flowKillPorts,
+  killOut: flowKillOut,
+  varList: flowVarList,
+  hasExplicitIn: flowHasExplicitIn,
+  tplValue: flowTplValue,
+  MAX_LOOP: FLOW_MAX_LOOP,
+  MAX_CALLS: FLOW_MAX_CALLS,
+};
+
 function copyTextRobust(text) {
   if (window.navigator && navigator.clipboard && navigator.clipboard.writeText) {
     try { navigator.clipboard.writeText(text).catch(function () { fallbackCopy(text); }); return; } catch (e) {}
@@ -5532,12 +5948,15 @@ function normalize(b) {
   }
   // 每个机器人独立持有 nodes 副本，避免共享 ORCH_BY_NAME / 模板引用导致互相污染
   if (res.nodes) res.nodes = res.nodes.map(function (n) { return n ? Object.assign({}, n) : n; });
-  // 画布坐标兜底：节点的 x/y 是**视图状态**（引擎只按数组顺序执行，不看坐标）。
-  // 老数据没有坐标 → 按顺序铺成一条横向链，保证打开画布就能看见内容，
-  // 而不是所有卡片叠在 (0,0)。这里用内联常量：normalize 在 block1，
-  // 画布常量 CW_* 在 block2，跨块引用会踩执行顺序。340 = 卡片宽 250 + 间距 90。
+  // 画布坐标兜底：节点的 x/y 是**视图状态**——引擎执行时看的是边（见 FLOW V2 SEMANTIC
+  // LAYER），坐标只影响画布上摆在哪。老数据没有坐标 → 按顺序铺成一条横向链，
+  // 保证打开画布就能看见内容，而不是所有卡片叠在 (0,0)。
+  // 340 = 卡片宽 250 + 间距 90，与画布常量 CW_LAYOUT_X 是同一份约定，改一处要改两处。
   // 注意必须放在上面那句 ORCH_BY_NAME 比较**之后** —— 先补坐标会让
   // 「JSON.stringify(res.nodes) === JSON.stringify(DEFAULT_WORKFLOW)」永远为假，编排兜底失效。
+  // 同一个理由：这里**不做** FlowV2 迁移（补 id / 建边）。迁移必然往节点上加字段，
+  // 一加就破坏了上面那个「是否仍是出厂默认工作流」的逐字节比较，
+  // 结果是有专属编排的机器人升级后再也套不上专属编排。迁移放在 renderNodes / runWorkflow。
   if (res.nodes && res.nodes.length) {
     res.nodes.forEach(function (n, i) {
       if (!n) return;
@@ -5561,6 +5980,10 @@ function snapshotBot(b) {
   return {
     n: b.n, d: b.d, prompt: b.prompt,
     nodes: JSON.parse(JSON.stringify(b.nodes || [])),
+    // 边必须一起进快照：分支 / 循环的图结构是「工作流」的一部分，
+    // 只快照节点会让「回滚到 v3」把分支图悄悄退化成一条链。
+    edges: JSON.parse(JSON.stringify(b.edges || [])),
+    flowV: b.flowV || 0,
     plugins: JSON.parse(JSON.stringify(b.plugins || [])),
     knowledges: JSON.parse(JSON.stringify(b.knowledges || [])),
     brand: JSON.parse(JSON.stringify(b.brand || {})),
@@ -5588,6 +6011,14 @@ function applyRestore(b, v) {
   const s = ver.snap;
   b.n = s.n; b.d = s.d; b.prompt = s.prompt;
   b.nodes = JSON.parse(JSON.stringify(s.nodes || []));
+  // 快照里带边就原样恢复（分支图必须原样回来）；老版本快照没有 edges 字段，
+  // 此时旧边挂的是**另一批 id**，留着就是一整片悬空边 —— 交给 flowEnsure 按数组顺序重建
+  if (Array.isArray(s.edges)) {
+    b.edges = JSON.parse(JSON.stringify(s.edges));
+    b.flowV = s.flowV || FLOW_V2;
+  } else {
+    flowDropEdges(b);
+  }
   b.plugins = JSON.parse(JSON.stringify(s.plugins || []));
   b.knowledges = JSON.parse(JSON.stringify(s.knowledges || []));
   b.brand = JSON.parse(JSON.stringify(s.brand || {}));
@@ -7076,7 +7507,8 @@ function openBot(id) {
   if (!requireLogin()) return;
   const b = getBot(id); if (!b) return;
   currentId = id;
-  if (!b.nodes || !b.nodes.length) b.nodes = DEFAULT_NODES.slice();
+  // 模板替换是「整批换节点」：id 全变，旧边全成悬空边，必须一并丢掉
+  if (!b.nodes || !b.nodes.length) { b.nodes = DEFAULT_NODES.slice(); dropFlowEdges(b); }
   if (!Array.isArray(b.history)) b.history = [];
   _initSessions(b);  // 幂等：补齐会话结构，并把 b.history 对齐到当前会话
   if (!b.channels) b.channels = ['网页嵌入', 'API 接口'];
@@ -7455,30 +7887,114 @@ function botGlyph(o) {
 }
 function nodeIcon(lbl, h) {
   var s = (lbl || '') + ' ' + (h || '');
-  var map = { '消息': '💬', '大模型': '🧠', '知识': '📚', '条件': '🔀', '插件': '🔗', '开始': '🟢', '机器人': '◆', '审核': '🧑‍⚖️', '审批': '🧑‍⚖️', '人工': '🧑‍⚖️' };
+  var map = { '消息': '💬', '大模型': '🧠', '知识': '📚', '条件': '🔀', '选择器': '🔀', '循环': '🔁', '代码': '🔧', '工具': '🧰', 'HTTP': '🌐', '子流程': '📦', '子工作流': '📦', '插件': '🔗', '开始': '🟢', '机器人': '◆', '审核': '🧑‍⚖️', '审批': '🧑‍⚖️', '人工': '🧑‍⚖️' };
   for (var k in map) { if (s.indexOf(k) >= 0) return map[k]; }
   return '💬';
 }
 
 function cwNum(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
+
+// 按节点种类生成配置项。
+// 这些字段用 onchange 直接写回并落盘，不走「保存」按钮 —— 保存按钮原本只管
+// 标题与描述，把它一起改会牵动一串既有行为；各管各的更稳，也不会因为
+// 重绘打断正在输入的内容。
+function flowNodeCfgHtml(b, nd, i) {
+  const F = window.BotCraftFlow;
+  const kind = F ? F.kindOf(nd) : 'llm';
+  if (kind === 'llm' || kind === 'start' || kind === 'human' || kind === 'end') return '';
+  const inp = 'class="ne-cfg" data-i="' + i + '" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px"';
+  const lab = 'style="font-size:11px;color:var(--sub);margin:6px 0 3px;font-weight:600"';
+  const note = 'style="font-size:10px;color:var(--sub);margin:-2px 0 6px;line-height:1.5"';
+  let h = '';
+  if (kind === 'cond') {
+    const bs = nd.branches || [{ label: '满足', when: '' }, { label: '其他', when: '' }];
+    h += '<div ' + lab + '>分支（自上而下判断，第一个成立的走它；条件留空 = 兜底）</div>';
+    bs.forEach(function (br, k) {
+      h += '<div style="display:flex;gap:5px;margin-bottom:5px">'
+        + '<input class="ne-cfg" data-i="' + i + '" data-f="branches" data-k="' + k + '" data-sub="label" value="' + escapeAttr(br.label || '') + '" placeholder="分支名" style="flex:0 0 76px;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 6px">'
+        + '<input class="ne-cfg" data-i="' + i + '" data-f="branches" data-k="' + k + '" data-sub="when" value="' + escapeAttr(br.when || '') + '" placeholder="如 {{n2.text}} contains 退款" style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 6px">'
+        + '</div>';
+    });
+    h += '<div class="ne-bradd" data-i="' + i + '" style="font-size:11px;color:var(--txt);text-decoration:underline;cursor:pointer;margin:2px 0 6px">＋ 添加一路分支</div>';
+    h += '<div ' + note + '>分支条件支持 == != &gt; &lt; &gt;= &lt;= 和 contains，也可以只写一个变量（有内容即算成立）。条件不做 eval，不会执行任何代码。</div>';
+  } else if (kind === 'code') {
+    h += '<div ' + lab + '>JS 代码</div>'
+      + '<textarea class="ne-cfg" data-i="' + i + '" data-f="code" placeholder="return params.text.split(/\n/);" style="width:100%;min-height:104px;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:6px 8px;resize:vertical">' + escapeHtml(nd.code || '') + '</textarea>'
+      + '<div ' + note + '>在隔离沙箱里运行，读不到本机数据，也没有联网代理。用 <b>return</b> 交出结果；params 里是下面配的输入绑定。</div>';
+  } else if (kind === 'tool') {
+    const opts = [['kb', '知识库检索'], ['web', '联网检索'], ['weather', '天气查询'], ['image', '文生图']]
+      .map(function (o) { return '<option value="' + o[0] + '"' + ((nd.tool || 'kb') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
+    h += '<div ' + lab + '>工具</div><select ' + inp + ' data-f="tool">' + opts + '</select>'
+      + '<div ' + lab + '>查询内容</div><input ' + inp + ' data-f="toolQuery" value="' + escapeAttr(nd.toolQuery || '') + '" placeholder="{{input.msg}}">'
+      + '<div ' + note + '>知识库用这个机器人的挂载；联网与天气免 Key；生图需要先在设置里配好接口。</div>';
+  } else if (kind === 'http') {
+    const ms = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].map(function (m2) {
+      return '<option value="' + m2 + '"' + ((nd.method || 'GET') === m2 ? ' selected' : '') + '>' + m2 + '</option>';
+    }).join('');
+    h += '<div ' + lab + '>请求地址</div><input ' + inp + ' data-f="url" value="' + escapeAttr(nd.url || '') + '" placeholder="https://api.example.com/x">'
+      + '<div ' + lab + '>方法</div><select ' + inp + ' data-f="method">' + ms + '</select>'
+      + '<div ' + lab + '>请求头（JSON）</div><input ' + inp + ' data-f="headers" value="' + escapeAttr(nd.headers || '') + '" placeholder=\'{"Content-Type":"application/json"}\'>'
+      + '<div ' + lab + '>请求体</div><input ' + inp + ' data-f="body" value="' + escapeAttr(nd.body || '') + '" placeholder="{{n2.text}}">'
+      + '<div ' + note + '>纯前端没有后端代理，只有允许跨域的接口能调通。被同源策略拦住时会明确报出来。</div>';
+  } else if (kind === 'sub') {
+    const opts = (typeof bots !== 'undefined' ? bots : []).filter(function (x) { return x.id !== b.id; })
+      .map(function (x) { return '<option value="' + escapeAttr(x.id) + '"' + ((nd.subId || '') === x.id ? ' selected' : '') + '>' + escapeHtml(x.n) + '</option>'; }).join('');
+    h += '<div ' + lab + '>目标机器人</div><select ' + inp + ' data-f="subId"><option value="">（请选择）</option>' + opts + '</select>'
+      + '<div ' + lab + '>传入的内容</div><input ' + inp + ' data-f="subQuery" value="' + escapeAttr(nd.subQuery || '') + '" placeholder="{{input.msg}}">';
+  } else if (kind === 'loop') {
+    h += '<div ' + lab + '>循环方式</div><select ' + inp + ' data-f="loopMode">'
+      + '<option value="array"' + ((nd.loopMode || 'array') === 'array' ? ' selected' : '') + '>遍历数组</option>'
+      + '<option value="times"' + (nd.loopMode === 'times' ? ' selected' : '') + '>固定次数</option></select>'
+      + '<div ' + lab + '>要遍历的数组</div><input ' + inp + ' data-f="loopWhen" value="' + escapeAttr(nd.loopWhen || '') + '" placeholder="{{n2.items}}">'
+      + '<div ' + lab + '>次数</div><input ' + inp + ' data-f="loopTimes" value="' + escapeAttr(String(nd.loopTimes === undefined ? 3 : nd.loopTimes)) + '">'
+      + '<div ' + lab + '>循环体（子工作流）</div><select ' + inp + ' data-f="loopBody"><option value="">（请选择）</option>'
+      + (typeof bots !== 'undefined' ? bots : []).filter(function (x) { return x.id !== b.id; })
+        .map(function (x) { return '<option value="' + escapeAttr(x.id) + '"' + ((nd.loopBody || '') === x.id ? ' selected' : '') + '>' + escapeHtml(x.n) + '</option>'; }).join('')
+      + '</select>'
+      + '<div ' + note + '>最多循环 20 次，防止把模型调用量放大。</div>';
+  }
+  // 通用：输出名 + 异常策略
+  h += '<div ' + lab + '>输出变量名（下游用 {{节点id.这个名字}} 取）</div>'
+    + '<input ' + inp + ' data-f="out" value="' + escapeAttr(F ? F.outOf(nd) : 'text') + '">'
+    + '<div ' + lab + '>这一步失败时</div><select ' + inp + ' data-f="onError">'
+    + '<option value="stop"' + ((nd.onError || 'stop') === 'stop' ? ' selected' : '') + '>中断整个流程</option>'
+    + '<option value="skip"' + (nd.onError === 'skip' ? ' selected' : '') + '>跳过，继续往下走</option>'
+    + '<option value="default"' + (nd.onError === 'default' ? ' selected' : '') + '>用默认值兜底</option></select>';
+  if (nd.onError === 'default') {
+    h += '<div ' + lab + '>默认值</div><input ' + inp + ' data-f="errDefault" value="' + escapeAttr(nd.errDefault || '') + '">';
+  }
+  // 输入绑定：变量选择器
+  if (F) {
+    const vars = F.varList(b, nd.id) || [];
+    const cur = ((nd['in']) || []).map(function (x) { return (x && x.from) || ''; }).join(' ');
+    h += '<div ' + lab + '>输入绑定（上游有更新时点右边插入）</div>'
+      + '<div style="display:flex;gap:5px;margin-bottom:5px">'
+      + '<input class="ne-cfg" data-i="' + i + '" data-f="infrom" value="' + escapeAttr(cur) + '" placeholder="{{n1.text}}">'
+      + '<select class="ne-varpick" data-i="' + i + '" style="flex:0 0 92px;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 4px"><option value="">插入变量</option>'
+      + vars.map(function (v) { return '<option value="' + escapeAttr(v.name) + '">' + escapeHtml(v.label) + '</option>'; }).join('')
+      + '</select></div>'
+      + '<div ' + note + '>只列得出上游节点的输出 —— 引用还没执行的节点取不到值。</div>';
+  }
+  return h;
+}
 function cwMod(a, n) { return ((a % n) + n) % n; }
 function cwRound(n) { return Math.round(n * 10) / 10; }
 
 // ---------------------------------------------------------------
 // 编排画布：无限画布 + 直接操控
 // ---------------------------------------------------------------
-// 为什么是「单链」而不是自由图：执行引擎 runWorkflow 按 b.nodes 数组**顺序**串行跑，
-// 没有并行 / 分支 / 合流语义。所以画布上的连线只表达「先后」—— 拖 A→B 就是把 B 排到 A
-// 后面（重排数组）。这样「画出来的结构」与「跑起来的行为」永远一致；画引擎跑不出来的
-// 分叉只是好看，那是骗人。
+// 连线是**真实数据流**，不再是「先后」的装饰：引擎 runWorkflow 走 flowPlan(b)
+//（Kahn 拓扑排序）定执行次序，并沿 b.edges 把上游产出交给下游；条件节点没走到的
+// 那几路会被整条跳过。所以画布上画得出的分叉就是引擎真会走的分叉 ——
+//「画出来的结构」与「跑起来的行为」依然一致，只是这回画的是图而不是链。
 // 节点坐标 (x,y) 只是**视图状态**：引擎不看它，老数据没有坐标时由 normalize 按顺序铺开。
-// 卡片左上角的序号徽标显示的才是真实执行次序。
+// 卡片左上角的序号徽标显示的是拓扑序（真实执行次序），不是数组下标。
 const CW_GRID = 20;        // 网格步长，也是拖拽吸附步长
 const CW_CARD_W = 250;     // 卡片宽（与 CSS .cw-card 的 width 保持一致，改一处要同步另一处）
 const CW_LAYOUT_X = 340;   // 自动布局横向步进 = 卡片宽 + 90 间距
 const CW_ZOOM_MIN = 0.3, CW_ZOOM_MAX = 2.5;
 const CW_VIEWS = {};       // botId -> {x,y,s}：每个机器人记住自己的视角（纯内存）
-const CW_UNDO = {}, CW_REDO = {};   // botId -> [nodes 的 JSON 快照]（纯内存：挂 bot 上会被存进 localStorage）
+const CW_UNDO = {}, CW_REDO = {};   // botId -> [{n,e} 的 JSON 快照]（纯内存：挂 bot 上会被存进 localStorage）
 
 const cwSt = {
   bot: null, botId: '', root: null, grid: null, linkPath: null, tmp: null,
@@ -7490,7 +8006,22 @@ const cwSt = {
 function cwView(b) { if (!CW_VIEWS[b.id]) CW_VIEWS[b.id] = { x: 0, y: 0, s: 1 }; return CW_VIEWS[b.id]; }
 function cwUL(b) { if (!CW_UNDO[b.id]) CW_UNDO[b.id] = []; return CW_UNDO[b.id]; }
 function cwRL(b) { if (!CW_REDO[b.id]) CW_REDO[b.id] = []; return CW_REDO[b.id]; }
-function cwSnap(b) { return JSON.stringify(b.nodes || []); }
+// 快照必须**同时**存节点与边：连线语义换成图之后，「执行顺序」这件事由边承载，
+// 只存节点的话 Ctrl+Z 会把节点放回来、却把它和上下游的连线永远留在删除那一刻 ——
+// 用户看到的是「撤销了一半」，而且没有任何报错。
+function cwSnap(b) { return JSON.stringify({ n: b.nodes || [], e: b.edges || [] }); }
+
+// 快照恢复。老格式（纯节点数组）也认 —— 撤销栈虽然只活在内存里，
+// 但混装格式会让撤销栈里一半的条目静默半失效，不值得省这两行。
+function cwApplySnap(b, s) {
+  var o = JSON.parse(s);
+  if (Array.isArray(o)) { b.nodes = o; if (window.BotCraftFlow) window.BotCraftFlow.dropEdges(b); return; }
+  b.nodes = o.n || [];
+  b.edges = o.e || [];
+  // 快照来自本会话，格式必然是 v2；但 flowEnsure 认的是版本号，
+  // 漏标会让下一次 renderNodes 把这条图当老数据重建成链 —— 白撤销一次。
+  b.flowV = FLOW_V2;
+}
 
 // 一次操作 = 一步撤销。栈顶与当前状态相同时不入栈（所以「只点选、不拖动」不会污染历史）。
 function cwPushUndo(b) {
@@ -7504,7 +8035,7 @@ function cwUndo(b) {
   const st = cwUL(b);
   if (!st.length) { toast('没有可撤销的操作', 'warn'); return; }
   cwRL(b).push(cwSnap(b));
-  b.nodes = JSON.parse(st.pop());
+  cwApplySnap(b, st.pop());
   cwSt.sel = [];
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
   toast('已撤销', 'ok');
@@ -7513,7 +8044,7 @@ function cwRedo(b) {
   const rt = cwRL(b);
   if (!rt.length) { toast('没有可重做的操作', 'warn'); return; }
   cwUL(b).push(cwSnap(b));
-  b.nodes = JSON.parse(rt.pop());
+  cwApplySnap(b, rt.pop());
   cwSt.sel = [];
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
   toast('已重做', 'ok');
@@ -7530,17 +8061,33 @@ function cwBox(b, i) {
     h: (el && el.offsetHeight) ? el.offsetHeight : 132
   };
 }
-// 前一张卡右中点 → 后一张卡左中点（屏幕坐标）
-function cwAdj(b, i, v) {
-  const a = cwBox(b, i), c = cwBox(b, i + 1);
+// 出端口在卡片右侧的纵向位置：多分支时按分支号均分（与 cwCard 里的 top 百分比同源）
+function cwPortY(box, port, total) {
+  const t = Math.max(1, total || 1);
+  if (t <= 1) return box.y + box.h / 2;
+  return box.y + box.h * (Number(port || 0) + 1) / (t + 1);
+}
+// 前一张卡第 port 个出端口 → 后一张卡左中点（屏幕坐标）。
+// 旧签名是 cwAdj(b, i, v)，只认「相邻两张卡」—— 那是数组顺序模型的产物，
+// 画不出分支也画不出跳线。改成按「一条边」算，port 决定从哪个口出发。
+function cwAdj(b, fromI, toI, port, total, v) {
+  const a = cwBox(b, fromI), c = cwBox(b, toI);
   if (!a || !c) return null;
+  const ay = cwPortY(a, port, total);
   return {
-    ax: (a.x + a.w) * v.s + v.x, ay: (a.y + a.h / 2) * v.s + v.y,
+    ax: (a.x + a.w) * v.s + v.x, ay: ay * v.s + v.y,
     bx: c.x * v.s + v.x, by: (c.y + c.h / 2) * v.s + v.y
   };
 }
-function cwLinkSeg(b, i, v) {
-  const p = cwAdj(b, i, v);
+function cwEdgeAdj(b, edge, v) {
+  const F = window.BotCraftFlow;
+  if (!edge || !F) return null;
+  const fi = F.idxOf(b, edge.from), ti = F.idxOf(b, edge.to);
+  if (fi < 0 || ti < 0) return null;
+  return cwAdj(b, fi, ti, edge.port || 0, cwBranchCount((b.nodes || [])[fi]), v);
+}
+function cwEdgeSeg(b, edge, v) {
+  const p = cwEdgeAdj(b, edge, v);
   if (!p) return '';
   const dx = Math.max(40, Math.abs(p.bx - p.ax) * 0.45);
   return 'M' + cwRound(p.ax) + ' ' + cwRound(p.ay) +
@@ -7550,15 +8097,19 @@ function cwLinkSeg(b, i, v) {
 }
 // 曲线 t=0.5 的点：两端点 x 的对称控制点在三次贝塞尔里正好抵消，
 // 所以「端点中点」就是曲线中点 —— 插入按钮一定压在线上，不用解方程。
-function cwMidPoint(b, i, v) {
-  const p = cwAdj(b, i, v);
+function cwMidPoint(b, k, v) {
+  const es = (b && b.edges) || [];
+  const e = es[k];
+  if (!e) return { x: -9999, y: -9999 };
+  const p = cwEdgeAdj(b, e, v);
   if (!p) return { x: -9999, y: -9999 };
   return { x: (p.ax + p.bx) / 2, y: (p.ay + p.by) / 2 };
 }
-
 function cwCard(b, nd, i) {
+  const F = window.BotCraftFlow;
   const lbl = nd.lbl || '', h = nd.h || '', p = nd.p || '';
-  const isHandoff = lbl.indexOf('机器人') >= 0;
+  const kind = F ? F.kindOf(nd) : 'llm';
+  const isHandoff = (lbl.indexOf('机器人') >= 0) || (kind === 'sub');
   const target = (isHandoff && nd.bot) ? getBot(nd.bot) : null;
   const hint = isHandoff
     ? (target ? '<div class="node-handoff-to">➡️ ' + escapeHtml(target.n) + '</div>'
@@ -7567,15 +8118,39 @@ function cwCard(b, nd, i) {
   const x = cwNum(nd.x, i * CW_LAYOUT_X), y = cwNum(nd.y, 0);
   const sel = cwSt.sel.indexOf(i) >= 0 ? ' sel' : '';
   const who = escapeAttr(h);
+  // 条件节点有几路分支就开几个口；其余节点一个口。
+  // 多口是「分支」这件事在界面上的唯一表达 —— 一个口是画不出分叉的。
+  const nBranch = cwBranchCount(nd);
+  let ports = '';
+  for (let k = 0; k < nBranch; k++) {
+    const yPct = nBranch <= 1 ? 50 : Math.round((k + 1) * 100 / (nBranch + 1));
+    const bl = (kind === 'cond' && nd.branches && nd.branches[k]) ? (nd.branches[k].label || ('分支' + (k + 1))) : '';
+    ports += '<span class="cw-port out" data-port="' + k + '" data-i="' + i + '"' +
+      ' style="top:' + yPct + '%;transform:translateY(-50%)"' +
+      ' title="拖到另一张卡：把这条线连过去' + (bl ? '（' + escapeAttr(bl) + '）' : '') + '"></span>';
+  }
+  // 输出变量名直接写在卡面上：下游就是靠这个名字取值，省得用户翻配置去猜
+  const outName = F ? F.outOf(nd) : 'text';
+  const ord = (cwSt.order && cwSt.order.length) ? (cwSt.order.indexOf(nd.id) + 1) : (i + 1);
+  const kindTag = (kind !== 'llm')
+    ? '<span style="font-size:10px;color:var(--sub);margin-left:5px;font-weight:400">' + escapeHtml(kind) + '</span>' : '';
   return '<div class="node cw-card' + (isHandoff ? ' handoff' : '') + sel + '" data-i="' + i + '" style="transform:translate(' + x + 'px,' + y + 'px)">' +
-    '<span class="cw-ord" title="执行次序：第 ' + (i + 1) + ' 步">' + (i + 1) + '</span>' +
-    '<span class="cw-port in" data-port="in" data-i="' + i + '" title="拖到别的节点：把「' + who + '」排到它后面"></span>' +
+    '<span class="cw-ord" title="执行次序（拓扑序第 ' + (ord || i + 1) + ' 位）">' + (ord || i + 1) + '</span>' +
+    '<span class="cw-port in" data-port="in" data-i="' + i + '" title="拖到这里：把别的节点接到「' + who + '」前面"></span>' +
     '<span class="node-del" data-i="' + i + '" title="删除节点">✕</span>' +
     '<span class="node-ic">' + nodeIcon(lbl, h) + '</span>' +
-    '<div class="lbl">' + escapeHtml(lbl) + '</div><h4>' + escapeHtml(h) + '</h4><p>' + escapeHtml(p) + '</p>' + hint +
+    '<div class="lbl">' + escapeHtml(lbl) + kindTag + '</div><h4>' + escapeHtml(h) + '</h4><p>' + escapeHtml(p) + '</p>' + hint +
+    '<div style="font-size:10px;color:var(--sub);margin-top:3px;word-break:break-all">输出 ' + escapeHtml('{{' + (nd.id || '') + '.' + outName + '}}') + '</div>' +
     '<div class="node-edit-save"><button class="ok" data-act="save">保存</button><button class="cancel" data-act="cancel">取消</button></div>' +
-    '<span class="cw-port out" data-port="out" data-i="' + i + '" title="拖到另一个节点：把它排到「' + who + '」后面"></span>' +
+    ports +
     '</div>';
+}
+// 条件节点有几个出口；其它节点恒为 1
+function cwBranchCount(nd) {
+  const F = window.BotCraftFlow;
+  const kind = F ? F.kindOf(nd) : 'llm';
+  if (kind !== 'cond') return 1;
+  return Math.max(1, ((nd && nd.branches) || []).length || 2);
 }
 
 function cwToolsHtml() {
@@ -7585,7 +8160,7 @@ function cwToolsHtml() {
     '<button class="cw-tbtn" data-act="zoomin" title="放大">＋</button>' +
     '<span class="cw-tsep"></span>' +
     '<button class="cw-tbtn" data-act="fit" title="适配视图，把所有节点框进来看（F）">⛶</button>' +
-    '<button class="cw-tbtn" data-act="layout" title="按执行顺序整理成一条链">⠿</button>' +
+    '<button class="cw-tbtn" data-act="layout" title="按执行次序（拓扑序）一字排开，有分支也不会把上下游错位">⠿</button>' +
     '<span class="cw-tsep"></span>' +
     '<button class="cw-tbtn" data-act="undo" title="撤销（Ctrl+Z）">↶</button>' +
     '<button class="cw-tbtn" data-act="redo" title="重做（Ctrl+Shift+Z）">↷</button>' +
@@ -7596,7 +8171,7 @@ function cwToolsHtml() {
 function cwHintHtml() {
   return '<div class="cw-hint">' +
     '<span><kbd>拖卡片</kbd>摆位置</span>' +
-    '<span><kbd>拖圆点</kbd>改顺序</span>' +
+    '<span><kbd>拖圆点</kbd>连边</span>' +
     '<span><kbd>Shift</kbd>+拖 框选</span>' +
     '<span><kbd>空格</kbd>/中键 平移</span>' +
     '<span><kbd>Ctrl</kbd>+滚轮 缩放</span>' +
@@ -7618,9 +8193,16 @@ function renderNodes(b) {
   body.classList.add('cw-on');
   const nodes = b.nodes || [];
   cwSt.sel = cwSt.sel.filter(function (i) { return i < nodes.length; });
+  // 保证图结构就位（老机器人 / 新建的），并把拓扑次序算给卡片显示
+  if (window.BotCraftFlow) {
+    try { window.BotCraftFlow.ensure(b); window.BotCraftFlow.edges(b); } catch (e) { console.warn('[flowV2] 画布初始化失败：', e); }
+  }
+  cwSt.order = null;
+  if (window.BotCraftFlow) { try { cwSt.order = window.BotCraftFlow.plan(b).order; } catch (e) { } }
   let mids = '';
-  for (let k = 0; k + 1 < nodes.length; k++) {
-    mids += '<span class="cw-mid" data-mid="' + k + '" title="在第 ' + (k + 1) + '、' + (k + 2) + ' 步之间插入一个节点">＋</span>';
+  const _mEs = (b && b.edges) || [];
+  for (let k = 0; k < _mEs.length; k++) {
+    mids += '<span class="cw-mid" data-mid="' + k + '" title="在这条连线上插入一个节点">＋</span>';
   }
   const mini = nodes.length
     ? '<div class="cw-mini" id="cwMini">' +
@@ -7659,25 +8241,55 @@ function renderNodes(b) {
 // 实际只是多跑一次普通模型调用 —— 那是误导。原先表里有四种类型在引擎里根本没有
 // 对应分支（消息、条件、插件、机器人转交），已移除；现表与 ROLE_SYSTEM 的 role 对齐。
 const NODE_TYPES = [
-  { lbl: '🧠 大模型', h: '大模型调用', p: '调用 LLM 生成内容' },
-  { lbl: '📚 知识库', h: '知识检索', p: '检索已挂载知识库并注入', role: 'retrieve' },
-  { lbl: '❓ 澄清', h: '需求澄清', p: '先向用户确认必要信息', role: 'clarify' },
-  { lbl: '🗂 大纲', h: '大纲设计', p: '先产出分点大纲再撰写', role: 'outline' },
-  { lbl: '✍️ 撰写', h: '撰写正文', p: '基于上下文产出完整内容', role: 'draft' },
-  { lbl: '✨ 润色', h: '润色质检', p: '去 AI 腔与套话，打磨成稿', role: 'review' },
-  { lbl: '🟢 开始', h: '开始', p: '流程起点', role: 'start' },
-  { lbl: '🧑‍⚖️ 审批', h: '人工审批', p: 'role:human 交付前暂停，人工确认/修改后再发出', role: 'human', note: '交付前请确认：无违规承诺、符合品牌调性、信息准确。', autoReview: true },
+  { lbl: '🧠 大模型', h: '大模型调用', p: '调用 LLM 生成内容', kind: 'llm' },
+  { lbl: '📚 知识库', h: '知识检索', p: '检索已挂载知识库并注入', role: 'retrieve', kind: 'llm' },
+  { lbl: '❓ 澄清', h: '需求澄清', p: '先向用户确认必要信息', role: 'clarify', kind: 'llm' },
+  { lbl: '🗂 大纲', h: '大纲设计', p: '先产出分点大纲再撰写', role: 'outline', kind: 'llm' },
+  { lbl: '✍️ 撰写', h: '撰写正文', p: '基于上下文产出完整内容', role: 'draft', kind: 'llm' },
+  { lbl: '✨ 润色', h: '润色质检', p: '去 AI 腔与套话，打磨成稿', role: 'review', kind: 'llm' },
+  { lbl: '🟢 开始', h: '开始', p: '流程起点', role: 'start', kind: 'start' },
+  // ---- 逻辑节点：让画布能表达「判断」和「重复」，而不只是措辞 ----
+  { lbl: '🔀 条件', h: '条件分支', p: '按变量判断走哪一路', kind: 'cond',
+    branches: [{ label: '满足', when: '' }, { label: '其他', when: '' }] },
+  { lbl: '🔁 循环', h: '循环处理', p: '对数组逐项跑一遍循环体工作流', kind: 'loop',
+    loopMode: 'array', loopWhen: '{{input.msg}}', loopTimes: 3, loopBody: '' },
+  // ---- 能力节点：真正「做事」的节点，不再全是让模型写文本 ----
+  { lbl: '🔧 代码', h: '代码处理', p: '用 JS 处理数据', kind: 'code', lang: 'js',
+    code: '// params 里是上游传入的值（在下面配输入绑定）\n// return 什么，下游就能用 {{节点id.输出名}} 取到什么\nvar t = (params && params.text) || "";\nreturn t.split(/[。！？\\n]/).filter(function (s) { return s.trim(); });' },
+  { lbl: '🧰 工具', h: '调用工具', p: '检索知识库 / 联网 / 天气 / 生图', kind: 'tool',
+    tool: 'kb', toolQuery: '{{input.msg}}' },
+  { lbl: '🌐 HTTP', h: 'HTTP 请求', p: '调用外部接口（受浏览器跨域限制）', kind: 'http',
+    url: '', method: 'GET', headers: '', body: '' },
+  { lbl: '📦 子流程', h: '调用子工作流', p: '复用另一个机器人的工作流', kind: 'sub',
+    subId: '', subQuery: '{{input.msg}}' },
+  { lbl: '🧑‍⚖️ 审批', h: '人工审批', p: 'role:human 交付前暂停，人工确认/修改后再发出', role: 'human', kind: 'human', note: '交付前请确认：无违规承诺、符合品牌调性、信息准确。', autoReview: true },
 ];
 function addNode() {
   const b = getBot(currentId); if (!b) return;
   if (!b.nodes) b.nodes = [];
   // 节点类型按顺序轮换，避免连点「添加」出来的全是同一种
-  const nd = NODE_TYPES[b.nodes.length % NODE_TYPES.length];
+  // 深拷贝模板：branches / code 是对象，浅拷贝会让同类型节点共享一份数据
+  const nd = JSON.parse(JSON.stringify(NODE_TYPES[b.nodes.length % NODE_TYPES.length]));
   const lastI = b.nodes.length - 1;
   const lx = lastI >= 0 ? cwNum(b.nodes[lastI].x, lastI * CW_LAYOUT_X) : -CW_LAYOUT_X;
   const ly = lastI >= 0 ? cwNum(b.nodes[lastI].y, 0) : 0;
   cwPushUndo(b);
-  b.nodes.push({ lbl: nd.lbl, h: nd.h, p: nd.p, role: nd.role || '', x: Math.round(lx + CW_LAYOUT_X), y: Math.round(ly) });
+  const _F = window.BotCraftFlow;
+  if (_F) { _F.ensure(b); _F.edges(b); nd.id = _F.newId(b); }
+  if (!nd.kind) nd.kind = 'llm';
+  if (!nd.out) nd.out = _F ? _F.outOf(nd) : 'text';
+  if (!nd.onError) nd.onError = 'stop';
+  nd.x = Math.round(lx + CW_LAYOUT_X); nd.y = Math.round(ly);
+  b.nodes.push(nd);
+  // 只有一个末端时自动接上，保住「新加的卡就是下一步」这个直觉
+  if (_F) {
+    const _outs = {};
+    b.edges.forEach(function (e) { _outs[e.from] = 1; });
+    const _tails = b.nodes.filter(function (n2) { return n2.id !== nd.id && !_outs[n2.id]; });
+    if (_tails.length === 1 && _F.canLink(b, _tails[0].id, nd.id).ok) {
+      b.edges.push({ from: _tails[0].id, to: nd.id, port: 0 });
+    }
+  }
   cwSt.sel = [b.nodes.length - 1];
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
   cwEnsureVisible(b, b.nodes.length - 1);
@@ -7696,6 +8308,7 @@ function bindNodeEdit(body, b) {
         : '';
       const isHandoffType = (nd.lbl || '').indexOf('机器人') >= 0;
       const isAprType = (nd.role === 'human');
+      const kindCfg = flowNodeCfgHtml(b, nd, i);
       el.innerHTML = `
         <span class="node-del" data-i="${i}" title="删除节点">✕</span>
         <select class="ne-type" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px">
@@ -7706,6 +8319,7 @@ function bindNodeEdit(body, b) {
         </select>
         <input class="ne-h" value="${escapeAttr(nd.h)}" placeholder="节点标题">
         <textarea class="ne-p" placeholder="节点描述">${escapeHtml(nd.p)}</textarea>
+        ${kindCfg}
         ${isAprType ? `
         <div style="margin-top:6px">
           <div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>
@@ -7720,6 +8334,61 @@ function bindNodeEdit(body, b) {
       const botSel = el.querySelector('.ne-bot');
       const hInput = el.querySelector('.ne-h');
       const pInput = el.querySelector('.ne-p');
+      // ---- 种类专有字段：直接写回并落盘 ----
+      el.querySelectorAll('.ne-cfg').forEach(inp2 => {
+        const flush = () => {
+          const nd2 = b.nodes[i];
+          if (!nd2) return;
+          const f = inp2.getAttribute('data-f');
+          if (!f) return;
+          const val = inp2.value;
+          if (f === 'branches') {
+            const k = +inp2.getAttribute('data-k');
+            if (!nd2.branches) nd2.branches = [];
+            if (!nd2.branches[k]) nd2.branches[k] = { label: '', when: '' };
+            nd2.branches[k][inp2.getAttribute('data-sub')] = val;
+          } else if (f === 'loopTimes') {
+            nd2.loopTimes = parseInt(val, 10) || 0;
+          } else if (f === 'infrom') {
+            const names = String(val || '').split(/\s+/).filter(Boolean);
+            nd2['in'] = names.map(function (n2, k2) { return { k: k2 ? ('in' + (k2 + 1)) : 'text', from: n2 }; });
+          } else {
+            nd2[f] = val;
+          }
+          b.updatedAt = Date.now(); saveBots();
+        };
+        inp2.onchange = flush;
+        inp2.oninput = flush;
+        inp2.onpointerdown = e2 => e2.stopPropagation();
+        inp2.ondblclick = e2 => e2.stopPropagation();
+      });
+      el.querySelectorAll('.ne-bradd').forEach(btn => {
+        btn.onpointerdown = e2 => e2.stopPropagation();
+        btn.onclick = e2 => {
+          e2.stopPropagation();
+          const nd2 = b.nodes[i];
+          if (!nd2) return;
+          if (!nd2.branches) nd2.branches = [];
+          nd2.branches.push({ label: '分支' + (nd2.branches.length + 1), when: '' });
+          b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+        };
+      });
+      el.querySelectorAll('.ne-varpick').forEach(sel => {
+        sel.onpointerdown = e2 => e2.stopPropagation();
+        sel.onchange = e2 => {
+          e2.stopPropagation();
+          const nd2 = b.nodes[i];
+          const box = sel.closest('div').querySelector('input.ne-cfg');
+          if (!nd2 || !box || !sel.value) return;
+          const add = sel.value;
+          nd2['in'] = (nd2['in'] || []).concat([{ k: (nd2['in'] || []).length ? ('in' + (nd2['in'].length + 1)) : 'text', from: '{{' + add + '}}' }]);
+          box.value = nd2['in'].map(function (x) { return x.from; }).join(' ');
+          b.updatedAt = Date.now(); saveBots();
+          sel.value = '';
+          toast('已插入变量 ' + add, 'ok');
+        };
+      });
+
       typeSel.onchange = () => {
         botSel.style.display = (typeSel.value.indexOf('机器人') >= 0) ? 'block' : 'none';
         const willHuman = ((NODE_TYPES.find(t => t.lbl === typeSel.value) || {}).role === 'human');
@@ -7776,9 +8445,11 @@ function cwPaint(b) {
       px + 'px ' + py + 'px,' + px + 'px ' + py + 'px';
   }
   cwSt.stage.style.transform = 'translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.s + ')';
-  const kids = cwSt.stage.children;
+  // 按边画线。旧代码是「把相邻两张卡连起来」—— 那是数组顺序模型的残留，
+  // 分支、跨节点跳线在这种画法下根本表达不出来。
   let d = '';
-  for (let i = 0; i + 1 < kids.length; i++) d += cwLinkSeg(b, i, v);
+  const _pes = (b && b.edges) || [];
+  for (let _ei = 0; _ei < _pes.length; _ei++) d += cwEdgeSeg(b, _pes[_ei], v);
   cwSt.linkPath.setAttribute('d', d);
   const mids = cwSt.mids || [];
   for (let m = 0; m < mids.length; m++) {
@@ -7899,61 +8570,139 @@ function cwRefresh() {
 }
 
 // ---------------------------------------------------------------
-// 结构操作：改顺序 / 增删 / 复制
+// 结构操作：连线 / 增删 / 复制
 // ---------------------------------------------------------------
-// 把 B 排到 A 之后。单链模型下这永远合法（不会成环、不会分叉），所以不存在「拒绝连线」。
-function cwLinkTo(b, A, B) {
+// 连线 = 加一条有向边。旧实现是「把 B 从数组里抽出来插到 A 后面」，
+// 那种做法在单链模型下永远合法、不会成环也不会分叉 —— 代价是根本画不出分支。
+// 换成有向图之后连线**可能被拒**（成环），所以拒绝理由必须说清楚，
+// 而不是静默失败让用户对着画布猜。
+function cwLinkTo(b, A, B, port) {
   if (A === B) { toast('不能把节点连到它自己', 'warn'); return; }
-  if (B === A + 1) { toast('「' + (b.nodes[B].h || '') + '」已经是下一步了', 'warn'); return; }
+  const F = window.BotCraftFlow;
+  if (!F) { toast('编排模块没就绪，无法连线', 'err'); return; }
+  F.ensure(b); F.edges(b);
+  const na = (b.nodes || [])[A], nb = (b.nodes || [])[B];
+  if (!na || !nb || !na.id || !nb.id) { toast('节点数据异常，无法连线', 'err'); return; }
+  const chk = F.canLink(b, na.id, nb.id);
+  if (!chk.ok) { toast(chk.why, 'err'); return; }
+  const p = Number(port) || 0;
+  if (b.edges.some(function (e) { return e.from === na.id && e.to === nb.id && Number(e.port || 0) === p; })) {
+    toast('这两张卡之间已经有这条线了', 'warn'); return;
+  }
   cwPushUndo(b);
-  const moved = b.nodes.splice(B, 1)[0];
-  const ai = B < A ? A - 1 : A;      // 抽走后 A 的下标可能左移一位
-  b.nodes.splice(ai + 1, 0, moved);
-  cwSt.sel = [ai + 1];
+  b.edges.push({ from: na.id, to: nb.id, port: p });
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
-  toast('已把「' + (moved.h || '') + '」排到「' + (b.nodes[ai].h || '') + '」之后（第 ' + (ai + 2) + ' 步）', 'ok');
+  toast('已连接：' + (na.h || '') + ' → ' + (nb.h || '') + (p ? ('（第 ' + (p + 1) + ' 路）') : ''), 'ok');
 }
 function cwAddAt(b, t, wx, wy) {
+  const F = window.BotCraftFlow;
   cwPushUndo(b);
-  b.nodes.push({ lbl: t.lbl, h: t.h, p: t.p, role: t.role || '', x: Math.round(wx), y: Math.round(wy) });
+  if (F) { F.ensure(b); F.edges(b); }
+  const nd = JSON.parse(JSON.stringify(t));
+  nd.id = F ? F.newId(b) : ('n' + (b.nodes.length + 1));
+  if (!nd.kind) nd.kind = 'llm';
+  if (!nd.out) nd.out = F ? F.outOf(nd) : 'text';
+  if (!nd.onError) nd.onError = 'stop';
+  nd.x = Math.round(wx); nd.y = Math.round(wy);
+  b.nodes.push(nd);
+  // 只有一个末端节点时自动接上，保住「新加的卡就是下一步」这个直觉；
+  // 有分支（多个末端）时不知道接哪一路，交给用户自己连
+  if (F) {
+    const outs = {};
+    b.edges.forEach(function (e) { outs[e.from] = 1; });
+    const tails = b.nodes.filter(function (n2) { return n2.id !== nd.id && !outs[n2.id]; });
+    if (tails.length === 1 && tails[0].id !== nd.id && F.canLink(b, tails[0].id, nd.id).ok) {
+      b.edges.push({ from: tails[0].id, to: nd.id, port: 0 });
+    }
+  }
   cwSt.sel = [b.nodes.length - 1];
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
   cwEnsureVisible(b, b.nodes.length - 1);
-  toast('已添加「' + t.h + '」，它是第 ' + b.nodes.length + ' 步', 'ok');
+  toast('已添加「' + nd.h + '」', 'ok');
 }
 function cwDelOne(b, i) {
   if (b.nodes.length <= 1) { toast('至少保留一个节点', 'err'); return; }
   cwPushUndo(b);
-  b.nodes.splice(i, 1);
+  cwRemoveNodes(b, [i]);
   cwSt.sel = [];
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
   toast('已删除节点', 'ok');
+}
+// 删节点必须**同时收边**：连线语义换成图之后，「谁接谁」不再由数组顺序兜着，
+// 光把节点从数组里抽走，它身上的边就变成悬空边被丢掉 —— 流程被剪成两截。
+// 所以删的时候顺手把上下游接起来，单个删 / 多选删共用这一段，免得两条路径行为不一致。
+function cwRemoveNodes(b, idxs) {
+  const F = window.BotCraftFlow;
+  // 从后往前删，前面的下标才不会因为 splice 而串位
+  const list = (idxs || []).slice().sort(function (a, c) { return c - a; });
+  if (F) { F.ensure(b); F.edges(b); }
+  let done = 0;
+  list.forEach(function (i) {
+    const nd = (b.nodes || [])[i];
+    if (!nd) return;
+    if (F && nd.id) {
+      const ins = b.edges.filter(function (e) { return e.to === nd.id; });
+      const outs = b.edges.filter(function (e) { return e.from === nd.id; });
+      b.edges = b.edges.filter(function (e) { return e.from !== nd.id && e.to !== nd.id; });
+      // 恰好一进一出 → 直接把上下游接起来。有分支（多进或多出）时不知道该接哪一路，
+      // 就不猜 —— 让它留在画布上由用户自己连。
+      if (ins.length === 1 && outs.length === 1) {
+        const src = ins[0].from, dst = outs[0].to;
+        const dup = b.edges.some(function (e) { return e.from === src && e.to === dst; });
+        if (src !== dst && !dup && F.canLink(b, src, dst).ok) {
+          b.edges.push({ from: src, to: dst, port: Number(ins[0].port) || 0 });
+        }
+      }
+    }
+    b.nodes.splice(i, 1);
+    done++;
+  });
+  return done;
 }
 function cwDelSel(b) {
   if (!cwSt.sel.length) { toast('先选中要删除的节点', 'warn'); return; }
   if (b.nodes.length - cwSt.sel.length < 1) { toast('至少保留一个节点', 'err'); return; }
   cwPushUndo(b);
-  const idx = cwSt.sel.slice().sort(function (a, c) { return c - a; });
-  idx.forEach(function (i) { b.nodes.splice(i, 1); });
-  const n = idx.length;
+  const n = cwRemoveNodes(b, cwSt.sel);
   cwSt.sel = [];
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
   toast('已删除 ' + n + ' 个节点', 'ok');
 }
-function cwInsertBetween(b, i) {
-  const t = NODE_TYPES[(b.nodes.length) % NODE_TYPES.length];
+function cwInsertBetween(b, k) {
+  const F = window.BotCraftFlow;
+  // 深拷贝模板：NODE_TYPES 里的 branches / code 是对象，
+  // 直接赋值会让所有同类型节点共享同一份数据，改一个动一片
+  const t = JSON.parse(JSON.stringify(NODE_TYPES[(b.nodes.length) % NODE_TYPES.length]));
   cwPushUndo(b);
-  const a = cwBox(b, i), c = cwBox(b, i + 1);
+  if (F) { F.ensure(b); F.edges(b); }
+  const e = (b.edges || [])[k];
   let x = 0, y = 0;
-  if (a && c) {
-    x = Math.round((a.x + c.x) / 2);
-    y = Math.round((a.y + c.y) / 2);
-    if (Math.abs(a.x - c.x) < 60) y = Math.round(y + 180);   // 两张卡几乎重叠时错开，别叠一起
+  if (e && F) {
+    const a = cwBox(b, F.idxOf(b, e.from)), c = cwBox(b, F.idxOf(b, e.to));
+    if (a && c) {
+      x = Math.round((a.x + c.x) / 2);
+      y = Math.round((a.y + c.y) / 2);
+      if (Math.abs(a.x - c.x) < 60) y = Math.round(y + 180);   // 两张卡几乎重叠时错开，别叠一起
+    }
   }
-  b.nodes.splice(i + 1, 0, { lbl: t.lbl, h: t.h, p: t.p, role: t.role || '', x: x, y: y });
-  cwSt.sel = [i + 1];
+  const nid = F ? F.newId(b) : ('n' + (b.nodes.length + 1));
+  t.id = nid;
+  if (!t.kind) t.kind = 'llm';
+  if (!t.out) t.out = F ? F.outOf(t) : 'text';
+  if (!t.onError) t.onError = 'stop';
+  t.x = x; t.y = y;
+  b.nodes.push(t);
+  if (e && F) {
+    // 断开原边，串成「上游 → 新节点 → 下游」
+    b.edges = b.edges.filter(function (x2) {
+      return !(x2.from === e.from && x2.to === e.to && Number(x2.port || 0) === Number(e.port || 0));
+    });
+    b.edges.push({ from: e.from, to: nid, port: e.port || 0 });
+    b.edges.push({ from: nid, to: e.to, port: 0 });
+  }
+  cwSt.sel = [b.nodes.length - 1];
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
-  toast('已插入「' + t.h + '」，它是第 ' + (i + 2) + ' 步', 'ok');
+  toast('已在这条线上插入「' + t.h + '」', 'ok');
 }
 function cwCopy(b) {
   if (!cwSt.sel.length) { toast('先选中要复制的节点', 'warn'); return; }
@@ -7964,27 +8713,70 @@ function cwCopy(b) {
 }
 function cwPaste(b) {
   if (!cwSt.clip || !cwSt.clip.length) { toast('剪贴板为空：先选中节点再 Ctrl+C', 'warn'); return; }
+  const F = window.BotCraftFlow;
   cwPushUndo(b);
-  const at = cwSt.sel.length ? Math.max.apply(null, cwSt.sel) + 1 : b.nodes.length;
+  if (F) { F.ensure(b); F.edges(b); }
+  const sel = cwSt.sel.slice().sort(function (a, c) { return a - c; });
+  const origins = sel.map(function (i) { return b.nodes[i]; }).filter(Boolean);
+  const at = sel.length ? sel[sel.length - 1] + 1 : b.nodes.length;
   const made = cwSt.clip.map(function (n) {
-    const c = Object.assign({}, n);
+    // 深拷贝：branches / in 是数组，浅拷贝会让「连粘两次」出来的副本共享同一份数据，
+    // 改一个分支两处一起变 —— 与画布添加节点处的深拷贝是同一个理由。
+    const c = JSON.parse(JSON.stringify(n));
     c.x = cwNum(c.x, 0) + CW_GRID * 2;
     c.y = cwNum(c.y, 0) + CW_GRID * 2;
+    // id 一定要重新发，而且必须**发一个就看得见一个**：
+    // flowNewId 是按 b.nodes 现存的 id 去重的，所以先把节点插进数组、再逐个取号，
+    // 否则同一批副本会拿到同一个 id（画布上出现两个同 id 节点，
+    // 之后 flowById 只认第一个、变量引用和边都可能挂到错的那个上）。
+    delete c.id;
     return c;
   });
   b.nodes.splice.apply(b.nodes, [at, 0].concat(made));
+  if (F) {
+    made.forEach(function (c) { c.id = F.newId(b); });
+    // 「粘出来的副本接在原节点后面」这件事在新的图模型下要自己接：
+    // 原节点只有一条出边时，把那条边拆成 原→副本→原来的下游
+    origins.forEach(function (o, k) {
+      const c = made[k];
+      if (!o || !c || !o.id) return;
+      const outs = b.edges.filter(function (e) { return e.from === o.id; });
+      if (outs.length === 1) {
+        const e0 = outs[0];
+        b.edges = b.edges.filter(function (e) {
+          return !(e.from === e0.from && e.to === e0.to && Number(e.port || 0) === Number(e0.port || 0));
+        });
+        if (F.canLink(b, o.id, c.id).ok) b.edges.push({ from: o.id, to: c.id, port: Number(e0.port) || 0 });
+        if (F.canLink(b, c.id, e0.to).ok) b.edges.push({ from: c.id, to: e0.to, port: 0 });
+      } else if (!outs.length) {
+        // 原节点本来就是末端：副本接在它后面，与「加节点自动接末端」一致
+        if (F.canLink(b, o.id, c.id).ok) b.edges.push({ from: o.id, to: c.id, port: 0 });
+      }
+    });
+  }
   cwSt.sel = made.map(function (_, k) { return at + k; });
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
-  toast('已粘贴 ' + made.length + ' 个节点（插在第 ' + at + ' 步之后）', 'ok');
+  toast('已粘贴 ' + made.length + ' 个节点', 'ok');
 }
 function cwAutoLayout(b) {
   b = b || cwSt.bot;
   if (!b || !b.nodes || !b.nodes.length) return;
   cwPushUndo(b);
-  b.nodes.forEach(function (n, i) { n.x = i * CW_LAYOUT_X; n.y = 0; });
+  const F = window.BotCraftFlow;
+  let order = null;
+  if (F) { try { F.ensure(b); F.edges(b); order = F.plan(b).order; } catch (e) { } }
+  if (order && order.length === b.nodes.length) {
+    // 按真实执行次序（拓扑序）铺开，不是数组顺序 —— 有分支时两者并不一样
+    order.forEach(function (id, k) {
+      const nd = F.byId(b, id);
+      if (nd) { nd.x = k * CW_LAYOUT_X; nd.y = 0; }
+    });
+  } else {
+    b.nodes.forEach(function (n, i) { n.x = i * CW_LAYOUT_X; n.y = 0; });
+  }
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
   cwFit(b);
-  toast('已按执行顺序整理成一条链', 'ok');
+  toast('已按执行次序排成一行', 'ok');
 }
 function cwEnsureVisible(b, i) {
   const root = cwSt.root;
@@ -8044,7 +8836,7 @@ function cwOpenMenu(b, cx, cy) {
     html += '<div class="cw-mi" data-add="' + k + '"><span>' + t.lbl + '</span><span class="cw-mdim">' + escapeHtml(t.p) + '</span></div>';
   });
   html += '<div class="cw-msep"></div>' +
-    '<div class="cw-mi" data-act="layout">⠿ 按执行顺序整理成链</div>' +
+    '<div class="cw-mi" data-act="layout">⠿ 按执行次序排成一行</div>' +
     '<div class="cw-mi" data-act="fit">⛶ 适配视图</div>' +
     '<div class="cw-mi" data-act="zoom100">1:1 缩放</div>' +
     '<div class="cw-mi" data-act="all">全选（' + (b.nodes || []).length + ' 个节点）</div>' +
@@ -8192,8 +8984,11 @@ function cwOnMove(e) {
     if (hot !== d.hot) { d.hot = hot; cwHotCard(hot); }
     const bx = cwBox(b, d.anchor);
     let sx, sy;
-    if (d.side === 'out') { sx = (bx.x + bx.w) * v.s + v.x; sy = (bx.y + bx.h / 2) * v.s + v.y; }
-    else { sx = bx.x * v.s + v.x; sy = (bx.y + bx.h / 2) * v.s + v.y; }
+    if (d.side !== 'in') {
+      // 从第几路分支口拖出来的，线就从那个口起画
+      const _ay = cwPortY(bx, Number(d.side) || 0, cwBranchCount(b.nodes[d.anchor]));
+      sx = (bx.x + bx.w) * v.s + v.x; sy = _ay * v.s + v.y;
+    } else { sx = bx.x * v.s + v.x; sy = (bx.y + bx.h / 2) * v.s + v.y; }
     const ex = e.clientX - r.left, ey = e.clientY - r.top;
     const dx = Math.max(30, Math.abs(ex - sx) * 0.4) * (ex >= sx ? 1 : -1);
     cwSt.tmp.setAttribute('d', 'M' + cwRound(sx) + ' ' + cwRound(sy) +
@@ -8226,9 +9021,11 @@ function cwOnUp(e) {
     cwSt.tmp.setAttribute('d', '');
     cwHotCard(-1);
     if (d.hot >= 0) {
-      cwLinkTo(b, d.side === 'out' ? d.anchor : d.hot, d.side === 'out' ? d.hot : d.anchor);
+      const _fromOut = (d.side !== 'in');
+      const _port = _fromOut ? (Number(d.side) || 0) : 0;
+      cwLinkTo(b, _fromOut ? d.anchor : d.hot, _fromOut ? d.hot : d.anchor, _port);
     } else if (d.moved) {
-      toast('松手时没有落在其他节点上，顺序没有改动', 'warn');
+      toast('松手时没有落在其他节点上，这次没有连线', 'warn');
     }
   }
   cwPaint(b);
@@ -9751,7 +10548,9 @@ function exportWorkflow() {
   const data = {
     botName: b.n, exportedAt: new Date().toISOString(),
     model: b.model || BotCraftAI.getConfig().model,
-    workflow: { nodes: b.nodes || [], prompt: b.prompt, knowledges: b.knowledges, plugins: b.plugins },
+    // edges 一起导出：分支 / 循环的图结构是工作流的一部分，漏了它
+    // 「导出再导入」会把别人的分支流程装成一条直线，而且看不出是哪里丢的
+    workflow: { nodes: b.nodes || [], edges: b.edges || [], prompt: b.prompt, knowledges: b.knowledges, plugins: b.plugins },
   };
   _exportJson = JSON.stringify(data, null, 2);
   document.getElementById('exportTitle').textContent = '导出工作流 · ' + (b.n || '未命名');
@@ -9791,6 +10590,28 @@ function importWorkflowFromFile(file) {
           n = n || {};
           return Object.assign({}, n, { lbl: n.lbl || '💬 消息', h: n.h || '节点', p: n.p || '' });
         });
+        // 导入的图要跟节点一起进来；来源没有 edges（老导出文件 / 手写 JSON）
+        // 就丢掉旧边让 flowEnsure 按数组顺序重建 —— 留着旧边会全成悬空边。
+        // 还要先验一遍端点：边是用 id 指认节点的，而老导出文件的节点**没有 id**，
+        // 进来后会被分配一套新 id —— 那时旧边看着还在、其实已经全指空了。
+        // 宁可判定为「这份文件没有图」按数组顺序重建，也不要留一张指空的图。
+        if (Array.isArray(data.workflow.edges)) {
+          var _ids = {};
+          b.nodes.forEach(function (n) { if (n && n.id) _ids[n.id] = 1; });
+          var _ok = data.workflow.edges.every(function (e) {
+            return e && _ids[e.from] && _ids[e.to] && e.from !== e.to;
+          });
+          if (_ok) {
+            b.edges = data.workflow.edges.map(function (e) {
+              return { from: String(e.from), to: String(e.to), port: Number(e.port) || 0 };
+            });
+            b.flowV = FLOW_V2;
+          } else {
+            flowDropEdges(b);
+          }
+        } else {
+          flowDropEdges(b);
+        }
         if (data.workflow.prompt) b.prompt = data.workflow.prompt;
         if (data.workflow.knowledges) b.knowledges = data.workflow.knowledges;
         if (data.workflow.plugins) b.plugins = data.workflow.plugins;
@@ -13088,29 +13909,365 @@ window.__debug = {
   }
 
   // ---------- 串行工作流引擎 ----------
-  async function runWorkflow(bot, userMsg, imgs, auds, frms, imagePrompt, onProgress) {
+  // =========================================================================
+  // FlowV2 执行器：非模型节点（条件 / 代码 / 工具 / HTTP / 子工作流 / 循环）
+  // -------------------------------------------------------------------------
+  // 只负责「把一张卡跑出结果」，调度（拓扑序、跳过传播）由 runWorkflow 管。
+  // 统一返回形状，免得调度侧为每种 kind 写一堆特例：
+  //     { out, value, branchPort, stop, note }
+  //   out        —— 写进变量池的文本，下游用 {{节点id.输出名}} 取到的就是它
+  //   value      —— 原始值（数组 / 对象原样保留，循环与代码节点要用）
+  //   branchPort —— cond 专用：哪一路命中，其余分支的边要标 dead
+  //   stop       —— 节点级致命错误且策略是中断，调度侧应停止整条流程
+  //   note       —— 追加到运行日志的提示（失败原因 / 降级说明）
+  // =========================================================================
+
+  var _flowSeq = 0;
+  var FLOW_CODE_TIMEOUT = 8000;
+
+  // 代码节点跑在插件同款沙箱里（sandbox 属性只给 allow-scripts，**不给 same-origin**），
+  // 所以它摸不到父页面的 localStorage（API Key 就在那儿）。
+  // 返回值走结构化克隆直接传对象，不经过桥的字符串化 —— 否则数组/对象一到
+  // 下游就变成 JSON 文本，类型全丢。
+  function flowCodeSandboxHtml(id, codeLit, paramsLit) {
+    var did = JSON.stringify(String(id));
+    var run = '(function(){'
+      + 'function bcsend(o){try{parent.postMessage(o,"*")}catch(e){}}'
+      + 'var params=' + paramsLit + ';'
+      + 'var __logs=[];'
+      + 'var mono=function(l){return function(){var a=[];'
+      + 'for(var i=0;i<arguments.length;i++){var v=arguments[i];'
+      + 'try{a.push(typeof v==="object"?JSON.stringify(v):String(v))}catch(e){a.push(String(v))}}'
+      + '__logs.push({lvl:l,text:a.join(" ")});};};'
+      + 'var C={};C.log=mono("log");C.info=mono("log");C.debug=mono("log");C.dir=mono("log");'
+      + 'C.table=mono("log");C.trace=mono("log");C.warn=mono("warn");C.error=mono("err");'
+      + 'C.group=C.groupEnd=C.time=C.timeEnd=C.clear=function(){};'
+      + 'try{'
+      + 'var __r=(new Function("params","console",' + codeLit + '))(params,C);'
+      + 'bcsend({__bcCode:' + did + ',ok:1,value:__r,logs:__logs});'
+      + '}catch(e){bcsend({__bcCode:' + did + ',ok:0,error:String((e&&e.message)||e),logs:__logs});}'
+      + '})();';
+    // script 开闭标签拆开写：源文件里不出现标签字面量，HTML 解析器就不会
+    // 把这一块当成真的 script 边界（这个坑本轮已经栽过一次）
+    return '<!doctype html><meta charset="utf-8"><scr' + 'ipt>' + run + '<\/scr' + 'ipt>';
+  }
+
+  function flowRunCodeNode(code, params) {
+    return new Promise(function (resolve) {
+      var id = 'fc' + (++_flowSeq);
+      var codeLit = JSON.stringify(String(code || '')).replace(/</g, '\\u003c');
+      var paramsLit = JSON.stringify(params === undefined ? null : params).replace(/</g, '\\u003c');
+      var frame = null, done = false, timer = null;
+      function flowCodeDone(res) {
+        if (done) return;
+        done = true;
+        if (timer) { clearTimeout(timer); timer = null; }
+        window.removeEventListener('message', flowCodeMsg);
+        try { if (frame && frame.parentNode) frame.parentNode.removeChild(frame); } catch (e) { }
+        resolve(res);
+      }
+      function flowCodeMsg(e) {
+        // 来源校验认 event.source 而不是 origin：opaque origin 下 e.origin 恒为 "null"，
+        // 没有区分度；contentWindow 是对象身份，伪造不了。
+        if (!frame || !frame.contentWindow || e.source !== frame.contentWindow) return;
+        var d = e.data;
+        if (!d || typeof d !== 'object' || d.__bcCode !== id) return;
+        if (d.ok) flowCodeDone({ ok: true, value: d.value, logs: d.logs || [] });
+        else flowCodeDone({ ok: false, error: d.error || '代码执行失败', logs: d.logs || [] });
+      }
+      try {
+        frame = document.createElement('iframe');
+        frame.setAttribute('sandbox', 'allow-scripts');
+        frame.setAttribute('title', 'code-node-' + id);
+        frame.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+        frame.srcdoc = flowCodeSandboxHtml(id, codeLit, paramsLit);
+        document.body.appendChild(frame);
+      } catch (e) {
+        resolve({ ok: false, error: String((e && e.message) || e), logs: [] });
+        return;
+      }
+      window.addEventListener('message', flowCodeMsg);
+      timer = setTimeout(function () {
+        flowCodeDone({ ok: false, error: '代码节点执行超时（' + Math.round(FLOW_CODE_TIMEOUT / 1000) + ' 秒），已中止' });
+      }, FLOW_CODE_TIMEOUT);
+    });
+  }
+
+  // 节点的入参：显式绑定的按名字给，没绑定的给一份顺手的默认（text=上一步输出）
+  function flowNodeParams(node, vars, prev) {
+    var F = window.BotCraftFlow;
+    var p = {};
+    var binds = (node && node['in']) || [];
+    for (var i = 0; i < binds.length; i++) {
+      var b = binds[i];
+      if (!b || !b.k) continue;
+      p[b.k] = F ? F.tplValue(b.from, vars) : '';
+    }
+    if (!binds.length) p.text = prev;
+    // 无论如何都放一份全量变量，方便代码节点临时取用
+    p.vars = vars;
+    return p;
+  }
+
+  async function flowRunToolNode(node, vars, bot) {
+    var F = window.BotCraftFlow;
+    var tool = String(node.tool || 'kb');
+    var q = F ? F.resolve(node.toolQuery || '{{input.msg}}', vars) : '';
+    if (!q) q = F ? (F.varGet(vars, 'input.msg') || '') : '';
+    if (tool === 'kb') {
+      var hits = searchKBHits(bot, q, 5);
+      if (!hits || !hits.length) return { out: '（知识库没有检索到相关内容）', value: [] };
+      var txt = hits.map(function (h, i) {
+        return '（片段' + (i + 1) + '·来自《' + (h.docName || '知识库') + '》第' + (h.chunk || 0) + '段）\n' + h.text;
+      }).join('\n\n');
+      // 复用既有的来源登记：回答下方的引用标注靠它，别让工具节点绕过去
+      try { if (window.kbPushHits) window.kbPushHits(hits); } catch (e) { }
+      return { out: txt, value: hits };
+    }
+    if (tool === 'web') {
+      var wh = await searchWeb(q, 4);
+      if (!wh || !wh.length) return { out: '（联网检索没有结果，或当前环境限制了跨域请求）', value: [] };
+      return { out: wh.map(function (c, i) { return '（' + (i + 1) + '）\n' + c; }).join('\n\n'), value: wh };
+    }
+    if (tool === 'weather') {
+      var w = await getWeather(q);
+      return { out: w ? String(w) : '（天气查询无结果）', value: w || '' };
+    }
+    if (tool === 'image') {
+      var img = await generateImage(q);
+      if (!img) return { out: '（文生图没有返回结果）', value: '' };
+      var url = (typeof img === 'string') ? img : (img.url || img.dataUrl || '');
+      // 直接给出 Markdown 图片，下游节点与最终回答都能直接显示
+      return { out: '![生成图片](' + url + ')', value: url, note: '已生成配图' };
+    }
+    return { out: '（未知的工具类型：' + tool + '）', value: '' };
+  }
+
+  async function flowRunHttpNode(node, vars) {
+    var F = window.BotCraftFlow;
+    var url = F ? F.resolve(node.url || '', vars) : (node.url || '');
+    if (!url) return { out: '（HTTP 节点没有填 URL）', value: '' };
+    var method = String(node.method || 'GET').toUpperCase();
+    var headers = {};
+    var ht = F ? F.resolve(node.headers || '', vars) : (node.headers || '');
+    if (ht && ht.trim()) {
+      try { headers = JSON.parse(ht); }
+      catch (e) { return { out: '（请求头不是合法 JSON：' + e.message + '）', value: '' }; }
+    }
+    var opts = { method: method, headers: headers };
+    if (method !== 'GET' && method !== 'HEAD') {
+      var body = F ? F.resolve(node.body || '', vars) : (node.body || '');
+      if (body) opts.body = body;
+    }
+    try {
+      var resp = await fetch(url, opts);
+      var text = await resp.text();
+      var short = text.length > 4000 ? text.slice(0, 4000) + '\n…（响应过长已截断）' : text;
+      return {
+        out: 'HTTP ' + resp.status + '\n' + short,
+        value: text,
+        note: resp.ok ? '' : ('响应状态 ' + resp.status)
+      };
+    } catch (e) {
+      // 纯前端没有后端代理，跨域被浏览器挡住时错误信息很含糊，这里说清原因
+      return {
+        out: '（请求失败：' + ((e && e.message) || e) + '）',
+        value: '',
+        note: '请求失败。跨域接口会被浏览器的同源策略拦住，这是纯前端绕不过去的限制。'
+      };
+    }
+  }
+
+  async function flowRunSubNode(node, vars, userMsg, depth) {
+    var F = window.BotCraftFlow;
+    var subId = String(node.subId || '');
+    var sub = subId ? getBot(subId) : null;
+    if (!sub) return { out: '（子工作流节点没有选目标机器人）', value: '' };
+    if (depth >= 5) return { out: '（子工作流嵌套超过 5 层，已中止以防无限递归）', value: '' };
+    var q = F ? F.resolve(node.subQuery || '{{input.msg}}', vars) : userMsg;
+    var r = await runWorkflow(sub, q || userMsg, null, null, null, '', null, depth + 1);
+    return { out: (r && r.final) || '', value: (r && r.final) || '' };
+  }
+
+  async function flowRunLoopNode(node, vars, userMsg, depth) {
+    var F = window.BotCraftFlow;
+    var maxN = (F && F.MAX_LOOP) || 20;
+    var items = [];
+    var mode = String(node.loopMode || 'array');
+    if (mode === 'times') {
+      var n = parseInt(F ? F.resolve(node.loopTimes, vars) : node.loopTimes, 10);
+      if (!isFinite(n) || n < 0) n = 0;
+      if (n > maxN) n = maxN;
+      for (var i = 0; i < n; i++) items.push(i);
+    } else {
+      var raw = F ? F.tplValue(node.loopWhen, vars) : node.loopWhen;
+      if (typeof raw === 'string') {
+        try { var parsed = JSON.parse(raw); if (Array.isArray(parsed)) raw = parsed; } catch (e) { }
+        if (typeof raw === 'string') raw = raw.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+      }
+      if (Array.isArray(raw)) items = raw;
+      else if (raw === undefined || raw === null || raw === '') items = [];
+      else items = [raw];
+      if (items.length > maxN) items = items.slice(0, maxN);
+    }
+    if (!items.length) return { out: '（循环的输入是空的，没有执行）', value: [] };
+    var subId = String(node.loopBody || '');
+    var sub = subId ? getBot(subId) : null;
+    if (!sub) return { out: '（循环节点没有选循环体工作流）', value: [] };
+    if (depth >= 5) return { out: '（循环嵌套超过 5 层，已中止）', value: [] };
+    var results = [];
+    for (var k = 0; k < items.length; k++) {
+      var item = items[k];
+      var seed = (item && typeof item === 'object') ? JSON.stringify(item) : String(item);
+      var r = await runWorkflow(sub, seed, null, null, null, '', null, depth + 1);
+      results.push((r && r.final) || '');
+    }
+    return {
+      out: results.map(function (t, idx) { return '【第 ' + (idx + 1) + ' 项】\n' + t; }).join('\n\n'),
+      value: results,
+      note: '已循环 ' + items.length + ' 次'
+    };
+  }
+
+  // 调度侧唯一入口。kind 已在外面算好，这里不再重复判断。
+  async function flowRunSpecialNode(bot, node, kind, vars, prev, userMsg, depth) {
+    var F = window.BotCraftFlow;
+    var t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    var res = { out: '', value: '', note: '' };
+    try {
+      if (kind === 'cond') {
+        var idx = F ? F.pickBranch(node, vars) : 0;
+        var bs = (node && node.branches) || [];
+        var label = (idx >= 0 && bs[idx]) ? (bs[idx].label || ('分支' + (idx + 1))) : '';
+        res.branchPort = idx;
+        res.out = idx < 0 ? '（没有任何分支命中）' : ('命中：' + label);
+        res.value = label;
+        if (idx < 0) res.note = '所有分支条件都不成立，且没有配置「否则」兜底分支，这条流程到此结束。';
+      } else if (kind === 'code') {
+        var params = flowNodeParams(node, vars, prev);
+        var cres = await flowRunCodeNode(node.code, params);
+        // 代码里 console.log 的内容照样进运行日志，不然调试时看不到
+        (cres.logs || []).forEach(function (l) {
+          try { console.log('[代码节点' + (node.h ? '·' + node.h : '') + ']', l.text); } catch (e) { }
+        });
+        if (!cres.ok) {
+          res.out = '';
+          res.note = '代码执行失败：' + cres.error;
+          res.failed = true;
+        } else {
+          var v = cres.value;
+          res.value = v;
+          res.out = (typeof v === 'string') ? v : (v === undefined || v === null ? '' : JSON.stringify(v, null, 2));
+          if (!res.out) res.out = '（代码节点没有返回值：记得写 return）';
+        }
+      } else if (kind === 'tool') {
+        var tr = await flowRunToolNode(node, vars, bot);
+        res = Object.assign(res, tr);
+      } else if (kind === 'http') {
+        var hr = await flowRunHttpNode(node, vars);
+        res = Object.assign(res, hr);
+      } else if (kind === 'sub') {
+        var sr = await flowRunSubNode(node, vars, userMsg, depth || 0);
+        res = Object.assign(res, sr);
+      } else if (kind === 'loop') {
+        var lr = await flowRunLoopNode(node, vars, userMsg, depth || 0);
+        res = Object.assign(res, lr);
+      } else if (kind === 'end') {
+        // 结束节点：把上游的内容固定成流程产出，本身不做事
+        res.out = prev || userMsg;
+        res.value = res.out;
+      } else {
+        res.out = '（暂不支持的节点类型：' + kind + '）';
+        res.note = '该节点类型还没有对应的执行器。';
+      }
+    } catch (e) {
+      res.failed = true;
+      res.out = '';
+      res.note = '节点执行失败：' + ((e && e.message) || e);
+    }
+    // 节点级异常策略：中断 / 跳过 / 用默认值兜底
+    if (res.failed) {
+      var pol = String((node && node.onError) || 'stop');
+      if (pol === 'skip') {
+        res.failed = false;
+        res.out = '';
+        res.note = (res.note || '') + '（按节点设置已跳过，流程继续）';
+      } else if (pol === 'default') {
+        res.failed = false;
+        res.out = String((node && node.errDefault) || '');
+        res.note = (res.note || '') + '（已用默认值兜底）';
+      } else {
+        res.stop = true;
+        res.note = (res.note || '') + '（节点设置为「中断」，流程已停止）';
+      }
+    }
+    res.ms = Math.max(0, Math.round(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0)));
+    return res;
+  }
+
+  async function runWorkflow(bot, userMsg, imgs, auds, frms, imagePrompt, onProgress, _depth) {
     var logs = [];
     function flushLogs() { renderRunLogs(logs); }
     function emit(st) { if (typeof onProgress === 'function') { try { onProgress(st); } catch (e) { } } }
     var canCall = (window.BotCraftAI && BotCraftAI.canCall) ? BotCraftAI.canCall() : false;
     var _imagePromptForNodes = imagePrompt || '';
     var nodes = (bot.nodes && bot.nodes.length) ? bot.nodes : [];
+    // ---- FlowV2：老数据迁移 + 拓扑计划 + 变量池 ----
+    // 迁移失败不能拖垮整条流程：任何异常都退回旧行为（数组顺序串行）。
+    var _F = window.BotCraftFlow || null;
+    var _plan = { order: null, cycle: null };
+    if (_F) {
+      try { _F.ensure(bot); _F.edges(bot); _plan = _F.plan(bot); } catch (e) { console.warn('[flowV2] 迁移或拓扑失败，回退旧行为：', e); }
+    }
+    if (_plan.cycle && _plan.cycle.length && _F) {
+      // 有环就说清是哪几张卡，别让用户对着「点了没反应」猜
+      var _cycNames = _plan.cycle.map(function (id) {
+        var n2 = _F.byId(bot, id);
+        return (n2 && (n2.h || n2.lbl)) || id;
+      });
+      var _cycMsg = '⚠️ 工作流存在循环连线（' + _cycNames.join(' → ') + '），无法执行。\n请到「编排」画布断开其中一条连线后重试。';
+      emit({ phase: 'error', text: _cycMsg });
+      return { final: _cycMsg, logs: logs };
+    }
+    var _order = (_plan.order && _plan.order.length)
+      ? _plan.order
+      : nodes.map(function (n2, k2) { return (n2 && n2.id) || String(k2); });
+    var _vars = { input: { msg: userMsg } };
+    var _edgeState = {};
+    var _execCount = 0;
+    var _lastExecNode = null;
     var prev = '', finalText = userMsg;
     var _lastNonEmpty = '', _lastNonEmptyNode = '', _lastNodeName = ''; // 空产出兜底用
     var _imgInjected = false; // 多模态：图片仅注入到第一个处理节点，避免重复
-    for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
+    for (var _pi = 0; _pi < _order.length; _pi++) {
+      var node = (_F && _F.byId(bot, _order[_pi])) || nodes[_pi];
+      if (!node) continue;
+      var i = (_F && _F.idxOf) ? _F.idxOf(bot, node.id) : _pi;
+      if (i < 0) i = _pi;
+      // 跳过传播：本节点的**所有**入边都已 dead 才跳过。分支在汇合处靠这条收敛，
+      // 无入边的起点永不跳过 —— 否则被断开连线的孤立节点会被静默吞掉。
+      if (_F && node.id && _F.nodeDead(bot, node.id, _edgeState)) {
+        _F.killOut(bot, node.id, _edgeState);
+        continue;
+      }
+      if (++_execCount > ((_F && _F.MAX_CALLS) || 200)) {
+        emit({ phase: 'error', text: '本次运行节点执行次数超过上限，已中止（可能是循环配置把调用量放大了）' });
+        break;
+      }
+      var _kind = _F ? _F.kindOf(node) : 'llm';
       var role = getNodeRole(node);
       var t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      emit({ total: nodes.length, done: i, curName: node.h || ('步骤' + (i + 1)), role: role, phase: 'node' });
-      if (role === 'start') {
+      emit({ total: _order.length, done: _pi, curName: node.h || ('步骤' + (i + 1)), role: role, phase: 'node' });
+      if (_kind === 'start' || role === 'start') {
         prev = userMsg; finalText = userMsg;
         logs.push({ i: i + 1, role: 'start', name: node.h || '用户输入', ms: 0, output: userMsg });
-        flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: '开始', role: 'start', phase: 'done' }); continue;
+        if (node.id) _vars[node.id] = { text: userMsg };
+        _lastExecNode = node;
+        flushLogs(); emit({ total: _order.length, done: _pi + 1, lastDone: '开始', role: 'start', phase: 'done' }); continue;
       }
       // 审批节点：暂停并等待人工确认或修改
-      if (role === 'human') {
-        emit({ total: nodes.length, done: i, curName: (node.h || '审批'), role: 'human', phase: 'human' });
+      if (_kind === 'human' || role === 'human') {
+        emit({ total: _order.length, done: _pi, curName: (node.h || '审批'), role: 'human', phase: 'human' });
         var draft = prev && prev !== userMsg ? prev : finalText;
         var decision = await waitHumanApproval(draft, node);
         var approver = (window.__curUser && window.__curUser.name) ? window.__curUser.name : '本机审批人';
@@ -13120,7 +14277,11 @@ window.__debug = {
           if (bot.approvals.length > 200) bot.approvals = bot.approvals.slice(-200);
           saveBots();
           logs.push({ i: i + 1, role: 'human', name: node.h || '审批', ms: 0, output: '[已驳回，重新执行工作流] · 审批人：' + approver });
-          flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: '审批', role: 'human', phase: 'done' }); prev = ''; finalText = userMsg; i = -1; continue;
+          // 驳回 = 整条流程重跑：重置的是拓扑游标与变量池（旧代码改的是数组下标 i，
+          // 换成拓扑调度后那个下标已经不代表执行位置了）
+          flushLogs(); emit({ total: _order.length, done: _pi + 1, lastDone: '审批', role: 'human', phase: 'done' });
+          prev = ''; finalText = userMsg; _pi = -1; _vars = { input: { msg: userMsg } }; _edgeState = {};
+          continue;
         }
         var approved = (decision && decision.text != null) ? decision.text : draft;
         approved = (approved || '').toString().trim();
@@ -13128,7 +14289,37 @@ window.__debug = {
         if (bot.approvals.length > 200) bot.approvals = bot.approvals.slice(-200);
         saveBots();
         logs.push({ i: i + 1, role: 'human', name: node.h || '审批', ms: 0, output: approved ? ('[已审批通过] ' + approved) : ('[已通过] · 审批人：' + approver) });
-        flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: '审批', role: 'human', phase: 'done' }); prev = approved || draft; finalText = approved || draft;
+        if (node.id) _vars[node.id] = { text: approved || draft };
+        _lastExecNode = node;
+        flushLogs(); emit({ total: _order.length, done: _pi + 1, lastDone: '审批', role: 'human', phase: 'done' }); prev = approved || draft; finalText = approved || draft;
+        continue;
+      }
+      // ---- 非模型节点（条件 / 代码 / 工具 / HTTP / 子工作流 / 循环 / 结束）----
+      // 它们不走模型调用，交给各自的执行器；产出同样写进变量池，下游一视同仁。
+      if (_kind !== 'llm') {
+        var _sr = await flowRunSpecialNode(bot, node, _kind, _vars, prev, userMsg, _depth || 0);
+        if (_sr.note) console.log('[flowV2] ' + (node.h || _kind) + '：' + _sr.note);
+        logs.push({
+          i: i + 1, role: _kind, name: node.h || ('步骤' + (i + 1)), ms: _sr.ms || 0,
+          output: _sr.out, note: _sr.note || ''
+        });
+        if (node.id) _vars[node.id] = { text: _sr.out, value: _sr.value };
+        flushLogs();
+        emit({ total: _order.length, done: _pi + 1, lastDone: (node.h || ('步骤' + i)), role: _kind, phase: 'done', text: _sr.out });
+        if (_sr.out) { prev = _sr.out; finalText = _sr.out; _lastExecNode = node; }
+        if (_F && node.id && _sr.branchPort !== undefined && !_sr.failed) {
+          // 只有命中的那一路的下游继续跑，其余分支的边标 dead
+          _F.killPorts(bot, node.id, _sr.branchPort, _edgeState);
+          if (_sr.branchPort < 0) {
+            var _outAlive = _F.killOut(bot, node.id, _edgeState);
+            void _outAlive;
+          }
+        }
+        if (_sr.stop) {
+          logs.push({ i: i + 1, role: _kind, name: node.h || _kind, ms: 0, output: '', note: '流程因该节点设置为「中断」而停止' });
+          flushLogs();
+          break;
+        }
         continue;
       }
       // 按节点角色裁剪上下文：中间节点只拿它该看的信息，避免所有节点都生成最终回复
@@ -13141,7 +14332,8 @@ window.__debug = {
         ctx = '【用户原始需求】\n' + userMsg + (prev && prev !== userMsg ? ('\n\n【上一步信息】\n' + prev) : '');
       } else {
         ctx = '【用户原始需求】\n' + userMsg;
-        if (prev && prev !== userMsg) ctx += '\n\n【上一步（' + (nodes[i - 1] ? (nodes[i - 1].h || '上一步') : '上一步') + '）输出】\n' + prev;
+        var _pn = _lastExecNode || nodes[i - 1];
+        if (prev && prev !== userMsg) ctx += '\n\n【上一步（' + (_pn ? (_pn.h || '上一步') : '上一步') + '）输出】\n' + prev;
       }
       // 只有真正需要查资料的节点才注入知识库/联网/天气；意图识别不需要
       // 注入白名单：只有「需要外部事实」的 role 才注入知识库/联网/天气。
@@ -13150,6 +14342,22 @@ window.__debug = {
       // outline 需要参考资料才能设计出贴合内容的大纲，纳入 —— 这样它与 clarify 不再同义。
       // 注：draft / generate / step 三者行为相同是**有意为之**（都是「基于上下文产出完整
       // 内容」，差别只在 ROLE_SYSTEM 的措辞与编排可读性），别再硬造差异。
+      // 节点配了 {{引用}} 或输入绑定，就以变量为准覆盖上面按角色裁出来的 ctx。
+      // 没配的节点一个字节都不动 —— 老机器人的提示词必须原样保留。
+      if (_F && _F.hasExplicitIn(node)) {
+        var _vctx = _F.resolve(node.p || '', _vars);
+        var _miss = _F.missingRefs(node.p || '', _vars);
+        if (_miss.length) _vctx += '\n\n（⚠️ 以下变量本次没有取到值：' + _miss.join('、') + '，请检查上游节点是否执行到）';
+        var _binds = node['in'] || [];
+        for (var _bi = 0; _bi < _binds.length; _bi++) {
+          var _bd = _binds[_bi];
+          if (!_bd || !_bd.from) continue;
+          var _bmiss = _F.missingRefs(_bd.from, _vars);
+          _vctx += '\n\n【' + (_bd.k || '输入') + '】\n' + _F.resolve(_bd.from, _vars)
+            + (_bmiss.length ? '（⚠️ ' + _bmiss.join('、') + ' 未取到值）' : '');
+        }
+        ctx = _vctx;
+      }
       var injectKB = (role === 'retrieve' || role === 'draft' || role === 'generate' || role === 'outline' || role === 'step');
       var kbCtx = '';
       if (injectKB) {
@@ -13250,7 +14458,7 @@ window.__debug = {
           out = '';
           if (_it && typeof _it[Symbol.asyncIterator] === 'function') {
             for await (var _ch of _it) {
-              if (_ch) { out += _ch; emit({ total: nodes.length, done: i, curName: (node.h || ('步骤' + (i + 1))), role: role, phase: 'token', text: out }); }
+              if (_ch) { out += _ch; emit({ total: _order.length, done: _pi, curName: (node.h || ('步骤' + (i + 1))), role: role, phase: 'token', text: out }); }
             }
           } else if (typeof _it === 'string') {
             out = _it;
@@ -13270,7 +14478,9 @@ window.__debug = {
         i: i + 1, role: role, name: node.h || ('步骤' + i), ms: Math.max(0, Math.round(t1 - t0)), output: out,
         note: _truncated ? '⚠️ 本步骤被「最大输出 tokens」截断，内容没写完。建议到「设置」把该值调大。' : ''
       });
-      flushLogs(); emit({ total: nodes.length, done: i + 1, lastDone: (node.h || ('步骤' + i)), role: role, phase: 'done', text: out }); prev = out; finalText = out;
+      if (node.id) _vars[node.id] = { text: out };
+      _lastExecNode = node;
+      flushLogs(); emit({ total: _order.length, done: _pi + 1, lastDone: (node.h || ('步骤' + i)), role: role, phase: 'done', text: out }); prev = out; finalText = out;
     }
     // 最终交付兜底：末尾节点没产出时，退回最后一个有内容的节点，而不是给用户一片空白
     var _fin = (finalText || '').toString().trim();
