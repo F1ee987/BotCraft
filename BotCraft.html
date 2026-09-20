@@ -854,6 +854,28 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg.bot pre.md-code .md-copy{position:absolute;top:7px;right:9px;z-index:2;display:inline-flex;align-items:center;gap:var(--sp-2);padding:3px 9px;border-radius:var(--r-sm);font-size:11px;font-weight:590;cursor:pointer;background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease)}
 .msg.bot pre.md-code .md-copy:hover{background:var(--fill-strong);color:var(--brand-text)}
 .msg.bot pre.md-code .md-copy.copied{color:#fff;background:var(--brand-fill);border-color:transparent}
+/* ===== 代码块「运行」：按钮与结果面板 =====
+   按钮与「复制」同款，靠 right 偏移贴在它左边（复制成功后文案变宽也不会压上来）。
+   结果面板用 --sunken 凹陷底（不是玻璃底，因此无需登记集中模糊清单），
+   语义色一律用 -text 变体 —— 系统色是给大色块调的，写 11–12px 小字不够对比度。 */
+.msg.bot pre.md-code .md-run{position:absolute;top:7px;right:78px;z-index:2;display:inline-flex;align-items:center;gap:var(--sp-2);padding:3px 9px;border-radius:var(--r-sm);font-size:11px;font-weight:590;cursor:pointer;background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease)}
+.msg.bot pre.md-code .md-run:hover{background:var(--fill-strong);color:var(--brand-text)}
+.msg.bot pre.md-code .md-run.on{color:#fff;background:var(--brand-fill);border-color:transparent}
+.md-runout{margin:0 0 var(--sp-4);border:1px solid var(--line);border-radius:var(--r-lg);background:var(--sunken);overflow:hidden}
+.md-runout-hd{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--line);font-size:11px;color:var(--sub)}
+.md-runout-t{font-weight:650;color:var(--txt)}
+.md-runout-st{margin-left:auto;font-variant-numeric:tabular-nums}
+.md-runout-btn{padding:2px 8px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--fill);color:var(--sub);font-size:11px;cursor:pointer;transition:var(--dur-2) var(--ease)}
+.md-runout-btn:hover{background:var(--fill-strong);color:var(--brand-text)}
+.md-runout-body{margin:0;padding:var(--sp-3);font-family:var(--font-mono);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--txt);max-height:280px;overflow:auto}
+.md-runout-body.hide{display:none}
+.md-runout-line{display:block}
+.md-runout-line.warn{color:var(--warn-text)}
+.md-runout-line.err{color:var(--danger-text)}
+.md-runout-line.dim{color:var(--sub)}
+/* 预览帧刻意给白底：沙箱文档没写 body 背景时默认是透明的，
+   透下来会变成宿主的凹陷灰，用户看到的「网页效果」就不是真浏览器里的样子。 */
+.md-runout-frame{display:block;width:100%;height:300px;border:0;background:#fff}
 .msg-copy{margin-top:8px;display:inline-flex;align-items:center;gap:var(--sp-2);padding:5px 12px;border-radius:var(--r-full);font-size:11.5px;font-weight:590;cursor:pointer;
   background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease)}
 .msg-copy:hover{background:var(--fill-strong);color:var(--brand-text)}
@@ -4992,7 +5014,10 @@ function renderMarkdown(text) {
     // 但「复制」按钮取的是原始字符串，留着会让粘贴出去的东西带脏字符。
     const safe = escapeHtml(code.replace(/\r\n?/g, '\n').replace(/\n$/, ''));
     const copyBtn = '<button type="button" class="md-copy" onclick="copyCodeBlock(this)" aria-label="复制代码">📋 复制</button>';
-    codeBlocks.push('<pre class="md-code"' + (lang ? ' data-lang="' + escapeAttr(lang) + '"' : '') + '>' + copyBtn + '<code>' + safe + '</code></pre>');
+    // 只有能安全跑的语言才给「运行」入口：其余语言（python/bash/sql/json…）不显示按钮，
+    // 而不是显示了再报错 —— 界面上不出现的东西，用户不会去点。
+    const runBtn = runKindOf(lang) ? '<button type="button" class="md-run" onclick="runCodeBlock(this)" aria-label="运行代码">▶ 运行</button>' : '';
+    codeBlocks.push('<pre class="md-code"' + (lang ? ' data-lang="' + escapeAttr(lang) + '"' : '') + '>' + runBtn + copyBtn + '<code>' + safe + '</code></pre>');
     return '\u0000CB' + id + '\u0000';
   }
   // 围栏识别（2026-09-19 修。原实现只用 \w 匹配语言名、只认 LF 换行，四处漏）：
@@ -5112,6 +5137,282 @@ function copyCodeBlock(btn) {
     setTimeout(function () { btn.textContent = '📋 复制'; btn.classList.remove('copied'); }, 1500);
   } catch (e) {}
 }
+// ==================== 代码块运行（隔离沙箱） ====================
+// 模型给的代码是**外部输入**，执行它的防线只有一条：iframe 的 sandbox 属性，
+// 且**绝不给 allow-same-origin**。沙箱内是唯一源（opaque origin）——
+// 摸 parent.localStorage / parent.document 会直接抛 SecurityError，
+// API Key 与全部机器人数据都在 parent 这边，够不着。
+// 另外三项也刻意不给：allow-modals（alert/confirm 不弹真对话框）、allow-popups、
+// allow-top-navigation（不能把宿主页面导走）。
+// 沙箱内**不提供** bc_http 宿主代理 —— 那条通道不受浏览器同源限制（任意域名可用），
+// 接进去等于把「无限联网」白送出去；沙箱里只能用它自己的 fetch，受同源策略约束。
+// 执行时机：**只有用户点「▶ 运行」才会跑**，模型输出永远不会自动执行。
+//
+// 已知边界（浏览器模型决定，不是可以改的实现细节）：沙箱 iframe 与宿主同进程同线程，
+// 沙箱里一个纯计算死循环（while(1){}）会一直占着这个线程 —— 超时只能摘掉 iframe、
+// 停止接收消息，**无法中断正在执行的同步循环**。真能强杀的是 Web Worker，但 Worker
+// 里没有 DOM 与 document，AI 写的网页脚本在那边基本跑不起来。这里选了
+// 「能跑真实场景 + 用户主动触发」，而不是「随时可强杀」。
+
+const RUN_TIMEOUT = 8000;      // 单次运行上限（毫秒）
+const RUN_MAX_LINES = 400;     // 最多回传多少条输出（防一行一打印刷爆 DOM）
+const RUN_LANGS = {
+  js: ['js', 'javascript', 'mjs', 'ecmascript', 'node', 'jsx'],
+  html: ['html', 'htm', 'svg', 'text/html']
+};
+
+let _runSeq = 0;
+let _panelRun = null;          // 「代码执行器」面板当前那次运行
+
+// 语言名 → 运行方式。不认识的语言返回 ''（= 不显示运行按钮）。
+function runKindOf(lang) {
+  const l = String(lang || '').trim().toLowerCase();
+  if (!l) return '';
+  for (const k in RUN_LANGS) { if (RUN_LANGS[k].indexOf(l) >= 0) return k; }
+  return '';
+}
+
+// 沙箱内共用的「输出桥」：抓 console / 未捕获错误 / 未处理的 Promise 拒绝，回传宿主。
+// 序列化必须扛得住 undefined / 函数 / 循环引用 / DOM 节点 —— 随手写的代码里这些很常见，
+// 直接 JSON.stringify 会抛错（循环引用）或只剩空壳（函数、undefined）。
+function runBridgeSrc(id) {
+  const did = JSON.stringify(String(id));
+  return '(function(){'
+    + 'var ID=' + did + ';window.__bcRunId=ID;var n=0;'
+    + 'function S(v){try{'
+    + 'if(v===undefined)return "undefined";'
+    + 'if(v===null)return "null";'
+    + 'var t=typeof v;'
+    + 'if(t==="string")return v;'
+    + 'if(t==="number"||t==="boolean"||t==="bigint")return String(v);'
+    + 'if(t==="function")return "[Function "+(v.name||"anonymous")+"]";'
+    + 'if(t==="symbol")return v.toString();'
+    + 'if(v instanceof Error)return (v.name||"Error")+": "+v.message;'
+    + 'if(typeof Node!=="undefined"&&v instanceof Node)return "[DOM "+v.nodeName+"]";'
+    + 'var seen=[];'
+    + 'return JSON.stringify(v,function(k,x){'
+    + 'if(typeof x==="function")return "[Function]";'
+    + 'if(x===undefined)return "[undefined]";'
+    + 'if(typeof x==="object"&&x!==null){if(seen.indexOf(x)>=0)return "[Circular]";seen.push(x);}'
+    + 'return x;},2);'
+    + '}catch(e){try{return String(v);}catch(_){return "[无法显示]";}}}'
+    + 'function bcsnd(t,p){n++;'
+    + 'if(n>' + RUN_MAX_LINES + '){'
+    + 'if(n===' + (RUN_MAX_LINES + 1) + '){'
+    + 'try{parent.postMessage({__bcRun:ID,t:"log",p:{lvl:"warn",text:"输出过多，仅保留前 '
+    + RUN_MAX_LINES + ' 条"}},"*");}catch(e){}}'
+    + 'return;}'
+    + 'try{parent.postMessage({__bcRun:ID,t:t,p:p},"*");}catch(e){}}'
+    + 'window.__bcSend=bcsnd;window.__bcSer=S;'
+    + 'var C={};'
+    + 'var mk=function(l){return function(){var a=[];'
+    + 'for(var i=0;i<arguments.length;i++)a.push(S(arguments[i]));'
+    + 'bcsnd("log",{lvl:l,text:a.join(" ")});};};'
+    + 'C.log=mk("log");C.info=mk("log");C.debug=mk("log");C.dir=mk("log");'
+    + 'C.table=mk("log");C.trace=mk("log");C.warn=mk("warn");C.error=mk("err");'
+    + 'C.clear=function(){};C.group=C.groupEnd=C.time=C.timeEnd=function(){};'
+    + 'window.console=C;'
+    // 未捕获错误要报出来：只重定向 console 的话，一个 ReferenceError 在界面上就是「什么都没发生」
+    + 'window.onerror=function(m,s,l,c,err){'
+    + 'bcsnd("log",{lvl:"err",text:S(err||m)+(l?"（第 "+l+" 行）":"")});return true;};'
+    + 'window.addEventListener("unhandledrejection",function(e){'
+    + 'bcsnd("log",{lvl:"err",text:"未处理的 Promise 拒绝："+S(e&&e.reason)});});'
+    + '})();';
+}
+
+// JS 模式：把用户代码作为**字符串字面量**嵌进沙箱文档，在沙箱内 new Function 执行
+// ——能否越界完全由 sandbox 属性决定，不靠代码洁癖（与插件沙箱同一条路子）。
+// 关键细节：JSON.stringify 之后还要把 < 转成 \u003c。代码里若出现「script 的结束标签」，
+// 它会在 HTML 解析阶段提前闭合本 script 元素，后面整段桥脚本变成页面上的纯文本
+// ——注意本行注释自己也不能写出那个标签的字面量，否则同样会截断这个源文件
+// （本轮就这样栽过一次：三块语法校验全绿，因为它们的提取正则也一起被截断了）。
+// 而 \u003c 在字面量里解析回来仍是 <，语义不变、HTML 解析器却再也看不到结束标签。
+function buildJsRunDoc(id, code) {
+  const lit = JSON.stringify(String(code)).replace(/</g, '\\u003c');
+  const run = '(function(){'
+    + 'var C=window.console,S=window.__bcSer,bcsnd=window.__bcSend;'
+    + 'var out=function(){var a=[];for(var i=0;i<arguments.length;i++)a.push(S(arguments[i]));'
+    + 'bcsnd("log",{lvl:"log",text:a.join(" ")});};'
+    + 'try{'
+    // print / alert / prompt / confirm 一并重定向：不重定向的话，
+    // 用户写 print('...') 会在沙箱内触发内核的打印动作（或 alert 被静默拦掉、什么反馈都没有）
+    + '(new Function("console","print","alert","prompt","confirm",' + lit + '))'
+    + '(C,out,out,function(){return null;},function(){return true;});'
+    + 'bcsnd("done",{ok:1});'
+    + '}catch(e){bcsnd("log",{lvl:"err",text:S(e)});bcsnd("done",{ok:0});}'
+    + '})();';
+  return '<!doctype html><meta charset="utf-8">'
+    + '<scr' + 'ipt>' + runBridgeSrc(id) + '<\/scr' + 'ipt>'
+    + '<scr' + 'ipt>' + run + '<\/scr' + 'ipt>';
+}
+
+// HTML 模式：用户 HTML 原样当文档，只在最前面插一段桥。
+// 桥必须插在 <!doctype> **之后** —— 放在它前面会让浏览器进怪异模式，
+// 用户写的老式布局（按 width/height 直接算内容区）会整体跑偏。
+function buildHtmlRunDoc(id, code) {
+  const h = String(code);
+  const bridge = '<scr' + 'ipt>' + runBridgeSrc(id) + '<\/scr' + 'ipt>'
+    + '<scr' + 'ipt>(function(){function rep(){try{parent.postMessage({'
+    + '__bcRun:window.__bcRunId,t:"h",p:Math.max(document.documentElement.scrollHeight,'
+    + 'document.body?document.body.scrollHeight:0)},"*");}catch(e){}}'
+    + 'window.addEventListener("load",rep);setTimeout(rep,60);setTimeout(rep,400);})();'
+    + '<\/scr' + 'ipt>';
+  const m = /^\s*<!doctype[^>]*>/i.exec(h);
+  if (m) return h.slice(0, m[0].length) + bridge + h.slice(m[0].length);
+  return bridge + h;
+}
+
+// 起一个沙箱跑一段代码。事件按次回调：
+//   {type:'log',lvl} / {type:'height',h} / {type:'done'} / {type:'error',text} / {type:'timeout'}
+function runInSandbox(kind, code, onEvent, mountEl) {
+  let frame = null, dead = false, timer = null, sawDone = false;
+  const id = 'r' + (++_runSeq);
+  function kill() {
+    if (dead) return; dead = true;
+    if (timer) { clearTimeout(timer); timer = null; }
+    window.removeEventListener('message', onRunMsg);
+    try { if (frame && frame.parentNode) frame.parentNode.removeChild(frame); } catch (e) { }
+  }
+  function onRunMsg(e) {
+    if (dead) return;
+    // 来源校验认 event.source，不认 event.origin —— opaque origin 下 origin 一律是
+    // 字符串 "null"，毫无区分度（任何别的沙箱、任何别的页面都能伪装），
+    // 而 contentWindow 是对象身份，伪造不了。
+    if (!frame || !frame.contentWindow || e.source !== frame.contentWindow) return;
+    const d = e.data;
+    if (!d || typeof d !== 'object' || d.__bcRun !== id) return;
+    if (d.t === 'log') {
+      const p = d.p || {};
+      const lvl = p.lvl === 'err' ? 'err' : (p.lvl === 'warn' ? 'warn' : 'log');
+      onEvent({ type: 'log', lvl: lvl, text: String(p.text == null ? '' : p.text) });
+      return;
+    }
+    if (d.t === 'h') { onEvent({ type: 'height', h: Number(d.p) || 0 }); return; }
+    if (d.t === 'done') { sawDone = true; onEvent({ type: 'done' }); setTimeout(kill, 40); return; }
+  }
+  try {
+    frame = document.createElement('iframe');
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.setAttribute('title', 'code-run-' + id);
+    // 0 尺寸 + visibility 隐藏（不用 display:none —— 部分内核会把 display:none 帧里的
+    // 脚本一起挂起，那样永远收不到输出）。HTML 预览模式随后由调用方改成可见样式。
+    frame.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+    frame.srcdoc = kind === 'html' ? buildHtmlRunDoc(id, code) : buildJsRunDoc(id, code);
+    // 挂载由这里负责，不交给调用方：**未插入 DOM 的 iframe 没有 contentWindow**，
+    // 沙箱里的代码根本不会执行、postMessage 也发不出来，症状是「点了运行，
+    // 面板一直停在运行中」——而且不报任何错。执行器面板当初就漏了这一步。
+    (mountEl || document.body).appendChild(frame);
+  } catch (e) {
+    onEvent({ type: 'error', text: String((e && e.message) || e) });
+    return null;
+  }
+  window.addEventListener('message', onRunMsg);
+  timer = setTimeout(function () {
+    if (sawDone) return;
+    onEvent({ type: 'timeout' });
+    kill();
+  }, RUN_TIMEOUT);
+  return { id: id, frame: frame, kill: kill };
+}
+
+// 输出行 → HTML。两处（代码块结果面板、执行器面板）共用，别各写一套着色规则。
+function runLinesHtml(lines) {
+  if (!lines.length) return '<span class="md-runout-line dim">（无输出）</span>';
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const x = lines[i];
+    const cls = x.lvl === 'err' ? ' err' : (x.lvl === 'warn' ? ' warn' : '');
+    out.push('<span class="md-runout-line' + cls + '">' + escapeHtml(x.text) + '</span>');
+  }
+  return out.join('');
+}
+
+function runBoxHtml(kind) {
+  const isHtml = kind === 'html';
+  return '<div class="md-runout-hd">'
+    + '<span class="md-runout-t">' + (isHtml ? '预览' : '输出') + '</span>'
+    + '<span class="md-runout-st">运行中…</span>'
+    + '<button type="button" class="md-runout-btn" onclick="closeRunBox(this)">关闭</button>'
+    + '</div>'
+    // HTML 模式下输出区默认藏着（预览才是主体），有 console 输出时才露出来
+    + '<pre class="md-runout-body' + (isHtml ? ' hide' : '') + '"></pre>';
+}
+
+function runCodeBlock(btn) {
+  const pre = (btn && btn.closest) ? btn.closest('pre.md-code') : null;
+  if (!pre || !pre.parentNode) return;
+  const codeEl = pre.querySelector('code');
+  const code = codeEl ? codeEl.textContent : '';
+  const kind = runKindOf(pre.getAttribute('data-lang'));
+  if (!kind) return;
+  if (!code.trim()) { toast('这个代码块没有内容', 'err'); return; }
+
+  // 幂等：同一个代码块重复点击 = 重跑。必须先把上一个沙箱 kill 掉（还它的事件监听
+  // 与超时定时器），否则每点一次就多堆一个还在跑的 iframe。
+  if (pre.__bcRun && pre.__bcRun.kill) pre.__bcRun.kill();
+  pre.__bcRun = null;
+  let box = pre.__bcBox;
+  if (!box || !box.parentNode) {
+    box = document.createElement('div');
+    box.className = 'md-runout';
+    pre.parentNode.insertBefore(box, pre.nextSibling);
+    pre.__bcBox = box;
+  }
+  box.innerHTML = runBoxHtml(kind);
+  const stEl = box.querySelector('.md-runout-st');
+  const bodyEl = box.querySelector('.md-runout-body');
+  const lines = [];
+  const t0 = Date.now();
+  let n = 0, fr = null;
+
+  function status(s) { if (stEl) stEl.textContent = s; }
+  function paint() {
+    if (!bodyEl) return;
+    if (lines.length && bodyEl.classList) bodyEl.classList.remove('hide');
+    bodyEl.innerHTML = runLinesHtml(lines);
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+  }
+  function runFinish(tag) {
+    if (btn) btn.classList.remove('on');
+    status(tag || ('✓ ' + (Date.now() - t0) + 'ms · ' + n + ' 条输出'));
+    paint();
+  }
+
+  const handle = runInSandbox(kind, code, function (ev) {
+    if (ev.type === 'log') { n++; lines.push(ev); paint(); return; }
+    if (ev.type === 'height') {
+      // 预览帧按内容自增高。上限 560px：再高就该用户自己滚动了，
+      // 否则一个长页面会把聊天区顶到看不见边界。
+      if (fr && ev.h > 0) fr.style.height = Math.min(560, Math.max(140, ev.h + 8)) + 'px';
+      return;
+    }
+    if (ev.type === 'timeout') { runFinish('⏱ 超过 ' + (RUN_TIMEOUT / 1000) + ' 秒，已终止'); return; }
+    if (ev.type === 'error') { runFinish('✗ ' + (ev.text || '无法启动沙箱')); return; }
+    if (ev.type === 'done') { runFinish(); return; }
+  }, box);
+  pre.__bcRun = handle;
+  if (!handle) { runFinish('✗ 无法启动沙箱'); return; }
+  fr = handle.frame;
+  if (btn) btn.classList.add('on');
+  // 帧已由 runInSandbox 挂进这个面板（默认 0 尺寸隐藏）。HTML 预览要它可见：
+  // 换上预览样式、清掉隐藏样式 —— 帧本来就在面板里，不能再搬一次
+  //（把 iframe 在文档里挪位置会让它重新加载，输出会重复一遍）。
+  if (kind === 'html') {
+    fr.className = 'md-runout-frame';
+    fr.style.cssText = '';
+  }
+  paint();
+}
+
+function closeRunBox(btn) {
+  const box = (btn && btn.closest) ? btn.closest('.md-runout') : null;
+  if (!box) return;
+  const pre = box.previousElementSibling;
+  if (pre && pre.__bcRun && pre.__bcRun.kill) pre.__bcRun.kill();
+  if (pre) { pre.__bcRun = null; pre.__bcBox = null; }
+  if (box.parentNode) box.parentNode.removeChild(box);
+}
+
 function copyTextRobust(text) {
   if (window.navigator && navigator.clipboard && navigator.clipboard.writeText) {
     try { navigator.clipboard.writeText(text).catch(function () { fallbackCopy(text); }); return; } catch (e) {}
@@ -11071,7 +11372,7 @@ function startReminderChecker(){
 }
 function codeRunnerExtraHTML(){
   return `<div style="margin-top:14px">
-    <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">⚙️ 试运行（仅本地运行·支持 console.log / print()，不会上传）</div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">⚙️ 试运行（隔离沙箱内运行·支持 console.log / print()，不会上传）</div>
     <textarea id="codeRunnerInput" placeholder="// 在此输入 JavaScript 代码，点击运行查看输出&#10;console.log(1+2);" style="width:100%;height:120px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:12.5px;font-family:var(--font-mono);resize:vertical"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn btn-primary btn-sm" onclick="runCodeInSandbox()">▶ 运行</button>
@@ -11080,18 +11381,28 @@ function codeRunnerExtraHTML(){
     <pre id="codeRunnerOut" style="margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--sub);font-size:12px;white-space:pre-wrap;min-height:20px"></pre>
   </div>`;
 }
+// 内置「代码执行器」面板：走的是与代码块同一套沙箱。
+// 原来这里是 new Function 在**主文档**里执行 —— 那段代码能直接摸到 localStorage，
+// 而 API Key 就在里面；「仅本地运行、不会上传」这句话当时只对了一半。
 function runCodeInSandbox(){
   const inp=document.getElementById('codeRunnerInput'); const out=document.getElementById('codeRunnerOut');
   if(!inp||!out) return;
-  const code=inp.value; if(!code.trim()){ out.textContent='（无代码）'; return; }
-  const logs=[]; const _log=(...a)=>logs.push(a.map(x=>{ try{ return typeof x==='object'?JSON.stringify(x,null,2):String(x); }catch(_){ return String(x); } }).join(' '));
-  const sandboxConsole={ log:_log, error:_log, warn:_log, info:_log, debug:_log, table:_log };
-  try{
-    // 把 print/alert/prompt/confirm 也重定向到输出面板，避免用户写 print('...') 时触发浏览器打印对话框
-    const fn=new Function('console','print','alert','prompt','confirm', code);
-    fn(sandboxConsole, _log, _log, function(){ return null; }, function(){ return true; });
-    out.style.color='var(--ok)'; out.textContent = logs.length? logs.join('\n') : '✓ 运行完成（无输出）';
-  }catch(e){ out.style.color='var(--danger)'; out.textContent='✗ '+(e&&e.message?e.message:e); }
+  const code=inp.value;
+  if(!code.trim()){ out.style.color='var(--sub)'; out.textContent='（无代码）'; return; }
+  if(_panelRun && _panelRun.kill) _panelRun.kill();
+  const lines=[]; const t0=Date.now(); let n=0;
+  function render(tag){
+    out.style.color='var(--sub)';
+    out.innerHTML = runLinesHtml(lines) + (tag ? '<span class="md-runout-line dim">' + escapeHtml(tag) + '</span>' : '');
+  }
+  render('');
+  _panelRun = runInSandbox('js', code, function(ev){
+    if(ev.type==='log'){ n++; lines.push(ev); render(''); return; }
+    if(ev.type==='timeout'){ render('⏱ 超过 ' + (RUN_TIMEOUT/1000) + ' 秒，已终止'); return; }
+    if(ev.type==='error'){ render('✗ ' + (ev.text || '无法启动沙箱')); return; }
+    if(ev.type==='done'){ render('✓ 运行完成 · ' + (Date.now()-t0) + 'ms · ' + n + ' 条输出'); return; }
+  }, out.parentNode || document.body);
+  if(!_panelRun) render('✗ 无法启动沙箱');
 }
 // ---------- 在线插件：注册表拉取与安装入口 ----------
 let _extOnline = [];   // 最近一次拉取到的在线插件列表
