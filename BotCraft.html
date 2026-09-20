@@ -643,6 +643,61 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .node.handoff{border-color:var(--brand);box-shadow:0 0 0 1px var(--glass-bg-active) inset}
 .node-handoff-to{font-size:11px;color:var(--brand-text);margin-top:5px;font-weight:590}
 .flow-arrow{text-align:center;color:var(--line);font-size:13px;margin:2px 0;font-weight:600}
+/* ==================== 编排画布：无限画布 + 直接操控 ====================
+   交互模型（JS 同名注释块里有完整说明）：
+     · 空白左键拖 = 平移；Shift+拖 = 框选；中键 / 空格 / 平移模式 = 平移
+     · 滚轮 = 平移，Ctrl(⌘)+滚轮 = 以光标为锚缩放
+     · 拖卡片 = 自由摆放（坐标只是视图状态，引擎按数组顺序执行）
+     · 从端口圆点拖到另一个节点 = 把它排到自己后面（改执行顺序）
+   只画一条链：引擎本来就是串行的，画分叉等于骗人。
+   面板从 display:none 切回来时量不到尺寸，所以 root 用绝对定位铺满，
+   不依赖父级的 display 值（switchWsTab 会给父级写内联 display:block）。 */
+#wsFlowBody.cw-on{position:relative;overflow:hidden;padding:0;display:block}
+.cw-root{position:absolute;inset:0;overflow:hidden;touch-action:none;background:var(--sunken);outline:none}
+.cw-root.panning{cursor:grabbing}
+.cw-root.marqueeing{cursor:crosshair}
+.cw-root.pan-ready{cursor:grab}
+.cw-root.pan-mode{cursor:grab}
+.cw-grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px),linear-gradient(var(--brand-line) 1px,transparent 1px),linear-gradient(90deg,var(--brand-line) 1px,transparent 1px);background-repeat:repeat}
+.cw-stage{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0}
+.cw-links{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.cw-link{fill:none;stroke:var(--brand-line);stroke-width:2}
+.cw-tmp{fill:none;stroke:var(--brand-text);stroke-width:2;stroke-dasharray:6 5}
+.cw-card{position:absolute;left:0;top:0;width:250px;transform-origin:0 0;cursor:grab;will-change:transform;padding:var(--sp-6) var(--sp-6) var(--sp-5)}
+.cw-card .node-ic{font-size:var(--fs-2xl);line-height:1;display:block;margin-bottom:var(--sp-3)}
+.cw-card p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cw-card.sel{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-tint-2),var(--lg-float)}
+.cw-card.link-target{border-color:var(--brand-text);box-shadow:0 0 0 3px var(--brand-tint-2)}
+.cw-ord{position:absolute;left:-10px;top:-10px;min-width:20px;height:20px;border-radius:var(--r-full);background:var(--brand-fill);color:#fff;font-size:var(--fs-2xs);font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 var(--sp-3);pointer-events:none;font-variant-numeric:tabular-nums}
+.cw-port{position:absolute;top:50%;width:13px;height:13px;margin-top:-7px;border-radius:var(--r-full);background:var(--card);border:2px solid var(--brand-line);cursor:crosshair;z-index:2;transition:transform var(--dur-2) var(--ease),background var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease)}
+.cw-port.in{left:-7px}
+.cw-port.out{right:-7px}
+.cw-port:hover{background:var(--brand-fill);border-color:var(--brand-fill);transform:scale(1.3)}
+.cw-mid{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:var(--r-full);background:var(--popover);border:1px solid var(--line);color:var(--sub);font-size:var(--fs-xs);line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;z-index:3;opacity:0;transition:opacity var(--dur-2) var(--ease),color var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease)}
+.cw-root:hover .cw-mid{opacity:.55}
+.cw-mid:hover{opacity:1;color:var(--brand-text);border-color:var(--brand)}
+.cw-marquee{position:absolute;border:1px solid var(--brand);background:var(--brand-tint);border-radius:var(--r-2xs);pointer-events:none;z-index:4}
+.cw-empty{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:var(--sp-6);color:var(--sub);font-size:var(--fs-sm);text-align:center;z-index:2}
+.cw-hint{position:absolute;left:var(--sp-6);top:var(--sp-6);display:flex;flex-wrap:wrap;gap:var(--sp-5);max-width:calc(100% - 190px);font-size:var(--fs-2xs);color:var(--sub);pointer-events:none;z-index:2}
+.cw-hint span{display:inline-flex;align-items:center;gap:var(--sp-2)}
+.cw-hint kbd{background:var(--fill);border-radius:var(--r-2xs);padding:1px var(--sp-3);font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--txt)}
+.cw-tools{position:absolute;left:var(--sp-6);bottom:var(--sp-6);display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2);border-radius:var(--r-xl);background:var(--glass-bg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);z-index:6}
+.cw-tbtn{min-width:28px;height:28px;padding:0 var(--sp-4);border-radius:var(--r-md);border:none;background:transparent;color:var(--sub);font-size:var(--fs-sm);font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease)}
+.cw-tbtn:hover{background:var(--hover);color:var(--txt)}
+.cw-tbtn.on{background:var(--brand-tint);color:var(--brand-text)}
+.cw-zval{min-width:54px;font-variant-numeric:tabular-nums}
+.cw-tsep{width:1px;height:16px;background:var(--line);margin:0 var(--sp-2)}
+.cw-mini{position:absolute;right:var(--sp-6);bottom:var(--sp-6);width:168px;height:108px;border-radius:var(--r-lg);background:var(--glass-bg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);overflow:hidden;z-index:6;cursor:pointer}
+.cw-mini-node{position:absolute;border-radius:var(--r-2xs);background:var(--brand-line)}
+.cw-mini-node.sel{background:var(--brand-text)}
+.cw-mini-vp{position:absolute;border-radius:var(--r-2xs);border:1px solid var(--brand-text);background:var(--brand-tint)}
+.cw-menu{position:absolute;min-width:210px;padding:var(--sp-2);border-radius:var(--r-lg);background:var(--popover);border:1px solid var(--line);box-shadow:var(--lg-float);z-index:9}
+.cw-mtitle{padding:var(--sp-3) var(--sp-5) var(--sp-2);font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.6px}
+.cw-mi{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4) var(--sp-5);border-radius:var(--r-sm);font-size:var(--fs-sm);color:var(--txt);cursor:pointer;white-space:nowrap}
+.cw-mi:hover{background:var(--fill)}
+.cw-mdim{margin-left:auto;color:var(--sub);font-size:var(--fs-2xs)}
+.cw-msep{height:1px;background:var(--line);margin:var(--sp-2) var(--sp-3)}
+
 .empty-tip{text-align:center;color:var(--sub);padding:60px 20px;font-size:14px}
 .empty-tip button{margin-top:16px}
 .tab-panel{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:16px}
@@ -5176,6 +5231,19 @@ function normalize(b) {
   }
   // 每个机器人独立持有 nodes 副本，避免共享 ORCH_BY_NAME / 模板引用导致互相污染
   if (res.nodes) res.nodes = res.nodes.map(function (n) { return n ? Object.assign({}, n) : n; });
+  // 画布坐标兜底：节点的 x/y 是**视图状态**（引擎只按数组顺序执行，不看坐标）。
+  // 老数据没有坐标 → 按顺序铺成一条横向链，保证打开画布就能看见内容，
+  // 而不是所有卡片叠在 (0,0)。这里用内联常量：normalize 在 block1，
+  // 画布常量 CW_* 在 block2，跨块引用会踩执行顺序。340 = 卡片宽 250 + 间距 90。
+  // 注意必须放在上面那句 ORCH_BY_NAME 比较**之后** —— 先补坐标会让
+  // 「JSON.stringify(res.nodes) === JSON.stringify(DEFAULT_WORKFLOW)」永远为假，编排兜底失效。
+  if (res.nodes && res.nodes.length) {
+    res.nodes.forEach(function (n, i) {
+      if (!n) return;
+      if (typeof n.x !== 'number' || !isFinite(n.x)) n.x = i * 340;
+      if (typeof n.y !== 'number' || !isFinite(n.y)) n.y = 0;
+    });
+  }
   // 多会话：补齐会话结构，并把 b.history 对齐到当前会话（同一引用）
   _initSessions(res);
   return res;
@@ -7091,34 +7159,201 @@ function nodeIcon(lbl, h) {
   return '💬';
 }
 
-function renderNodes(b) {
-  const body = document.querySelector('.ws-body'); if (!body) return;
-  if (!b.nodes || b.nodes.length === 0) {
-    body.innerHTML = `<div class="empty-tip">还没有工作流节点<br><button class="btn btn-primary" onclick="addNode()">＋ 添加第一个节点</button></div>`;
-    return;
-  }
-  let html = '';
-  b.nodes.forEach((nd, i) => {
-    const isHandoff = (nd.lbl || '').indexOf('机器人') >= 0;
-    const targetBot = (isHandoff && nd.bot) ? (getBot(nd.bot)) : null;
-    const handoffHint = (isHandoff && targetBot)
-      ? `<div class="node-handoff-to">➡️ ${escapeHtml(targetBot.n)}</div>` : (isHandoff ? `<div class="node-handoff-to" style="color:var(--danger-text)">⚠️ 未选择机器人</div>` : '');
-    html += `<div class="node${isHandoff ? ' handoff' : ''}" data-i="${i}" draggable="true">
-      <span class="node-handle" title="拖拽排序">⣿</span>
-      <span class="node-del" data-i="${i}" title="删除节点">✕</span>
-      <span class="node-ic">${nodeIcon(nd.lbl, nd.h)}</span>
-      <div class="lbl">${escapeHtml(nd.lbl)}</div><h4>${escapeHtml(nd.h)}</h4><p>${escapeHtml(nd.p)}</p>${handoffHint}
-      <div class="node-edit-save">
-        <button class="ok" data-act="save">保存</button>
-        <button class="cancel" data-act="cancel">取消</button>
-      </div>
-    </div>${i < b.nodes.length - 1 ? '<div class="flow-arrow">↓</div>' : ''}`;
-  });
-  html += `<div class="node add" onclick="addNode()">＋ 添加节点</div>`;
-  body.innerHTML = html;
-  bindNodeDrag(body, b);
-  bindNodeEdit(body, b);
+function cwNum(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
+function cwMod(a, n) { return ((a % n) + n) % n; }
+function cwRound(n) { return Math.round(n * 10) / 10; }
+
+// ---------------------------------------------------------------
+// 编排画布：无限画布 + 直接操控
+// ---------------------------------------------------------------
+// 为什么是「单链」而不是自由图：执行引擎 runWorkflow 按 b.nodes 数组**顺序**串行跑，
+// 没有并行 / 分支 / 合流语义。所以画布上的连线只表达「先后」—— 拖 A→B 就是把 B 排到 A
+// 后面（重排数组）。这样「画出来的结构」与「跑起来的行为」永远一致；画引擎跑不出来的
+// 分叉只是好看，那是骗人。
+// 节点坐标 (x,y) 只是**视图状态**：引擎不看它，老数据没有坐标时由 normalize 按顺序铺开。
+// 卡片左上角的序号徽标显示的才是真实执行次序。
+const CW_GRID = 20;        // 网格步长，也是拖拽吸附步长
+const CW_CARD_W = 250;     // 卡片宽（与 CSS .cw-card 的 width 保持一致，改一处要同步另一处）
+const CW_LAYOUT_X = 340;   // 自动布局横向步进 = 卡片宽 + 90 间距
+const CW_ZOOM_MIN = 0.3, CW_ZOOM_MAX = 2.5;
+const CW_VIEWS = {};       // botId -> {x,y,s}：每个机器人记住自己的视角（纯内存）
+const CW_UNDO = {}, CW_REDO = {};   // botId -> [nodes 的 JSON 快照]（纯内存：挂 bot 上会被存进 localStorage）
+
+const cwSt = {
+  bot: null, botId: '', root: null, grid: null, linkPath: null, tmp: null,
+  stage: null, mini: null, miniKids: null, miniVp: null, miniMap: null,
+  mids: null, marquee: null, sel: [], mode: 'select', space: false,
+  drag: null, menu: null, clip: null, ro: null
+};
+
+function cwView(b) { if (!CW_VIEWS[b.id]) CW_VIEWS[b.id] = { x: 0, y: 0, s: 1 }; return CW_VIEWS[b.id]; }
+function cwUL(b) { if (!CW_UNDO[b.id]) CW_UNDO[b.id] = []; return CW_UNDO[b.id]; }
+function cwRL(b) { if (!CW_REDO[b.id]) CW_REDO[b.id] = []; return CW_REDO[b.id]; }
+function cwSnap(b) { return JSON.stringify(b.nodes || []); }
+
+// 一次操作 = 一步撤销。栈顶与当前状态相同时不入栈（所以「只点选、不拖动」不会污染历史）。
+function cwPushUndo(b) {
+  const st = cwUL(b), s = cwSnap(b);
+  if (st.length && st[st.length - 1] === s) return;
+  st.push(s);
+  if (st.length > 60) st.shift();
+  cwRL(b).length = 0;
 }
+function cwUndo(b) {
+  const st = cwUL(b);
+  if (!st.length) { toast('没有可撤销的操作', 'warn'); return; }
+  cwRL(b).push(cwSnap(b));
+  b.nodes = JSON.parse(st.pop());
+  cwSt.sel = [];
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  toast('已撤销', 'ok');
+}
+function cwRedo(b) {
+  const rt = cwRL(b);
+  if (!rt.length) { toast('没有可重做的操作', 'warn'); return; }
+  cwUL(b).push(cwSnap(b));
+  b.nodes = JSON.parse(rt.pop());
+  cwSt.sel = [];
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  toast('已重做', 'ok');
+}
+
+// 卡片的实际几何（世界坐标）。宽高从 DOM 量（编辑态会变高），量不到时退回常量。
+function cwBox(b, i) {
+  const nd = (b.nodes || [])[i];
+  if (!nd) return null;
+  const el = cwSt.stage ? cwSt.stage.children[i] : null;
+  return {
+    x: cwNum(nd.x, i * CW_LAYOUT_X), y: cwNum(nd.y, 0),
+    w: (el && el.offsetWidth) ? el.offsetWidth : CW_CARD_W,
+    h: (el && el.offsetHeight) ? el.offsetHeight : 132
+  };
+}
+// 前一张卡右中点 → 后一张卡左中点（屏幕坐标）
+function cwAdj(b, i, v) {
+  const a = cwBox(b, i), c = cwBox(b, i + 1);
+  if (!a || !c) return null;
+  return {
+    ax: (a.x + a.w) * v.s + v.x, ay: (a.y + a.h / 2) * v.s + v.y,
+    bx: c.x * v.s + v.x, by: (c.y + c.h / 2) * v.s + v.y
+  };
+}
+function cwLinkSeg(b, i, v) {
+  const p = cwAdj(b, i, v);
+  if (!p) return '';
+  const dx = Math.max(40, Math.abs(p.bx - p.ax) * 0.45);
+  return 'M' + cwRound(p.ax) + ' ' + cwRound(p.ay) +
+    'C' + cwRound(p.ax + dx) + ' ' + cwRound(p.ay) + ',' +
+    cwRound(p.bx - dx) + ' ' + cwRound(p.by) + ',' +
+    cwRound(p.bx) + ' ' + cwRound(p.by);
+}
+// 曲线 t=0.5 的点：两端点 x 的对称控制点在三次贝塞尔里正好抵消，
+// 所以「端点中点」就是曲线中点 —— 插入按钮一定压在线上，不用解方程。
+function cwMidPoint(b, i, v) {
+  const p = cwAdj(b, i, v);
+  if (!p) return { x: -9999, y: -9999 };
+  return { x: (p.ax + p.bx) / 2, y: (p.ay + p.by) / 2 };
+}
+
+function cwCard(b, nd, i) {
+  const lbl = nd.lbl || '', h = nd.h || '', p = nd.p || '';
+  const isHandoff = lbl.indexOf('机器人') >= 0;
+  const target = (isHandoff && nd.bot) ? getBot(nd.bot) : null;
+  const hint = isHandoff
+    ? (target ? '<div class="node-handoff-to">➡️ ' + escapeHtml(target.n) + '</div>'
+      : '<div class="node-handoff-to" style="color:var(--danger-text)">⚠️ 未选择机器人</div>')
+    : '';
+  const x = cwNum(nd.x, i * CW_LAYOUT_X), y = cwNum(nd.y, 0);
+  const sel = cwSt.sel.indexOf(i) >= 0 ? ' sel' : '';
+  const who = escapeAttr(h);
+  return '<div class="node cw-card' + (isHandoff ? ' handoff' : '') + sel + '" data-i="' + i + '" style="transform:translate(' + x + 'px,' + y + 'px)">' +
+    '<span class="cw-ord" title="执行次序：第 ' + (i + 1) + ' 步">' + (i + 1) + '</span>' +
+    '<span class="cw-port in" data-port="in" data-i="' + i + '" title="拖到别的节点：把「' + who + '」排到它后面"></span>' +
+    '<span class="node-del" data-i="' + i + '" title="删除节点">✕</span>' +
+    '<span class="node-ic">' + nodeIcon(lbl, h) + '</span>' +
+    '<div class="lbl">' + escapeHtml(lbl) + '</div><h4>' + escapeHtml(h) + '</h4><p>' + escapeHtml(p) + '</p>' + hint +
+    '<div class="node-edit-save"><button class="ok" data-act="save">保存</button><button class="cancel" data-act="cancel">取消</button></div>' +
+    '<span class="cw-port out" data-port="out" data-i="' + i + '" title="拖到另一个节点：把它排到「' + who + '」后面"></span>' +
+    '</div>';
+}
+
+function cwToolsHtml() {
+  return '<div class="cw-tools">' +
+    '<button class="cw-tbtn" data-act="zoomout" title="缩小（Ctrl/⌘+滚轮 也可以）">−</button>' +
+    '<button class="cw-tbtn cw-zval" data-act="zoom100" title="恢复到 1:1">100%</button>' +
+    '<button class="cw-tbtn" data-act="zoomin" title="放大">＋</button>' +
+    '<span class="cw-tsep"></span>' +
+    '<button class="cw-tbtn" data-act="fit" title="适配视图，把所有节点框进来看（F）">⛶</button>' +
+    '<button class="cw-tbtn" data-act="layout" title="按执行顺序整理成一条链">⠿</button>' +
+    '<span class="cw-tsep"></span>' +
+    '<button class="cw-tbtn" data-act="undo" title="撤销（Ctrl+Z）">↶</button>' +
+    '<button class="cw-tbtn" data-act="redo" title="重做（Ctrl+Shift+Z）">↷</button>' +
+    '<span class="cw-tsep"></span>' +
+    '<button class="cw-tbtn" data-act="mode" title="切换：选择模式 / 平移模式（按住空格可临时平移）">✋</button>' +
+    '</div>';
+}
+function cwHintHtml() {
+  return '<div class="cw-hint">' +
+    '<span><kbd>拖卡片</kbd>摆位置</span>' +
+    '<span><kbd>拖圆点</kbd>改顺序</span>' +
+    '<span><kbd>Shift</kbd>+拖 框选</span>' +
+    '<span><kbd>空格</kbd>/中键 平移</span>' +
+    '<span><kbd>Ctrl</kbd>+滚轮 缩放</span>' +
+    '<span><kbd>双击</kbd>编辑 · <kbd>右键</kbd>菜单</span>' +
+    '<span><kbd>Del</kbd>删除 · <kbd>Ctrl+Z</kbd>撤销</span>' +
+    '</div>';
+}
+function cwEmptyHtml() {
+  return '<div class="cw-empty"><div>这个机器人还没有工作流节点<br>引擎目前只会走一次直接对话</div>' +
+    '<button class="btn btn-primary" data-act="addnode">＋ 添加第一个节点</button>' +
+    '<div style="font-size:var(--fs-2xs)">也可以双击画布任意位置，或右键呼出菜单</div></div>';
+}
+
+function renderNodes(b) {
+  const body = document.getElementById('wsFlowBody') || document.querySelector('.ws-body');
+  if (!body || !b) return;
+  if (cwSt.botId !== b.id) { cwSt.sel = []; cwSt.botId = b.id; }
+  cwSt.bot = b;
+  body.classList.add('cw-on');
+  const nodes = b.nodes || [];
+  cwSt.sel = cwSt.sel.filter(function (i) { return i < nodes.length; });
+  let mids = '';
+  for (let k = 0; k + 1 < nodes.length; k++) {
+    mids += '<span class="cw-mid" data-mid="' + k + '" title="在第 ' + (k + 1) + '、' + (k + 2) + ' 步之间插入一个节点">＋</span>';
+  }
+  const mini = nodes.length
+    ? '<div class="cw-mini" id="cwMini">' +
+      nodes.map(function () { return '<span class="cw-mini-node"></span>'; }).join('') +
+      '<span class="cw-mini-vp"></span></div>'
+    : '';
+  body.innerHTML =
+    '<div class="cw-root" id="cwRoot" tabindex="0">' +
+    '<div class="cw-grid" id="cwGrid"></div>' +
+    '<svg class="cw-links" id="cwLinks"><path class="cw-link" id="cwLinkPath" d=""></path><path class="cw-tmp" id="cwTmpPath" d=""></path></svg>' +
+    '<div class="cw-stage" id="cwStage">' + nodes.map(function (nd, i) { return cwCard(b, nd, i); }).join('') + '</div>' +
+    mids + mini + cwToolsHtml() + cwHintHtml() + (nodes.length ? '' : cwEmptyHtml()) +
+    '<div class="cw-marquee" id="cwMarquee" style="display:none"></div>' +
+    '</div>';
+  cwSt.root = document.getElementById('cwRoot');
+  cwSt.grid = document.getElementById('cwGrid');
+  cwSt.linkPath = document.getElementById('cwLinkPath');
+  cwSt.tmp = document.getElementById('cwTmpPath');
+  cwSt.stage = document.getElementById('cwStage');
+  cwSt.mini = document.getElementById('cwMini');
+  cwSt.miniKids = cwSt.mini ? cwSt.mini.querySelectorAll('.cw-mini-node') : null;
+  cwSt.miniVp = cwSt.mini ? cwSt.mini.querySelector('.cw-mini-vp') : null;
+  cwSt.mids = cwSt.root.querySelectorAll('.cw-mid');
+  cwSt.marquee = document.getElementById('cwMarquee');
+  cwSt.menu = null;
+  cwSt.drag = null;
+  cwBind();
+  bindNodeEdit(cwSt.stage, b);
+  if (!CW_VIEWS[b.id]) { CW_VIEWS[b.id] = { x: 0, y: 0, s: 1 }; cwFit(b); }
+  else cwPaint(b);
+  if (cwSt.mode === 'pan') cwSt.root.classList.add('pan-mode');
+  cwObserve();
+}
+
 // 节点类型：**每一项都必须在执行引擎里真的有对应行为**，否则用户加了个节点，
 // 实际只是多跑一次普通模型调用 —— 那是误导。原先表里有四种类型在引擎里根本没有
 // 对应分支（消息、条件、插件、机器人转交），已移除；现表与 ROLE_SYSTEM 的 role 对齐。
@@ -7134,11 +7369,18 @@ const NODE_TYPES = [
 ];
 function addNode() {
   const b = getBot(currentId); if (!b) return;
-  // 轮换选取不同类型，避免总是前 3 种
-  const idx = b.nodes.length % NODE_TYPES.length;
-  const nd = NODE_TYPES[idx];
-  b.nodes.push({ lbl: nd.lbl, h: nd.h, p: nd.p, role: nd.role || '' });
-  b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('已添加节点', 'ok');
+  if (!b.nodes) b.nodes = [];
+  // 节点类型按顺序轮换，避免连点「添加」出来的全是同一种
+  const nd = NODE_TYPES[b.nodes.length % NODE_TYPES.length];
+  const lastI = b.nodes.length - 1;
+  const lx = lastI >= 0 ? cwNum(b.nodes[lastI].x, lastI * CW_LAYOUT_X) : -CW_LAYOUT_X;
+  const ly = lastI >= 0 ? cwNum(b.nodes[lastI].y, 0) : 0;
+  cwPushUndo(b);
+  b.nodes.push({ lbl: nd.lbl, h: nd.h, p: nd.p, role: nd.role || '', x: Math.round(lx + CW_LAYOUT_X), y: Math.round(ly) });
+  cwSt.sel = [b.nodes.length - 1];
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  cwEnsureVisible(b, b.nodes.length - 1);
+  toast('已添加「' + nd.h + '」，它是第 ' + b.nodes.length + ' 步', 'ok');
 }
 // 双击节点进入编辑态
 function bindNodeEdit(body, b) {
@@ -7202,7 +7444,9 @@ function bindNodeEdit(body, b) {
         const isHuman = (newRole === 'human');
         const newNote = isHuman ? ((el.querySelector('.ne-note') || {}).value || '') : '';
         const newAuto = isHuman ? !!(el.querySelector('.ne-autoreview') && el.querySelector('.ne-autoreview').checked) : false;
-        b.nodes[i] = { lbl: typeSel.value, h: newH, p: newP, bot: newBot, role: newRole, note: newNote, autoReview: newAuto };
+        // 保留原对象的其它字段（尤其 x/y）：画布的坐标是视图状态，
+        // 重建对象时漏掉它，编辑一次节点就会跳回自动布局的默认位置。
+        b.nodes[i] = Object.assign({}, b.nodes[i], { lbl: typeSel.value, h: newH, p: newP, bot: newBot, role: newRole, note: newNote, autoReview: newAuto });
         b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('节点已更新', 'ok');
       };
       el.querySelector('[data-act=save]').onclick = save;
@@ -7211,31 +7455,628 @@ function bindNodeEdit(body, b) {
     };
   });
 }
-function bindNodeDrag(body, b) {
-  let dragIdx = null;
-  body.querySelectorAll('.node[draggable]').forEach(el => {
-    el.ondragstart = e => { dragIdx = +el.dataset.i; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
-    el.ondragover = e => { e.preventDefault(); el.classList.add('drag-over'); };
-    el.ondragleave = () => el.classList.remove('drag-over');
-    el.ondrop = e => {
-      e.preventDefault(); el.classList.remove('drag-over');
-      const dropIdx = +el.dataset.i;
-      if (dragIdx === null || dragIdx === dropIdx) return;
-      const [moved] = b.nodes.splice(dragIdx, 1);
-      b.nodes.splice(dropIdx, 0, moved);
-      b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('节点已重排', 'ok');
-    };
-    el.ondragend = () => { el.classList.remove('dragging'); body.querySelectorAll('.node').forEach(x => x.classList.remove('drag-over')); };
-  });
-  body.querySelectorAll('.node-del').forEach(btn => {
-    btn.onclick = e => {
-      e.stopPropagation();
-      const i = +btn.dataset.i;
-      if (b.nodes.length <= 1) { toast('至少保留一个节点', 'err'); return; }
-      b.nodes.splice(i, 1); b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('已删除节点', 'ok');
-    };
-  });
+// ---------------------------------------------------------------
+// 画布绘制：网格 / 平移缩放 / 连线 / 中点按钮 / 小地图
+// ---------------------------------------------------------------
+function cwPaint(b) {
+  const root = cwSt.root;
+  if (!root || !b) return;
+  const v = cwView(b);
+  const W = root.clientWidth, H = root.clientHeight;
+  const step = CW_GRID * v.s, big = step * 5;
+  const g = cwSt.grid;
+  if (g) {
+    // 缩得太小时小格会糊成一片灰，直接把它的 background-size 置 0（该层就不画了）
+    const small = step >= 7 ? step : 0;
+    g.style.backgroundSize = small + 'px ' + small + 'px,' + small + 'px ' + small + 'px,' +
+      big + 'px ' + big + 'px,' + big + 'px ' + big + 'px';
+    const px = cwMod(v.x, big), py = cwMod(v.y, big);
+    g.style.backgroundPosition = px + 'px ' + py + 'px,' + px + 'px ' + py + 'px,' +
+      px + 'px ' + py + 'px,' + px + 'px ' + py + 'px';
+  }
+  cwSt.stage.style.transform = 'translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.s + ')';
+  const kids = cwSt.stage.children;
+  let d = '';
+  for (let i = 0; i + 1 < kids.length; i++) d += cwLinkSeg(b, i, v);
+  cwSt.linkPath.setAttribute('d', d);
+  const mids = cwSt.mids || [];
+  for (let m = 0; m < mids.length; m++) {
+    const pt = cwMidPoint(b, m, v);
+    const off = pt.x < 0 || pt.y < 0 || pt.x > W || pt.y > H;
+    mids[m].style.left = pt.x + 'px';
+    mids[m].style.top = pt.y + 'px';
+    mids[m].style.display = off ? 'none' : '';
+  }
+  const zv = root.querySelector('.cw-zval');
+  if (zv) zv.textContent = Math.round(v.s * 100) + '%';
+  cwPaintMini(b, v, W, H);
 }
+
+function cwPaintMini(b, v, W, H) {
+  const mini = cwSt.mini, kids = cwSt.miniKids;
+  if (!mini || !kids || !kids.length) return;
+  const mw = mini.clientWidth || 168, mh = mini.clientHeight || 108, pad = 6;
+  let minx = -v.x / v.s, miny = -v.y / v.s;
+  let maxx = minx + W / v.s, maxy = miny + H / v.s;
+  (b.nodes || []).forEach(function (n, i) {
+    const bx = cwBox(b, i);
+    if (!bx) return;
+    minx = Math.min(minx, bx.x); miny = Math.min(miny, bx.y);
+    maxx = Math.max(maxx, bx.x + bx.w); maxy = Math.max(maxy, bx.y + bx.h);
+  });
+  const bw = Math.max(1, maxx - minx), bh = Math.max(1, maxy - miny);
+  const s = Math.min((mw - pad * 2) / bw, (mh - pad * 2) / bh);
+  const ox = (mw - bw * s) / 2, oy = (mh - bh * s) / 2;
+  cwSt.miniMap = { s: s, ox: ox, oy: oy, minx: minx, miny: miny };
+  for (let i = 0; i < kids.length; i++) {
+    const bx = cwBox(b, i);
+    if (!bx) continue;
+    kids[i].style.left = (ox + (bx.x - minx) * s) + 'px';
+    kids[i].style.top = (oy + (bx.y - miny) * s) + 'px';
+    kids[i].style.width = Math.max(2, bx.w * s) + 'px';
+    kids[i].style.height = Math.max(2, bx.h * s) + 'px';
+    kids[i].classList.toggle('sel', cwSt.sel.indexOf(i) >= 0);
+  }
+  const vp = cwSt.miniVp;
+  if (vp) {
+    vp.style.left = (ox + (-v.x / v.s - minx) * s) + 'px';
+    vp.style.top = (oy + (-v.y / v.s - miny) * s) + 'px';
+    vp.style.width = Math.max(3, (W / v.s) * s) + 'px';
+    vp.style.height = Math.max(3, (H / v.s) * s) + 'px';
+  }
+}
+
+function cwPaintSel(b) {
+  const kids = cwSt.stage ? cwSt.stage.children : [];
+  for (let i = 0; i < kids.length; i++) kids[i].classList.toggle('sel', cwSt.sel.indexOf(i) >= 0);
+  cwPaintMini(b, cwView(b), (cwSt.root && cwSt.root.clientWidth) || 0, (cwSt.root && cwSt.root.clientHeight) || 0);
+}
+
+function cwHotCard(idx) {
+  const kids = cwSt.stage ? cwSt.stage.children : [];
+  for (let i = 0; i < kids.length; i++) kids[i].classList.toggle('link-target', i === idx);
+}
+
+// ---------------------------------------------------------------
+// 视图操作
+// ---------------------------------------------------------------
+function cwZoomAt(b, cx, cy, f) {
+  const root = cwSt.root, v = cwView(b);
+  if (!root) return;
+  const r = root.getBoundingClientRect();
+  const px = cx - r.left, py = cy - r.top;
+  const ns = Math.min(CW_ZOOM_MAX, Math.max(CW_ZOOM_MIN, v.s * f));
+  if (Math.abs(ns - v.s) < 1e-4) return;
+  // 光标下的那个世界点保持不动：wx = (px - v.x) / v.s
+  v.x = px - ((px - v.x) / v.s) * ns;
+  v.y = py - ((py - v.y) / v.s) * ns;
+  v.s = ns;
+  cwPaint(b);
+}
+function cwZoomCenter(b, f) {
+  const root = cwSt.root;
+  if (!root) return;
+  const r = root.getBoundingClientRect();
+  cwZoomAt(b, r.left + root.clientWidth / 2, r.top + root.clientHeight / 2, f);
+}
+function cwFit(b) {
+  const root = cwSt.root;
+  b = b || cwSt.bot;
+  if (!root || !b || !b.nodes || !b.nodes.length) return;
+  const v = cwView(b);
+  const W = root.clientWidth || 420, H = root.clientHeight || 320, pad = 40;
+  let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
+  b.nodes.forEach(function (n, i) {
+    const bx = cwBox(b, i);
+    if (!bx) return;
+    minx = Math.min(minx, bx.x); miny = Math.min(miny, bx.y);
+    maxx = Math.max(maxx, bx.x + bx.w); maxy = Math.max(maxy, bx.y + bx.h);
+  });
+  const bw = Math.max(1, maxx - minx), bh = Math.max(1, maxy - miny);
+  let s = Math.min((W - pad * 2) / bw, (H - pad * 2) / bh);
+  s = Math.min(1.15, Math.max(CW_ZOOM_MIN, s));   // 不放大过头：一两个节点别撑成巨无霸
+  v.s = s;
+  v.x = (W - bw * s) / 2 - minx * s;
+  v.y = (H - bh * s) / 2 - miny * s;
+  cwPaint(b);
+}
+function cwResetZoom(b) {
+  const root = cwSt.root;
+  b = b || cwSt.bot;
+  if (!root || !b) return;
+  const v = cwView(b), W = root.clientWidth, H = root.clientHeight;
+  const cx = (W / 2 - v.x) / v.s, cy = (H / 2 - v.y) / v.s;  // 视图中心的世界点
+  v.s = 1;
+  v.x = W / 2 - cx;
+  v.y = H / 2 - cy;
+  cwPaint(b);
+}
+function cwRefresh() {
+  const b = cwSt.bot || getBot(currentId);
+  if (!b || !cwSt.root || !cwSt.root.isConnected) return;
+  cwPaint(b);
+}
+
+// ---------------------------------------------------------------
+// 结构操作：改顺序 / 增删 / 复制
+// ---------------------------------------------------------------
+// 把 B 排到 A 之后。单链模型下这永远合法（不会成环、不会分叉），所以不存在「拒绝连线」。
+function cwLinkTo(b, A, B) {
+  if (A === B) { toast('不能把节点连到它自己', 'warn'); return; }
+  if (B === A + 1) { toast('「' + (b.nodes[B].h || '') + '」已经是下一步了', 'warn'); return; }
+  cwPushUndo(b);
+  const moved = b.nodes.splice(B, 1)[0];
+  const ai = B < A ? A - 1 : A;      // 抽走后 A 的下标可能左移一位
+  b.nodes.splice(ai + 1, 0, moved);
+  cwSt.sel = [ai + 1];
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  toast('已把「' + (moved.h || '') + '」排到「' + (b.nodes[ai].h || '') + '」之后（第 ' + (ai + 2) + ' 步）', 'ok');
+}
+function cwAddAt(b, t, wx, wy) {
+  cwPushUndo(b);
+  b.nodes.push({ lbl: t.lbl, h: t.h, p: t.p, role: t.role || '', x: Math.round(wx), y: Math.round(wy) });
+  cwSt.sel = [b.nodes.length - 1];
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  cwEnsureVisible(b, b.nodes.length - 1);
+  toast('已添加「' + t.h + '」，它是第 ' + b.nodes.length + ' 步', 'ok');
+}
+function cwDelOne(b, i) {
+  if (b.nodes.length <= 1) { toast('至少保留一个节点', 'err'); return; }
+  cwPushUndo(b);
+  b.nodes.splice(i, 1);
+  cwSt.sel = [];
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  toast('已删除节点', 'ok');
+}
+function cwDelSel(b) {
+  if (!cwSt.sel.length) { toast('先选中要删除的节点', 'warn'); return; }
+  if (b.nodes.length - cwSt.sel.length < 1) { toast('至少保留一个节点', 'err'); return; }
+  cwPushUndo(b);
+  const idx = cwSt.sel.slice().sort(function (a, c) { return c - a; });
+  idx.forEach(function (i) { b.nodes.splice(i, 1); });
+  const n = idx.length;
+  cwSt.sel = [];
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  toast('已删除 ' + n + ' 个节点', 'ok');
+}
+function cwInsertBetween(b, i) {
+  const t = NODE_TYPES[(b.nodes.length) % NODE_TYPES.length];
+  cwPushUndo(b);
+  const a = cwBox(b, i), c = cwBox(b, i + 1);
+  let x = 0, y = 0;
+  if (a && c) {
+    x = Math.round((a.x + c.x) / 2);
+    y = Math.round((a.y + c.y) / 2);
+    if (Math.abs(a.x - c.x) < 60) y = Math.round(y + 180);   // 两张卡几乎重叠时错开，别叠一起
+  }
+  b.nodes.splice(i + 1, 0, { lbl: t.lbl, h: t.h, p: t.p, role: t.role || '', x: x, y: y });
+  cwSt.sel = [i + 1];
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  toast('已插入「' + t.h + '」，它是第 ' + (i + 2) + ' 步', 'ok');
+}
+function cwCopy(b) {
+  if (!cwSt.sel.length) { toast('先选中要复制的节点', 'warn'); return; }
+  const picked = cwSt.sel.slice().sort(function (a, c) { return a - c; })
+    .map(function (i) { return b.nodes[i]; }).filter(Boolean);
+  cwSt.clip = JSON.parse(JSON.stringify(picked));
+  toast('已复制 ' + picked.length + ' 个节点', 'ok');
+}
+function cwPaste(b) {
+  if (!cwSt.clip || !cwSt.clip.length) { toast('剪贴板为空：先选中节点再 Ctrl+C', 'warn'); return; }
+  cwPushUndo(b);
+  const at = cwSt.sel.length ? Math.max.apply(null, cwSt.sel) + 1 : b.nodes.length;
+  const made = cwSt.clip.map(function (n) {
+    const c = Object.assign({}, n);
+    c.x = cwNum(c.x, 0) + CW_GRID * 2;
+    c.y = cwNum(c.y, 0) + CW_GRID * 2;
+    return c;
+  });
+  b.nodes.splice.apply(b.nodes, [at, 0].concat(made));
+  cwSt.sel = made.map(function (_, k) { return at + k; });
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  toast('已粘贴 ' + made.length + ' 个节点（插在第 ' + at + ' 步之后）', 'ok');
+}
+function cwAutoLayout(b) {
+  b = b || cwSt.bot;
+  if (!b || !b.nodes || !b.nodes.length) return;
+  cwPushUndo(b);
+  b.nodes.forEach(function (n, i) { n.x = i * CW_LAYOUT_X; n.y = 0; });
+  b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+  cwFit(b);
+  toast('已按执行顺序整理成一条链', 'ok');
+}
+function cwEnsureVisible(b, i) {
+  const root = cwSt.root;
+  if (!root || !b.nodes[i]) return;
+  const v = cwView(b), W = root.clientWidth, H = root.clientHeight, pad = 24;
+  const bx = cwBox(b, i);
+  const sx = bx.x * v.s + v.x, sy = bx.y * v.s + v.y;
+  if (sx < pad) v.x += pad - sx;
+  if (sy < pad) v.y += pad - sy;
+  if (sx + bx.w * v.s > W - pad) v.x -= (sx + bx.w * v.s) - (W - pad);
+  if (sy + bx.h * v.s > H - pad) v.y -= (sy + bx.h * v.s) - (H - pad);
+  cwPaint(b);
+}
+function cwToolAct(b, act) {
+  if (!act) return;
+  const root = cwSt.root;
+  if (act === 'zoomin') { cwZoomCenter(b, 1.2); return; }
+  if (act === 'zoomout') { cwZoomCenter(b, 1 / 1.2); return; }
+  if (act === 'zoom100') { cwResetZoom(b); return; }
+  if (act === 'fit') { cwFit(b); return; }
+  if (act === 'layout') { cwAutoLayout(b); return; }
+  if (act === 'undo') { cwUndo(b); return; }
+  if (act === 'redo') { cwRedo(b); return; }
+  if (act === 'addnode') { addNodeAtCenter(b); return; }
+  if (act === 'mode') {
+    cwSt.mode = cwSt.mode === 'pan' ? 'select' : 'pan';
+    if (root) root.classList.toggle('pan-mode', cwSt.mode === 'pan');
+    const btn = root ? root.querySelector('[data-act=mode]') : null;
+    if (btn) btn.classList.toggle('on', cwSt.mode === 'pan');
+    toast(cwSt.mode === 'pan' ? '平移模式：左键拖动画布' : '选择模式：拖卡片摆位，Shift+拖动框选', 'ok');
+  }
+}
+// 空态按钮 / 首次添加：落在当前视图中心
+function addNodeAtCenter(b) {
+  const root = cwSt.root;
+  const v = cwView(b);
+  const W = root ? root.clientWidth : 420, H = root ? root.clientHeight : 320;
+  cwAddAt(b, NODE_TYPES[(b.nodes || []).length % NODE_TYPES.length],
+    (W / 2 - v.x) / v.s - CW_CARD_W / 2, (H / 2 - v.y) / v.s - 60);
+}
+
+// ---------------------------------------------------------------
+// 右键菜单 / 事件绑定
+// ---------------------------------------------------------------
+function cwCloseMenu() {
+  if (cwSt.menu && cwSt.menu.parentNode) cwSt.menu.parentNode.removeChild(cwSt.menu);
+  cwSt.menu = null;
+}
+function cwOpenMenu(b, cx, cy) {
+  cwCloseMenu();
+  const root = cwSt.root;
+  if (!root) return;
+  const r = root.getBoundingClientRect();
+  const v = cwView(b);
+  let html = '<div class="cw-mtitle">在此处添加（追加到链尾）</div>';
+  NODE_TYPES.forEach(function (t, k) {
+    html += '<div class="cw-mi" data-add="' + k + '"><span>' + t.lbl + '</span><span class="cw-mdim">' + escapeHtml(t.p) + '</span></div>';
+  });
+  html += '<div class="cw-msep"></div>' +
+    '<div class="cw-mi" data-act="layout">⠿ 按执行顺序整理成链</div>' +
+    '<div class="cw-mi" data-act="fit">⛶ 适配视图</div>' +
+    '<div class="cw-mi" data-act="zoom100">1:1 缩放</div>' +
+    '<div class="cw-mi" data-act="all">全选（' + (b.nodes || []).length + ' 个节点）</div>' +
+    '<div class="cw-msep"></div>' +
+    '<div class="cw-mi" data-act="undo">↶ 撤销</div>' +
+    '<div class="cw-mi" data-act="redo">↷ 重做</div>';
+  const m = document.createElement('div');
+  m.className = 'cw-menu';
+  m.innerHTML = html;
+  root.appendChild(m);
+  const mw = m.offsetWidth, mh = m.offsetHeight;
+  const x = cx - r.left, y = cy - r.top;
+  m.style.left = Math.max(4, Math.min(x, root.clientWidth - mw - 4)) + 'px';
+  m.style.top = Math.max(4, Math.min(y, root.clientHeight - mh - 4)) + 'px';
+  m.__wx = (x - v.x) / v.s;
+  m.__wy = (y - v.y) / v.s;
+  cwSt.menu = m;
+}
+
+function cwBind() {
+  const root = cwSt.root;
+  if (!root || root.__cwBound) return;
+  root.__cwBound = true;
+  root.addEventListener('pointerdown', cwOnDown);
+  root.addEventListener('pointermove', cwOnMove);
+  root.addEventListener('pointerup', cwOnUp);
+  root.addEventListener('pointercancel', cwOnUp);
+  root.addEventListener('wheel', cwOnWheel, { passive: false });
+  root.addEventListener('contextmenu', cwOnMenu);
+  root.addEventListener('dblclick', cwOnDbl);
+  root.addEventListener('click', cwOnClick);
+}
+function cwObserve() {
+  if (typeof ResizeObserver === 'undefined' || !cwSt.root) return;
+  if (cwSt.ro) { try { cwSt.ro.disconnect(); } catch (e) { } }
+  cwSt.ro = new ResizeObserver(function () { cwRefresh(); });
+  cwSt.ro.observe(cwSt.root);
+}
+function cwCardAt(cx, cy) {
+  if (typeof document.elementFromPoint !== 'function') return null;
+  const el = document.elementFromPoint(cx, cy);
+  return el && el.closest ? el.closest('.cw-card') : null;
+}
+function cwWorldAt(b, cx, cy) {
+  const root = cwSt.root, v = cwView(b);
+  const r = root.getBoundingClientRect();
+  return { x: (cx - r.left - v.x) / v.s, y: (cy - r.top - v.y) / v.s };
+}
+
+function cwOnDown(e) {
+  const b = cwSt.bot, root = cwSt.root;
+  if (!b || !root) return;
+  if (e.button === 2) return;      // 右键交给 contextmenu
+  if (e.target.closest('.cw-tools') || e.target.closest('.cw-mini') || e.target.closest('.cw-mid') || e.target.closest('.cw-menu')) return;
+  cwCloseMenu();
+  const port = e.target.closest('.cw-port');
+  const card = e.target.closest('.cw-card');
+  const editing = card && card.classList.contains('editing');
+  const wantPan = (e.button === 1) || cwSt.space || cwSt.mode === 'pan';
+  const wantMarquee = e.shiftKey && !wantPan && !card && !port;
+
+  if (port && !editing) {
+    cwSt.drag = { mode: 'link', anchor: +port.getAttribute('data-i'), side: port.getAttribute('data-port'), hot: -1, moved: false };
+  } else if (card && !editing && !wantPan) {
+    const ci = +card.getAttribute('data-i');
+    if (e.shiftKey) cwSt.sel = cwSt.sel.indexOf(ci) >= 0 ? cwSt.sel.filter(function (k) { return k !== ci; }) : cwSt.sel.concat([ci]);
+    else if (cwSt.sel.indexOf(ci) < 0) cwSt.sel = [ci];
+    cwPaintSel(b);
+    cwPushUndo(b);   // 一次拖动 = 一步撤销；只点选不拖动时栈顶状态相同，不会入栈
+    cwSt.drag = {
+      mode: 'node', start: cwWorldAt(b, e.clientX, e.clientY), moved: false,
+      init: cwSt.sel.map(function (i) {
+        return { i: i, x: cwNum(b.nodes[i].x, i * CW_LAYOUT_X), y: cwNum(b.nodes[i].y, 0) };
+      })
+    };
+  } else if (card && !editing && wantPan) {
+    cwSt.drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: cwView(b).x, vy: cwView(b).y };
+    root.classList.add('panning');
+  } else if (wantMarquee) {
+    cwSt.drag = { mode: 'marquee', x0: e.clientX, y0: e.clientY, add: e.shiftKey, moved: false };
+    root.classList.add('marqueeing');
+  } else {
+    cwSt.drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: cwView(b).x, vy: cwView(b).y };
+    root.classList.add('panning');
+  }
+  try { root.setPointerCapture(e.pointerId); } catch (err) { }
+  e.preventDefault();
+}
+
+function cwOnMove(e) {
+  const d = cwSt.drag, b = cwSt.bot;
+  if (!d || !b) return;
+  d.moved = true;
+  const v = cwView(b);
+  if (d.mode === 'pan') {
+    v.x = d.vx + (e.clientX - d.sx);
+    v.y = d.vy + (e.clientY - d.sy);
+    cwPaint(b);
+    return;
+  }
+  if (d.mode === 'node') {
+    const cur = cwWorldAt(b, e.clientX, e.clientY);
+    const dx = cur.x - d.start.x, dy = cur.y - d.start.y;
+    const free = e.altKey;   // Alt = 不吸附，精细摆放
+    d.init.forEach(function (o) {
+      let nx = o.x + dx, ny = o.y + dy;
+      if (!free) { nx = Math.round(nx / CW_GRID) * CW_GRID; ny = Math.round(ny / CW_GRID) * CW_GRID; }
+      const nd = b.nodes[o.i];
+      if (!nd) return;
+      nd.x = Math.round(nx); nd.y = Math.round(ny);
+      const el = cwSt.stage.children[o.i];
+      if (el) el.style.transform = 'translate(' + nd.x + 'px,' + nd.y + 'px)';
+    });
+    cwPaint(b);
+    return;
+  }
+  if (d.mode === 'marquee') {
+    const r = cwSt.root.getBoundingClientRect();
+    const x1 = d.x0 - r.left, y1 = d.y0 - r.top, x2 = e.clientX - r.left, y2 = e.clientY - r.top;
+    const mx = Math.min(x1, x2), my = Math.min(y1, y2), mw = Math.abs(x2 - x1), mh = Math.abs(y2 - y1);
+    cwSt.marquee.style.display = 'block';
+    cwSt.marquee.style.left = mx + 'px';
+    cwSt.marquee.style.top = my + 'px';
+    cwSt.marquee.style.width = mw + 'px';
+    cwSt.marquee.style.height = mh + 'px';
+    const w0 = cwWorldAt(b, mx + r.left, my + r.top);
+    const w1 = cwWorldAt(b, mx + mw + r.left, my + mh + r.top);
+    const hit = [];
+    (b.nodes || []).forEach(function (n, i) {
+      const bx = cwBox(b, i);
+      if (bx && bx.x < w1.x && bx.x + bx.w > w0.x && bx.y < w1.y && bx.y + bx.h > w0.y) hit.push(i);
+    });
+    if (d.add) {
+      const merged = cwSt.sel.slice();
+      hit.forEach(function (i) { if (merged.indexOf(i) < 0) merged.push(i); });
+      cwSt.sel = merged;
+    } else cwSt.sel = hit;
+    cwPaintSel(b);
+    return;
+  }
+  if (d.mode === 'link') {
+    const root = cwSt.root, r = root.getBoundingClientRect();
+    const hotEl = cwCardAt(e.clientX, e.clientY);
+    const hot = (hotEl && +hotEl.getAttribute('data-i') !== d.anchor) ? +hotEl.getAttribute('data-i') : -1;
+    if (hot !== d.hot) { d.hot = hot; cwHotCard(hot); }
+    const bx = cwBox(b, d.anchor);
+    let sx, sy;
+    if (d.side === 'out') { sx = (bx.x + bx.w) * v.s + v.x; sy = (bx.y + bx.h / 2) * v.s + v.y; }
+    else { sx = bx.x * v.s + v.x; sy = (bx.y + bx.h / 2) * v.s + v.y; }
+    const ex = e.clientX - r.left, ey = e.clientY - r.top;
+    const dx = Math.max(30, Math.abs(ex - sx) * 0.4) * (ex >= sx ? 1 : -1);
+    cwSt.tmp.setAttribute('d', 'M' + cwRound(sx) + ' ' + cwRound(sy) +
+      'C' + cwRound(sx + dx) + ' ' + cwRound(sy) + ',' +
+      cwRound(ex - dx) + ' ' + cwRound(ey) + ',' + cwRound(ex) + ' ' + cwRound(ey));
+  }
+}
+
+function cwOnUp(e) {
+  const d = cwSt.drag, b = cwSt.bot, root = cwSt.root;
+  if (!d || !b) return;
+  cwSt.drag = null;
+  if (root) {
+    root.classList.remove('panning', 'marqueeing');
+    try { root.releasePointerCapture(e.pointerId); } catch (err) { }
+  }
+  if (d.mode === 'node') {
+    if (d.moved) { b.updatedAt = Date.now(); saveBots(); }
+    else {
+      // 只点选没拖动：把刚才那一步空快照收回来，别让 Ctrl+Z 白跳一下
+      const st = cwUL(b);
+      if (st.length && st[st.length - 1] === cwSnap(b)) st.pop();
+    }
+  }
+  if (d.mode === 'marquee') {
+    if (cwSt.marquee) cwSt.marquee.style.display = 'none';
+    if (d.moved) cwPaintSel(b);
+  }
+  if (d.mode === 'link') {
+    cwSt.tmp.setAttribute('d', '');
+    cwHotCard(-1);
+    if (d.hot >= 0) {
+      cwLinkTo(b, d.side === 'out' ? d.anchor : d.hot, d.side === 'out' ? d.hot : d.anchor);
+    } else if (d.moved) {
+      toast('松手时没有落在其他节点上，顺序没有改动', 'warn');
+    }
+  }
+  cwPaint(b);
+}
+
+function cwOnWheel(e) {
+  const b = cwSt.bot, root = cwSt.root;
+  if (!b || !root) return;
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) {
+    cwZoomAt(b, e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0022));
+    return;
+  }
+  const v = cwView(b);
+  if (e.shiftKey) v.x -= e.deltaY;         // Shift = 横向
+  else { v.x -= e.deltaX; v.y -= e.deltaY; }
+  cwPaint(b);
+}
+
+function cwOnMenu(e) {
+  const b = cwSt.bot;
+  if (!b) return;
+  e.preventDefault();
+  if (e.target.closest('.cw-tools') || e.target.closest('.cw-mini')) return;
+  cwOpenMenu(b, e.clientX, e.clientY);
+}
+
+function cwOnDbl(e) {
+  const b = cwSt.bot;
+  if (!b) return;
+  if (e.target.closest('.cw-card')) return;    // 卡片双击 = 编辑（bindNodeEdit 管）
+  if (e.target.closest('.cw-tools') || e.target.closest('.cw-mini') || e.target.closest('.cw-menu')) return;
+  const w = cwWorldAt(b, e.clientX, e.clientY);
+  cwAddAt(b, NODE_TYPES[(b.nodes || []).length % NODE_TYPES.length], w.x - CW_CARD_W / 2, w.y - 60);
+}
+
+function cwOnClick(e) {
+  const b = cwSt.bot, root = cwSt.root;
+  if (!b || !root) return;
+  const menu = cwSt.menu;
+  if (menu && menu.contains(e.target)) {
+    const mi = e.target.closest('.cw-mi');
+    if (!mi) return;
+    const addIdx = mi.getAttribute('data-add');
+    const act = mi.getAttribute('data-act');
+    const wx = menu.__wx, wy = menu.__wy;
+    cwCloseMenu();
+    if (addIdx !== null) { cwAddAt(b, NODE_TYPES[+addIdx], wx - CW_CARD_W / 2, wy - 60); return; }
+    if (act === 'all') {
+      cwSt.sel = (b.nodes || []).map(function (_, i) { return i; });
+      cwPaintSel(b);
+      toast('已选中全部 ' + cwSt.sel.length + ' 个节点', 'ok');
+      return;
+    }
+    cwToolAct(b, act);
+    return;
+  }
+  if (e.target.closest('.cw-menu')) { cwCloseMenu(); return; }
+  const del = e.target.closest('.node-del');
+  if (del) { cwDelOne(b, +del.getAttribute('data-i')); return; }
+  const mid = e.target.closest('.cw-mid');
+  if (mid) { cwInsertBetween(b, +mid.getAttribute('data-mid')); return; }
+  const tbtn = e.target.closest('.cw-tbtn');
+  if (tbtn) { cwToolAct(b, tbtn.getAttribute('data-act')); return; }
+  if (e.target.closest('.cw-empty')) {
+    const btn = e.target.closest('[data-act=addnode]');
+    if (btn) { addNodeAtCenter(b); return; }
+  }
+  if (e.target.closest('.cw-mini')) {
+    const m = cwSt.miniMap;
+    if (!m) return;
+    const r = cwSt.mini.getBoundingClientRect();
+    const wx = (e.clientX - r.left - m.ox) / m.s + m.minx;
+    const wy = (e.clientY - r.top - m.oy) / m.s + m.miny;
+    const v = cwView(b);
+    v.x = root.clientWidth / 2 - wx * v.s;
+    v.y = root.clientHeight / 2 - wy * v.s;
+    cwPaint(b);
+  }
+}
+
+// 键盘：只在「编排 Tab 真的可见 + 焦点不在输入控件」时生效，避免抢走聊天框的按键
+function cwTyping() {
+  const ae = document.activeElement;
+  if (!ae) return false;
+  // BUTTON / A 也放过：焦点在工具条按钮上时，空格该触发按钮，不该被我抢去当平移
+  if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(ae.tagName)) return true;
+  return !!ae.isContentEditable;
+}
+function cwLive() {
+  const body = document.getElementById('wsFlowBody');
+  if (!body || !body.classList.contains('cw-on')) return false;
+  const root = cwSt.root;
+  if (!root || !root.isConnected) return false;
+  // 页面/面板隐藏时 clientWidth 为 0 —— 这是唯一不依赖类名约定的可见性判据
+  // （切页面用的是内联 style.display，切 Tab 用的也是内联，别去猜类名）
+  return root.clientWidth > 0;
+}
+function cwOnKey(e) {
+  const b = cwSt.bot;
+  if (!b || !cwLive() || cwTyping()) return;
+  const mod = e.ctrlKey || e.metaKey;
+  const k = e.key;
+  if (e.code === 'Space') { cwSt.space = true; cwSt.root.classList.add('pan-ready'); e.preventDefault(); return; }
+  if (mod && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) cwRedo(b); else cwUndo(b); return; }
+  if (mod && (k === 'y' || k === 'Y')) { e.preventDefault(); cwRedo(b); return; }
+  if (mod && (k === 'a' || k === 'A')) {
+    e.preventDefault();
+    cwSt.sel = (b.nodes || []).map(function (_, i) { return i; });
+    cwPaintSel(b);
+    return;
+  }
+  if (mod && (k === 'c' || k === 'C')) { e.preventDefault(); cwCopy(b); return; }
+  if (mod && (k === 'v' || k === 'V')) { e.preventDefault(); cwPaste(b); return; }
+  if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); cwDelSel(b); return; }
+  if (k === 'Escape') { e.preventDefault(); cwSt.sel = []; cwCloseMenu(); cwPaintSel(b); return; }
+  if (k === '0') { e.preventDefault(); cwResetZoom(b); return; }
+  if (k === 'f' || k === 'F') { e.preventDefault(); cwFit(b); return; }
+  if (k === '+' || k === '=') { e.preventDefault(); cwZoomCenter(b, 1.2); return; }
+  if (k === '-' || k === '_') { e.preventDefault(); cwZoomCenter(b, 1 / 1.2); return; }
+  if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') {
+    if (!cwSt.sel.length) return;
+    e.preventDefault();
+    cwPushUndo(b);   // 微移也是「改位置」，得能撤销（连按 80 次由撤销栈上限兜住）
+    const step = e.shiftKey ? 1 : CW_GRID;   // 默认按网格走，Shift 精细到 1px
+    const dx = k === 'ArrowLeft' ? -step : (k === 'ArrowRight' ? step : 0);
+    const dy = k === 'ArrowUp' ? -step : (k === 'ArrowDown' ? step : 0);
+    cwSt.sel.forEach(function (i) {
+      const nd = b.nodes[i];
+      if (!nd) return;
+      nd.x = cwNum(nd.x, i * CW_LAYOUT_X) + dx;
+      nd.y = cwNum(nd.y, 0) + dy;
+      const el = cwSt.stage.children[i];
+      if (el) el.style.transform = 'translate(' + nd.x + 'px,' + nd.y + 'px)';
+    });
+    cwPaint(b);
+    b.updatedAt = Date.now(); saveBots();
+  }
+}
+function cwOnKeyUp(e) {
+  if (e.code === 'Space') {
+    cwSt.space = false;
+    if (cwSt.root) cwSt.root.classList.remove('pan-ready');
+  }
+}
+document.addEventListener('keydown', cwOnKey);
+document.addEventListener('keyup', cwOnKeyUp);
+window.addEventListener('resize', function () { cwRefresh(); });
+
 
 function scrollChatToBottom(force) {
   const chat = document.getElementById('chat'); if (!chat) return;
@@ -10513,6 +11354,9 @@ function switchWsTab(t) {
   if (t === 'publish') renderChannels();
   if (t === 'versions') { if (b) renderVersionPanel(b); }
   if (t === 'batch') { if (b) renderBatchPanel(b); }
+  // 画布：面板刚从 display:none 切成可见，此刻才量得到 root 的真实尺寸。
+  // 不在这一步补画一次，切走再切回来连线会按「尺寸 0」画歪。
+  if (t === 'flow' && b) cwRefresh();
   closeWsMore();
   // 面板刚由 display:none 切成可见，此时才量得到真实内容高度 —— 提示词 / 批量的
   // 输入框就活在这些面板里，不在这里补一次，切过来时会停在旧高度上。
@@ -11472,6 +12316,7 @@ window.addEventListener('beforeunload', () => { if (currentUser) saveBots(); });
 // 暴露全局
 window.openCreate = openCreate; window.closeCreate = closeCreate; window.submitCreate = submitCreate;
 window.sendMsg = sendMsg; window.stopGenerate = stopGenerate; window.addNode = addNode;
+window.cwRefresh = cwRefresh; window.cwFit = cwFit; window.cwAutoLayout = cwAutoLayout;
 window.openPublishModal = openPublishModal; window.closePublishModal = closePublishModal; window.confirmPublish = confirmPublish; window.cardMenu = cardMenu; window.clearChat = clearChat;
 window.openSettings = openSettings; window.closeSettings = closeSettings;
 window.saveSettings = saveSettings; window.testConnection = testConnection;
