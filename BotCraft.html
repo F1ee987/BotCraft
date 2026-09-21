@@ -9677,6 +9677,11 @@ function cwOnDown(e) {
   const b = cwSt.bot, root = cwSt.root;
   if (!b || !root) return;
   if (e.button === 2) return;      // 右键交给 contextmenu
+  // 卡片右上角的删除按钮：必须在**按下阶段**就早退。否则会走进卡片拖动分支，
+  // 那一支会 setPointerCapture + preventDefault —— 之后浏览器把 click 的目标
+  // 派给捕获元素（画布 root）而不是按钮，cwOnClick 里 closest('.node-del') 落空，
+  // 症状就是「删除按钮点了没反应」。顺带也避免了从删除按钮起拖整张卡。
+  if (e.target.closest('.node-del')) return;
   if (e.target.closest('.cw-tools') || e.target.closest('.cw-mid') || e.target.closest('.cw-menu')) return;
   cwCloseMenu();
   // 小地图：按下即跳、拖住连续平移 —— 视口框就是被拖的那个「把手」。
