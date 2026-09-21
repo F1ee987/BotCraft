@@ -9674,6 +9674,12 @@ function cwFitMini() {
   const bw = root.clientWidth;
   if (!bw) return;                                  // 面板还没显示，量不到就别动
   const sp6 = parseFloat(getComputedStyle(root).getPropertyValue('--sp-6')) || 12;
+  // 防抖（拖动分隔线时小地图/工具条「抽搐」的根因）：必须先摘掉 cw-cramped 再量
+  // 工具条宽度。否则 cramped 折行后 offsetWidth 变小，need>have 判定跟着翻转 ——
+  // 非 cramped 量到宽→判 cramped→量到窄→判非 cramped，拖动经过临界区间就每帧横跳。
+  // 摘类后读 offsetWidth 会强制同步重排，量到的一律是「未让位布局」的宽度，判定只跟
+  // 画布宽有关 → 同一宽度永远同一结果。整段同步执行，中间态不会上屏。
+  root.classList.remove('cw-cramped');
   const need = sp6 + tools.offsetWidth + 8;         // 工具条右边缘（含最小间隙）
   const have = bw - sp6 - mini.offsetWidth;         // 小地图左边缘
   root.classList.toggle('cw-cramped', need > have);
