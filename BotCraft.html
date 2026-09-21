@@ -315,7 +315,7 @@ body #page-home .grid, body #page-home .empty-home{animation:bcRise .6s var(--ea
    var 完整性全查不出来。被抹掉的正好是全局玻璃的模糊层。
    → 往这段注释里加字时，别带注释定界符。守卫：verify_css.js 的「注释配平」组。 */
 body .topbar, body .sidebar, body .ws-side, body .mbox, body .toast, body .cmd-panel,
-body .pop-menu, body .ws-more-menu, body .bot-switch-menu, body .modal, body .modal-box,
+body .pop-menu, body .ws-more-menu, body .bot-switch-menu, body .ch-more-menu, body .modal, body .modal-box,
 body .ctxp-box,
 body .stat-card, body .chart-box, body .brand-card,
 body .pub-card, body .batch-bar, body .main.scrolled > .page-head{
@@ -713,14 +713,31 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .chat-head{padding:12px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:var(--sp-5);flex:0 0 auto}  /* 头部固定，不伸缩 */
 .chat-head .ava{width:32px;height:32px;border-radius:var(--r-sm);background:var(--brand-fill);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:#fff}
 .chat-head .ava svg{width:19px;height:19px;display:block}
-.bot-switch{position:relative;flex-shrink:0}
-.bot-switch-btn{display:flex;align-items:center;gap:var(--sp-4);max-width:210px;padding:7px 10px;border-radius:var(--r-sm);background:transparent;border:1px solid transparent;color:var(--txt);font-size:12.5px;cursor:pointer;font-weight:590;transition:background var(--dur-3) var(--ease)}
+/* 头部宽度不够时的让步顺序（只截断 / 只收窄，绝不换行）：
+   ① 机器人名字与状态先截成省略号 ② 机器人切换器的名称缩到只剩图标 ③ 按钮永不压缩。
+   原来这三类都没写 white-space:nowrap，中文可以逐字断行 —— 于是每个元素的「最小宽度」
+   变成一个汉字宽，flex 就把整条头部（名字、7 个按钮）压成竖排，头部从 56px 长到 150px。
+   ⚠️ 刻意不给 .chat-head 加 overflow:hidden：机器人切换器与「⋯ 更多」的下拉菜单都是
+   相对各自按钮绝对定位的，父级一裁，菜单会跟着消失。 */
+.chat-head .ch-id{flex:0 1 auto;min-width:0}
+.chat-head .ch-id > div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-head .btn{white-space:nowrap;flex-shrink:0}
+/* 头部「更多」：把次要操作（导出对话 / 清空 / 导出导入工作流）收起来。
+   头部最窄也要放得下：头像 + 名字 + 机器人切换 + 会话 / 日志 / ⋯ / 发布，
+   8 个按钮并排在任何宽度下都放不下，而不放下的结果就是上面那种竖排塌陷。 */
+.ch-more{position:relative;flex-shrink:0}
+#chMoreBtn{min-width:44px}  /* 图标按钮也留够 44px 命中区：既好点，也是几何判据的下限 */
+.ch-more-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:200px;background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--glass-shadow);padding:6px}
+.ch-mi{display:flex;align-items:center;gap:var(--sp-4);padding:9px 12px;border-radius:var(--r-sm);font-size:13px;color:var(--txt);cursor:pointer;white-space:nowrap;transition:background var(--dur-2) var(--ease)}
+.ch-mi:hover{background:var(--fill)}
+.bot-switch{position:relative;flex:0 1 auto;min-width:0}
+.bot-switch-btn{display:flex;align-items:center;gap:var(--sp-4);max-width:210px;min-width:0;padding:7px 10px;border-radius:var(--r-sm);background:transparent;border:1px solid transparent;color:var(--txt);font-size:12.5px;cursor:pointer;font-weight:590;transition:background var(--dur-3) var(--ease)}
 .bot-switch-btn:hover{background:var(--fill)}
 .bot-switch-btn.open{background:var(--fill);border-color:transparent}
 .bs-ava{width:22px;height:22px;border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;background:var(--brand-fill);color:#fff}
 .bs-ava svg{width:13px;height:13px;display:block}
-.bs-name{max-width:128px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bs-caret{font-size:10px;color:var(--sub);transition:var(--dur-3) var(--ease)}
+.bs-name{max-width:128px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-caret{font-size:10px;color:var(--sub);flex-shrink:0;transition:var(--dur-3) var(--ease)}
 .bot-switch-btn.open .bs-caret{transform:rotate(180deg)}
 .bot-switch-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:50;width:290px;max-width:82vw;background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--glass-shadow);padding:6px}
 .bs-search input{width:100%;box-sizing:border-box;padding:8px 10px;border-radius:var(--r-sm);background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:13px;outline:none}
@@ -1717,11 +1734,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="ws-main">
       <div class="chat-head">
         <div class="ava" id="chatAva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></div>
-        <div style="min-width:0">
+        <div class="ch-id">
           <div id="chatBotName" style="font-weight:600;font-size:14px">机器人</div>
           <div style="font-size:11.5px;color:var(--sub)" id="chatStatus">在线 · 响应 &lt; 1s</div>
         </div>
-        <div style="flex:1"></div>
+        <div style="flex:1;min-width:0"></div>
         <div class="bot-switch" id="botSwitch">
           <button type="button" class="bot-switch-btn" id="botSwitchBtn" onclick="toggleBotSwitch()" title="切换机器人">
             <span class="bs-ava" id="bsAva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></span>
@@ -1734,12 +1751,20 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           </div>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="openSessPanel()" title="切换会话 / 搜索历史对话">🗂 会话</button>
-        <button class="btn btn-ghost btn-sm" onclick="exportChatMd()" title="把当前对话导出为 Markdown 文件">📤 导出</button>
-        <button class="btn btn-ghost btn-sm" onclick="clearChat()">🗑️ 清空</button>
-        <button class="btn btn-ghost btn-sm" id="logReopenBtn" onclick="reopenRunLog()" title="重新打开执行日志面板（查看最近一次工作流每步记录）">🪵 日志</button>
         <button class="btn btn-ghost btn-sm" id="stopBtn" style="display:none" onclick="stopGenerate()">⏹ 停止</button>
-        <button class="btn btn-ghost btn-sm" onclick="exportWorkflow()" title="导出工作流为 JSON">⬇️ 导出</button>
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile').click()" title="从 JSON 导入工作流">⬆️ 导入</button>
+        <!-- 次要操作收进「⋯」：头部一行 8 个按钮在任何窗口宽度下都放不下，硬放就会把每个
+             按钮压成 1 个字宽（竖排）。一级只留 会话 / ⋯ / 发布（生成中多一个停止），
+             头部最小宽度由此降到 ~340px —— 可算的宽度才守得住（见 test_wiring.js F 组）。 -->
+        <div class="ch-more" id="chMore">
+          <button class="btn btn-ghost btn-sm" id="chMoreBtn" type="button" onclick="toggleChMore(event)" title="更多操作">⋯</button>
+          <div class="ch-more-menu" id="chMoreMenu" style="display:none">
+            <div class="ch-mi" id="logReopenBtn" onclick="reopenRunLog()" title="查看最近一次工作流每步记录（无记录时给占位提示）">🪵 执行日志</div>
+            <div class="ch-mi" onclick="exportChatMd()" title="把当前对话导出为 Markdown 文件">📤 导出对话</div>
+            <div class="ch-mi" onclick="clearChat()" title="清空当前会话的全部消息">🗑️ 清空对话</div>
+            <div class="ch-mi" onclick="exportWorkflow()" title="导出工作流为 JSON">⬇️ 导出工作流</div>
+            <div class="ch-mi" onclick="document.getElementById('importFile').click()" title="从 JSON 导入工作流">⬆️ 导入工作流</div>
+          </div>
+        </div>
         <input type="file" id="importFile" accept=".json,application/json" style="display:none">
         <button class="btn btn-primary btn-sm" onclick="go('workspace');document.querySelector('.ws-tab[data-tab=publish]').click()">发布</button>
       </div>
@@ -7665,6 +7690,34 @@ document.addEventListener('keydown', function (e) {
     if (m && m.style.display !== 'none') { m.style.display = 'none'; const b = document.getElementById('botSwitchBtn'); if (b) b.classList.remove('open'); }
   }
 });
+// ==================== 聊天区头部「更多」菜单 ====================
+// 头部只留最常用的四个（会话 / 日志 / ⋯ / 发布），导出对话、清空、导出导入工作流收进这里。
+// 好处不只是整齐：头部的「最小宽度」从此是有限的、可算的，窄窗口下不会再把按钮挤成竖排。
+// 顺带解决两个同名按钮的歧义 —— 原来「📤 导出」和「⬇️ 导出」并排，一个导对话一个导工作流。
+window.toggleChMore = function (e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  const menu = document.getElementById('chMoreMenu');
+  const btn = document.getElementById('chMoreBtn');
+  if (!menu) return;
+  const willOpen = menu.style.display === 'none';
+  menu.style.display = willOpen ? 'block' : 'none';
+  if (btn) btn.classList.toggle('open', willOpen);
+};
+function closeChMore() {
+  const menu = document.getElementById('chMoreMenu'); if (menu) menu.style.display = 'none';
+  const btn = document.getElementById('chMoreBtn'); if (btn) btn.classList.remove('open');
+}
+// 点菜单项（动作先跑完，再冒泡到这里）或点别处都关闭；点按钮本身除外 —— 那是 toggleChMore 的活，
+// 不排除的话它会先打开、再被这里立刻关掉，表现为「点了没反应」。
+document.addEventListener('click', function (e) {
+  const menu = document.getElementById('chMoreMenu');
+  if (!menu || menu.style.display === 'none') return;
+  const btn = document.getElementById('chMoreBtn');
+  if (btn && btn.contains(e.target)) return;
+  closeChMore();
+});
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeChMore(); });
+
 // 兼容旧入口：切换机器人
 window.switchBotManual = function (id) { if (id) openBot(id); };
 
@@ -12525,6 +12578,9 @@ document.addEventListener('click', function (e) {
   const tg = document.getElementById('wsSideToggle');
   const WKEY = 'botcraft.wsside.width', CKEY = 'botcraft.wsside.collapsed';
   const MIN_W = 220, MAX_W = 560, DEF_W = 300;
+  // 右侧聊天区的最小宽度：低于这个值 .chat-head 一行就放不下（头像 + 名字 + 机器人切换 +
+  // 会话 / 日志 / ⋯ / 发布）。拖拽时用它反推工作区上限，见下面 mousemove。
+  const MIN_MAIN = 400;
   const isColumn = function () { return window.matchMedia && window.matchMedia('(max-width:760px)').matches; };
   let savedW = parseInt((function(){ try { return localStorage.getItem(WKEY); } catch (e) { return null; } })(), 10);
   if (!(savedW >= MIN_W && savedW <= MAX_W)) savedW = DEF_W;
@@ -12545,7 +12601,13 @@ document.addEventListener('click', function (e) {
   });
   window.addEventListener('mousemove', function (e) {
     if (!dragging) return;
-    const w = Math.min(MAX_W, Math.max(MIN_W, e.clientX));
+    // 上限不只是「工作区最宽 560」，还要给聊天区留够 MIN_MAIN：把工作区拖到最宽时
+    // 聊天区会被压到 460px 上下，头部就在那儿塌成一列竖排字。屏幕够宽时这个上限不起作用，
+    // 拖拽手感与原来完全一致。
+    const host = side.parentElement;
+    const avail = host ? host.clientWidth : 0;
+    const cap = avail > MIN_W + MIN_MAIN ? Math.min(MAX_W, avail - MIN_MAIN) : MAX_W;
+    const w = Math.min(cap, Math.max(MIN_W, e.clientX));
     side.style.width = w + 'px';
   });
   window.addEventListener('mouseup', function () {
