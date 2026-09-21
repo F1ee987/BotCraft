@@ -373,7 +373,7 @@ select option{background:#1f1f24;color:#f2f2f7}
 .logo{display:flex;align-items:center;gap:var(--sp-4);font-weight:700;font-size:18px;letter-spacing:-.2px;color:var(--txt);font-family:var(--font-display)}
 .logo .dot{width:28px;height:28px;flex:0 0 28px;line-height:0}
 .logo .dot svg{display:block;width:100%;height:100%}
-.nav a{font-size:13.5px;font-weight:590;padding:6px 14px;border-radius:var(--r-sm);color:var(--sub);background:transparent;border:1px solid transparent;transition:background var(--dur-3) var(--ease),color var(--dur-3) var(--ease)}
+.nav a{font-size:13.5px;font-weight:590;padding:6px 14px;border-radius:var(--r-sm);color:var(--sub);background:transparent;border:1px solid transparent;transition:background var(--dur-3) var(--ease),color var(--dur-3) var(--ease),transform var(--dur-1) var(--ease)}
 .nav{display:flex;gap:var(--sp-2);margin-left:8px}
 .topbar .spacer{flex:1}
 /* ===== 按钮：Apple 双层级（填充灰次按钮 / 实心蓝主按钮） ===== */
@@ -421,7 +421,7 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
   background:var(--glass-bg-hover);
   border:1px solid var(--glass-border);
   box-shadow:var(--glass-shadow)}
-.pop-menu button{padding:8px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;transition:background var(--dur-2) var(--ease)}
+.pop-menu button{padding:8px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;transition:background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .pop-menu button:hover{background:var(--fill)}
 .pop-menu button.danger{color:var(--danger-text)}
 /* 账号菜单挂在 body 上（原因见 renderUserMenu 的注释），层级要「在顶栏之上、
@@ -432,7 +432,7 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 /* 顶栏账号切换下拉 */
 .pop-label{font-size:11px;color:var(--sub);padding:7px 11px 3px;letter-spacing:.04em}
 .avatar.sm{height:24px;width:24px;font-size:11px;flex:0 0 auto}
-.acct-row{display:flex;align-items:center;gap:var(--sp-5);padding:8px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;transition:background var(--dur-2) var(--ease);cursor:pointer}
+.acct-row{display:flex;align-items:center;gap:var(--sp-5);padding:8px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;transition:background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);cursor:pointer}
 .acct-row:hover{background:var(--fill)}
 .acct-name{flex:1;font-weight:590;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acct-go{font-size:11px;color:var(--brand-text);flex:0 0 auto}
@@ -486,7 +486,7 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .auth-tabs{display:flex;gap:var(--sp-1);margin-bottom:18px;background:var(--fill);padding:2px;border-radius:var(--r-sm);width:fit-content;flex-shrink:0}
 /* nowrap 是保命的：中文可以在任意字间断行，tab 一旦被 flex 压窄就会变成「登/录」竖排
    （用户截图里真实发生过）。宽不够时宁可让容器溢出，也不许逐字竖排。 */
-.auth-tab{padding:6px 20px;border-radius:var(--r-xs);font-size:13px;background:transparent;color:var(--txt);font-weight:590;cursor:pointer;border:none;transition:background var(--dur-4) var(--ease);white-space:nowrap;flex-shrink:0}
+.auth-tab{padding:6px 20px;border-radius:var(--r-xs);font-size:13px;background:transparent;color:var(--txt);font-weight:590;cursor:pointer;border:none;transition:background var(--dur-4) var(--ease),transform var(--dur-1) var(--ease);white-space:nowrap;flex-shrink:0}
 .auth-tab.active{background:var(--card);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.16)}
 #authModal .field input{padding:11px 13px}
 #auth-err{font-size:12px}
@@ -568,7 +568,7 @@ body.embed-mode #wsName{font-size:15px}
 .sidebar{width:232px;margin:0 10px 12px 12px;border-radius:var(--r-xl);background:var(--glass-bg-hover);border:1px solid var(--glass-border);padding:14px 10px;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;transition:width .24s var(--ease),border-color var(--dur-5) var(--ease);position:relative;z-index:20}
 .side-section{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:1.1px;padding:20px 10px 7px;font-weight:600;opacity:.9}
 .side-section:first-child{padding-top:4px}
-.side-item{display:flex;align-items:center;gap:var(--sp-5);padding:9px 10px;border-radius:var(--r-sm);font-size:14px;color:var(--txt);cursor:pointer;margin-bottom:2px;transition:background var(--dur-3) var(--ease),color var(--dur-3) var(--ease);background:transparent;border:1px solid transparent}
+.side-item{display:flex;align-items:center;gap:var(--sp-5);padding:9px 10px;border-radius:var(--r-sm);font-size:14px;color:var(--txt);cursor:pointer;margin-bottom:2px;transition:background var(--dur-3) var(--ease),color var(--dur-3) var(--ease),transform var(--dur-1) var(--ease);background:transparent;border:1px solid transparent}
 .side-item .ic{font-size:16px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:var(--r-sm);background:var(--fill);box-shadow:var(--lg-top),0 1px 4px rgba(0,0,0,.14);flex-shrink:0;transition:var(--dur-3) var(--ease)}
 .side-item:hover .ic{transform:translateY(-1px);box-shadow:var(--lg-top),0 3px 9px rgba(0,0,0,.20)}
 .side-item .ic svg{width:17px;height:17px;display:block}
@@ -596,9 +596,9 @@ body.embed-mode #wsName{font-size:15px}
 .sidebar.collapsed .side-item:hover::before,
 .sidebar.collapsed .side-create:hover::before{content:"";position:absolute;left:calc(100% + 5px);top:50%;transform:translateY(-50%);border:6px solid transparent;border-right-color:var(--panel);z-index:300;pointer-events:none}
 .sidebar.collapsed .side-item:hover::after,
-.sidebar.collapsed .side-create:hover::after{content:attr(data-tip);position:absolute;left:calc(100% + 11px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--panel);color:var(--txt);border:1px solid var(--line);padding:6px 11px;border-radius:var(--r-sm);font-size:13px;font-weight:500;z-index:300;pointer-events:none;box-shadow:var(--glass-shadow);opacity:0;animation:sideTipIn var(--dur-1) ease forwards}
+.sidebar.collapsed .side-create:hover::after{content:attr(data-tip);position:absolute;left:calc(100% + 11px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--panel);color:var(--txt);border:1px solid var(--line);padding:6px 11px;border-radius:var(--r-sm);font-size:13px;font-weight:500;z-index:300;pointer-events:none;box-shadow:var(--glass-shadow);opacity:0;animation:sideTipIn var(--dur-1) var(--ease) forwards}
 @keyframes sideTipIn{from{opacity:0;transform:translateY(-50%) translateX(-4px)}to{opacity:1;transform:translateY(-50%) translateX(0)}}
-.side-toggle{display:flex;align-items:center;gap:var(--sp-4);padding:8px 10px;margin-bottom:4px;border-radius:var(--r-sm);font-size:13.5px;color:var(--sub);cursor:pointer;transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease);user-select:none;font-weight:590;background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.side-toggle{display:flex;align-items:center;gap:var(--sp-4);padding:8px 10px;margin-bottom:4px;border-radius:var(--r-sm);font-size:13.5px;color:var(--sub);cursor:pointer;transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);user-select:none;font-weight:590;background:transparent!important;border:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 .side-toggle:hover{background:var(--fill)!important;color:var(--txt)}
 .side-toggle .tt-ic{font-size:18px;line-height:1;width:22px;text-align:center}
 .sidebar.collapsed .side-toggle{justify-content:center;padding:9px 0}
@@ -657,9 +657,9 @@ body.embed-mode #wsName{font-size:15px}
 .bot-card p{font-size:12.5px;color:var(--sub);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .bot-meta{display:flex;gap:var(--sp-6);margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub)}
 .bot-meta span{display:flex;align-items:center;gap:var(--sp-2)}
-.mini-x{margin-left:auto;border:none;background:transparent;color:var(--sub);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:var(--r-xs);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease)}
+.mini-x{margin-left:auto;border:none;background:transparent;color:var(--sub);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:var(--r-xs);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .mini-x:hover{background:var(--fill);color:var(--danger-text)}
-.style-view-btn{margin-left:auto;border:1px solid transparent;background:var(--glass-bg-active);color:var(--brand-text);cursor:pointer;font-size:12.5px;font-weight:590;padding:5px 15px;border-radius:var(--r-full);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease)}
+.style-view-btn{margin-left:auto;border:1px solid transparent;background:var(--glass-bg-active);color:var(--brand-text);cursor:pointer;font-size:12.5px;font-weight:590;padding:5px 15px;border-radius:var(--r-full);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .style-view-btn:hover{background:var(--brand-fill);color:#fff}
 .chip-row{display:flex;gap:var(--sp-4);flex-wrap:wrap;margin:2px 0 6px}
 .plugin-cat{font-size:11px;color:var(--brand-text);background:var(--glass-bg-active);padding:2px 9px;border-radius:var(--r-full);white-space:nowrap}
@@ -698,18 +698,18 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .ws-tabs{display:flex;padding:8px 10px;border-bottom:1px solid var(--line);gap:0;flex-wrap:wrap;overflow:visible;row-gap:var(--sp-3)}
 .ws-tab-scroll{display:flex;gap:var(--sp-1);flex:1;min-width:0;flex-wrap:wrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-ms-overflow-style:none;background:var(--fill);border-radius:var(--r-sm);padding:2px}
 .ws-tab-scroll::-webkit-scrollbar{display:none}
-.ws-tab{padding:5px 11px;border-radius:var(--r-xs);font-size:12px;color:var(--txt);cursor:pointer;font-weight:590;transition:background var(--dur-4) var(--ease);border:1px solid transparent;background:transparent;flex-shrink:0;white-space:nowrap}
+.ws-tab{padding:5px 11px;border-radius:var(--r-xs);font-size:12px;color:var(--txt);cursor:pointer;font-weight:590;transition:background var(--dur-4) var(--ease),transform var(--dur-1) var(--ease);border:1px solid transparent;background:transparent;flex-shrink:0;white-space:nowrap}
 .ws-tab-more{margin-left:4px}
 .ws-tab.active{background:var(--card);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.16)}
 .ws-tab:hover{color:var(--txt)}
 .ws-tab-more{position:relative;user-select:none}
 .ws-more-menu{position:fixed;min-width:148px;background:var(--popover);border:1px solid var(--glass-border);border-radius:var(--r-lg);padding:6px;display:none;flex-direction:column;gap:var(--sp-1);z-index:80;box-shadow:var(--lg-shadow)}
 .ws-more-menu.open{display:flex}
-.ws-more-item{padding:9px 12px;border-radius:var(--r-sm);font-size:13px;color:var(--txt);cursor:pointer;white-space:nowrap;font-weight:590;transition:background var(--dur-2) var(--ease)}
+.ws-more-item{padding:9px 12px;border-radius:var(--r-sm);font-size:13px;color:var(--txt);cursor:pointer;white-space:nowrap;font-weight:590;transition:background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .ws-more-item:hover{background:var(--fill)}
 .ws-more-item.active{background:var(--fill);color:var(--brand-text)}
 .ws-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:14px}
-.node{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px;margin-bottom:0;cursor:grab;position:relative;transition:border-color var(--dur-2) var(--ease),background var(--dur-2) var(--ease);
+.node{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px;margin-bottom:0;cursor:grab;position:relative;transition:border-color var(--dur-2) var(--ease),background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
   content-visibility:auto;contain-intrinsic-size:auto 96px}
 .node .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--brand-text);font-weight:600}
 .node h4{font-size:13.5px;font-weight:600;margin:5px 0 3px}
@@ -769,7 +769,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-port.in{left:-7px}
 .cw-port.out{right:-7px}
 .cw-port:hover{background:var(--brand-fill);border-color:var(--brand-fill);transform:scale(1.3)}
-.cw-mid{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:var(--r-full);background:var(--popover);border:1px solid var(--line);color:var(--sub);font-size:var(--fs-xs);line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;z-index:3;opacity:0;transition:opacity var(--dur-2) var(--ease),color var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease)}
+.cw-mid{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:var(--r-full);background:var(--popover);border:1px solid var(--line);color:var(--sub);font-size:var(--fs-xs);line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;z-index:3;opacity:0;transition:opacity var(--dur-2) var(--ease),color var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .cw-root:hover .cw-mid{opacity:.55}
 .cw-mid:hover{opacity:1;color:var(--brand-text);border-color:var(--brand)}
 .cw-marquee{position:absolute;border:1px solid var(--brand);background:var(--brand-tint);border-radius:var(--r-2xs);pointer-events:none;z-index:4}
@@ -781,7 +781,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
    overflow:hidden 切掉 —— 那会连最右那颗「平移模式」按钮都点不到（同属「显示不全」）。
    限宽取 100% - var(--sp-6)，与 left 相同口径，正常情况下不改变宽度。 */
 .cw-tools{position:absolute;left:var(--sp-6);bottom:var(--sp-6);display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2);padding:var(--sp-2);max-width:calc(100% - var(--sp-6));border-radius:var(--r-xl);background:var(--glass-bg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);z-index:6}
-.cw-tbtn{min-width:28px;height:28px;padding:0 var(--sp-4);border-radius:var(--r-md);border:none;background:transparent;color:var(--sub);font-size:var(--fs-sm);font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease)}
+.cw-tbtn{min-width:28px;height:28px;padding:0 var(--sp-4);border-radius:var(--r-md);border:none;background:transparent;color:var(--sub);font-size:var(--fs-sm);font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .cw-tbtn:hover{background:var(--hover);color:var(--txt)}
 .cw-tbtn.on{background:var(--brand-tint);color:var(--brand-text)}
 .cw-zval{min-width:54px;font-variant-numeric:tabular-nums}
@@ -835,10 +835,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .ch-more{position:relative;flex-shrink:0}
 #chMoreBtn{min-width:44px}  /* 图标按钮也留够 44px 命中区：既好点，也是几何判据的下限 */
 .ch-more-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:200px;background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--glass-shadow);padding:6px}
-.ch-mi{display:flex;align-items:center;gap:var(--sp-4);padding:9px 12px;border-radius:var(--r-sm);font-size:13px;color:var(--txt);cursor:pointer;white-space:nowrap;transition:background var(--dur-2) var(--ease)}
+.ch-mi{display:flex;align-items:center;gap:var(--sp-4);padding:9px 12px;border-radius:var(--r-sm);font-size:13px;color:var(--txt);cursor:pointer;white-space:nowrap;transition:background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .ch-mi:hover{background:var(--fill)}
 .bot-switch{position:relative;flex:0 1 auto;min-width:0}
-.bot-switch-btn{display:flex;align-items:center;gap:var(--sp-4);max-width:210px;min-width:0;padding:7px 10px;border-radius:var(--r-sm);background:transparent;border:1px solid transparent;color:var(--txt);font-size:12.5px;cursor:pointer;font-weight:590;transition:background var(--dur-3) var(--ease)}
+.bot-switch-btn{display:flex;align-items:center;gap:var(--sp-4);max-width:210px;min-width:0;padding:7px 10px;border-radius:var(--r-sm);background:transparent;border:1px solid transparent;color:var(--txt);font-size:12.5px;cursor:pointer;font-weight:590;transition:background var(--dur-3) var(--ease),transform var(--dur-1) var(--ease)}
 .bot-switch-btn:hover{background:var(--fill)}
 .bot-switch-btn.open{background:var(--fill);border-color:transparent}
 .bs-ava{width:22px;height:22px;border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;background:var(--brand-fill);color:#fff}
@@ -890,12 +890,12 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .chat-input button:hover{filter:brightness(1.06)}
 .chat-input button:active{filter:brightness(.94);transform:scale(.97)}
 .chat-input button:disabled{opacity:.4;cursor:not-allowed;filter:none}
-.chat-input .attach-btn{padding:0;width:44px;height:44px;border-radius:var(--r-lg);background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--dur-3) var(--ease)}
+.chat-input .attach-btn{padding:0;width:44px;height:44px;border-radius:var(--r-lg);background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--dur-3) var(--ease),transform var(--dur-1) var(--ease)}
 /* 提示词库 + 斜杠指令 */
 .input-wrap{position:relative}
 .slash-menu{position:absolute;left:0;right:0;bottom:calc(100% + 10px);max-height:300px;overflow:auto;z-index:80;
   padding:6px;border-radius:var(--r-lg);background:var(--popover);border:1px solid var(--glass-border);box-shadow:var(--lg-shadow)}
-.slash-item{display:flex;align-items:center;gap:var(--sp-4);padding:8px 10px;border-radius:var(--r-md);cursor:pointer;font-size:13px;color:var(--txt);transition:background .13s var(--ease)}
+.slash-item{display:flex;align-items:center;gap:var(--sp-4);padding:8px 10px;border-radius:var(--r-md);cursor:pointer;font-size:13px;color:var(--txt);transition:background .13s var(--ease),transform var(--dur-1) var(--ease)}
 .slash-item:hover,.slash-item.on{background:var(--fill-strong)}
 .slash-ic{flex-shrink:0;width:24px;height:24px;border-radius:var(--r-sm);background:var(--fill);display:flex;align-items:center;justify-content:center;font-size:13px}
 .slash-name{font-weight:590;flex-shrink:0}
@@ -931,7 +931,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .audio-chip .x{width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:0;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0}
 .msg.me .msg-audio{margin-top:6px;display:block}
 .msg.bot .msg-audio{margin-top:6px;display:block}
-.msg-media-btn{margin-top:6px;padding:5px 12px;border-radius:var(--r-full);border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12px;cursor:pointer;transition:background .16s var(--ease),border-color .16s var(--ease)}
+.msg-media-btn{margin-top:6px;padding:5px 12px;border-radius:var(--r-full);border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12px;cursor:pointer;transition:background .16s var(--ease),border-color .16s var(--ease),transform var(--dur-1) var(--ease)}
 .msg-media-btn:hover{background:var(--fill-hover);border-color:var(--brand)}
 .msg-fold{margin-top:8px;padding-top:6px;border-top:1px dashed var(--line);color:var(--sub);font-size:12px}
 .msg-fold-btn{border:0;background:none;color:var(--brand-text);font-size:12px;cursor:pointer;padding:0}
@@ -1109,7 +1109,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .list-row .info h4{font-size:15px;font-weight:600}
 .list-row .info p{font-size:11.5px;color:var(--sub);margin-top:2px}
 .list-row .st{font-size:11.5px;padding:4px 10px;border-radius:var(--r-full);background:var(--ok-bg);color:var(--ok-text);flex-shrink:0}
-.list-row .act{cursor:pointer;color:var(--sub);font-size:16px;padding:4px 8px;border-radius:var(--r-xs);transition:background var(--dur-2) var(--ease)}
+.list-row .act{cursor:pointer;color:var(--sub);font-size:16px;padding:4px 8px;border-radius:var(--r-xs);transition:background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .list-row .act:hover{background:var(--fill);color:var(--txt)}
 
 /* ============ 弹窗 ============ */
@@ -1411,6 +1411,17 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none;
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms!important;transition-duration:.001ms!important}
 }
+
+/* 全局按压回弹：所有可点元素统一触感，与 .btn 的 scale(.97) 一致；
+   transform 过渡已在上列各规则的 transition 中声明（reduced-motion 全局兜底会一并关掉） */
+.nav a:active,.side-item:active,.side-toggle:active,.ch-mi:active,.slash-item:active,
+.bot-switch-btn:active,.ws-tab:active,.ws-more-item:active,.msg-media-btn:active,
+.attach-btn:active,.mini-x:active,.style-view-btn:active,.pop-menu button:active,
+.acct-row:active,.auth-tab:active,.emoji-pick button:active,.swatch:active,
+.color-pick .c:active,.md-copy:active,.md-run:active,.md-runout-btn:active,
+.snip-row:active,.node-del:active,.node-edit:active,.bs-item:active,.list-row .act:active,
+.cw-tbtn:active,.cw-mid:active{transform:scale(.97)}
+.node:active{transform:scale(.985)}
 /* ==================================================================
    液态玻璃：玻璃表面的「厚度」层
    ------------------------------------------------------------------
@@ -1476,7 +1487,7 @@ body .chip:hover{transform:translateY(-1px)}
    .side-item 不能加 position:relative（折叠态 tooltip 的 ::before 正以 .sidebar 为
    定位参照，一改就漂），inset 既不占布局也不动定位。 */
 body .sidebar:not(.collapsed) .side-item{
-  transition:background var(--dur-3) var(--ease),color var(--dur-3) var(--ease),box-shadow var(--dur-4) var(--ease);
+  transition:background var(--dur-3) var(--ease),color var(--dur-3) var(--ease),transform var(--dur-1) var(--ease),box-shadow var(--dur-4) var(--ease);
   box-shadow:inset 3px 0 0 0 transparent;
 }
 body .sidebar:not(.collapsed) .side-item:hover{box-shadow:inset 3px 0 0 0 var(--brand-fill)}
