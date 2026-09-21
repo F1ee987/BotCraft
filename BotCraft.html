@@ -5513,17 +5513,27 @@ const RUN_TIMEOUT = 8000;      // 单次运行上限（毫秒）
 const RUN_MAX_LINES = 400;     // 最多回传多少条输出（防一行一打印刷爆 DOM）
 const RUN_LANGS = {
   js: ['js', 'javascript', 'mjs', 'ecmascript', 'node', 'jsx'],
-  html: ['html', 'htm', 'svg', 'text/html']
+  html: ['html', 'htm', 'svg', 'text/html'],
+  py: ['py', 'python', 'python3', 'ipython', 'py3']
 };
 
 let _runSeq = 0;
 let _panelRun = null;          // 「代码执行器」面板当前那次运行
 
 // 语言名 → 运行方式。不认识的语言返回 ''（= 不显示运行按钮）。
+// Python 只在桌面版给入口：浏览器直开没有 pywebview 桥、后端跑不了 Python，
+// 所以这里要探测 bc_py_run 是否存在，不在就返回 ''（不挂按钮，点了也不会跑）。
 function runKindOf(lang) {
   const l = String(lang || '').trim().toLowerCase();
   if (!l) return '';
-  for (const k in RUN_LANGS) { if (RUN_LANGS[k].indexOf(l) >= 0) return k; }
+  for (const k in RUN_LANGS) {
+    if (RUN_LANGS[k].indexOf(l) < 0) continue;
+    if (k === 'py') {
+      const a = (typeof window !== 'undefined' && window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+      return (a && typeof a.bc_py_run === 'function') ? 'py' : '';
+    }
+    return k;
+  }
   return '';
 }
 
@@ -5701,6 +5711,8 @@ function runCodeBlock(btn) {
   const kind = runKindOf(pre.getAttribute('data-lang'));
   if (!kind) return;
   if (!code.trim()) { toast('这个代码块没有内容', 'err'); return; }
+  // Python 走桌面端后端（白名单沙箱），不是浏览器 iframe 沙箱 —— 单独一条链路
+  if (kind === 'py') { runPyCodeBlock(btn); return; }
 
   // 幂等：同一个代码块重复点击 = 重跑。必须先把上一个沙箱 kill 掉（还它的事件监听
   // 与超时定时器），否则每点一次就多堆一个还在跑的 iframe。
@@ -5766,6 +5778,60 @@ function closeRunBox(btn) {
   if (pre && pre.__bcRun && pre.__bcRun.kill) pre.__bcRun.kill();
   if (pre) { pre.__bcRun = null; pre.__bcBox = null; }
   if (box.parentNode) box.parentNode.removeChild(box);
+}
+
+// Python 代码块的运行链路：不走浏览器 iframe 沙箱，而是把代码交给桌面端 Python
+// 后端（window.pywebview.api.bc_py_run，白名单 + 超时，见 build_exe.py）。
+// 浏览器直开时没有后端，runKindOf 已经不给 Python 挂运行按钮，这里再兜一道
+// 「后端不存在就提示」，防有人在别处直接调它。
+async function runPyCodeBlock(btn) {
+  const pre = (btn && btn.closest) ? btn.closest('pre.md-code') : null;
+  if (!pre || !pre.parentNode) return;
+  const codeEl = pre.querySelector('code');
+  const code = codeEl ? codeEl.textContent : '';
+  const api = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+  if (!api || typeof api.bc_py_run !== 'function') {
+    toast('Python 运行需要桌面版（浏览器直开没有 Python 后端）', 'warn');
+    return;
+  }
+  // 幂等：重跑先收掉旧面板（Python 链路没有 iframe 句柄，只需清面板）
+  if (pre.__bcRun && pre.__bcRun.kill) pre.__bcRun.kill();
+  pre.__bcRun = null;
+  let box = pre.__bcBox;
+  if (box && box.parentNode) box.parentNode.removeChild(box);
+  box = document.createElement('div');
+  box.className = 'md-runout';
+  pre.parentNode.insertBefore(box, pre.nextSibling);
+  pre.__bcBox = box;
+  box.innerHTML = runBoxHtml('py');
+  const stEl = box.querySelector('.md-runout-st');
+  const bodyEl = box.querySelector('.md-runout-body');
+  const lines = [];
+  function paintPy() {
+    if (!bodyEl) return;
+    if (lines.length && bodyEl.classList) bodyEl.classList.remove('hide');
+    bodyEl.innerHTML = runLinesHtml(lines);
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+  }
+  if (btn) btn.classList.add('on');
+  stEl.textContent = '运行中…';
+  let res = null;
+  try {
+    res = await api.bc_py_run(code);
+  } catch (e) {
+    res = { ok: false, lines: [{ lvl: 'err', text: String((e && e.message) || e) }] };
+  }
+  if (btn) btn.classList.remove('on');
+  const ms = (res && res.ms) || 0;
+  stEl.textContent = (res && res.timeout)
+    ? '⏱ 运行超时，已终止'
+    : (res && res.ok)
+      ? ('✓ ' + ms + 'ms · ' + ((res.lines || []).length) + ' 条输出')
+      : ('✗ ' + ms + 'ms');
+  (res && res.lines || []).forEach(function (x) {
+    lines.push({ lvl: (x.lvl === 'err' ? 'err' : (x.lvl === 'warn' ? 'warn' : 'log')), text: x.text });
+  });
+  paintPy();
 }
 
 /// FLOW V2 SEMANTIC LAYER ///
