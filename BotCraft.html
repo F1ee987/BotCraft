@@ -684,10 +684,11 @@ body.embed-mode #wsName{font-size:15px}
 .ws-resizer::after{content:'';position:absolute;left:2px;top:0;bottom:0;width:2px;background:transparent;transition:background .16s var(--ease)}
 .ws-resizer:hover::after,body.resizing .ws-resizer::after{background:var(--brand-fill)}
 body.resizing{cursor:col-resize;user-select:none}
-.ws-side-toggle{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:22px;height:48px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--popover);color:var(--sub);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)}
-.ws-resizer:hover .ws-side-toggle{opacity:0;pointer-events:none}
-body.ws-side-collapsed .ws-side-toggle{opacity:1;pointer-events:auto}
-.ws-side-toggle:hover{color:var(--txt);border-color:var(--brand)}
+/* 收起后的「展开工作区」入口：住在聊天区头部左缘 —— 收起/展开两个按钮都不沾拉手，
+   调宽拉手在任何状态下都只有纯拖拽热区。仅工作区收起时出现（平时 display:none 不占位）。 */
+.ws-side-expand{display:none;align-items:center;justify-content:center;width:22px;height:26px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);background:transparent;color:var(--sub);font-size:13px;line-height:1;cursor:pointer;flex-shrink:0;transition:var(--dur-2) var(--ease)}
+.ws-side-expand:hover{color:var(--txt);border-color:var(--brand);background:var(--fill)}
+body.ws-side-collapsed .ws-side-expand{display:flex}
 body.ws-side-collapsed .ws-side{display:none}
 body.ws-side-collapsed .ws-resizer{width:12px}
 body.ws-side-collapsed .ws-resizer::after{left:5px}
@@ -1969,9 +1970,10 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <div id="batchList" class="batch-list"></div>
         </div>
     </div>
-    <div class="ws-resizer" id="wsResizer" title="拖拽调整宽度，双击复位"><button type="button" class="ws-side-toggle" id="wsSideToggle" title="收起 / 展开工作区">‹</button></div>
+    <div class="ws-resizer" id="wsResizer" title="拖拽调整宽度，双击复位"></div>
     <div class="ws-main">
       <div class="chat-head">
+        <button type="button" class="ws-side-expand" id="wsSideExpand" title="展开工作区">›</button>
         <div class="ava" id="chatAva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></div>
         <div class="ch-id">
           <div id="chatBotName" style="font-weight:600;font-size:14px">机器人</div>
@@ -14054,7 +14056,9 @@ document.addEventListener('click', function (e) {
   const side = document.querySelector('.ws-side');
   const rz = document.getElementById('wsResizer');
   if (!side || !rz) return;
-  const tg = document.getElementById('wsSideToggle');
+  // 展开入口住在聊天区头部左缘（仅收起态出现）；收起按钮在工作区标题栏右上角。
+  // 拉手（wsResizer）从此只有拖拽调宽 + 双击复位两个职责，零按钮。
+  const tg = document.getElementById('wsSideExpand');
   const WKEY = 'botcraft.wsside.width', CKEY = 'botcraft.wsside.collapsed';
   const MIN_W = 220, MAX_W = 560, DEF_W = 300;
   // 右侧聊天区的最小宽度：低于这个值 .chat-head 一行就放不下（头像 + 名字 + 机器人切换 +
@@ -14067,23 +14071,18 @@ document.addEventListener('click', function (e) {
   const collapsedNow = function () { return document.body.classList.contains('ws-side-collapsed'); };
   const applyCollapsed = function (c) {
     document.body.classList.toggle('ws-side-collapsed', c);
-    if (tg) tg.textContent = c ? '›' : '‹';
-    if (tg) tg.title = c ? '展开工作区' : '收起工作区';
   };
   let initC = false;
   try { initC = localStorage.getItem(CKEY) === '1'; } catch (e) {}
   applyCollapsed(initC);
-  let dragging = false, _dragMoved = false, _sx = 0, _sy = 0;
+  let dragging = false;
   rz.addEventListener('mousedown', function (e) {
-    // 收起按钮不再排除在拖拽之外：按在按钮上也能拖。是否算「点了按钮」由位移判别
-    //（click 时看 _dragMoved）—— 想拖就拖得动，想收起就原地点一下，两头都不误触。
     if (e.button !== 0 || collapsedNow() || isColumn()) return;
-    dragging = true; _dragMoved = false; _sx = e.clientX; _sy = e.clientY;
+    dragging = true;
     document.body.classList.add('resizing'); e.preventDefault();
   });
   window.addEventListener('mousemove', function (e) {
     if (!dragging) return;
-    if (!_dragMoved && (Math.abs(e.clientX - _sx) > 4 || Math.abs(e.clientY - _sy) > 4)) _dragMoved = true;
     // 上限不只是「工作区最宽 560」，还要给聊天区留够 MIN_MAIN：把工作区拖到最宽时
     // 聊天区会被压到 460px 上下，头部就在那儿塌成一列竖排字。屏幕够宽时这个上限不起作用，
     // 拖拽手感与原来完全一致。
@@ -14103,12 +14102,9 @@ document.addEventListener('click', function (e) {
     side.style.width = DEF_W + 'px';
     try { localStorage.setItem(WKEY, String(DEF_W)); } catch (e) {}
   });
-  if (tg) tg.addEventListener('click', function (e) {
-    e.stopPropagation();
-    if (_dragMoved) { _dragMoved = false; return; }   // 这次 click 是拖拽的收尾，不算点按钮
-    const c = !collapsedNow();
-    applyCollapsed(c);
-    try { localStorage.setItem(CKEY, c ? '1' : '0'); } catch (e) {}
+  if (tg) tg.addEventListener('click', function () {
+    applyCollapsed(false);
+    try { localStorage.setItem(CKEY, '0'); } catch (e) {}
   });
   // 「收起」入口在工作区标题栏右上角（与拉手分离）；拉手上的按钮只在收起态当「展开」用
   const cb = document.getElementById('wsSideCollapse');
