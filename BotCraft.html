@@ -1933,6 +1933,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
     <div class="field"><label>专精 <span style="font-size:11px;color:var(--sub);font-weight:400">（可选，选定后不可更改）</span></label>
       <div id="specPick" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <div id="specCustomBox" style="display:none;margin-top:8px">
+        <input id="f-spec-name" placeholder="角色名称，如：旅行规划师（最多 20 字）" maxlength="20" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;margin-bottom:8px">
+        <textarea id="f-spec-prompt" placeholder="这个角色的人设提示词，例如：你是旅行规划师，根据用户偏好定制行程与预算…" maxlength="500" style="width:100%;box-sizing:border-box;min-height:72px;resize:vertical;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;line-height:1.5"></textarea>
+        <div style="font-size:11px;color:var(--sub);margin-top:4px">这里写的人设会成为机器人的起始提示词，之后仍可自由修改。</div>
+      </div>
       <div style="font-size:11px;color:var(--sub);margin-top:6px">绑定机器人的默认人设方向；提示词文本之后仍可自由修改，但专精本身锁定。</div>
     </div>
     <div class="field"><label>创建方式</label>
@@ -4191,6 +4196,14 @@ const tpls = [
   { n: '邮件自动回复', d: '理解邮件意图并草拟专业回复', ic: '📧', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', prompt: '你是邮件助理，草拟得体、专业的邮件回复。', nodes: ORCH_BY_NAME['邮件自动回复'], temperature: 0.3, expertise: { field: '商务往来邮件的意图理解与得体回复草拟', method: '先判断对方诉求与期待动作，再确定回复姿态（接受 / 协商 / 婉拒 / 追问）；一封信只处理一个主题', output: '主题行 + 正文（称呼、开头一句直入主题、正文分点、明确下一步、落款）+ 发送前需你确认的事项', avoid: '不替用户做出未经授权的承诺（价格、交期、责任界定）；不用过度热情的营销腔；不臆测对方未说明的背景' } },
   { n: '翻译官', d: '多语种互译，保留语气与文体风格', ic: '🌐', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。', nodes: ORCH_BY_NAME['翻译官'], temperature: 0.2, expertise: { field: '中英日韩等常见语种互译，含商务、技术、日常文体', method: '先判断语种与文体，再按目标语言的表达习惯翻译而非逐字直译；保留原文格式与专有名词', output: '译文；专有名词与把握不足处标注原文；必要时补一句「可替代译法」供选择', avoid: '不擅自增删内容或改变语气强度；数字、单位、代码与链接原样保留；不确定的术语要标注而不是猜一个' } },
   { n: '情感陪伴助手', d: '温暖倾听，提供情绪价值与建议', ic: '💬', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', prompt: '你是温暖的倾听者，给予情绪支持与实用建议。', nodes: ORCH_BY_NAME['情感陪伴助手'], temperature: 0.8, expertise: { field: '情绪倾诉陪伴、压力与关系困扰的倾听', method: '先接住情绪再谈事情；不急着给建议，对方明确要建议时才给；用对方的原话回述以确认理解', output: '共情回应（回述对方的处境与感受）→ 如需，给 1-2 个当下可做的小建议 → 一个开放的追问', avoid: '不诊断心理疾病、不推荐任何药物；不说「这没什么大不了」这类否定感受的话；不代替专业心理咨询；不追问对方不愿说的细节' } },
+  // —— 出厂机器人（SEED_BOTS）整体并入模板：用户删掉出厂机器人后，还能从模板页 /
+  //    创建对话框重新创建回来，其他用户也能以它们为起点。展开引用而非手抄 ——
+  //    这份数据的单一来源是 SEED_BOTS，抄第二份迟早漂移（本项目吃过这个亏）。
+  ...SEED_BOTS.map(function (s) {
+    return { n: s.n, d: s.d, ic: s.ic, c: s.c, prompt: s.prompt, nodes: s.nodes,
+             temperature: s.temperature, expertise: s.expertise,
+             plugins: s.plugins, knowledges: s.knowledges };
+  }),
 ];
 
 // ==================== 出厂默认专精 ====================
@@ -9962,6 +9975,8 @@ function autoMatchSpec(b) {
 function renderSpecPick() {
   var box = document.getElementById('specPick'); if (!box) return;
   box.innerHTML = '';
+  var cust = document.getElementById('specCustomBox');
+  if (cust) cust.style.display = 'none';
   var mk = function (label, val) {
     var b = document.createElement('button');
     b.type = 'button'; b.className = 'prompt-tpl' + (val === '' ? ' active' : '');
@@ -9969,11 +9984,14 @@ function renderSpecPick() {
     b.onclick = function () {
       box.querySelectorAll('.prompt-tpl').forEach(function (el) { el.classList.remove('active'); });
       b.classList.add('active');
+      // 「✏️ 自定义」才展开名称 / 人设输入框，其余选择收起 —— 避免一进来就是一堆用不到的框
+      if (cust) cust.style.display = (val === '__custom__') ? 'block' : 'none';
     };
     box.appendChild(b);
   };
   mk('不使用', '');
   PROMPT_TEMPLATES.forEach(function (p) { mk(p.ic + ' ' + p.n, p.n); });
+  mk('✏️ 自定义', '__custom__');
 }
 function updatePromptCount() {
   const pa = document.getElementById('promptArea'); const pc = document.getElementById('promptCount');
@@ -11931,14 +11949,21 @@ function submitCreate() {
   const colorEl = document.querySelector('.color-pick .c.on');
   const icon = colorEl ? colorEl.dataset.c : '';
   const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,#8b5cf6,#6d28d9)';
-  // 创建时选定的专精：写一次就锁（提示词 Tab 的绑定按钮看到 spec 非空即拒绝换绑）
+  // 创建时选定的专精：写一次就锁（提示词 Tab 不显示按钮，spec 是纯数据标记）。
+  // 「✏️ 自定义」= 用户自己定义角色：名称进 spec，人设文本成为起始提示词。
   const specEl = document.querySelector('#specPick .prompt-tpl.active');
-  const spec = specEl ? (specEl.dataset.spec || '') : '';
+  let spec = specEl ? (specEl.dataset.spec || '') : '';
+  const isCustomSpec = spec === '__custom__';
+  const customSpecName = ((document.getElementById('f-spec-name') || {}).value || '').trim();
+  const customSpecPrompt = ((document.getElementById('f-spec-prompt') || {}).value || '').trim();
+  if (isCustomSpec) spec = customSpecName.slice(0, 20) || '自定义';
   const finalName = name || (tpl ? tpl.n : '');
-  // 标准创建 + 选了专精：提示词直接从该专精的模板起步（选了「代码导师」却给通用
-  // 默认提示词，创建出来的第一眼就是割裂的）。从模板创建则模板自己的提示词优先。
+  // 起始提示词的优先级：用户显式写的自定义人设 > 模板自带的 prompt > 所选专精的模板
+  // > 出厂默认。用户明确写了的东西，永远不该被模板盖掉。
   let prompt = tpl ? (tpl.prompt || SAMPLE_PROMPT) : SAMPLE_PROMPT;
-  if (!tpl && spec) {
+  if (customSpecPrompt) {
+    prompt = customSpecPrompt;
+  } else if (!tpl && spec && !isCustomSpec) {
     PROMPT_TEMPLATES.forEach(function (p) {
       if (p.n === spec) prompt = p.t.replace(/\{\{bot_name\}\}/g, finalName.slice(0, 30) || '助手');
     });
