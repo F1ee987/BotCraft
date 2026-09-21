@@ -6104,6 +6104,15 @@ function canvasOpsValidate(ops, b, TYPES) {
       var afterId = o.kv.after ? String(o.kv.after).trim() : '';
       var anchor = afterId ? byId[afterId] : null;
       if (afterId && !anchor) { warn('after=' + afterId.slice(0, 16) + ' 指向不存在的节点，已改为追加到链尾'); }
+      // 「接在后面」往往真实意图是「插在中间」：anchor 在该出口上只有唯一后继时，
+      // 把它串进去（anchor→新→原后继），而不是并排挂在 anchor 后面当第二个下游。
+      // 条件节点按 port 分组看 —— 默认挂第 1 路出口，并在回执里说清挂到哪一路。
+      var wantPort = parseInt(o.kv.port, 10);
+      if (isNaN(wantPort) || wantPort < 0) wantPort = 0;
+      var outsAll = anchor ? edges.filter(function (e) { return e.from === anchor.id; }) : [];
+      var samePort = outsAll.filter(function (e) { return (e.port || 0) === wantPort; });
+      var insertBefore = (samePort.length === 1) ? samePort[0].to : '';
+      var multiOut = outsAll.length > 1;
       var nd = {
         id: newIdFor(nodes, byId),
         lbl: mapped,
@@ -6122,14 +6131,29 @@ function canvasOpsValidate(ops, b, TYPES) {
       if (kd === 'http') { nd.url = ''; nd.method = 'GET'; nd.headers = ''; nd.body = ''; }
       if (kd === 'sub') { nd.subId = ''; nd.subQuery = '{{input.msg}}'; }
       nodes.push(nd); byId[nd.id] = nd;
-      out.push({ op: 'add', node: nd });
-      if (anchor) {
-        if (linkCheck(edges, anchor.id, nd.id).ok) {
-          edges.push({ from: anchor.id, to: nd.id, port: 0 });
-          // 隐式连线也照常进 list 并照常落库 —— 校验器的影子图与真实数据必须一致，
-          // 否则「校验说有边、应用后没边」，画布上就是两个孤立节点
-          out.push({ op: 'link', from: anchor.id, to: nd.id, port: 0, implicit: true });
-        } else warn('「' + anchor.id + '」到新节点的自动连线不合法，已跳过');
+      out.push({ op: 'add', node: nd, after: anchor ? anchor.id : '', insertedBefore: insertBefore });
+      if (anchor && insertBefore) {
+        // 影子图：断开 anchor→原后继，改接 anchor→新→原后继
+        edges = edges.filter(function (e) { return !(e.from === anchor.id && e.to === insertBefore); });
+        edges.push({ from: anchor.id, to: nd.id, port: wantPort });
+        edges.push({ from: nd.id, to: insertBefore, port: 0 });
+        out.push({
+          op: 'relink',
+          drop: [{ from: anchor.id, to: insertBefore }],
+          add: [{ from: anchor.id, to: nd.id, port: wantPort }, { from: nd.id, to: insertBefore, port: 0 }],
+          insertedBefore: insertBefore
+        });
+        if (multiOut) warn('「' + anchor.id + '」有多路出口，新节点插在第 ' + (wantPort + 1) + ' 路的 ' + insertBefore + ' 之前（要挂别的出口请写 port=）');
+      } else if (anchor && linkCheck(edges, anchor.id, nd.id).ok) {
+        edges.push({ from: anchor.id, to: nd.id, port: 0 });
+        // 隐式连线也照常进 list 并照常落库 —— 校验器的影子图与真实数据必须一致，
+        // 否则「校验说有边、应用后没边」，画布上就是两个孤立节点
+        out.push({ op: 'link', from: anchor.id, to: nd.id, port: 0, implicit: true });
+        if (multiOut) warn('「' + anchor.id + '」有多路出口，新节点接在第 ' + (wantPort + 1) + ' 路之后（要挂别的出口请写 port=）');
+      } else if (!anchor && nodes.length > 1) {
+        warn('新节点「' + nd.id + '」没有接入流程（没连线）—— 如需要，说一句「把它接到某个节点后面」');
+      } else if (anchor) {
+        warn('「' + anchor.id + '」到新节点的自动连线不合法，已跳过');
       }
       continue;
     }
@@ -6160,11 +6184,31 @@ function canvasOpsValidate(ops, b, TYPES) {
       var un = byId[uid];
       if (!un) { warn('update 指向不存在的节点 ' + (uid || '?') + '，已跳过'); continue; }
       var patch = {};
-      // 字段白名单：只允许改标题与说明 —— id/坐标/类型都不许模型动
+      // 字段白名单：标题、说明 + 一组**受校验的配置字段**（都被钳到合法值域）。
+      // 刻意不给的：id / 坐标 / lbl（类型）/ kind —— 那些是图结构，改了就成另一张图了。
       if (o.kv.h !== undefined) patch.h = String(o.kv.h).slice(0, 40);
       if (o.kv.p !== undefined) patch.p = String(o.kv.p).slice(0, 120);
-      if (out.length === 0 && !Object.keys(patch).length && o.pos[1]) patch.p = String(o.pos[1]).slice(0, 120);
-      if (!Object.keys(patch).length) { warn('update ' + uid + ' 没有可改的字段（只支持 h= 标题、p= 说明），已跳过'); continue; }
+      if (o.kv.tool !== undefined) {
+        var tv = String(o.kv.tool).toLowerCase();
+        if (['kb', 'web', 'weather', 'image'].indexOf(tv) < 0) { warn('update ' + uid + '：工具只支持 kb/web/weather/image，' + o.kv.tool.slice(0, 12) + ' 已忽略'); }
+        else patch.tool = tv;
+      }
+      if (o.kv.query !== undefined) patch.toolQuery = String(o.kv.query).slice(0, 200);
+      if (o.kv.url !== undefined) patch.url = String(o.kv.url).slice(0, 300);
+      if (o.kv.method !== undefined) {
+        var mv = String(o.kv.method).toUpperCase();
+        if (['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].indexOf(mv) < 0) { warn('update ' + uid + '：HTTP 方法 ' + o.kv.method.slice(0, 10) + ' 不合法，已忽略'); }
+        else patch.method = mv;
+      }
+      if (o.kv.times !== undefined) {
+        var lt = parseInt(o.kv.times, 10);
+        if (isNaN(lt)) { warn('update ' + uid + '：循环次数不是数字，已忽略'); }
+        else if (lt < 1 || lt > 20) { patch.loopTimes = Math.max(1, Math.min(20, lt)); warn('update ' + uid + '：循环次数 ' + lt + ' 超出 1~20，已按 ' + patch.loopTimes + ' 处理'); }
+        else patch.loopTimes = lt;
+      }
+      // 容错：模型写成 "update | n3 | 新说明"（第二个位置参数当说明）也认
+      if (!Object.keys(patch).length && o.pos[1]) patch.p = String(o.pos[1]).slice(0, 120);
+      if (!Object.keys(patch).length) { warn('update ' + uid + ' 没有可改的字段（支持 h= 标题、p= 说明、tool= 工具、query= 查询、url= 地址、method= 方法、times= 循环次数），已跳过'); continue; }
       out.push({ op: 'update', id: uid, patch: patch });
       continue;
     }
@@ -6220,11 +6264,16 @@ function canvasOpsApply(b, list) {
   if (F && F.ensure) { try { F.ensure(b); } catch (e) { } }
   if (!Array.isArray(b.nodes)) b.nodes = [];
   if (!Array.isArray(b.edges)) b.edges = [];
-  var logParts = [], added = [];
+  var logParts = [], added = [], needLayout = false, needFit = false;
   (list || []).forEach(function (o) {
     if (o.op === 'add') {
       b.nodes.push(o.node); added.push(o.node.id);
-      logParts.push('新增「' + o.node.h + '」(' + o.node.id + ')');
+      logParts.push(o.insertedBefore
+        ? ('新增「' + o.node.h + '」并插入 ' + (o.after || '链首') + ' 与 ' + o.insertedBefore + ' 之间')
+        : (o.after ? ('新增「' + o.node.h + '」接在 ' + o.after + ' 之后') : ('新增「' + o.node.h + '」(' + o.node.id + ')，未连线')));
+    } else if (o.op === 'relink') {
+      o.drop.forEach(function (d) { b.edges = b.edges.filter(function (e) { return !(e.from === d.from && e.to === d.to); }); });
+      o.add.forEach(function (a) { b.edges.push({ from: a.from, to: a.to, port: a.port || 0 }); });
     } else if (o.op === 'link') {
       b.edges.push({ from: o.from, to: o.to, port: o.port || 0 });
       logParts.push((o.implicit ? '自动接上 ' : '连线 ') + o.from + '→' + o.to);
@@ -6234,16 +6283,30 @@ function canvasOpsApply(b, list) {
     } else if (o.op === 'update') {
       var nd = null;
       b.nodes.forEach(function (n) { if (n.id === o.id) nd = n; });
-      if (nd) { for (var k in o.patch) if (Object.prototype.hasOwnProperty.call(o.patch, k)) nd[k] = o.patch[k]; logParts.push('改「' + (nd.h || o.id) + '」'); }
+      if (nd) {
+        for (var k in o.patch) if (Object.prototype.hasOwnProperty.call(o.patch, k)) nd[k] = o.patch[k];
+        logParts.push('改「' + (nd.h || o.id) + '」的 ' + Object.keys(o.patch).join('/'));
+      }
     } else if (o.op === 'remove') {
       b.nodes = b.nodes.filter(function (n) { return n.id !== o.id; });
       b.edges = b.edges.filter(function (e) { return e.from !== o.id && e.to !== o.id; });
-      logParts.push('删除 ' + o.id);
-    } else if (o.op === 'layout') { logParts.push('按执行次序重排'); }
-    else if (o.op === 'fit') { logParts.push('适配视图'); }
+      logParts.push('删除 ' + o.id + '（连带它的连线）');
+    } else if (o.op === 'layout') {
+      // 真的排 —— 从前这里只记了一句日志，「说了重排却没排」是骗人的。
+      // 数据层用分层布局（不碰视图，任意机器人可执行）；视图层的 cwAutoLayout
+      // 会切画布显示，所以只在画布正打开该机器人时由调用方另调。
+      needLayout = true;
+      logParts.push('按执行次序重排');
+    } else if (o.op === 'fit') { needFit = true; logParts.push('适配视图'); }
   });
+  if (needLayout) {
+    try {
+      var pos = (F && F.aiPlotLayout) ? F.aiPlotLayout(b.nodes, b.edges) : null;
+      if (pos) b.nodes.forEach(function (n) { if (pos[n.id]) { n.x = pos[n.id].x; n.y = pos[n.id].y; } });
+    } catch (e) { }
+  }
   b.flowV = (F && F.V2) || 2;
-  return { log: logParts, added: added };
+  return { log: logParts, added: added, needLayout: needLayout, needFit: needFit };
 }
 
 // 画布现状的紧凑文本（给模型看）：节点 id/类型/标题 + 连线。token 友好，超长截断。
@@ -10989,6 +11052,10 @@ async function runReply(b, opt) {
             activeBot.updatedAt = Date.now(); saveBots();
             if (_cOnScreen && typeof renderNodes === 'function') {
               renderNodes(activeBot);
+              // 重排已在数据层做完（canvasOpsApply 用分层布局，与 🪄 AI 编排落地时同一套）。
+              // 刻意不调 cwAutoLayout：它内部还会 cwPushUndo 一次，会让「一次回复 = 一步撤销」
+              // 变成要按两次 Ctrl+Z；而且它排成一行，与分层布局不一致。
+              if (_cRes.needFit && typeof cwFit === 'function') { try { cwFit(activeBot); } catch (e) { } }
               // 新节点可能在视野之外：滚到最后一个新增节点，让用户看见改动
               if (_cRes.added.length && typeof cwEnsureVisible === 'function') {
                 try { cwEnsureVisible(activeBot, activeBot.nodes.length - 1); } catch (e) { }
@@ -14742,10 +14809,12 @@ window.__debug = {
           + '· 加节点：[CANVAS: add | 节点类型 | 标题 | 一句话说明 | after=接在哪个节点后面]\n'
           + '· 连线：[CANVAS: link | 起点id | 终点id | port=出口序号]\n'
           + '· 断线：[CANVAS: unlink | 起点id | 终点id]\n'
-          + '· 改节点：[CANVAS: update | 节点id | h=新标题 | p=新说明]\n'
+          + '· 改节点：[CANVAS: update | 节点id | h=新标题 | p=新说明 | tool=kb/web/weather/image | query=查询内容 | url=地址 | method=方法 | times=循环次数]\n'
           + '· 删节点：[CANVAS: remove | 节点id]\n'
           + '· 重排：[CANVAS: layout]\n'
-          + '规则：节点类型只能用 ' + _lbls + '；id 必须是下面现有 id；after 省略 = 接到链尾；'
+          + '规则：节点类型只能用 ' + _lbls + '；id 必须是下面现有 id；'
+          + '**加在两步之间**就用 after=前一步的 id（若前一步只有一个下游，新节点会自动串进它们中间，不会并排多挂一路）；'
+          + 'after 省略 = 新节点不与任何节点相连（放在最右侧），除非用户明确说要独立节点，否则加节点都请带 after；'
           + '指令之外用一两句话说明你改了什么，不要复述指令本身。\n'
           + '【当前画布】\n' + _bl);
       } catch (e) { }
