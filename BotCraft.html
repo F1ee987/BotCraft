@@ -8752,8 +8752,21 @@ function cwPaint(b) {
   cwPaintMini(b, v, W, H);
 }
 
-function cwPaintMini(b, v, W, H) {
-  const mini = cwSt.mini, kids = cwSt.miniKids;
+// 小地图坐标 → 世界坐标，并把视图中心移过去。按下与拖拽共用这一份几何，
+// 两处各写一份必然漂移（本项目「同一份文案写两遍」已经栽过）。
+function cwMiniJump(cx, cy, m) {
+  const mini = cwSt.mini, root = cwSt.root, b = cwSt.bot;
+  if (!mini || !root || !b || !m) return;
+  const r = mini.getBoundingClientRect();
+  const wx = (cx - r.left - m.ox) / m.s + m.minx;
+  const wy = (cy - r.top - m.oy) / m.s + m.miny;
+  const v = cwView(b);
+  v.x = root.clientWidth / 2 - wx * v.s;
+  v.y = root.clientHeight / 2 - wy * v.s;
+  cwPaint(b);
+}
+
+function cwPaintMini(b, v, W, H) {  const mini = cwSt.mini, kids = cwSt.miniKids;
   if (!mini || !kids || !kids.length) return;
   const mw = mini.clientWidth || 168, mh = mini.clientHeight || 108, pad = 6;
   let minx = -v.x / v.s, miny = -v.y / v.s;
@@ -9366,8 +9379,19 @@ function cwOnDown(e) {
   const b = cwSt.bot, root = cwSt.root;
   if (!b || !root) return;
   if (e.button === 2) return;      // 右键交给 contextmenu
-  if (e.target.closest('.cw-tools') || e.target.closest('.cw-mini') || e.target.closest('.cw-mid') || e.target.closest('.cw-menu')) return;
+  if (e.target.closest('.cw-tools') || e.target.closest('.cw-mid') || e.target.closest('.cw-menu')) return;
   cwCloseMenu();
+  // 小地图：按下即跳、拖住连续平移 —— 视口框就是被拖的那个「把手」。
+  // 以前的「点击跳转」是这里按下不动的一种特例，统一交给一套几何处理。
+  if (e.target.closest('.cw-mini')) {
+    if (cwSt.miniMap) {
+      cwMiniJump(e.clientX, e.clientY, cwSt.miniMap);
+      cwSt.drag = { mode: 'mini', moved: false };
+    }
+    try { root.setPointerCapture(e.pointerId); } catch (err) { }
+    e.preventDefault();
+    return;
+  }
   const port = e.target.closest('.cw-port');
   const card = e.target.closest('.cw-card');
   const editing = card && card.classList.contains('editing');
@@ -9406,6 +9430,13 @@ function cwOnDown(e) {
 function cwOnMove(e) {
   const d = cwSt.drag, b = cwSt.bot;
   if (!d || !b) return;
+  // 小地图拖拽：视口连续跟随，不受拖动阈值约束（阈值防的是手抖挪卡，
+  // 而拖视口本来就要「指哪打哪」，抖一下跳一下反而对）。
+  if (d.mode === 'mini') {
+    if (cwSt.miniMap) cwMiniJump(e.clientX, e.clientY, cwSt.miniMap);
+    d.moved = true;
+    return;
+  }
   // node / marquee：位移不足阈值不算拖动 —— 卡片不动、moved 不置位（撤销栈的空快照
   // 照常在 cwOnUp 回收）。pan / link 不需要阈值：平移与连线对手抖不敏感。
   if (d.mode === 'node' || d.mode === 'marquee') {
@@ -9583,17 +9614,8 @@ function cwOnClick(e) {
     const btn = e.target.closest('[data-act=addnode]');
     if (btn) { addNodeAtCenter(b); return; }
   }
-  if (e.target.closest('.cw-mini')) {
-    const m = cwSt.miniMap;
-    if (!m) return;
-    const r = cwSt.mini.getBoundingClientRect();
-    const wx = (e.clientX - r.left - m.ox) / m.s + m.minx;
-    const wy = (e.clientY - r.top - m.oy) / m.s + m.miny;
-    const v = cwView(b);
-    v.x = root.clientWidth / 2 - wx * v.s;
-    v.y = root.clientHeight / 2 - wy * v.s;
-    cwPaint(b);
-  }
+  // 小地图的跳转已由 pointerdown/pointermove（mode:'mini'）接管 ——
+  // click 再跳一次是重复劳动，还会在拖拽结束时把视口拽回松手位置附近。
 }
 
 // 键盘：只在「编排 Tab 真的可见 + 焦点不在输入控件」时生效，避免抢走聊天框的按键
