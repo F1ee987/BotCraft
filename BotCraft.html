@@ -4232,6 +4232,7 @@ const plugins = [
   { n: '天气查询', d: '获取全球城市实时天气', ic: '🌤️', c: 'linear-gradient(135deg,#7c4dff,#4dd0e1)', cat: '数据', cap: '调用天气接口，返回指定城市当前气温、天气、风力与未来预报，适合行程规划、生活助手类机器人。' },
   { n: '日历/提醒', d: '创建与管理日程提醒', ic: '📅', c: 'linear-gradient(135deg,#a1887f,#795548)', cat: '数据', cap: '创建提醒事项与日程，支持按时间触发，适合待办管理、日程助理类机器人。' },
   { n: '代码执行器', d: '安全沙盒中运行代码片段', ic: '⚙️', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', cat: '开发', cap: '在本地沙盒中试运行 JavaScript 片段（仅 JavaScript，不支持 Python），用于算法验证、数据转换与格式清洗。注意：当前只在插件详情面板手动运行，工作流不会自动执行代码。' },
+  { n: '画布工具', d: '在聊天里直接增删改连工作流画布', ic: '🧩', c: 'linear-gradient(135deg,#8b5cf6,#32ade6)', cat: '开发', cap: '勾选后，你可以用聊天的方式让机器人改当前机器人的编排画布：加节点、连线、断线、改标题与说明、删节点、按执行次序排布。机器人会在回复末尾输出 [CANVAS: ...] 指令行（不会显示在聊天里），系统校验通过后立即应用到画布。一次回复里的所有改动算一步，Ctrl+Z 可整体撤销；类型与连线都会被校验（不认的类型、指空的 id、成环的连线一律拒绝并回报）。' },
 ];
 // 内置插件名单（由 plugins 派生，不手抄）：normalize 用它过滤已下架插件的幽灵声明
 const BUILTIN_PLUGIN_NAMES = plugins.map(function (p) { return p.n; });
@@ -6047,6 +6048,219 @@ function aiPlotMakeUnique(nodes, edges, usedIds) {
   return map;
 }
 
+// ---------- 画布工具：模型在聊天里改画布（指令行协议） ----------
+// 为什么是「文本指令 + 前端校验执行」而不是 function calling：本项目单文件、无后端，
+// 且要兼容所有模型（含不支持 tools 参数的）。日历插件的 [REMINDER: ...] 就是这个套路，
+// 已验证可用。模型只负责**说**要做什么，能不能做由这里的校验器说了算 —— 它不认识
+// 的类型、指空的 id、成环的连线，一律拒绝并在回执里说明，绝不静默改坏画布。
+
+// 从句子里抠出所有 [CANVAS: ...] 指令行。容忍大小写、前后空白、行尾其他内容。
+function canvasOpsParse(text) {
+  var out = [];
+  var re = /\[\s*CANVAS\s*:\s*([^\]\n]*)\]/gi, m;
+  var s = String(text === null || text === undefined ? '' : text);
+  while ((m = re.exec(s))) {
+    var body = String(m[1] || '').trim();
+    if (!body) continue;
+    var seg = body.split('|').map(function (x) { return x.trim(); });
+    if (!seg.length) continue;
+    var op = seg[0].toLowerCase();
+    var args = seg.slice(1), kv = {}, pos = [];
+    for (var i = 0; i < args.length; i++) {
+      var a = args[i];
+      if (!a) continue;
+      var eq = a.indexOf('=');
+      if (eq > 0) kv[a.slice(0, eq).trim().toLowerCase()] = a.slice(eq + 1).trim();
+      else pos.push(a);
+    }
+    out.push({ op: op, pos: pos, kv: kv, raw: m[0] });
+  }
+  return out;
+}
+
+// 校验 + 规范化。返回 {ok, list, warnings, error}
+// 只有「一条都不合法」才整体失败；个别非法指令剔除并留痕，合法的照常执行。
+function canvasOpsValidate(ops, b, TYPES) {
+  var res = { ok: false, list: [], warnings: [], error: '' };
+  if (!Array.isArray(ops) || !ops.length) { res.error = '没有可执行的指令'; return res; }
+  if (ops.length > 20) { res.error = '单次指令超过 20 条（' + ops.length + '），已拒绝 —— 请分几次说'; return res; }
+  var F = window.BotCraftFlow;
+  if (F && F.ensure) { try { F.ensure(b); } catch (e) { } }
+  var types = Array.isArray(TYPES) ? TYPES : [];
+  var out = [], warn = function (s) { if (res.warnings.indexOf(s) < 0) res.warnings.push(s); };
+  // 影子图：逐条模拟，保证「先加后连」「先删后断」这类顺序依赖也能判对
+  var nodes = (b.nodes || []).map(function (n) { return n; });
+  var edges = ((b && b.edges) || []).map(function (e) { return { from: e.from, to: e.to, port: e.port || 0 }; });
+  var byId = {};
+  nodes.forEach(function (n) { if (n && n.id) byId[n.id] = n; });
+  for (var i = 0; i < ops.length; i++) {
+    var o = ops[i], op = o.op;
+    if (op === 'add') {
+      var lbl = String(o.pos[0] || '').trim();
+      var mapped = (typeof aiPlotMapLbl === 'function') ? aiPlotMapLbl(lbl, types) : '';
+      if (!mapped) { warn('「' + lbl.slice(0, 16) + '」不是可用的节点类型，这条 add 已跳过'); continue; }
+      var tp = null;
+      types.forEach(function (t) { if (t.lbl === mapped) tp = t; });
+      var afterId = o.kv.after ? String(o.kv.after).trim() : '';
+      var anchor = afterId ? byId[afterId] : null;
+      if (afterId && !anchor) { warn('after=' + afterId.slice(0, 16) + ' 指向不存在的节点，已改为追加到链尾'); }
+      var nd = {
+        id: newIdFor(nodes, byId),
+        lbl: mapped,
+        h: String(o.pos[1] || (tp && tp.h) || '新节点').slice(0, 40),
+        p: String(o.pos[2] || (tp && tp.p) || '').slice(0, 120),
+        x: anchor ? (cwNumish(anchor.x, 0) + 290) : nextFreeX(nodes),
+        y: anchor ? cwNumish(anchor.y, 0) : nextFreeY(nodes)
+      };
+      if (tp && tp.role) nd.role = tp.role;
+      var kd = (tp && tp.kind) || 'llm';
+      nd.kind = kd;
+      if (kd === 'cond') nd.branches = [{ label: '满足', when: '' }, { label: '其他', when: '' }];
+      if (kd === 'loop') { nd.loopMode = 'array'; nd.loopWhen = '{{input.msg}}'; nd.loopTimes = 3; nd.loopBody = ''; }
+      if (kd === 'code') nd.code = '';
+      if (kd === 'tool') { nd.tool = 'kb'; nd.toolQuery = '{{input.msg}}'; }
+      if (kd === 'http') { nd.url = ''; nd.method = 'GET'; nd.headers = ''; nd.body = ''; }
+      if (kd === 'sub') { nd.subId = ''; nd.subQuery = '{{input.msg}}'; }
+      nodes.push(nd); byId[nd.id] = nd;
+      out.push({ op: 'add', node: nd });
+      if (anchor) {
+        if (linkCheck(edges, anchor.id, nd.id).ok) {
+          edges.push({ from: anchor.id, to: nd.id, port: 0 });
+          // 隐式连线也照常进 list 并照常落库 —— 校验器的影子图与真实数据必须一致，
+          // 否则「校验说有边、应用后没边」，画布上就是两个孤立节点
+          out.push({ op: 'link', from: anchor.id, to: nd.id, port: 0, implicit: true });
+        } else warn('「' + anchor.id + '」到新节点的自动连线不合法，已跳过');
+      }
+      continue;
+    }
+    if (op === 'link') {
+      var f = String(o.pos[0] || '').trim(), t2 = String(o.pos[1] || '').trim();
+      if (!byId[f] || !byId[t2]) { warn('连线 ' + (f || '?') + '→' + (t2 || '?') + ' 指向不存在的节点，已跳过'); continue; }
+      var chk = linkCheck(edges, f, t2);
+      if (!chk.ok) { warn('连线 ' + f + '→' + t2 + '：' + chk.why + '，已跳过'); continue; }
+      var src = byId[f];
+      var maxPort = (src.kind === 'cond') ? Math.max(1, (src.branches || []).length) - 1 : 0;
+      var port = parseInt(o.kv.port, 10);
+      if (isNaN(port) || port < 0) port = 0;
+      if (port > maxPort) { warn('连线 ' + f + '→' + t2 + ' 的出口越界，已按第 ' + maxPort + ' 路处理'); port = maxPort; }
+      edges.push({ from: f, to: t2, port: port });
+      out.push({ op: 'link', from: f, to: t2, port: port });
+      continue;
+    }
+    if (op === 'unlink') {
+      var uf = String(o.pos[0] || '').trim(), ut = String(o.pos[1] || '').trim();
+      var before = edges.length;
+      edges = edges.filter(function (e) { return !(e.from === uf && e.to === ut); });
+      if (edges.length === before) { warn('要断的连线 ' + uf + '→' + ut + ' 不存在，已跳过'); continue; }
+      out.push({ op: 'unlink', from: uf, to: ut });
+      continue;
+    }
+    if (op === 'update') {
+      var uid = String(o.pos[0] || '').trim();
+      var un = byId[uid];
+      if (!un) { warn('update 指向不存在的节点 ' + (uid || '?') + '，已跳过'); continue; }
+      var patch = {};
+      // 字段白名单：只允许改标题与说明 —— id/坐标/类型都不许模型动
+      if (o.kv.h !== undefined) patch.h = String(o.kv.h).slice(0, 40);
+      if (o.kv.p !== undefined) patch.p = String(o.kv.p).slice(0, 120);
+      if (out.length === 0 && !Object.keys(patch).length && o.pos[1]) patch.p = String(o.pos[1]).slice(0, 120);
+      if (!Object.keys(patch).length) { warn('update ' + uid + ' 没有可改的字段（只支持 h= 标题、p= 说明），已跳过'); continue; }
+      out.push({ op: 'update', id: uid, patch: patch });
+      continue;
+    }
+    if (op === 'remove') {
+      var rid = String(o.pos[0] || '').trim();
+      if (!byId[rid]) { warn('remove 指向不存在的节点 ' + (rid || '?') + '，已跳过'); continue; }
+      nodes = nodes.filter(function (n) { return n.id !== rid; });
+      edges = edges.filter(function (e) { return e.from !== rid && e.to !== rid; });
+      delete byId[rid];
+      out.push({ op: 'remove', id: rid });
+      continue;
+    }
+    if (op === 'layout' || op === 'fit') { out.push({ op: op }); continue; }
+    warn('不认识的指令「' + String(o.op).slice(0, 12) + '」，已忽略');
+  }
+  if (!out.length) { res.error = '指令都不合法（详见警告）'; res.warnings = res.warnings; return res; }
+  res.list = out; res.ok = true;
+  return res;
+}
+
+function cwNumish(v, d) { var n = Number(v); return isFinite(n) ? n : d; }
+function nextFreeX(nodes) { var mx = 0; (nodes || []).forEach(function (n) { var x = cwNumish(n.x, 0); if (x > mx) mx = x; }); return nodes.length ? mx + 290 : 40; }
+function nextFreeY(nodes) { return nodes.length ? cwNumish(nodes[nodes.length - 1].y, 0) : 40; }
+function newIdFor(nodes, byId) {
+  var k = 1;
+  while (byId['n' + k]) k++;
+  return 'n' + k;
+}
+// 加连线的合法性：不存在、自环、成环。方向别写反 —— 加 from→to 会闭环的充要条件是
+// to 已经能到达 from（同 flowCanLink 的判据）。
+function linkCheck(edges, from, to) {
+  if (!from || !to) return { ok: false, why: '缺少节点' };
+  if (from === to) return { ok: false, why: '不能连到自身' };
+  var dup = false;
+  edges.forEach(function (e) { if (e.from === from && e.to === to) dup = true; });
+  if (dup) return { ok: false, why: '这条连线已经存在' };
+  var adj = {};
+  edges.forEach(function (e) { (adj[e.from] = adj[e.from] || []).push(e.to); });
+  var seen = {}, stack = (adj[to] || []).slice();
+  while (stack.length) {
+    var cur = stack.pop();
+    if (seen[cur]) continue;
+    seen[cur] = 1;
+    (adj[cur] || []).forEach(function (t) { if (!seen[t]) stack.push(t); });
+  }
+  if (seen[from]) return { ok: false, why: '会形成环' };
+  return { ok: true };
+}
+
+// 落到数据上。返回 {applied, log, added}：log 是给人看的回执，added 是新增节点 id（供画布滚动过去）
+function canvasOpsApply(b, list) {
+  var F = window.BotCraftFlow;
+  if (F && F.ensure) { try { F.ensure(b); } catch (e) { } }
+  if (!Array.isArray(b.nodes)) b.nodes = [];
+  if (!Array.isArray(b.edges)) b.edges = [];
+  var logParts = [], added = [];
+  (list || []).forEach(function (o) {
+    if (o.op === 'add') {
+      b.nodes.push(o.node); added.push(o.node.id);
+      logParts.push('新增「' + o.node.h + '」(' + o.node.id + ')');
+    } else if (o.op === 'link') {
+      b.edges.push({ from: o.from, to: o.to, port: o.port || 0 });
+      logParts.push((o.implicit ? '自动接上 ' : '连线 ') + o.from + '→' + o.to);
+    } else if (o.op === 'unlink') {
+      b.edges = b.edges.filter(function (e) { return !(e.from === o.from && e.to === o.to); });
+      logParts.push('断开 ' + o.from + '→' + o.to);
+    } else if (o.op === 'update') {
+      var nd = null;
+      b.nodes.forEach(function (n) { if (n.id === o.id) nd = n; });
+      if (nd) { for (var k in o.patch) if (Object.prototype.hasOwnProperty.call(o.patch, k)) nd[k] = o.patch[k]; logParts.push('改「' + (nd.h || o.id) + '」'); }
+    } else if (o.op === 'remove') {
+      b.nodes = b.nodes.filter(function (n) { return n.id !== o.id; });
+      b.edges = b.edges.filter(function (e) { return e.from !== o.id && e.to !== o.id; });
+      logParts.push('删除 ' + o.id);
+    } else if (o.op === 'layout') { logParts.push('按执行次序重排'); }
+    else if (o.op === 'fit') { logParts.push('适配视图'); }
+  });
+  b.flowV = (F && F.V2) || 2;
+  return { log: logParts, added: added };
+}
+
+// 画布现状的紧凑文本（给模型看）：节点 id/类型/标题 + 连线。token 友好，超长截断。
+function canvasBriefText(b, limit) {
+  if (!b) return '（当前没有画布）';
+  var F = window.BotCraftFlow;
+  if (F && F.ensure) { try { F.ensure(b); } catch (e) { } }
+  var ns = (b.nodes || []).slice(0, limit || 30);
+  if (!ns.length) return '（画布还是空的，没有任何节点）';
+  var lines = ns.map(function (n) {
+    var t = (n.h || n.lbl || '').toString().slice(0, 24);
+    return n.id + ' ' + (n.lbl || '') + ' ' + t;
+  });
+  var es = (b.edges || []).slice(0, 60).map(function (e) { return e.from + '→' + e.to + (e.port ? ('(口' + e.port + ')') : ''); });
+  return '节点：\n' + lines.join('\n') + '\n连线：' + (es.length ? es.join('，') : '（无）');
+}
+
 // 语义层对外暴露：界面与测试都从这里取，避免两处各写一份判断
 window.BotCraftFlow = {
   V2: FLOW_V2,
@@ -6074,6 +6288,10 @@ window.BotCraftFlow = {
   aiPlotValidate: aiPlotValidate,
   aiPlotLayout: aiPlotLayout,
   aiPlotMakeUnique: aiPlotMakeUnique,
+  canvasOpsParse: canvasOpsParse,
+  canvasOpsValidate: canvasOpsValidate,
+  canvasOpsApply: canvasOpsApply,
+  canvasBriefText: canvasBriefText,
 inEdges: flowInEdges,
   nodeDead: flowNodeDead,
   killPorts: flowKillPorts,
@@ -10752,6 +10970,47 @@ async function runReply(b, opt) {
         if (_added) { toast('已为你设置 ' + _added + ' 条提醒 📅', 'ok', 4000); full = full.replace(/\[REMINDER:[^\]]*\]/g, '').replace(/\n{2,}/g, '\n').trim(); }
       } catch (e) { }
     }
+    // 画布工具插件：解析模型返回的 [CANVAS: ...] 指令并真实改画布
+    // 与 REMINDER 同一套路：模型只说「要做什么」，能不能做由校验器说了算。
+    // 一次回复里的所有改动算一步（画布正打开着这个机器人时压一次撤销栈）。
+    if ((activeBot.plugins || []).indexOf('画布工具') >= 0) {
+      try {
+        var _cF = window.BotCraftFlow;
+        var _cOps = _cF && _cF.canvasOpsParse ? _cF.canvasOpsParse(full) : [];
+        if (_cOps.length) {
+          var _cV = _cF.canvasOpsValidate(_cOps, activeBot, (typeof NODE_TYPES !== 'undefined' ? NODE_TYPES : []));
+          // 画布 UI 是否正打开着这个机器人：决定要不要压撤销栈 / 立刻重绘。
+          // 用 typeof 守卫，别让「画布代码没加载」把整段工具打成静默失效。
+          var _cOnScreen = false;
+          try { _cOnScreen = !!(typeof cwSt !== 'undefined' && cwSt && cwSt.bot && cwSt.bot.id === activeBot.id); } catch (e) { _cOnScreen = false; }
+          if (_cV.ok) {
+            if (_cOnScreen && typeof cwPushUndo === 'function') { try { cwPushUndo(activeBot); } catch (e) { } }
+            var _cRes = _cF.canvasOpsApply(activeBot, _cV.list);
+            activeBot.updatedAt = Date.now(); saveBots();
+            if (_cOnScreen && typeof renderNodes === 'function') {
+              renderNodes(activeBot);
+              // 新节点可能在视野之外：滚到最后一个新增节点，让用户看见改动
+              if (_cRes.added.length && typeof cwEnsureVisible === 'function') {
+                try { cwEnsureVisible(activeBot, activeBot.nodes.length - 1); } catch (e) { }
+              }
+            }
+            full = full.replace(/\[\s*CANVAS\s*:[^\]\n]*\]/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+            var _cMsg = '已按你的要求改画布：' + _cRes.log.join('；') + (_cOnScreen ? '（Ctrl+Z 可整体撤销）' : '');
+            if (_cV.warnings.length) _cMsg += '。另有 ' + _cV.warnings.length + ' 条被跳过：' + _cV.warnings.join('；');
+            toast('画布已更新 🧩', 'ok', 4000);
+            // 回执并进正文（markdown 引用块）：渲染、历史、重新生成全都自然带上，
+            // 下一轮对话里模型也能看到自己刚才改了什么
+            full = full.replace(/\s*$/, '') + (full ? '\n\n' : '') + '> 🧩 ' + _cMsg;
+          } else {
+            full = full.replace(/\[\s*CANVAS\s*:[^\]\n]*\]/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+            var _cErr = '画布没改：' + (_cV.error || '指令不合法')
+              + (_cV.warnings && _cV.warnings.length ? '（' + _cV.warnings.join('；') + '）' : '');
+            toast('画布指令有问题，未执行', 'warn', 4000);
+            full = full.replace(/\s*$/, '') + (full ? '\n\n' : '') + '> ⚠️ ' + _cErr;
+          }
+        }
+      } catch (e) { console.warn('[画布工具] 执行失败：', e); }
+    }
     span.innerHTML = renderMarkdown(full);
     _histRef.push({ role: 'bot', text: full, who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
     bubble.querySelector('.who').textContent = activeBot.n; // 保持
@@ -14471,6 +14730,24 @@ window.__debug = {
         var _remList = (window.loadReminders && window.loadReminders()) || [];
         var _remTxt = _remList.length ? _remList.map(function (r) { return '· ' + r.title + '（' + new Date(r.time).toLocaleString('zh-CN') + '）'; }).join('\n') : '（暂无）';
         parts.push('【提醒工具】当用户要求设置提醒时，请在回复末尾追加一行严格格式：\n[REMINDER: 提醒标题 | 2026-08-28T09:00]\n时间用 24 小时制；可用“明天 09:00”等相对表述，请换算成具体日期时间。每行一个。系统会自动存储并在到点时通知用户。现有提醒：\n' + _remTxt);
+      } catch (e) { }
+    }
+    if (plugins.indexOf('画布工具') >= 0) {
+      try {
+        var _cb = getBot(currentId) || bot;
+        var _bl = (window.BotCraftFlow && window.BotCraftFlow.canvasBriefText) ? window.BotCraftFlow.canvasBriefText(_cb, 30) : '';
+        var _lbls = (typeof NODE_TYPES !== 'undefined' ? NODE_TYPES : []).map(function (t) { return t.lbl; }).join(' / ');
+        parts.push('【画布工具】你可以直接改这个机器人的**编排画布**。当用户要你改流程时，在回复**末尾**追加指令行'
+          + '（每行一条，系统会执行并从回复里删掉，不会显示给用户）：\n'
+          + '· 加节点：[CANVAS: add | 节点类型 | 标题 | 一句话说明 | after=接在哪个节点后面]\n'
+          + '· 连线：[CANVAS: link | 起点id | 终点id | port=出口序号]\n'
+          + '· 断线：[CANVAS: unlink | 起点id | 终点id]\n'
+          + '· 改节点：[CANVAS: update | 节点id | h=新标题 | p=新说明]\n'
+          + '· 删节点：[CANVAS: remove | 节点id]\n'
+          + '· 重排：[CANVAS: layout]\n'
+          + '规则：节点类型只能用 ' + _lbls + '；id 必须是下面现有 id；after 省略 = 接到链尾；'
+          + '指令之外用一两句话说明你改了什么，不要复述指令本身。\n'
+          + '【当前画布】\n' + _bl);
       } catch (e) { }
     }
     return parts.join('\n\n');
