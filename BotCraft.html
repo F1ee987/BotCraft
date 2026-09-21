@@ -303,6 +303,17 @@ body main.main > .page-head{animation:bcRise .56s var(--ease-out) var(--dur-1) b
 body main.main > *:not(.page-head){animation:bcRise .6s var(--ease-out) .2s backwards}
 body #page-workspace .ws-side{animation:bcSlideIn .56s var(--ease-out) var(--dur-1) backwards}
 body #page-workspace .ws-main{animation:bcRise .6s var(--ease-out) var(--dur-2) backwards}
+/* 页面级「收起 / 展开」过场（2026-09-21）：此前只有进页动画，离页是硬切（内容瞬间消失）。
+   做成**顺序式**而不是交叉淡化：所有 page 都是 .app 的 flex 子项，两个同时在场会互相
+   挤开宽度（互相压缩成半屏），所以必须「旧页先收起 → 切可见性 → 新页展开」。
+   展开 bcPageIn 挂在页面容器本身（微放大 + 淡入），与既有子元素的错位上浮叠加，
+   出场就是「从中展开」；收起 bcPageOut 反向、更短（180ms），让等待感不明显。
+   ⚠️ 收起时长以这条 CSS 为准 —— JS 读 computed animation-duration 决定何时切换，
+   改这里 JS 自动跟着走；降级用户这条是 animation:none → 时长 0 → 立即切不等动画。 */
+@keyframes bcPageIn{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
+@keyframes bcPageOut{from{opacity:1;transform:none}to{opacity:0;transform:scale(.985)}}
+body main.main, body .workspace{animation:bcPageIn .28s var(--ease-out) backwards}
+body main.bc-leaving, body .workspace.bc-leaving{animation:bcPageOut .18s var(--ease) forwards;pointer-events:none}
 /* 全局兜底只压 duration、不清 delay；backwards + delay 会让元素在延迟期保持 opacity:0，
    降级用户会看到「延迟空白」。这里逐条掐掉整条动画。
    ⚠️ 写成一行一条，别合并成长选择器列表 —— verify_css.js 用
@@ -318,6 +329,10 @@ body #page-workspace .ws-main{animation:bcRise .6s var(--ease-out) var(--dur-2) 
   body main.main > *:not(.page-head){animation:none}
   body #page-workspace .ws-side{animation:none}
   body #page-workspace .ws-main{animation:none}
+  body main.main{animation:none}
+  body .workspace{animation:none}
+  body main.bc-leaving{animation:none}
+  body .workspace.bc-leaving{animation:none}
 }
 
 /* ============ 材质策略：全局液态玻璃 ============
@@ -8476,14 +8491,19 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 else bindStickyHeads();
 window.addEventListener('resize', function () { syncStickyHead(); });
 
-function go(p) {
-  var _navEl = document.querySelector('.nav'); if (_navEl) _navEl.classList.remove('open');
+/* ============ 页面切换：收起 → 切可见性 → 展开 ============
+   display:none → 可见会重启 CSS 动画，所以 applyPage 一落地，新页那套错位上浮自动重放。
+   收起时长取 .bc-leaving 的 computed animation-duration（改 CSS 不用改 JS）；降级用户那条
+   规则是 animation:none → 时长 0 → 立即切、不等动画。连点用 _goSeq 判废：等待期间又点了
+   别的页，只有最后一次会真正落地（旧页保持收起态被一并切走）。 */
+let _goSeq = 0;
+function applyPage(p) {
   pages.forEach(pg => {
     const el = document.getElementById('page-' + pg);
-    if (el) el.style.display = (pg === p ? (pg === 'workspace' ? 'flex' : 'block') : 'none');
+    if (!el) return;
+    el.classList.remove('bc-leaving');
+    el.style.display = (pg === p ? (pg === 'workspace' ? 'flex' : 'block') : 'none');
   });
-  document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === p));
-  document.querySelectorAll('.sidebar .side-item').forEach(x => x.classList.toggle('active', x.dataset.page === p));
   if (p === 'analytics') renderAnalytics();
   if (p === 'favorites') updateFavPage();
   if (p === 'knowledge') renderKbList();
@@ -8492,6 +8512,27 @@ function go(p) {
   if (p === 'styles') renderStyleGrid();
   if (p === 'home') { renderGrid(); syncEmptyHome(); }
   syncStickyHead(p);   /* 切页后补量标题栏高度（隐藏时量出来是 0） */
+}
+function go(p) {
+  var _navEl = document.querySelector('.nav'); if (_navEl) _navEl.classList.remove('open');
+  /* 侧栏 / 顶栏的选中态立刻更新：内容稍 180ms 到位，但点击反馈必须是即时的 */
+  document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === p));
+  document.querySelectorAll('.sidebar .side-item').forEach(x => x.classList.toggle('active', x.dataset.page === p));
+  let curEl = null;
+  pages.forEach(function (pg) {
+    if (curEl) return;
+    const el = document.getElementById('page-' + pg);
+    if (!el || el.style.display === 'none') return;
+    if (getComputedStyle(el).display !== 'none') curEl = el;
+  });
+  if (!curEl || curEl.id === 'page-' + p) { applyPage(p); return; }
+  const seq = ++_goSeq;
+  curEl.classList.add('bc-leaving');
+  const raw = String(getComputedStyle(curEl).animationDuration || '');
+  const sec = parseFloat(raw);
+  const ms = sec > 0 ? sec * (raw.indexOf('ms') >= 0 ? 1 : 1000) : 0;
+  if (!ms) { applyPage(p); return; }
+  setTimeout(function () { if (seq === _goSeq) applyPage(p); }, ms + 20);
 }
 function toggleNav() { var n = document.querySelector('.nav'); if (n) n.classList.toggle('open'); }
 
