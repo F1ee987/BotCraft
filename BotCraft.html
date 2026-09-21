@@ -8043,6 +8043,9 @@ function cwRound(n) { return Math.round(n * 10) / 10; }
 // 节点坐标 (x,y) 只是**视图状态**：引擎不看它，老数据没有坐标时由 normalize 按顺序铺开。
 // 卡片左上角的序号徽标显示的是拓扑序（真实执行次序），不是数组下标。
 const CW_GRID = 20;        // 网格步长，也是拖拽吸附步长
+const CW_DRAG_T = 4;       // 拖动启动阈值（屏幕 px）：低于它不算拖。没有这个阈值，双击时的
+                           // 1~2px 手抖就会把卡片吸附挪走（吸附步长 20px 会放大位移），
+                           // 第二击落在空白上，「双击编辑」就变成了「凭空多一个节点」。
 const CW_CARD_W = 250;     // 卡片宽（与 CSS .cw-card 的 width 保持一致，改一处要同步另一处）
 const CW_LAYOUT_X = 340;   // 自动布局横向步进 = 卡片宽 + 90 间距
 const CW_ZOOM_MIN = 0.3, CW_ZOOM_MAX = 2.5;
@@ -8228,14 +8231,14 @@ function cwHintHtml() {
     '<span><kbd>Shift</kbd>+拖 框选</span>' +
     '<span><kbd>空格</kbd>/中键 平移</span>' +
     '<span><kbd>Ctrl</kbd>+滚轮 缩放</span>' +
-    '<span><kbd>双击</kbd>编辑 · <kbd>右键</kbd>菜单</span>' +
+    '<span><kbd>双击卡片</kbd>编辑 · <kbd>双击空白</kbd>/<kbd>右键</kbd>加节点</span>' +
     '<span><kbd>Del</kbd>删除 · <kbd>Ctrl+Z</kbd>撤销</span>' +
     '</div>';
 }
 function cwEmptyHtml() {
   return '<div class="cw-empty"><div>这个机器人还没有工作流节点<br>引擎目前只会走一次直接对话</div>' +
     '<button class="btn btn-primary" data-act="addnode">＋ 添加第一个节点</button>' +
-    '<div style="font-size:var(--fs-2xs)">也可以双击画布任意位置，或右键呼出菜单</div></div>';
+    '<div style="font-size:var(--fs-2xs)">双击 / 右键画布空白处，选一个类型开始（双击节点是编辑）</div></div>';
 }
 
 function renderNodes(b) {
@@ -8961,6 +8964,7 @@ function cwOnDown(e) {
     cwPushUndo(b);   // 一次拖动 = 一步撤销；只点选不拖动时栈顶状态相同，不会入栈
     cwSt.drag = {
       mode: 'node', start: cwWorldAt(b, e.clientX, e.clientY), moved: false,
+      sx0: e.clientX, sy0: e.clientY,
       init: cwSt.sel.map(function (i) {
         return { i: i, x: cwNum(b.nodes[i].x, i * CW_LAYOUT_X), y: cwNum(b.nodes[i].y, 0) };
       })
@@ -8969,7 +8973,7 @@ function cwOnDown(e) {
     cwSt.drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: cwView(b).x, vy: cwView(b).y };
     root.classList.add('panning');
   } else if (wantMarquee) {
-    cwSt.drag = { mode: 'marquee', x0: e.clientX, y0: e.clientY, add: e.shiftKey, moved: false };
+    cwSt.drag = { mode: 'marquee', x0: e.clientX, y0: e.clientY, sx0: e.clientX, sy0: e.clientY, add: e.shiftKey, moved: false };
     root.classList.add('marqueeing');
   } else {
     cwSt.drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: cwView(b).x, vy: cwView(b).y };
@@ -8982,6 +8986,14 @@ function cwOnDown(e) {
 function cwOnMove(e) {
   const d = cwSt.drag, b = cwSt.bot;
   if (!d || !b) return;
+  // node / marquee：位移不足阈值不算拖动 —— 卡片不动、moved 不置位（撤销栈的空快照
+  // 照常在 cwOnUp 回收）。pan / link 不需要阈值：平移与连线对手抖不敏感。
+  if (d.mode === 'node' || d.mode === 'marquee') {
+    if (!d.moved) {
+      const jx = e.clientX - d.sx0, jy = e.clientY - d.sy0;
+      if (Math.abs(jx) + Math.abs(jy) < CW_DRAG_T) return;
+    }
+  }
   d.moved = true;
   const v = cwView(b);
   if (d.mode === 'pan') {
@@ -9111,8 +9123,12 @@ function cwOnDbl(e) {
   if (!b) return;
   if (e.target.closest('.cw-card')) return;    // 卡片双击 = 编辑（bindNodeEdit 管）
   if (e.target.closest('.cw-tools') || e.target.closest('.cw-mini') || e.target.closest('.cw-menu')) return;
-  const w = cwWorldAt(b, e.clientX, e.clientY);
-  cwAddAt(b, NODE_TYPES[(b.nodes || []).length % NODE_TYPES.length], w.x - CW_CARD_W / 2, w.y - 60);
+  // 双击空白 = 呼出菜单（与右键一致），**不是**直接建节点：
+  // 原实现按「节点数 % 类型数」轮询类型，连击三下会得到三个不同类型的节点——
+  // 类型全凭运气；而且双击是高频误触手势，手一抖就多出一个要删的节点，
+  // 用户抱怨的「双击怎么不能编辑，而是会创建新节点」就是这么来的。
+  // 菜单里类型自选、位置就是双击处，只多一次点击。
+  cwOpenMenu(b, e.clientX, e.clientY);
 }
 
 function cwOnClick(e) {
