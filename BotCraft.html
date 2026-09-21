@@ -2349,6 +2349,43 @@ function botGenOpts(b) {
 // 节点自身的任务描述。多节点工作流里每个节点都会拿到这一句 ——
 // 它是作者在编排面板上写的「这一步到底干什么」，此前从未进入过提示词，
 // 只在流程图与提示词预览里出现（预览里有、发送时没有，属于骗人型不一致）。
+// 用户这句话是不是在要求改画布？（收窄到「动作 + 结构词」同时出现，
+// 免得「帮我改一下这段文案」也被当成画布指令）
+function looksLikeCanvasAsk(t) {
+  var s = String(t === null || t === undefined ? '' : t);
+  if (!s) return false;
+  var act = /(加一?个?|新增|添加|删掉|删除|去掉|移除|改成|换成|替换|连一?条?|连上|断开|拆开|重排|排序|调整顺序|插一?步|插到)/;
+  var obj = /(步骤|节点|流程|画布|工作流|环节|链路|第\s*[一二三四五六七八九十\d]+\s*步)/;
+  return act.test(s) && obj.test(s);
+}
+
+// 画布工具的协议与画布现状。**不放进 collectToolContext**：那里会被包成
+// 「【工具结果】…请据此作答」，模型当参考资料不当能力，而且 tool 区块 prio=3
+// 一紧就最先被丢。这里由 buildCtxSections 作为独立保护区块（prio 0）注入。
+function canvasToolBlock(bot) {
+  try {
+    if (!bot || (bot.plugins || []).indexOf('画布工具') < 0) return '';
+    var cb = (typeof getBot === 'function' && typeof currentId !== 'undefined') ? (getBot(currentId) || bot) : bot;
+    var bl = (window.BotCraftFlow && window.BotCraftFlow.canvasBriefText) ? window.BotCraftFlow.canvasBriefText(cb, 30) : '';
+    var lbls = (typeof NODE_TYPES !== 'undefined' && NODE_TYPES.length ? NODE_TYPES : []).map(function (t) { return t.lbl; }).join(' / ');
+    return '\n【画布工具 · 你可以直接改这个机器人的编排画布】\n'
+      + '用户要求修改流程时，你**必须真的执行**：在回复**末尾**追加指令行（每行一条；系统会执行它们，并把指令行从回复里删掉，不会显示给用户）。'
+      + '不要只是描述「建议怎么做」或者写一段与流程无关的正文 —— 那等于没做。\n'
+      + '· 加节点：[CANVAS: add | 节点类型 | 标题 | 一句话说明 | after=接在哪个节点后面]\n'
+      + '· 连线：[CANVAS: link | 起点id | 终点id | port=出口序号]\n'
+      + '· 断线：[CANVAS: unlink | 起点id | 终点id]\n'
+      + '· 改节点：[CANVAS: update | 节点id | h=新标题 | p=新说明 | tool=kb/web/weather/image | query=查询内容 | url=地址 | method=方法 | times=循环次数]\n'
+      + '· 删节点：[CANVAS: remove | 节点id]\n'
+      + '· 重排：[CANVAS: layout]\n'
+      + '规则：节点类型只能用 ' + lbls + '；id 必须是下面现有的；'
+      + '**加在两步之间**就用 after=前一步的 id（前一步只有一个下游时，新节点会自动串进它们中间）；'
+      + 'after 省略 = 新节点不与任何节点相连（放在最右侧），除非用户明确要独立节点，否则加节点都请带 after；'
+      + '「第二步」这类说法按下面的节点顺序数（1 起）；'
+      + '指令之外用一两句话说明你改了什么，不要复述指令本身。\n'
+      + '【当前画布】\n' + bl;
+  } catch (e) { return ''; }
+}
+
 function nodeTaskBlock(node) {
   if (!node) return '';
   var h = ((node.h === null || node.h === undefined) ? '' : String(node.h)).trim();
@@ -2954,7 +2991,8 @@ window.__storage = __storage;
   // 组装上下文区块（不做预算分配）——供 composeSystemPrompt 正式发送与压缩预演共用。
   // 抽出来的理由：压缩要按「同一份区块」算配额，若两边各拼一遍，
   // 迟早出现「按这份内容定配额、却按那份内容发送」的漂移。
-  function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
+
+function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     // 每个内容来源作为一个区块独立记账，最终由 packContextSections 按优先级分配预算，
     // 而不是拼完再 slice 砍尾 —— 见上方「上下文预算管理」注释
     const secs = [];
@@ -3003,7 +3041,7 @@ window.__storage = __storage;
     }
     // 画布工具：能力契约（不是参考资料）。独立成保护区区块 —— 塞进 tool 区块时
     // 模型把它当「工具结果」看，而且 prio=3 一紧就丢，表现成「说了改画布却没改」。
-    pushSec('canvas', canvasToolBlock(bot));
+    pushSec('canvas', (typeof canvasToolBlock === 'function') ? canvasToolBlock(bot) : '');
     // 真实工具执行结果（联网检索 / 天气查询等），由系统在调用模型前自动拉取并注入
     if (toolCtx && toolCtx.trim()) {
       pushSec('tool', '\n【工具结果】以下是已启用插件的实际执行结果，请据此作答：\n' + toolCtx.trim());
@@ -14821,42 +14859,7 @@ window.__debug = {
     return parts.join('\n\n');
   }
 
-  // 用户这句话是不是在要求改画布？（收窄到「动作 + 结构词」同时出现，
-  // 免得「帮我改一下这段文案」也被当成画布指令）
-  function looksLikeCanvasAsk(t) {
-    var s = String(t === null || t === undefined ? '' : t);
-    if (!s) return false;
-    var act = /(加一?个?|新增|添加|删掉|删除|去掉|移除|改成|换成|替换|连一?条?|连上|断开|拆开|重排|排序|调整顺序|插一?步|插到)/;
-    var obj = /(步骤|节点|流程|画布|工作流|环节|链路|第\s*[一二三四五六七八九十\d]+\s*步)/;
-    return act.test(s) && obj.test(s);
-  }
 
-  // 画布工具的协议与画布现状。**不放进 collectToolContext**：那里会被包成
-  // 「【工具结果】…请据此作答」，模型当参考资料不当能力，而且 tool 区块 prio=3
-  // 一紧就最先被丢。这里由 buildCtxSections 作为独立保护区块（prio 0）注入。
-  function canvasToolBlock(bot) {
-    try {
-      if (!bot || (bot.plugins || []).indexOf('画布工具') < 0) return '';
-      var cb = (typeof getBot === 'function' && typeof currentId !== 'undefined') ? (getBot(currentId) || bot) : bot;
-      var bl = (window.BotCraftFlow && window.BotCraftFlow.canvasBriefText) ? window.BotCraftFlow.canvasBriefText(cb, 30) : '';
-      var lbls = (typeof NODE_TYPES !== 'undefined' && NODE_TYPES.length ? NODE_TYPES : []).map(function (t) { return t.lbl; }).join(' / ');
-      return '\n【画布工具 · 你可以直接改这个机器人的编排画布】\n'
-        + '用户要求修改流程时，你**必须真的执行**：在回复**末尾**追加指令行（每行一条；系统会执行它们，并把指令行从回复里删掉，不会显示给用户）。'
-        + '不要只是描述「建议怎么做」或者写一段与流程无关的正文 —— 那等于没做。\n'
-        + '· 加节点：[CANVAS: add | 节点类型 | 标题 | 一句话说明 | after=接在哪个节点后面]\n'
-        + '· 连线：[CANVAS: link | 起点id | 终点id | port=出口序号]\n'
-        + '· 断线：[CANVAS: unlink | 起点id | 终点id]\n'
-        + '· 改节点：[CANVAS: update | 节点id | h=新标题 | p=新说明 | tool=kb/web/weather/image | query=查询内容 | url=地址 | method=方法 | times=循环次数]\n'
-        + '· 删节点：[CANVAS: remove | 节点id]\n'
-        + '· 重排：[CANVAS: layout]\n'
-        + '规则：节点类型只能用 ' + lbls + '；id 必须是下面现有的；'
-        + '**加在两步之间**就用 after=前一步的 id（前一步只有一个下游时，新节点会自动串进它们中间）；'
-        + 'after 省略 = 新节点不与任何节点相连（放在最右侧），除非用户明确要独立节点，否则加节点都请带 after；'
-        + '「第二步」这类说法按下面的节点顺序数（1 起）；'
-        + '指令之外用一两句话说明你改了什么，不要复述指令本身。\n'
-        + '【当前画布】\n' + bl;
-    } catch (e) { return ''; }
-  }
 
   // ---------- 审批节点：暂停工作流，等待人工确认（含 AI 预审，复用 review 质检逻辑） ----------
   function waitHumanApproval(draft, node) {
