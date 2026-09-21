@@ -1669,7 +1669,6 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="tab-panel" id="wsPromptBody" style="display:none">
         <div style="font-size:12px;color:var(--sub);margin-bottom:10px">定义机器人的人设与回复规则，支持变量如 {{user_input}}、{{user_name}}</div>
         <div style="font-size:11.5px;color:var(--sub);margin-bottom:8px" id="specLine"></div>
-        <div class="prompt-templates" id="promptTpls"></div>
         <textarea id="promptArea" data-grow data-grow-max="560" placeholder="例如：你是一个智能客服，请用专业友好的语气回答…"></textarea>
         <div style="font-size:11px;color:var(--sub);margin-top:8px" id="promptCount">0 字</div>
         <div id="expertiseBox"></div>
@@ -9893,51 +9892,71 @@ function tempLabel(b, cfg) {
   if (t === null) return '跟随全局（' + (Number(cfg.temperature) || 0.7) + '）';
   return String(t);
 }
-// 人设专精（PROMPT_TEMPLATES）的绑定：每个机器人**限一个、创建时选定、之后不可更改**。
-// bot.spec 存绑定的专精名（''/undefined = 未绑定；老机器人没有该字段，可在提示词 Tab
-// 补选一次，确认后同样锁死）。注意与 expertise（🎯 专长卡，可随时编辑）是两回事：
-// 这里锁的是「选了哪个人设模板」这个选择，提示词文本本身用户仍可自由修改。
+// 人设专精（bot.spec）：**选只在创建时做**（对话框里的 specPick），已有机器人由
+// 系统按名称/描述自动匹配（下方 autoMatchSpec），提示词 Tab 一律**不显示**专精按钮 ——
+// 锁定不该靠「点了拒绝」，更不该摆一排选项引诱用户去点一个点了也没用的东西。
+// 与 expertise（🎯 专长卡，可随时编辑）是两回事：spec 锁的是人设方向这个选择。
 function updateSpecLine(bot) {
   var el = document.getElementById('specLine'); if (!el) return;
   var bound = bot ? (bot.spec || '') : '';
   el.innerHTML = bound
-    ? '🎯 已绑定专精：<b>' + escapeHtml(bound) + '</b>（创建时选定，不可更改；下方提示词文本仍可自由修改）'
-    : '尚未绑定专精 —— 点下方任一专精即绑定（选定后不可更改）';
+    ? '🎯 人设方向：' + escapeHtml(bound) + '（创建时选定或自动匹配，不可更改）'
+    : '';
 }
 function renderPromptTpls() {
-  var box = document.getElementById('promptTpls'); if (!box) return;
-  box.innerHTML = '';
-  var bot = getBot(currentId);
-  var bound = bot ? (bot.spec || '') : '';
-  PROMPT_TEMPLATES.forEach(function (p, i) {
-    // 已绑定：只渲染绑定的那一个，其他 12 个**根本不出现** ——
-    // 锁定不该靠「点了拒绝」（那是在邀请用户较劲），干脆不给别的选项
-    if (bound && p.n !== bound) return;
-    var b = document.createElement('button');
-    b.className = 'prompt-tpl'; b.innerHTML = '<span>' + p.ic + '</span>' + p.n;
-    // 高亮跟着数据走：以前点击时加 active、重绘就丢 —— 高亮从来不是状态，bot.spec 才是
-    if (bound && p.n === bound) b.classList.add('active');
-    b.onclick = function () {
-      var bot = getBot(currentId); if (!bot) return;
-      if (bot.spec) {
-        // 已绑定：锁死。提示词文本没锁 —— 用户改提示词是日常操作，换专精才是要锁的
-        toast('已绑定「' + bot.spec + '」专精（创建时选定，不可更改）；提示词文本仍可自由修改', 'ok');
-        return;
-      }
-      if (!confirm('专精绑定后不可更改。确定绑定「' + p.n + '」吗？')) return;
-      bot.spec = p.n;
-      var tpl = p.t.replace(/\{\{bot_name\}\}/g, (bot.n || '助手'));
-      var pa = document.getElementById('promptArea'); if (!pa) return;
-      pa.value = tpl; bot.prompt = tpl; bot.updatedAt = Date.now(); updatePromptCount(); renderCtxBar(bot); saveBots();
-      box.querySelectorAll('.prompt-tpl').forEach(function (el) { el.classList.remove('active'); });
-      b.classList.add('active');
-      updateSpecLine(bot);
-      toast('已绑定「' + p.n + '」并应用其提示词模板', 'ok'); pa.focus();
-    };
-    box.appendChild(b);
-  });
-  updateSpecLine(bot);
+  updateSpecLine(getBot(currentId));
 }
+// 名称/描述 → 专精 的关键词表。匹配第一个命中的；匹配不到就不绑（宁缺毋滥）。
+var SPEC_KEYWORDS = [
+  ['代码导师', ['代码', '编程', '工程师', '程序', 'debug']],
+  ['专业客服', ['客服', '售后']],
+  ['文案专家', ['文案', '种草', '营销', '推广']],
+  ['翻译官', ['翻译']],
+  ['产品经理', ['产品经理', '需求分析']],
+  ['健身教练', ['健身', '训练计划']],
+  ['法律顾问', ['法律', '合同', '法务']],
+  ['读书助手', ['读书', '书籍', '书评']],
+  ['面试教练', ['面试']],
+  ['美食顾问', ['美食', '菜谱', '烹饪']],
+  ['数据分析师', ['数据', '报表']],
+  ['心理咨询', ['心理', '情绪', '倾听']],
+  ['英文写作', ['英文', '英语', '口语']],
+];
+// 自动匹配 + 设默认提示词角色。规则：
+//   · 只对未绑定的机器人跑（spec 非空即跳过 → 幂等，跑多少遍都一样）；
+//   · 匹配到就绑定 spec；
+//   · 提示词**只有在还是出厂默认（SAMPLE_PROMPT）时**才替换成模板文本 ——
+//     用户自己写的人设是内容不是占位符，系统绝不覆盖。
+function autoMatchSpec(b) {
+  if (!b || b.spec) return b;
+  var hay = (b.n || '') + ' ' + (b.d || '');
+  for (var i = 0; i < SPEC_KEYWORDS.length; i++) {
+    var kws = SPEC_KEYWORDS[i][1];
+    for (var k = 0; k < kws.length; k++) {
+      if (hay.indexOf(kws[k]) >= 0) {
+        b.spec = SPEC_KEYWORDS[i][0];
+        var tpl = null;
+        PROMPT_TEMPLATES.forEach(function (p) { if (p.n === b.spec) tpl = p; });
+        if (tpl && (!b.prompt || b.prompt === SAMPLE_PROMPT)) {
+          b.prompt = tpl.t.replace(/\{\{bot_name\}\}/g, (b.n || '助手'));
+        }
+        return b;
+      }
+    }
+  }
+  return b;
+}
+// 启动时对当前账号的全部机器人跑一遍自动匹配（幂等：绑定过的跳过）。
+// 放在 PROMPT_TEMPLATES 之后立即执行 —— bots 在 block1 已加载，这里全就绪。
+(function () {
+  var changed = false;
+  (bots || []).forEach(function (b) {
+    var before = b.spec || '';
+    autoMatchSpec(b);
+    if ((b.spec || '') !== before) changed = true;
+  });
+  if (changed) { try { saveBots(); } catch (e) {} }
+})();
 // 创建对话框里的专精选择：单选，默认「不使用」。每次打开重置 —— 上一次的选择
 // 不该悄悄留给下一个机器人。
 function renderSpecPick() {
@@ -11916,7 +11935,14 @@ function submitCreate() {
   const specEl = document.querySelector('#specPick .prompt-tpl.active');
   const spec = specEl ? (specEl.dataset.spec || '') : '';
   const finalName = name || (tpl ? tpl.n : '');
-  const prompt = tpl ? (tpl.prompt || SAMPLE_PROMPT) : SAMPLE_PROMPT;
+  // 标准创建 + 选了专精：提示词直接从该专精的模板起步（选了「代码导师」却给通用
+  // 默认提示词，创建出来的第一眼就是割裂的）。从模板创建则模板自己的提示词优先。
+  let prompt = tpl ? (tpl.prompt || SAMPLE_PROMPT) : SAMPLE_PROMPT;
+  if (!tpl && spec) {
+    PROMPT_TEMPLATES.forEach(function (p) {
+      if (p.n === spec) prompt = p.t.replace(/\{\{bot_name\}\}/g, finalName.slice(0, 30) || '助手');
+    });
+  }
   const base = {
     n: finalName.slice(0, 30), d: desc || '一个全新的机器人', ic: icon, c: bg,
     tag: '草稿', u: 0, t: '—', prompt: prompt, history: [], plugins: [], knowledges: [],
