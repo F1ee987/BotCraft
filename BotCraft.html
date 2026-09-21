@@ -128,6 +128,9 @@
   --brand-tint:rgba(139,92,246,.16);     /* 徽标底、记忆命中闪烁 */
   --brand-tint-2:rgba(139,92,246,.26);   /* 高亮标记、文字选区、消息气泡辉光 */
   --brand-line:rgba(139,92,246,.38);     /* 淡描边 */
+  /* 画布连线专用色：比淡描边浓得多 —— 连线是画布上最重要的结构信息，
+     用 38% 的淡描边色根本看不清（用户反馈「线的颜色不够明显」）。 */
+  --cw-link:rgba(167,139,250,.92);
   --brand-glow:rgba(139,92,246,.42);     /* 品牌辉光投影（激活图标、主按钮） */
 
   /* 字体分层：界面层沿用系统栈（--font-ui 见 body），展示层单独一路衬线。
@@ -190,6 +193,7 @@
   --brand-tint:rgba(109,40,217,.08);
   --brand-tint-2:rgba(109,40,217,.14);
   --brand-line:rgba(109,40,217,.26);
+  --cw-link:rgba(109,40,217,.82);
   --brand-glow:rgba(109,40,217,.30);
 }
 /* 浅色主题下浮层的少量定向修正（分层用实色，不再叠渐变与内发光） */
@@ -663,7 +667,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px),linear-gradient(var(--brand-line) 1px,transparent 1px),linear-gradient(90deg,var(--brand-line) 1px,transparent 1px);background-repeat:repeat}
 .cw-stage{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0}
 .cw-links{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible}
-.cw-link{fill:none;stroke:var(--brand-line);stroke-width:2}
+.cw-link{fill:none;stroke:var(--cw-link);stroke-width:2.5}
+/* 箭头 = 有向边在界面上的唯一表达。连线本来就是有向的（谁的数据流给谁），
+   画成无向线等于把方向信息藏起来 —— 用户只能靠节点序号猜。 */
+.cw-arrow-head{fill:var(--cw-link)}
 .cw-tmp{fill:none;stroke:var(--brand-text);stroke-width:2;stroke-dasharray:6 5}
 .cw-card{position:absolute;left:0;top:0;width:250px;transform-origin:0 0;cursor:grab;will-change:transform;padding:var(--sp-6) var(--sp-6) var(--sp-5)}
 .cw-card .node-ic{font-size:var(--fs-2xl);line-height:1;display:block;margin-bottom:var(--sp-3)}
@@ -2390,6 +2397,8 @@ function canvasToolBlock(bot) {
         + '  [CANVAS: replace | n2 | 📚 知识库 | 知识库检索 | 检索资料]\n'
         + '· 用户「在质检后面加一步人工确认」→ 你回：好的，已在质检后加上人工确认。\n'
         + '  [CANVAS: add | ✨ 润色 | 人工确认 | 人工复核后再发 | after=n4]\n'
+        + '· 用户「在第 2 步和第 3 步之间插入一个润色」→ 你回：好的，已插在两步之间。\n'
+        + '  [CANVAS: add | ✨ 润色 | 润色 | 打磨成稿 | after=n2]（写前一步的 id 就会插到它和它的下游之间）\n'
         + '· 用户「删掉第三步」→ 你回：好的，已删掉第三步。\n'
         + '  [CANVAS: remove | n3]\n'
         + '**这类请求只回一句确认 + 指令行，不要顺带产出业务正文**（例如客服邮件草稿、长报告）——'
@@ -8884,14 +8893,19 @@ function renderNodes(b) {
   body.innerHTML =
     '<div class="cw-root" id="cwRoot" tabindex="0">' +
     '<div class="cw-grid" id="cwGrid"></div>' +
-    '<svg class="cw-links" id="cwLinks"><path class="cw-link" id="cwLinkPath" d=""></path><path class="cw-tmp" id="cwTmpPath" d=""></path></svg>' +
+    '<svg class="cw-links" id="cwLinks">' +
+    '<defs><marker id="cwArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">' +
+    '<path class="cw-arrow-head" d="M0,0.6 L9.4,5 L0,9.4 z"></path></marker></defs>' +
+    '<path class="cw-tmp" id="cwTmpPath" d=""></path></svg>' +
     '<div class="cw-stage" id="cwStage">' + nodes.map(function (nd, i) { return cwCard(b, nd, i); }).join('') + '</div>' +
     mids + mini + cwToolsHtml() + cwHintHtml() + (nodes.length ? '' : cwEmptyHtml()) +
     '<div class="cw-marquee" id="cwMarquee" style="display:none"></div>' +
     '</div>';
   cwSt.root = document.getElementById('cwRoot');
   cwSt.grid = document.getElementById('cwGrid');
-  cwSt.linkPath = document.getElementById('cwLinkPath');
+  cwSt.links = document.getElementById('cwLinks');
+  cwSt.linkPaths = [];          // 每条边一个 path（元素池，见 cwPaint）
+  cwSt.linkPath = null;         // 旧单 path 引用：保留字段避免老代码踩空，实际不再用
   cwSt.tmp = document.getElementById('cwTmpPath');
   cwSt.stage = document.getElementById('cwStage');
   cwSt.mini = document.getElementById('cwMini');
@@ -9119,10 +9133,28 @@ function cwPaint(b) {
   cwSt.stage.style.transform = 'translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.s + ')';
   // 按边画线。旧代码是「把相邻两张卡连起来」—— 那是数组顺序模型的残留，
   // 分支、跨节点跳线在这种画法下根本表达不出来。
-  let d = '';
+  // 每条边一个 path（元素池）：单条 path 拼所有边虽然省元素，但**加不了箭头**——
+  // marker-end 只作用于路径末端，一条 path 里几十段曲线只有一个端点。
+  // 池只在边数变化时增删元素，拖动时仅更新 d，帧内开销与从前相当。
   const _pes = (b && b.edges) || [];
-  for (let _ei = 0; _ei < _pes.length; _ei++) d += cwEdgeSeg(b, _pes[_ei], v);
-  cwSt.linkPath.setAttribute('d', d);
+  const _pool = cwSt.linkPaths || (cwSt.linkPaths = []);
+  const _svg = cwSt.links;
+  if (_svg) {
+    while (_pool.length < _pes.length) {
+      const np = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      np.setAttribute('class', 'cw-link');
+      np.setAttribute('marker-end', 'url(#cwArrow)');
+      // 插在拖拽预览线之前：预览线要盖在已连好的线上面
+      if (cwSt.tmp && cwSt.tmp.parentNode === _svg) _svg.insertBefore(np, cwSt.tmp);
+      else _svg.appendChild(np);
+      _pool.push(np);
+    }
+  }
+  for (let _ei = 0; _ei < _pool.length; _ei++) {
+    const _seg = _ei < _pes.length ? cwEdgeSeg(b, _pes[_ei], v) : '';
+    if (_seg) { _pool[_ei].setAttribute('d', _seg); _pool[_ei].style.display = ''; }
+    else { _pool[_ei].setAttribute('d', ''); _pool[_ei].style.display = 'none'; }
+  }
   const mids = cwSt.mids || [];
   for (let m = 0; m < mids.length; m++) {
     const pt = cwMidPoint(b, m, v);
