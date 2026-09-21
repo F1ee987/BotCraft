@@ -685,12 +685,17 @@ body.embed-mode #wsName{font-size:15px}
 .ws-resizer:hover::after,body.resizing .ws-resizer::after{background:var(--brand-fill)}
 body.resizing{cursor:col-resize;user-select:none}
 .ws-side-toggle{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:22px;height:48px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--popover);color:var(--sub);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)}
-.ws-resizer:hover .ws-side-toggle,body.ws-side-collapsed .ws-side-toggle{opacity:1}
+.ws-resizer:hover .ws-side-toggle{opacity:0;pointer-events:none}
+body.ws-side-collapsed .ws-side-toggle{opacity:1;pointer-events:auto}
 .ws-side-toggle:hover{color:var(--txt);border-color:var(--brand)}
 body.ws-side-collapsed .ws-side{display:none}
 body.ws-side-collapsed .ws-resizer{width:12px}
 body.ws-side-collapsed .ws-resizer::after{left:5px}
-.ws-head{padding:16px;border-bottom:1px solid var(--line)}
+.ws-head{position:relative;padding:16px;border-bottom:1px solid var(--line)}
+/* 「收起工作区」按钮住在工作区自己的标题栏右上角，与调宽拉手彻底分离 —— 拉手上
+   展开态不再有任何按钮（收起态才在拉手出现展开入口），拖拽永远不会误触收起。 */
+.ws-collapse-btn{position:absolute;top:14px;right:14px;width:26px;height:26px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);background:transparent;color:var(--sub);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--dur-2) var(--ease)}
+.ws-collapse-btn:hover{color:var(--txt);border-color:var(--brand);background:var(--fill)}
 .ws-head h2{font-size:18px;font-weight:600;letter-spacing:-.3px;display:flex;align-items:center;gap:var(--sp-4)}
 .ws-head h2 .status{width:8px;height:8px;border-radius:50%;background:var(--ok)}
 .ws-head .flow{font-size:12.5px;color:var(--sub);margin-top:4px}
@@ -1887,6 +1892,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="ws-head">
         <h2><span class="status"></span><span id="wsName">机器人</span></h2>
         <div class="flow" id="wsFlow">工作流 · 草稿</div>
+        <button type="button" class="ws-collapse-btn" id="wsSideCollapse" title="收起工作区">‹</button>
       </div>
       <div class="ws-tabs">
         <div class="ws-tab-scroll">
@@ -14103,6 +14109,12 @@ document.addEventListener('click', function (e) {
     const c = !collapsedNow();
     applyCollapsed(c);
     try { localStorage.setItem(CKEY, c ? '1' : '0'); } catch (e) {}
+  });
+  // 「收起」入口在工作区标题栏右上角（与拉手分离）；拉手上的按钮只在收起态当「展开」用
+  const cb = document.getElementById('wsSideCollapse');
+  if (cb) cb.addEventListener('click', function () {
+    applyCollapsed(true);
+    try { localStorage.setItem(CKEY, '1'); } catch (e) {}
   });
 })();
 
