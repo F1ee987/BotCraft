@@ -9910,19 +9910,18 @@ function renderPromptTpls() {
   var bot = getBot(currentId);
   var bound = bot ? (bot.spec || '') : '';
   PROMPT_TEMPLATES.forEach(function (p, i) {
+    // 已绑定：只渲染绑定的那一个，其他 12 个**根本不出现** ——
+    // 锁定不该靠「点了拒绝」（那是在邀请用户较劲），干脆不给别的选项
+    if (bound && p.n !== bound) return;
     var b = document.createElement('button');
     b.className = 'prompt-tpl'; b.innerHTML = '<span>' + p.ic + '</span>' + p.n;
     // 高亮跟着数据走：以前点击时加 active、重绘就丢 —— 高亮从来不是状态，bot.spec 才是
     if (bound && p.n === bound) b.classList.add('active');
-    if (bound && p.n !== bound) b.title = '该机器人已绑定「' + bound + '」，专精创建后不可更改';
     b.onclick = function () {
       var bot = getBot(currentId); if (!bot) return;
       if (bot.spec) {
         // 已绑定：锁死。提示词文本没锁 —— 用户改提示词是日常操作，换专精才是要锁的
-        toast(bot.spec === p.n
-          ? '已绑定「' + bot.spec + '」专精（创建时选定，不可更改）'
-          : '该机器人已绑定「' + bot.spec + '」专精，专精创建后不可更改；提示词文本仍可自由修改',
-          bot.spec === p.n ? 'ok' : 'warn');
+        toast('已绑定「' + bot.spec + '」专精（创建时选定，不可更改）；提示词文本仍可自由修改', 'ok');
         return;
       }
       if (!confirm('专精绑定后不可更改。确定绑定「' + p.n + '」吗？')) return;
