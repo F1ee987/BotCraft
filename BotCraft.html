@@ -777,7 +777,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-hint{position:absolute;left:var(--sp-6);top:var(--sp-6);display:flex;flex-wrap:wrap;gap:var(--sp-5);max-width:calc(100% - 190px);font-size:var(--fs-2xs);color:var(--sub);pointer-events:none;z-index:2}
 .cw-hint span{display:inline-flex;align-items:center;gap:var(--sp-2)}
 .cw-hint kbd{background:var(--fill);border-radius:var(--r-2xs);padding:1px var(--sp-3);font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--txt)}
-.cw-tools{position:absolute;left:var(--sp-6);bottom:var(--sp-6);display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2);border-radius:var(--r-xl);background:var(--glass-bg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);z-index:6}
+/* flex-wrap + 限宽：画布比工具条还窄（<≈371px）时宁可折成两行，也别让右端被画布的
+   overflow:hidden 切掉 —— 那会连最右那颗「平移模式」按钮都点不到（同属「显示不全」）。
+   限宽取 100% - var(--sp-6)，与 left 相同口径，正常情况下不改变宽度。 */
+.cw-tools{position:absolute;left:var(--sp-6);bottom:var(--sp-6);display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2);padding:var(--sp-2);max-width:calc(100% - var(--sp-6));border-radius:var(--r-xl);background:var(--glass-bg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);z-index:6}
 .cw-tbtn{min-width:28px;height:28px;padding:0 var(--sp-4);border-radius:var(--r-md);border:none;background:transparent;color:var(--sub);font-size:var(--fs-sm);font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease)}
 .cw-tbtn:hover{background:var(--hover);color:var(--txt)}
 .cw-tbtn.on{background:var(--brand-tint);color:var(--brand-text)}
@@ -787,6 +790,12 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-mini-node{position:absolute;border-radius:var(--r-2xs);background:var(--brand-line)}
 .cw-mini-node.sel{background:var(--brand-text)}
 .cw-mini-vp{position:absolute;border-radius:var(--r-2xs);border:1px solid var(--brand-text);background:var(--brand-tint)}
+/* 窄画布兜底：底行并排放不下工具条(≈359px)+小地图(168px)，并排需要 ≥559px 画宽。
+   不够时两者会叠在一起 —— z-index 同为 6、工具条 DOM 在后，直接压住小地图下半截，
+   取景框与底边被切（用户反馈「显示不全」）。挤不下就把小地图挪到右上角，
+   那个位置一直空着（.cw-hint 的 max-width:calc(100% - 190px) 就是为它留的）。
+   判定与打点在 cwFitMini()：量的是画布宽度，用媒体查询没用（视口宽度说了不算）。 */
+.cw-root.cw-cramped .cw-mini{top:var(--sp-6);bottom:auto}
 /* 菜单项 = 14 个节点类型 + 6 个动作，整列逼近 950px：不限高的话在 1080 高以下的窗口里
    底部几项（撤销/重做）会被画布边缘切掉，看起来像「菜单少了一半」。
    限高后自己滚 —— 配套改了 cwOnWheel：菜单上滚轮不能再去平移画布，否则滚不动。 */
@@ -9176,6 +9185,7 @@ function renderNodes(b) {
   if (!CW_VIEWS[b.id]) { CW_VIEWS[b.id] = { x: 0, y: 0, s: 1 }; cwFit(b); }
   else cwPaint(b);
   if (cwSt.mode === 'pan') cwSt.root.classList.add('pan-mode');
+  cwFitMini();
   cwObserve();
 }
 
@@ -9566,6 +9576,24 @@ function cwRefresh() {
   const b = cwSt.bot || getBot(currentId);
   if (!b || !cwSt.root || !cwSt.root.isConnected) return;
   cwPaint(b);
+  cwFitMini();
+}
+
+// 小地图要不要让位：底部这一行只有 12px 边距 + 实测宽度的余量，画布一窄工具条
+// 就会压到小地图上（见 .cw-root.cw-cramped）。判定用实测宽度而不写死 559：
+// 小地图宽度、工具条里缩放百分比文字的宽度都可能变。
+// 注意量的是画布(.cw-root)宽度 —— 两侧栏一拉开，画布只剩几百像素。
+function cwFitMini() {
+  const root = cwSt.root, mini = cwSt.mini;
+  if (!root || !mini || !root.isConnected) return;
+  const tools = root.querySelector('.cw-tools');
+  if (!tools) return;
+  const bw = root.clientWidth;
+  if (!bw) return;                                  // 面板还没显示，量不到就别动
+  const sp6 = parseFloat(getComputedStyle(root).getPropertyValue('--sp-6')) || 12;
+  const need = sp6 + tools.offsetWidth + 8;         // 工具条右边缘（含最小间隙）
+  const have = bw - sp6 - mini.offsetWidth;         // 小地图左边缘
+  root.classList.toggle('cw-cramped', need > have);
 }
 
 // ---------------------------------------------------------------
