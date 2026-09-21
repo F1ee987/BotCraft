@@ -479,6 +479,57 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .auth-tab.active{background:var(--card);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.16)}
 #authModal .field input{padding:11px 13px}
 #auth-err{font-size:12px}
+/* —— 登录/注册左右分栏（2026-09-21 美化）：左插画面板 / 右内容栏 ——
+   插画是内联 SVG：一个 symbol（#authArt）定义一次、启动页与弹窗两处 use 复用，
+   单文件零依赖；面板底色用品牌紫渐变，双主题都是同一块彩色面板，浮在卡片上。
+   （注意：注释里别再写带 id 属性的标签字面量 —— lint_deep 的 id 扫描会把它
+   当成第二处定义，报「id 重复」，这次就踩了一次。） */
+.auth-card{display:flex;width:940px;max-width:94vw;height:min(560px,86vh);border-radius:var(--r-2xl);overflow:hidden;
+  background:var(--glass-bg-hover);border:1px solid var(--glass-border);box-shadow:0 32px 80px rgba(0,0,0,.42);
+  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);text-align:left}
+.auth-art{flex:0 0 47%;position:relative;overflow:hidden;
+  background:linear-gradient(158deg,#8b5cf6 0%,#6247d6 46%,#3a3496 100%);
+  display:flex;align-items:center;justify-content:center}
+/* 两团光晕：纯渐变太平，加一点纵深让插画浮起来 */
+.auth-art::before,.auth-art::after{content:'';position:absolute;border-radius:50%;pointer-events:none}
+.auth-art::before{width:320px;height:320px;left:-90px;top:-80px;background:radial-gradient(circle,rgba(255,255,255,.22),transparent 68%)}
+.auth-art::after{width:380px;height:380px;right:-120px;bottom:-150px;background:radial-gradient(circle,rgba(251,191,36,.30),transparent 66%)}
+.auth-art-svg{position:relative;z-index:1;width:100%;height:100%;display:block}
+.auth-panel{flex:1;min-width:0;padding:44px 46px;display:flex;flex-direction:column;justify-content:center}
+.auth-panel .logo{justify-content:flex-start}
+.auth-panel h2{margin:0;font-size:26px;font-weight:680;letter-spacing:-.4px;color:var(--txt);font-family:var(--font-display)}
+.auth-panel .auth-lede{color:var(--sub);font-size:13.5px;line-height:1.75;margin:9px 0 0}
+.auth-panel .auth-entry{display:flex;flex-direction:column;gap:var(--sp-3);margin-top:26px}
+.auth-panel .auth-entry .btn{width:100%;padding:12px 18px;font-size:14px;border-radius:var(--r-lg);justify-content:center}
+.auth-panel .auth-foot{color:var(--sub);font-size:11.5px;line-height:1.7;margin-top:22px;opacity:.9}
+/* 登录弹窗同样是分栏：左插画窄栏 + 右表单（覆盖 .mbox 的 padding 与滚动） */
+.auth-split{display:flex;padding:0;overflow:hidden;width:auto}
+.auth-split .auth-art{flex:0 0 286px}
+.auth-split .auth-form-col{padding:26px 30px 24px;width:398px;max-width:92vw;box-sizing:border-box;overflow-y:auto;text-align:left}
+/* 密码可见切换 */
+.auth-pass-wrap{position:relative}
+.auth-pass-wrap input{padding-right:44px}
+.auth-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;background:transparent;color:var(--sub);cursor:pointer;border-radius:var(--r-sm);font-size:14px;line-height:1;padding:0}
+.auth-eye:hover{background:var(--fill);color:var(--txt)}
+/* 激活态用「品牌填充 + 白字」：单独 color:var(--brand) 在卡片底色上只有 3.4:1 / 4.2:1，
+   过不了对比度门槛（.node-edit:hover 踩过同一个坑）。 */
+.auth-eye.on{background:var(--brand-fill);color:#fff}
+/* 弹窗底部：主按钮整宽压在下面、取消收到其次（column-reverse 让 DOM 顺序不用改） */
+.auth-split .mbox-foot{flex-direction:column-reverse;align-items:stretch;gap:var(--sp-3);margin-top:12px}
+.auth-or{display:flex;align-items:center;gap:var(--sp-4);margin:14px 0 0;color:var(--sub);font-size:11.5px}
+.auth-or::before,.auth-or::after{content:'';flex:1;height:1px;background:var(--line)}
+@media (max-width:900px){
+  .auth-card{flex-direction:column;height:min(680px,90vh)}
+  .auth-card .auth-art{flex:0 0 168px}
+  .auth-panel{padding:30px 34px}
+  .auth-panel h2{font-size:22px}
+}
+@media (max-width:760px){
+  .auth-card .auth-art,.auth-split .auth-art{display:none}
+  .auth-card{height:auto}
+  .auth-split{flex-direction:column}
+  .auth-split .auth-form-col{width:auto;max-width:92vw}
+}
 
 /* ============ 布局 ============ */
 .app{display:flex;flex:1;min-height:0}  /* 自动填满顶栏以下空间，高度不再依赖顶栏具体占位 */
@@ -1489,23 +1540,104 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <div id="userMenuWrap"></div>
 </div>
 
+<!-- ==================== 登录页插画（只定义一次，下面两处 <use> 复用） ==================== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="authArt" viewBox="0 0 440 560">
+    <!-- 背景装饰 -->
+    <circle cx="56" cy="112" r="32" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.18"/>
+    <rect x="352" y="92" width="34" height="34" rx="11" fill="#fbbf24" opacity="0.9"/>
+    <path d="M404 196 L404 222" stroke="#ffffff" stroke-width="4" opacity="0.85"/>
+    <path d="M391 209 L417 209" stroke="#ffffff" stroke-width="4" opacity="0.85"/>
+    <circle cx="396" cy="268" r="5" fill="#ffffff" opacity="0.5"/>
+    <circle cx="46" cy="262" r="6" fill="#ffffff" opacity="0.4"/>
+    <circle cx="410" cy="344" r="4" fill="#ffffff" opacity="0.5"/>
+    <!-- 背板：错位一层，让前面的白板浮起来 -->
+    <rect x="74" y="122" width="316" height="222" rx="20" fill="#ffffff" opacity="0.16"/>
+    <!-- 工作流白板 -->
+    <rect x="62" y="132" width="316" height="222" rx="20" fill="#ffffff" opacity="0.97"/>
+    <circle cx="86" cy="156" r="4.5" fill="#d9def7"/>
+    <circle cx="104" cy="156" r="4.5" fill="#d9def7"/>
+    <circle cx="122" cy="156" r="4.5" fill="#d9def7"/>
+    <rect x="288" y="318" width="74" height="7" rx="3.5" fill="#e6e9f7"/>
+    <circle cx="332" cy="334" r="4" fill="#d9def7"/>
+    <circle cx="346" cy="334" r="4" fill="#d9def7"/>
+    <circle cx="360" cy="334" r="4" fill="#d9def7"/>
+    <!-- 连线：正交折线 + 端点圆点 -->
+    <path d="M212 199 L226 199" fill="none" stroke="#a5b4fc" stroke-width="3.5"/>
+    <circle cx="228" cy="199" r="4.5" fill="#a5b4fc"/>
+    <path d="M293 222 L293 265 L286 265" fill="none" stroke="#a5b4fc" stroke-width="3.5"/>
+    <circle cx="284" cy="265" r="4.5" fill="#a5b4fc"/>
+    <path d="M148 222 L148 265 L154 265" fill="none" stroke="#a5b4fc" stroke-width="3.5"/>
+    <circle cx="156" cy="265" r="4.5" fill="#a5b4fc"/>
+    <!-- 节点卡 A -->
+    <rect x="84" y="176" width="128" height="46" rx="12" fill="#eef1ff"/>
+    <circle cx="104" cy="199" r="9" fill="#8b5cf6"/>
+    <rect x="120" y="190" width="78" height="7" rx="3.5" fill="#c9cff2"/>
+    <rect x="120" y="203" width="52" height="7" rx="3.5" fill="#dfe3f8"/>
+    <!-- 节点卡 B -->
+    <rect x="230" y="176" width="126" height="46" rx="12" fill="#eef1ff"/>
+    <circle cx="250" cy="199" r="9" fill="#22c55e"/>
+    <rect x="266" y="190" width="76" height="7" rx="3.5" fill="#c9cff2"/>
+    <rect x="266" y="203" width="48" height="7" rx="3.5" fill="#dfe3f8"/>
+    <!-- 节点卡 C -->
+    <rect x="156" y="246" width="128" height="46" rx="12" fill="#eef1ff"/>
+    <circle cx="176" cy="269" r="9" fill="#f59e0b"/>
+    <rect x="192" y="260" width="78" height="7" rx="3.5" fill="#c9cff2"/>
+    <rect x="192" y="273" width="52" height="7" rx="3.5" fill="#dfe3f8"/>
+    <!-- 散落的小卡片：填两人之间的空隙 -->
+    <polygon points="206,438 250,430 256,472 212,480" fill="#ffffff" opacity="0.95"/>
+    <polygon points="206,438 250,430 251,440 207,448" fill="#a5b4fc" opacity="0.85"/>
+    <path d="M218 458 L242 454" stroke="#c9cff2" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <!-- 机器人（左下） -->
+    <ellipse cx="134" cy="504" rx="58" ry="11" fill="#231f52" opacity="0.45"/>
+    <rect x="106" y="462" width="20" height="44" rx="10" fill="#c7cdf5"/>
+    <rect x="142" y="462" width="20" height="44" rx="10" fill="#c7cdf5"/>
+    <path d="M114 402 L92 376" stroke="#ffffff" stroke-width="12" stroke-linecap="round" fill="none"/>
+    <circle cx="92" cy="376" r="8" fill="#ffffff"/>
+    <path d="M162 408 L178 440" stroke="#ffffff" stroke-width="12" stroke-linecap="round" fill="none"/>
+    <circle cx="178" cy="440" r="8" fill="#ffffff"/>
+    <rect x="96" y="386" width="76" height="92" rx="26" fill="#ffffff"/>
+    <rect x="112" y="408" width="44" height="32" rx="9" fill="#e7e9ff"/>
+    <circle cx="126" cy="424" r="4.5" fill="#6b5cf6"/>
+    <circle cx="142" cy="424" r="4.5" fill="#6b5cf6"/>
+    <path d="M134 386 L134 362" stroke="#ffffff" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <circle cx="134" cy="356" r="8" fill="#fbbf24"/>
+    <!-- 人物（右下） -->
+    <ellipse cx="316" cy="504" rx="48" ry="10" fill="#231f52" opacity="0.45"/>
+    <polygon points="296,420 336,420 350,498 282,498" fill="#fb923c"/>
+    <rect x="296" y="416" width="40" height="7" rx="3.5" fill="#f97316"/>
+    <path d="M302 396 L272 378" stroke="#f8d3b0" stroke-width="10" stroke-linecap="round" fill="none"/>
+    <circle cx="270" cy="377" r="7" fill="#f8d3b0"/>
+    <rect x="298" y="384" width="36" height="40" rx="16" fill="#fb923c"/>
+    <circle cx="316" cy="364" r="21" fill="#f8d3b0"/>
+    <ellipse cx="316" cy="352" rx="22" ry="17" fill="#2b2b35"/>
+    <circle cx="316" cy="334" r="10" fill="#2b2b35"/>
+  </symbol>
+</svg>
+
 <!-- ==================== 登录遮罩（未登录时盖住整个应用） ==================== -->
 <div class="auth-mask" id="authMask">
-  <div class="auth-brand">
+  <div class="auth-card">
+    <div class="auth-art"><svg class="auth-art-svg" viewBox="0 0 440 560" role="img" aria-label="机器人与工作流画布插画"><use href="#authArt"/></svg></div>
+    <div class="auth-panel">
     <div class="logo" style="font-size:22px"><div class="dot"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' aria-hidden='true' focusable='false'><defs><linearGradient id='bcLogoG2' x1='0' y1='0' x2='1' y2='1'><stop offset='0' style='stop-color:var(--brand-hi)'/><stop offset='1' style='stop-color:var(--brand)'/></linearGradient></defs><rect width='32' height='32' rx='7.01' fill='url(#bcLogoG2)'/><path d='M16 5.44V10.24' stroke='#fff' stroke-width='2.18'/><circle cx='16' cy='3.9' r='1.66' fill='#c4b5fd'/><rect x='4.96' y='9.92' width='22.08' height='14.08' rx='4.96' fill='#fff'/><circle cx='12' cy='16.96' r='2.5' fill='#1e202e'/><circle cx='20' cy='16.96' r='2.5' fill='#1e202e'/></svg></div>BotCraft</div>
-    <p>机器人搭建平台 · 多用户隔离 · 数据本地加密</p>
-    <div class="auth-entry" style="margin-top:26px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-      <button class="btn btn-primary auth-entry-btn" style="padding:11px 30px;font-size:14px" data-auth-mode="login" onclick="openAuth('login')">登录</button>
-      <button class="btn btn-ghost auth-entry-btn" style="padding:11px 30px;font-size:14px;border:1px solid var(--line)" data-auth-mode="register" onclick="openAuth('register')">注册账号</button>
-      <button class="btn btn-ghost auth-entry-btn" style="padding:11px 30px;font-size:14px;border:1px solid var(--line)" onclick="enterGuestMode()">先试用（不登录）</button>
+    <h2>欢迎回来 👋</h2>
+    <p class="auth-lede">用一句话搭一个能干活的工作流机器人 —— 编排画布、知识库、插件都在本机跑。账号与数据只存这台电脑，不上传服务器。</p>
+    <div class="auth-entry">
+      <button class="btn btn-primary auth-entry-btn" data-auth-mode="login" onclick="openAuth('login')">登录</button>
+      <button class="btn btn-ghost auth-entry-btn" style="border:1px solid var(--line)" data-auth-mode="register" onclick="openAuth('register')">注册账号</button>
+      <button class="btn btn-ghost auth-entry-btn" style="border:1px solid var(--line)" onclick="enterGuestMode()">先试用（不登录）</button>
     </div>
-    <p style="margin-top:16px;font-size:11px;opacity:.55">点击「注册账号」即可开始 · 数据保存在本机浏览器</p>
+    <p class="auth-foot">🔒 密码经 PBKDF2-SHA256 加盐哈希后本地存储 · 无需邮箱验证 · 数据随时可导出备份</p>
+    </div>
   </div>
 </div>
 
 <!-- ==================== 登录 / 注册弹窗 ==================== -->
 <div class="modal" id="authModal">
-  <div class="mbox" style="width:440px">
+  <div class="mbox auth-split">
+    <div class="auth-art"><svg class="auth-art-svg" viewBox="0 0 440 560" role="img" aria-label="机器人与工作流画布插画"><use href="#authArt"/></svg></div>
+    <div class="auth-form-col">
     <div class="auth-tabs">
       <button class="auth-tab active" data-mode="login" onclick="switchMode('login')">登录</button>
       <button class="auth-tab" data-mode="register" onclick="switchMode('register')">注册</button>
@@ -1524,7 +1656,10 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
       <div class="field">
         <label>密码</label>
-        <input id="auth-pass" type="password" placeholder="至少 6 位" autocomplete="current-password" oninput="this.classList.remove('invalid');var ph=document.getElementById('auth-pass-hint');if(ph)ph.style.display='none'">
+        <div class="auth-pass-wrap">
+          <input id="auth-pass" type="password" placeholder="至少 6 位" autocomplete="current-password" oninput="this.classList.remove('invalid');var ph=document.getElementById('auth-pass-hint');if(ph)ph.style.display='none'">
+          <button type="button" class="auth-eye" id="auth-eye" onclick="toggleAuthPass()" title="显示密码" aria-label="显示密码">👁</button>
+        </div>
         <div id="auth-pass-hint" class="hint" style="color:var(--danger-text);display:none;margin-top:5px">⚠️ 密码错误，请重试</div>
       </div>
       <div id="auth-err" class="hint" style="color:var(--danger-text);display:none"></div>
@@ -1533,9 +1668,12 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button type="submit" class="btn btn-primary" id="auth-submit">登录</button>
       </div>
     </form>
+    <div class="auth-or">或</div>
+    <button type="button" class="btn btn-ghost" style="width:100%;margin-top:12px;border:1px solid var(--line)" onclick="closeAuth();enterGuestMode()">先试用，不登录</button>
     <div class="hint" id="auth-switch-text" style="text-align:center;margin-top:14px"></div>
     <div class="hint" style="font-size:11px;margin-top:12px;opacity:.8">
       🔒 密码经 PBKDF2-SHA256 加盐哈希后本地存储，绝不明文保存；演示用途，请勿用于真实敏感账号。
+    </div>
     </div>
   </div>
 </div>
@@ -7406,7 +7544,30 @@ function switchMode(mode) {
   });
   const uh = document.getElementById('auth-user-hint'); if (uh) uh.style.display = 'none';
   const ph = document.getElementById('auth-pass-hint'); if (ph) ph.style.display = 'none';
+  // 切模式（登录 ⇄ 注册）时把密码框收回密文：留着 type=text，
+  // 下一个用同一台电脑的人就会看到上一个人敲的明文
+  setAuthPassVisible(false);
 }
+// 密码可见切换。只改 type、不搬值 —— 浏览器原生保证值不变；
+// 手动「把值搬到另一个 input」是这类实现最常见的自找麻烦（丢焦点、丢光标位、丢自动填充）。
+function setAuthPassVisible(show) {
+  const el = document.getElementById('auth-pass');
+  const btn = document.getElementById('auth-eye');
+  if (el) el.type = show ? 'text' : 'password';
+  if (btn) {
+    btn.classList.toggle('on', !!show);
+    btn.textContent = show ? '🙈' : '👁';
+    btn.setAttribute('title', show ? '隐藏密码' : '显示密码');
+    btn.setAttribute('aria-label', show ? '隐藏密码' : '显示密码');
+  }
+}
+function toggleAuthPass() {
+  const el = document.getElementById('auth-pass');
+  if (!el) return;
+  setAuthPassVisible(el.type === 'password');
+}
+window.toggleAuthPass = toggleAuthPass;
+
 function checkUsernameInput() {
   const el = document.getElementById('auth-user');
   const hint = document.getElementById('auth-user-hint');
