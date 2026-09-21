@@ -8769,14 +8769,22 @@ function cwMiniJump(cx, cy, m) {
 function cwPaintMini(b, v, W, H) {  const mini = cwSt.mini, kids = cwSt.miniKids;
   if (!mini || !kids || !kids.length) return;
   const mw = mini.clientWidth || 168, mh = mini.clientHeight || 108, pad = 6;
-  let minx = -v.x / v.s, miny = -v.y / v.s;
-  let maxx = minx + W / v.s, maxy = miny + H / v.s;
+  // 包围盒**只由节点决定，不含当前视口** —— 这一条是小地图不乱跳的全部秘密。
+  // 从前把视口也算进来（minx 初值取 -v.x/v.s）：拖动视口 → 包围盒变 → 缩放比 s 变
+  // → 视口框与节点块一起变大变小、坐标映射非线性。表现就是「框大小一直在变」+
+  // 「拖起来乱跳」。s 只跟节点有关才是稳定的，框的大小因此恒定。
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   (b.nodes || []).forEach(function (n, i) {
     const bx = cwBox(b, i);
     if (!bx) return;
     minx = Math.min(minx, bx.x); miny = Math.min(miny, bx.y);
     maxx = Math.max(maxx, bx.x + bx.w); maxy = Math.max(maxy, bx.y + bx.h);
   });
+  // 没有节点时退回「视口本身」，否则 minx 还是 Infinity，后面全算出 NaN
+  if (!isFinite(minx)) {
+    minx = -v.x / v.s; miny = -v.y / v.s;
+    maxx = minx + W / v.s; maxy = miny + H / v.s;
+  }
   const bw = Math.max(1, maxx - minx), bh = Math.max(1, maxy - miny);
   const s = Math.min((mw - pad * 2) / bw, (mh - pad * 2) / bh);
   const ox = (mw - bw * s) / 2, oy = (mh - bh * s) / 2;
@@ -8792,6 +8800,9 @@ function cwPaintMini(b, v, W, H) {  const mini = cwSt.mini, kids = cwSt.miniKids
   }
   const vp = cwSt.miniVp;
   if (vp) {
+    // 视口框尺寸 = 视口世界宽 × 固定 s：缩放不变、s 不变，框的大小就恒定。
+    // 视口跑到节点包围盒之外时框会被 .cw-mini 的 overflow 裁掉 —— 这是刻意的：
+    // 把框 clamp 进小地图会让它的位置不再对应真实视口，反而骗人。
     vp.style.left = (ox + (-v.x / v.s - minx) * s) + 'px';
     vp.style.top = (oy + (-v.y / v.s - miny) * s) + 'px';
     vp.style.width = Math.max(3, (W / v.s) * s) + 'px';
