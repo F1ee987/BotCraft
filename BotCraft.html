@@ -1668,6 +1668,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="ws-body" id="wsFlowBody"></div>
       <div class="tab-panel" id="wsPromptBody" style="display:none">
         <div style="font-size:12px;color:var(--sub);margin-bottom:10px">定义机器人的人设与回复规则，支持变量如 {{user_input}}、{{user_name}}</div>
+        <div style="font-size:11.5px;color:var(--sub);margin-bottom:8px" id="specLine"></div>
         <div class="prompt-templates" id="promptTpls"></div>
         <textarea id="promptArea" data-grow data-grow-max="560" placeholder="例如：你是一个智能客服，请用专业友好的语气回答…"></textarea>
         <div style="font-size:11px;color:var(--sub);margin-top:8px" id="promptCount">0 字</div>
@@ -1930,6 +1931,10 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <div class="c" style="background:linear-gradient(135deg,#9b7bff,#6b8bff)" data-c="🎮"></div>
         <div class="c" style="background:linear-gradient(135deg,#4dd0e1,#7c4dff)" data-c="✈️"></div>
       </div>
+    </div>
+    <div class="field"><label>专精 <span style="font-size:11px;color:var(--sub);font-weight:400">（可选，选定后不可更改）</span></label>
+      <div id="specPick" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <div style="font-size:11px;color:var(--sub);margin-top:6px">绑定机器人的默认人设方向；提示词文本之后仍可自由修改，但专精本身锁定。</div>
     </div>
     <div class="field"><label>创建方式</label>
       <select id="f-mode"><option value="blank">标准创建（从零搭建）</option><option value="template">从模板创建</option></select>
@@ -9888,23 +9893,69 @@ function tempLabel(b, cfg) {
   if (t === null) return '跟随全局（' + (Number(cfg.temperature) || 0.7) + '）';
   return String(t);
 }
+// 人设专精（PROMPT_TEMPLATES）的绑定：每个机器人**限一个、创建时选定、之后不可更改**。
+// bot.spec 存绑定的专精名（''/undefined = 未绑定；老机器人没有该字段，可在提示词 Tab
+// 补选一次，确认后同样锁死）。注意与 expertise（🎯 专长卡，可随时编辑）是两回事：
+// 这里锁的是「选了哪个人设模板」这个选择，提示词文本本身用户仍可自由修改。
+function updateSpecLine(bot) {
+  var el = document.getElementById('specLine'); if (!el) return;
+  var bound = bot ? (bot.spec || '') : '';
+  el.innerHTML = bound
+    ? '🎯 已绑定专精：<b>' + escapeHtml(bound) + '</b>（创建时选定，不可更改；下方提示词文本仍可自由修改）'
+    : '尚未绑定专精 —— 点下方任一专精即绑定（选定后不可更改）';
+}
 function renderPromptTpls() {
   var box = document.getElementById('promptTpls'); if (!box) return;
   box.innerHTML = '';
+  var bot = getBot(currentId);
+  var bound = bot ? (bot.spec || '') : '';
   PROMPT_TEMPLATES.forEach(function (p, i) {
     var b = document.createElement('button');
     b.className = 'prompt-tpl'; b.innerHTML = '<span>' + p.ic + '</span>' + p.n;
+    // 高亮跟着数据走：以前点击时加 active、重绘就丢 —— 高亮从来不是状态，bot.spec 才是
+    if (bound && p.n === bound) b.classList.add('active');
+    if (bound && p.n !== bound) b.title = '该机器人已绑定「' + bound + '」，专精创建后不可更改';
     b.onclick = function () {
       var bot = getBot(currentId); if (!bot) return;
+      if (bot.spec) {
+        // 已绑定：锁死。提示词文本没锁 —— 用户改提示词是日常操作，换专精才是要锁的
+        toast(bot.spec === p.n
+          ? '已绑定「' + bot.spec + '」专精（创建时选定，不可更改）'
+          : '该机器人已绑定「' + bot.spec + '」专精，专精创建后不可更改；提示词文本仍可自由修改',
+          bot.spec === p.n ? 'ok' : 'warn');
+        return;
+      }
+      if (!confirm('专精绑定后不可更改。确定绑定「' + p.n + '」吗？')) return;
+      bot.spec = p.n;
       var tpl = p.t.replace(/\{\{bot_name\}\}/g, (bot.n || '助手'));
       var pa = document.getElementById('promptArea'); if (!pa) return;
       pa.value = tpl; bot.prompt = tpl; bot.updatedAt = Date.now(); updatePromptCount(); renderCtxBar(bot); saveBots();
       box.querySelectorAll('.prompt-tpl').forEach(function (el) { el.classList.remove('active'); });
       b.classList.add('active');
-      toast('已应用提示词模板，可继续修改', 'ok'); pa.focus();
+      updateSpecLine(bot);
+      toast('已绑定「' + p.n + '」并应用其提示词模板', 'ok'); pa.focus();
     };
     box.appendChild(b);
   });
+  updateSpecLine(bot);
+}
+// 创建对话框里的专精选择：单选，默认「不使用」。每次打开重置 —— 上一次的选择
+// 不该悄悄留给下一个机器人。
+function renderSpecPick() {
+  var box = document.getElementById('specPick'); if (!box) return;
+  box.innerHTML = '';
+  var mk = function (label, val) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'prompt-tpl' + (val === '' ? ' active' : '');
+    b.innerHTML = label; b.dataset.spec = val;
+    b.onclick = function () {
+      box.querySelectorAll('.prompt-tpl').forEach(function (el) { el.classList.remove('active'); });
+      b.classList.add('active');
+    };
+    box.appendChild(b);
+  };
+  mk('不使用', '');
+  PROMPT_TEMPLATES.forEach(function (p) { mk(p.ic + ' ' + p.n, p.n); });
 }
 function updatePromptCount() {
   const pa = document.getElementById('promptArea'); const pc = document.getElementById('promptCount');
@@ -11648,7 +11699,7 @@ function toggleSidebar() {
   } catch (e) {}
 })();
 let selTpl = null;
-function openCreate() { document.getElementById('createModal').classList.add('on'); setTimeout(() => document.getElementById('f-name').focus(), 50); }
+function openCreate() { renderSpecPick(); document.getElementById('createModal').classList.add('on'); setTimeout(() => document.getElementById('f-name').focus(), 50); }
 function closeCreate() {
   document.getElementById('createModal').classList.remove('on');
   document.querySelectorAll('#createModal .field').forEach(f => f.classList.remove('invalid'));
@@ -11862,13 +11913,16 @@ function submitCreate() {
   const colorEl = document.querySelector('.color-pick .c.on');
   const icon = colorEl ? colorEl.dataset.c : '';
   const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,#8b5cf6,#6d28d9)';
+  // 创建时选定的专精：写一次就锁（提示词 Tab 的绑定按钮看到 spec 非空即拒绝换绑）
+  const specEl = document.querySelector('#specPick .prompt-tpl.active');
+  const spec = specEl ? (specEl.dataset.spec || '') : '';
   const finalName = name || (tpl ? tpl.n : '');
   const prompt = tpl ? (tpl.prompt || SAMPLE_PROMPT) : SAMPLE_PROMPT;
   const base = {
     n: finalName.slice(0, 30), d: desc || '一个全新的机器人', ic: icon, c: bg,
     tag: '草稿', u: 0, t: '—', prompt: prompt, history: [], plugins: [], knowledges: [],
     // 留空 = 跟随全局默认。创建时快照一个模型名，会在用户日后换服务商时变成 404
-    model: '', fromTemplate: !!tpl,
+    model: '', fromTemplate: !!tpl, spec: spec,
   };
   if (mode !== 'template') { base.nodes = DEFAULT_NODES.slice(); }
   else if (tpl && tpl.nodes && tpl.nodes.length) { base.nodes = tpl.nodes; }
@@ -12952,7 +13006,7 @@ function switchWsTab(t) {
   const target = document.getElementById(TAB_MAP[t]); if (target) target.style.display = 'block';
   const b = getBot(currentId);
   if (t === 'kb' || t === 'plugin') { if (b) renderKbPanel(b); }
-  if (t === 'prompt') { if (b) { renderExpertisePanel(b); renderGenParamsPanel(b); } }
+  if (t === 'prompt') { if (b) { renderPromptTpls(); renderExpertisePanel(b); renderGenParamsPanel(b); } }
   if (t === 'style') { if (b) renderStyleWorkspacePanel(b); }
   if (t === 'memory') { if (b) renderMemoryPanel(b); }
   if (t === 'publish') renderChannels();
