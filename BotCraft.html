@@ -2354,8 +2354,10 @@ function botGenOpts(b) {
 function looksLikeCanvasAsk(t) {
   var s = String(t === null || t === undefined ? '' : t);
   if (!s) return false;
-  var act = /(加一?个?|新增|添加|删掉|删除|去掉|移除|改成|换成|替换|连一?条?|连上|断开|拆开|重排|排序|调整顺序|插一?步|插到)/;
-  var obj = /(步骤|节点|流程|画布|工作流|环节|链路|第\s*[一二三四五六七八九十\d]+\s*步)/;
+    // 动词族要收够：「改成 / 改为 / 改回 / 换成 / 换为 / 替换成 / 变为 / 变成」都是同一个意图。
+    // 2026-09-21 用户说「把第二步改为调用知识库」时漏判，就是只写了「改成」没收「改为」。
+    var act = /(加一?个?|新增|添加|增加|删掉|删除|去掉|移除|改(成|为|回)?|换(成|为)|替换(成|为)?|变(成|为)|连一?条?|连上|连到|接到|断开|拆开|重排|排序|调整顺序|插一?步|插到|插入)/;
+    var obj = /(步骤|节点|流程|画布|工作流|环节|链路|第\s*[一二三四五六七八九十\d]+\s*步)/;
   return act.test(s) && obj.test(s);
 }
 
@@ -2374,15 +2376,25 @@ function canvasToolBlock(bot) {
       + '· 加节点：[CANVAS: add | 节点类型 | 标题 | 一句话说明 | after=接在哪个节点后面]\n'
       + '· 连线：[CANVAS: link | 起点id | 终点id | port=出口序号]\n'
       + '· 断线：[CANVAS: unlink | 起点id | 终点id]\n'
-      + '· 改节点：[CANVAS: update | 节点id | h=新标题 | p=新说明 | tool=kb/web/weather/image | query=查询内容 | url=地址 | method=方法 | times=循环次数]\n'
-      + '· 删节点：[CANVAS: remove | 节点id]\n'
-      + '· 重排：[CANVAS: layout]\n'
-      + '规则：节点类型只能用 ' + lbls + '；id 必须是下面现有的；'
-      + '**加在两步之间**就用 after=前一步的 id（前一步只有一个下游时，新节点会自动串进它们中间）；'
-      + 'after 省略 = 新节点不与任何节点相连（放在最右侧），除非用户明确要独立节点，否则加节点都请带 after；'
-      + '「第二步」这类说法按下面的节点顺序数（1 起）；'
-      + '指令之外用一两句话说明你改了什么，不要复述指令本身。\n'
-      + '【当前画布】\n' + bl;
+        + '· 改节点：[CANVAS: update | 节点id | h=新标题 | p=新说明 | tool=kb/web/weather/image | query=查询内容 | url=地址 | method=方法 | times=循环次数]\n'
+        + '· 换类型：[CANVAS: replace | 节点id | 新节点类型 | 新标题 | 新说明]（「把第 N 步改成…」用它；连线与位置不变）\n'
+        + '· 删节点：[CANVAS: remove | 节点id]\n'
+        + '· 重排：[CANVAS: layout]\n'
+        + '规则：节点类型只能用 ' + lbls + '；id 必须是下面现有的；'
+        + '**加在两步之间**就用 after=前一步的 id（前一步只有一个下游时，新节点会自动串进它们中间）；'
+        + 'after 省略 = 新节点不与任何节点相连（放在最右侧），除非用户明确要独立节点，否则加节点都请带 after；'
+        + '「第二步」这类说法按下面的节点顺序数（1 起）；'
+        + '指令之外用一两句话说明你改了什么，不要复述指令本身。\n'
+        + '示例（照这个来）：\n'
+        + '· 用户「把第二步改成调用知识库」→ 你回：好的，已把第二步换成知识库检索。\n'
+        + '  [CANVAS: replace | n2 | 📚 知识库 | 知识库检索 | 检索资料]\n'
+        + '· 用户「在质检后面加一步人工确认」→ 你回：好的，已在质检后加上人工确认。\n'
+        + '  [CANVAS: add | ✨ 润色 | 人工确认 | 人工复核后再发 | after=n4]\n'
+        + '· 用户「删掉第三步」→ 你回：好的，已删掉第三步。\n'
+        + '  [CANVAS: remove | n3]\n'
+        + '**这类请求只回一句确认 + 指令行，不要顺带产出业务正文**（例如客服邮件草稿、长报告）——'
+        + '用户要的是改流程，不是要你马上跑一遍流程。只有用户另外明确要内容时，才顺带给出。\n'
+        + '【当前画布】\n' + bl;
   } catch (e) { return ''; }
 }
 
@@ -6139,6 +6151,11 @@ function canvasOpsValidate(ops, b, TYPES) {
   var edges = ((b && b.edges) || []).map(function (e) { return { from: e.from, to: e.to, port: e.port || 0 }; });
   var byId = {};
   nodes.forEach(function (n) { if (n && n.id) byId[n.id] = n; });
+  // 影子类型表：replace 会改节点类型，而校验器**绝不能改真实数据**（byId 里的就是真节点）。
+  // 后续指令（link 的 port 数、replace 的重复判断）看到的是这张表覆盖后的视图。
+  var shadowType = {};
+  function effKindOf(id) { return shadowType[id] ? shadowType[id].kind : (byId[id] && byId[id].kind); }
+  function effBranchesOf(id) { return shadowType[id] ? shadowType[id].branches : (byId[id] && byId[id].branches); }
   for (var i = 0; i < ops.length; i++) {
     var o = ops[i], op = o.op;
     if (op === 'add') {
@@ -6208,8 +6225,7 @@ function canvasOpsValidate(ops, b, TYPES) {
       if (!byId[f] || !byId[t2]) { warn('连线 ' + (f || '?') + '→' + (t2 || '?') + ' 指向不存在的节点，已跳过'); continue; }
       var chk = linkCheck(edges, f, t2);
       if (!chk.ok) { warn('连线 ' + f + '→' + t2 + '：' + chk.why + '，已跳过'); continue; }
-      var src = byId[f];
-      var maxPort = (src.kind === 'cond') ? Math.max(1, (src.branches || []).length) - 1 : 0;
+      var maxPort = (effKindOf(f) === 'cond') ? Math.max(1, (effBranchesOf(f) || []).length) - 1 : 0;
       var port = parseInt(o.kv.port, 10);
       if (isNaN(port) || port < 0) port = 0;
       if (port > maxPort) { warn('连线 ' + f + '→' + t2 + ' 的出口越界，已按第 ' + maxPort + ' 路处理'); port = maxPort; }
@@ -6256,6 +6272,34 @@ function canvasOpsValidate(ops, b, TYPES) {
       if (!Object.keys(patch).length && o.pos[1]) patch.p = String(o.pos[1]).slice(0, 120);
       if (!Object.keys(patch).length) { warn('update ' + uid + ' 没有可改的字段（支持 h= 标题、p= 说明、tool= 工具、query= 查询、url= 地址、method= 方法、times= 循环次数），已跳过'); continue; }
       out.push({ op: 'update', id: uid, patch: patch });
+      continue;
+    }
+    if (op === 'replace') {
+      // 「把第二步改成调用知识库」——用户的真实意图是**换掉这一步的类型**。
+      // update 刻意不许改 lbl/kind（那是图结构），于是这条路上原本无解；
+      // replace 只换类型与文案，**保留 id、坐标与上下游连线**，位置不动。
+      var rpid = String(o.pos[0] || '').trim();
+      var oldNd = byId[rpid];
+      if (!oldNd) { warn('replace 指向不存在的节点 ' + (rpid || '?') + '，已跳过'); continue; }
+      var rawLbl2 = String(o.pos[1] || '').trim();
+      var mapped2 = aiPlotMapLbl(rawLbl2, types);
+      if (!mapped2) { warn('「' + rawLbl2.slice(0, 16) + '」不是可用的节点类型，replace 已跳过'); continue; }
+      var curLbl = shadowType[rpid] ? shadowType[rpid].lbl : oldNd.lbl;
+      if (mapped2 === curLbl) { warn('「' + rpid + '」本来就已是「' + mapped2 + '」，replace 已跳过（只改文案请用 update）'); continue; }
+      var tp2 = null;
+      types.forEach(function (t) { if (t.lbl === mapped2) tp2 = t; });
+      var kind2 = (tp2 && tp2.kind) || 'llm';
+      var patch2 = { lbl: mapped2, kind: kind2, role: (tp2 && tp2.role) || '' };
+      if (o.pos[2]) patch2.h = String(o.pos[2]).slice(0, 40);
+      if (o.pos[3]) patch2.p = String(o.pos[3]).slice(0, 120);
+      if (kind2 === 'cond') patch2.branches = [{ label: '满足', when: '' }, { label: '其他', when: '' }];
+      if (kind2 === 'loop') { patch2.loopMode = 'array'; patch2.loopWhen = '{{input.msg}}'; patch2.loopTimes = 3; patch2.loopBody = ''; }
+      if (kind2 === 'tool') { patch2.tool = 'kb'; patch2.toolQuery = '{{input.msg}}'; }
+      if (kind2 === 'http') { patch2.url = ''; patch2.method = 'GET'; patch2.headers = ''; patch2.body = ''; }
+      if (kind2 === 'sub') { patch2.subId = ''; patch2.subQuery = '{{input.msg}}'; }
+      // 影子类型表同步（只影响校验期间的判断，真实数据在 apply 时才动）
+      shadowType[rpid] = { lbl: mapped2, kind: kind2, branches: patch2.branches };
+      out.push({ op: 'replace', id: rpid, patch: patch2, from: curLbl, to: mapped2 });
       continue;
     }
     if (op === 'remove') {
@@ -6337,6 +6381,19 @@ function canvasOpsApply(b, list) {
       b.nodes = b.nodes.filter(function (n) { return n.id !== o.id; });
       b.edges = b.edges.filter(function (e) { return e.from !== o.id && e.to !== o.id; });
       logParts.push('删除 ' + o.id + '（连带它的连线）');
+    } else if (o.op === 'replace') {
+      var rn = null;
+      b.nodes.forEach(function (n) { if (n.id === o.id) rn = n; });
+      if (rn) {
+        // 先清掉「类型专有字段」，再落新值 —— 否则 cond 的 branches 会留在普通节点上，
+        // 画布按 lbl 渲染、引擎按分支执行，两边对不上
+        ['branches', 'loopMode', 'loopWhen', 'loopTimes', 'loopBody', 'code', 'lang',
+         'tool', 'toolQuery', 'url', 'method', 'headers', 'body', 'subId', 'subQuery'].forEach(function (fk) {
+          if (!(fk in o.patch)) delete rn[fk];
+        });
+        for (var k4 in o.patch) if (Object.prototype.hasOwnProperty.call(o.patch, k4)) rn[k4] = o.patch[k4];
+        logParts.push('把「' + (o.from || o.id) + '」换成「' + rn.lbl + ' · ' + (rn.h || '') + '」（连线与位置不变）');
+      }
     } else if (o.op === 'layout') {
       // 真的排 —— 从前这里只记了一句日志，「说了重排却没排」是骗人的。
       // 数据层用分层布局（不碰视图，任意机器人可执行）；视图层的 cwAutoLayout
