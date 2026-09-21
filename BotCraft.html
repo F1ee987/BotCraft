@@ -444,28 +444,37 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .acct-me-txt b{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acct-me-txt i{font-size:11px;color:var(--sub);font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* ============ 账号信息面板 ============ */
-.acct-head{display:flex;align-items:center;gap:var(--sp-7);margin:16px 0 4px}
-.acct-avatar-lg{width:76px;height:76px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:600;color:#fff;background:linear-gradient(180deg,#5e5ce6,#4845d2);background-size:cover;background-position:center;box-shadow:var(--lg-top),0 6px 18px rgba(0,0,0,.24)}
-.acct-head-name{font-size:19px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.acct-head-sub{font-size:12.5px;color:var(--sub);margin-top:4px;word-break:break-all;line-height:1.5}
-.acct-sec{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
-.acct-sec-t{font-size:11.5px;font-weight:700;color:var(--sub);letter-spacing:.06em;margin-bottom:11px}
-.acct-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:var(--sp-4)}
-.acct-stat{background:var(--fill);border-radius:var(--r-md);padding:9px 11px;min-width:0}
+/* ============ 账号信息面板（Apple 风） ============ */
+.acct-sheet{text-align:center}
+.acct-sheet .field,.acct-sheet .acct-two{text-align:left}
+.acct-hero{display:flex;flex-direction:column;align-items:center;gap:var(--sp-3);margin:4px 0 2px;padding-top:4px}
+/* 彩色渐变光环：苹果账号头像标志性的彩虹描边 */
+.acct-avatar-ring{width:96px;height:96px;border-radius:50%;padding:4px;flex:0 0 auto;
+  background:conic-gradient(from 210deg,#8b5cf6,#ec4899,#f59e0b,#22d3ee,#8b5cf6);
+  box-shadow:0 8px 24px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center}
+.acct-avatar-lg{width:88px;height:88px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  font-size:34px;font-weight:600;color:#fff;background:linear-gradient(180deg,#5e5ce6,#4845d2);
+  background-size:cover;background-position:center}
+.acct-hero-name{font-size:21px;font-weight:700;line-height:1.2;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.acct-hero-sub{font-size:12.5px;color:var(--sub);word-break:break-all;line-height:1.5}
+/* 分组卡片（iOS 设置风格：圆角容器 + 内部分隔） */
+.acct-sec{margin-top:14px;background:var(--fill);border-radius:var(--r-xl);padding:16px 18px;text-align:left}
+.acct-sec-t{font-size:11.5px;font-weight:700;color:var(--sub);letter-spacing:.06em;margin-bottom:13px}
+.acct-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:var(--sp-4)}
+.acct-stat{background:var(--fill-strong);border-radius:var(--r-md);padding:10px 12px;min-width:0}
 .acct-stat b{display:block;font-size:14.5px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acct-stat span{font-size:11px;color:var(--sub)}
-.acct-hint{font-size:11.5px;color:var(--sub);line-height:1.6;margin-top:9px}
-.acct-two{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-6)}
-@media (max-width:560px){.acct-two{grid-template-columns:1fr}}
+.acct-hint{font-size:11.5px;color:var(--sub);line-height:1.6;margin-top:10px}
+.acct-two{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-6);text-align:left}
+@media (max-width:520px){.acct-two{grid-template-columns:1fr}}
 .swatch-row{display:flex;gap:var(--sp-4);flex-wrap:wrap;align-items:center}
-.swatch{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;transition:var(--dur-2) var(--ease)}
+.swatch{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;transition:var(--dur-2) var(--ease)}
 .swatch:hover{transform:scale(1.1)}
-.swatch.on{border-color:var(--txt)}
+.swatch.on{border-color:var(--txt);box-shadow:0 0 0 2px var(--brand-tint)}
 .emoji-pick{display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-top:2px}
 .emoji-pick button{width:44px;height:44px;border-radius:var(--r-lg);background:var(--fill);border:1px solid transparent;font-size:20px;line-height:1;cursor:pointer;padding:0;color:var(--txt);font-weight:600;transition:var(--dur-2) var(--ease)}
 .emoji-pick button:hover{background:var(--fill-hover)}
-.emoji-pick button.on{border-color:var(--brand)}
+.emoji-pick button.on{border-color:var(--brand);background:var(--brand-tint)}
 .acct-pass-msg{font-size:12px;margin-top:9px;display:none}
 
 /* ============ 登录 ============ */
@@ -1095,7 +1104,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 
 /* ============ 弹窗 ============ */
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center;padding:20px;will-change:transform}
-.modal.on{display:flex}
+.modal.on{display:flex;animation:modalMaskIn .26s ease both}
 .mbox{background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-2xl);padding:24px;width:520px;max-width:92vw;box-shadow:0 24px 60px rgba(0,0,0,.36);max-height:90vh;overflow-y:auto;transform:translateZ(0);position:relative;
   -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
 /* 设置弹窗：与其它浮层共用同一材质，避免「同层级却不同质感」 */
@@ -1105,6 +1114,27 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   box-shadow:var(--lg-shadow);
 }
 .mbox .hint{font-size:12.5px;color:var(--sub);margin-bottom:18px}
+/* ============ Apple 风「展开」动效（账号 / 设置弹窗 + 机器人切换菜单共用） ============ */
+@keyframes modalMaskIn{from{opacity:0}to{opacity:1}}
+@keyframes modalMaskOut{from{opacity:1}to{opacity:0}}
+@keyframes acctSheetIn{from{opacity:0;transform:scale(.9) translateY(14px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes acctSheetOut{from{opacity:1;transform:scale(1) translateY(0)}to{opacity:0;transform:scale(.94) translateY(10px)}}
+@keyframes dropdownIn{from{opacity:0;transform:scale(.96) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes dropdownOut{from{opacity:1;transform:scale(1) translateY(0)}to{opacity:0;transform:scale(.97) translateY(-4px)}}
+/* 账号面板 */
+.modal.on .acct-sheet{animation:acctSheetIn .44s var(--ease-out) both}
+.modal.closing .acct-sheet{animation:acctSheetOut .3s var(--ease) both}
+/* 设置弹窗（居中卡片，复用 sheet 展开） */
+.modal.on #settingsModal .mbox{animation:acctSheetIn .44s var(--ease-out) both}
+.modal.closing #settingsModal .mbox{animation:acctSheetOut .3s var(--ease) both}
+/* 机器人切换菜单（从按钮下方展开的 dropdown） */
+.bot-switch-menu.bs-open{animation:dropdownIn .26s var(--ease-out) both;transform-origin:top right}
+.bot-switch-menu.bs-closing{animation:dropdownOut .2s var(--ease) both;transform-origin:top right}
+@media (prefers-reduced-motion: reduce){
+  .modal.on,.modal.closing,.modal.on .acct-sheet,.modal.closing .acct-sheet,
+  .modal.on #settingsModal .mbox,.modal.closing #settingsModal .mbox,
+  .bot-switch-menu.bs-open,.bot-switch-menu.bs-closing{animation:none}
+}
 .field{margin-bottom:14px}
 .field label{font-size:12px;color:var(--sub);display:block;margin-bottom:6px;font-weight:590}
 .field input,.field textarea,.field select{width:100%;padding:10px 13px;border-radius:var(--r-md);background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:13px;transition:var(--dur-3) var(--ease)}
@@ -2367,14 +2397,14 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
 <!-- ==================== 账号信息面板（资料 / 头像 / 数据概览 / 改密码） ==================== -->
 <div class="modal" id="acctModal">
-  <div class="mbox" style="width:560px">
-    <h2>👤 账号信息</h2>
-    <div class="acct-head">
-      <div class="acct-avatar-lg" id="acctAvatarLg">A</div>
-      <div style="flex:1;min-width:0">
-        <div class="acct-head-name" id="acctHeadName">—</div>
-        <div class="acct-head-sub" id="acctHeadSub">—</div>
+    <div class="mbox acct-sheet" style="width:600px">
+    <button class="modal-x" onclick="closeAccountPanel()" title="关闭" aria-label="关闭">✕</button>
+    <div class="acct-hero">
+      <div class="acct-avatar-ring">
+        <div class="acct-avatar-lg" id="acctAvatarLg">A</div>
       </div>
+      <div class="acct-hero-name" id="acctHeadName">—</div>
+      <div class="acct-hero-sub" id="acctHeadSub">—</div>
     </div>
 
     <div class="acct-sec">
@@ -7739,6 +7769,7 @@ function fmtAccountBytes(n) {
 // ---------- 面板渲染 ----------
 let acctDraft = null;   // 面板内的头像草稿：点「保存资料」才写回账号表
 
+let _acctCloseTimer = null;
 function openAccountPanel() {
   if (!currentUser) { openAuth('login'); return; }
   const row = findUser(currentUser.username) || { username: currentUser.username, email: currentUser.email || '' };
@@ -7754,11 +7785,23 @@ function openAccountPanel() {
   if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
   renderAcctSwatches(); renderAcctEmojis(); renderAcctHeader(); renderAccountStats();
   const modal = document.getElementById('acctModal');
-  if (modal) modal.classList.add('on');
+  if (modal) {
+    if (_acctCloseTimer) { clearTimeout(_acctCloseTimer); _acctCloseTimer = null; }
+    modal.classList.remove('closing');
+    modal.classList.add('on');
+  }
 }
 function closeAccountPanel() {
   const modal = document.getElementById('acctModal');
-  if (modal) modal.classList.remove('on');
+  if (modal) {
+    modal.classList.add('closing');
+    if (_acctCloseTimer) clearTimeout(_acctCloseTimer);
+    _acctCloseTimer = setTimeout(function () {
+      modal.classList.remove('on');
+      modal.classList.remove('closing');
+      _acctCloseTimer = null;
+    }, 320);
+  }
   acctDraft = null;
 }
 function renderAcctSwatches() {
@@ -8465,19 +8508,37 @@ function buildBotSwitchList(kw) {
       + pub + check + '</div>';
   }).join('');
 }
+let _bsCloseTimer = null;
 window.toggleBotSwitch = function () {
   const menu = document.getElementById('botSwitchMenu');
   const btn = document.getElementById('botSwitchBtn');
   if (!menu) return;
-  if (menu.style.display !== 'none') { menu.style.display = 'none'; if (btn) btn.classList.remove('open'); return; }
-  menu.style.display = 'block'; if (btn) btn.classList.add('open');
+  if (menu.style.display !== 'none') { closeBotSwitch(); return; }
+  if (_bsCloseTimer) { clearTimeout(_bsCloseTimer); _bsCloseTimer = null; }
+  menu.style.display = 'block';
+  menu.classList.remove('bs-closing');
+  menu.classList.add('bs-open');
+  if (btn) btn.classList.add('open');
   const inp = document.getElementById('bsSearch');
   if (inp) { inp.value = ''; buildBotSwitchList(''); setTimeout(function () { inp.focus(); }, 10); }
 };
+window.closeBotSwitch = function () {
+  const menu = document.getElementById('botSwitchMenu');
+  const btn = document.getElementById('botSwitchBtn');
+  if (!menu || menu.style.display === 'none') return;
+  if (_bsCloseTimer) clearTimeout(_bsCloseTimer);
+  menu.classList.remove('bs-open');
+  menu.classList.add('bs-closing');
+  if (btn) btn.classList.remove('open');
+  _bsCloseTimer = setTimeout(function () {
+    menu.style.display = 'none';
+    menu.classList.remove('bs-closing');
+    _bsCloseTimer = null;
+  }, 220);
+};
 window.filterBotSwitch = function () { const inp = document.getElementById('bsSearch'); buildBotSwitchList(inp ? inp.value : ''); };
 window.selectBotFromSwitch = function (id) {
-  const menu = document.getElementById('botSwitchMenu'); if (menu) menu.style.display = 'none';
-  const btn = document.getElementById('botSwitchBtn'); if (btn) btn.classList.remove('open');
+  closeBotSwitch();
   if (id && id !== currentId) openBot(id);
   else renderBotSwitcher();
 };
@@ -8499,14 +8560,13 @@ document.addEventListener('click', function (e) {
   const wrap = document.getElementById('botSwitch');
   const menu = document.getElementById('botSwitchMenu');
   if (menu && menu.style.display !== 'none' && wrap && !wrap.contains(e.target)) {
-    menu.style.display = 'none';
-    const b = document.getElementById('botSwitchBtn'); if (b) b.classList.remove('open');
+    closeBotSwitch();
   }
 });
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') {
     const m = document.getElementById('botSwitchMenu');
-    if (m && m.style.display !== 'none') { m.style.display = 'none'; const b = document.getElementById('botSwitchBtn'); if (b) b.classList.remove('open'); }
+    if (m && m.style.display !== 'none') { closeBotSwitch(); }
   }
 });
 // ==================== 聊天区头部「更多」菜单 ====================
@@ -14524,6 +14584,7 @@ function setSerialInput(v) { SERIAL_INPUT = !!v; try { localStorage.setItem('bot
 // ==================== 设置面板 ====================
 const PROVIDER_META = BotCraftAI.getProviders();
 let _settingsInited = false;
+let _settingsCloseTimer = null;
 function openSettings() {
   // 只在首次打开时构建一次服务商/模型下拉框，之后直接复用（避免反复 innerHTML 重建导致卡顿）
   if (!_settingsInited) {
@@ -14552,7 +14613,10 @@ function openSettings() {
   document.getElementById('set-model-custom').value =
     (cfg.model && !(PROVIDER_META[cfg.provider] || {}).models?.includes(cfg.model)) ? cfg.model : '';
   setConnStatus(''); renderSettingsPreview();
-  document.getElementById('settingsModal').classList.add('on');
+  const sm = document.getElementById('settingsModal');
+  if (_settingsCloseTimer) { clearTimeout(_settingsCloseTimer); _settingsCloseTimer = null; }
+  sm.classList.remove('closing');
+  sm.classList.add('on');
   setTimeout(() => document.getElementById('set-key').focus(), 50);
 }
 function fillModelOptions(provider, currentModel) {
@@ -14634,7 +14698,18 @@ function renderSettingsPreview() {
     host.innerHTML = escapeHtml(label) + ' · ' + (direct ? '浏览器直连' : '走代理');
   } catch (e) {}
 }
-function closeSettings() { document.getElementById('settingsModal').classList.remove('on'); }
+function closeSettings() {
+  const sm = document.getElementById('settingsModal');
+  if (sm) {
+    sm.classList.add('closing');
+    if (_settingsCloseTimer) clearTimeout(_settingsCloseTimer);
+    _settingsCloseTimer = setTimeout(function () {
+      sm.classList.remove('on');
+      sm.classList.remove('closing');
+      _settingsCloseTimer = null;
+    }, 320);
+  }
+}
 function saveSettings() {
   const provider = document.getElementById('set-provider').value;
   const apiKey = document.getElementById('set-key').value.trim();
