@@ -603,6 +603,15 @@ body.embed-mode #wsName{font-size:15px}
 .side-toggle .tt-ic{font-size:18px;line-height:1;width:22px;text-align:center}
 .sidebar.collapsed .side-toggle{justify-content:center;padding:9px 0}
 .sidebar.collapsed .side-toggle .tt-txt{display:none}
+/* ============ Apple 风「收起/展开」chevron 图标（全局统一） ============
+   全站方向类图标（侧栏收起、工作区收起/展开、下拉 caret、记忆折叠）统一换成
+   SF Symbols 风格的圆头描边 chevron SVG：1em 随字号缩放、currentColor 随状态变色，
+   替换原先各处文字字形（不同平台字重不齐、笔画发虚，和整体描边图标体系也不搭）。
+   开合动画复用既有 .bs-caret/.kb-caret 的 rotate 过渡；侧栏图标用 .flip 做 180° 平滑翻转。 */
+.chev{width:1em;height:1em;display:inline-block;vertical-align:-.14em;flex-shrink:0}
+.side-toggle .tt-ic .chev{width:13px;height:13px;transition:transform var(--dur-3) var(--ease)}
+.side-toggle .tt-ic.flip .chev{transform:rotate(180deg)}
+.ws-collapse-btn .chev,.ws-side-expand .chev{width:12px;height:12px}
 
 /* ============ 主内容 ============ */
 /* 主内容 = 悬浮圆角玻璃珠：与顶栏/侧栏同一家族，不再用通顶贴边直角板（此前视觉割裂）。
@@ -1823,7 +1832,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 <div class="app">
   <!-- ==================== 侧边栏 ==================== -->
   <aside class="sidebar">
-    <div class="side-toggle" onclick="toggleSidebar()" title="收起/展开侧边栏"><span class="tt-ic">«</span><span class="tt-txt">收起侧栏</span></div>
+    <div class="side-toggle" onclick="toggleSidebar()" title="收起/展开侧边栏"><span class="tt-ic"><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.8 5.8 8l4.2 4.2"/></svg></span><span class="tt-txt">收起侧栏</span></div>
     <div class="side-section">创作</div>
     <div class="side-item active" data-page="home" data-tip="我的机器人"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.2" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></span><span class="side-txt">我的机器人</span> <span class="badge">0</span></div>
     <div class="side-item" data-page="workspace" data-tip="工作流编排"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M7.6 7.6 10.4 16M16.4 7.6 13.6 16M8.4 6h7.2"/></svg></span><span class="side-txt">工作流编排</span></div>
@@ -1893,7 +1902,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="ws-head">
         <h2><span class="status"></span><span id="wsName">机器人</span></h2>
         <div class="flow" id="wsFlow">工作流 · 草稿</div>
-        <button type="button" class="ws-collapse-btn" id="wsSideCollapse" title="收起工作区">‹</button>
+        <button type="button" class="ws-collapse-btn" id="wsSideCollapse" title="收起工作区"><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.8 5.8 8l4.2 4.2"/></svg></button>
       </div>
       <div class="ws-tabs">
         <div class="ws-tab-scroll">
@@ -1903,7 +1912,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <div class="ws-tab" data-tab="plugin">插件</div>
           <div class="ws-tab" data-tab="publish">发布</div>
         </div>
-        <div class="ws-tab ws-tab-more" id="wsTabMore">更多 ▾</div>
+        <div class="ws-tab ws-tab-more" id="wsTabMore">更多 <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 6 8 10.2 12.2 6"/></svg></div>
       </div>
       <div class="ws-body" id="wsFlowBody"></div>
       <div class="tab-panel" id="wsPromptBody" style="display:none">
@@ -1973,7 +1982,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="ws-resizer" id="wsResizer" title="拖拽调整宽度，双击复位"></div>
     <div class="ws-main">
       <div class="chat-head">
-        <button type="button" class="ws-side-expand" id="wsSideExpand" title="展开工作区">›</button>
+        <button type="button" class="ws-side-expand" id="wsSideExpand" title="展开工作区"><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.8 10.2 8 6 12.2"/></svg></button>
         <div class="ava" id="chatAva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></div>
         <div class="ch-id">
           <div id="chatBotName" style="font-weight:600;font-size:14px">机器人</div>
@@ -1984,7 +1993,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <button type="button" class="bot-switch-btn" id="botSwitchBtn" onclick="toggleBotSwitch()" title="切换机器人">
             <span class="bs-ava" id="bsAva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></span>
             <span class="bs-name" id="bsName">机器人</span>
-            <span class="bs-caret">▾</span>
+            <span class="bs-caret"><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 6 8 10.2 12.2 6"/></svg></span>
           </button>
           <div class="bot-switch-menu" id="botSwitchMenu" style="display:none">
             <div class="bs-search"><input id="bsSearch" type="text" placeholder="🔍 搜索机器人…" oninput="filterBotSwitch()" onkeydown="bsKeyNav(event)"></div>
@@ -3769,10 +3778,10 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
         var body = open
           ? '<textarea class="mem-text" data-mi="' + gi + '" rows="2">' + escapeHtml(it.text) + '</textarea>'
           : '<div class="mem-view" data-mi="' + gi + '" title="点击展开并编辑">' + (it.text ? escapeHtml(it.text) : '<span class="mem-view-empty">（空记忆，点击补充）</span>') + '</div>';
-        return '<div class="mem-item"><span class="mem-type mem-type-' + tp + '">' + tp + '</span><div class="mem-main">' + body + (open ? '<button type="button" class="mem-fold" data-fold="' + gi + '">收起 ▴</button>' : '') + '</div>' + marks + '<button class="mem-del" data-del="' + gi + '" title="删除">✕</button></div>';
+        return '<div class="mem-item"><span class="mem-type mem-type-' + tp + '">' + tp + '</span><div class="mem-main">' + body + (open ? '<button type="button" class="mem-fold" data-fold="' + gi + '">收起 <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 10 8 5.8 12.2 10"/></svg></button>' : '') + '</div>' + marks + '<button class="mem-del" data-del="' + gi + '" title="删除">✕</button></div>';
       }).join('');
-      if (capOn) html += '<button type="button" class="mem-more" id="memMore">显示全部 ' + view.length + ' 条 ▾</button>';
-      else if (unfiltered && _memShowAll && view.length > MEM_PREVIEW_N) html += '<button type="button" class="mem-more" id="memMore">收起，只显示前 ' + MEM_PREVIEW_N + ' 条 ▴</button>';
+      if (capOn) html += '<button type="button" class="mem-more" id="memMore">显示全部 ' + view.length + ' 条 <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 6 8 10.2 12.2 6"/></svg></button>';
+      else if (unfiltered && _memShowAll && view.length > MEM_PREVIEW_N) html += '<button type="button" class="mem-more" id="memMore">收起，只显示前 ' + MEM_PREVIEW_N + ' 条 <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 10 8 5.8 12.2 10"/></svg></button>';
     } else {
       html = '<div class="empty-tip">还没有记忆。多聊几句，或手动添加一条。</div>';
     }
@@ -8764,7 +8773,7 @@ function renderCtxBar(b) {
   if (snap.histDropped) html += '<span class="ctx-over" title="历史超出预算，已从最旧的消息开始丢弃">已丢弃最旧 ' + snap.histDropped + ' 条</span>';
   if (comp.length) html += '<span class="ctx-ok" title="' + escapeAttr(comp.map(function (s) { return s.label + '：' + s.note; }).join('　')) + '">🗜 已压缩 ' + comp.length + ' 个区块（省 ' + fmtCtxLen(snap.compressedSaved || 0) + ' 字）</span>';
   if (cut.length) html += '<span class="ctx-over" title="' + escapeAttr(cut.map(function (s) { return s.label + '：' + s.note; }).join('　')) + '">⚠️ 已裁剪 ' + cut.length + ' 个区块</span>';
-  html += '<span class="ctx-btn" onclick="openCtxPanel()" title="查看上下文逐区块明细与实际注入内容">上下文详情 ›</span>';
+  html += '<span class="ctx-btn" onclick="openCtxPanel()" title="查看上下文逐区块明细与实际注入内容">上下文详情 <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.8 10.2 8 6 12.2"/></svg></span>';
   html += '</div>';
   html += '<div class="ctx-band">' + segs + '</div>';
   html += '<div class="ctx-mini">' + summary + '</div>';
@@ -10969,7 +10978,7 @@ function _kbCiteHtml(hits) {
       + '</div>';
   }).join('');
   return '<div class="kb-cite">'
-    + '<button class="kb-cite-head" type="button" onclick="kbCiteToggle(this)">\uD83D\uDCDA 参考来源 · 命中 ' + hits.length + ' 处 <span class="kb-caret">▾</span></button>'
+    + '<button class="kb-cite-head" type="button" onclick="kbCiteToggle(this)">\uD83D\uDCDA 参考来源 · 命中 ' + hits.length + ' 处 <span class="kb-caret"><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 6 8 10.2 12.2 6"/></svg></span></button>'
     + '<div class="kb-cite-body" style="display:none">' + rows + '</div>'
     + '</div>';
 }
@@ -12675,7 +12684,7 @@ function toggleSidebar() {
   var collapsed = sb.classList.toggle('collapsed');
   var ic = document.querySelector('.side-toggle .tt-ic');
   var tx = document.querySelector('.side-toggle .tt-txt');
-  if (ic) ic.textContent = collapsed ? '»' : '«';
+  if (ic) ic.classList.toggle('flip', collapsed);   // 图标 180° 翻转（Apple 式），不再换字
   if (tx) tx.textContent = collapsed ? '展开侧栏' : '收起侧栏';
   try { localStorage.setItem('botcraft.sidebar.collapsed', collapsed ? '1' : '0'); } catch (e) {}
 }
@@ -12687,7 +12696,7 @@ function toggleSidebar() {
       if (sb) sb.classList.add('collapsed');
       var ic = document.querySelector('.side-toggle .tt-ic');
       var tx = document.querySelector('.side-toggle .tt-txt');
-      if (ic) ic.textContent = '»';
+      if (ic) ic.classList.add('flip');
       if (tx) tx.textContent = '展开侧栏';
     }
   } catch (e) {}
