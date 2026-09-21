@@ -505,12 +505,14 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .auth-panel .auth-entry .btn{width:100%;padding:12px 18px;font-size:14px;border-radius:var(--r-lg);justify-content:center}
 .auth-panel .auth-foot{color:var(--sub);font-size:11.5px;line-height:1.7;margin-top:22px;opacity:.9}
 /* 登录弹窗同样是分栏：左插画窄栏 + 右表单（覆盖 .mbox 的 padding 与滚动） */
-/* ⚠️ 必须用 .mbox.auth-split 组合选择器：.mbox{padding:24px} 定义在本文件更后面，
+/* min-height 把弹窗高度定死：登录（字段少）与注册（多一个邮箱行）两种模式等高，
+   切 tab 时弹窗不再上下跳。取注册模式的估算高度 720；内容真超出时自然撑高。
+   ⚠️ 必须用 .mbox.auth-split 组合选择器：.mbox{padding:24px} 定义在本文件更后面，
    同特异性时后者赢 —— 用单类 .auth-split{padding:0} 会被它覆盖，插画面板四周
    就会缩进一圈（真机截图里面板顶/底各留了 ~20px 深边，就是它）。 */
-.mbox.auth-split{display:flex;padding:0;overflow:hidden;width:auto}
-.auth-split .auth-art{flex:0 0 330px}
-.auth-split .auth-form-col{padding:30px 36px 28px;width:470px;max-width:92vw;box-sizing:border-box;overflow-y:auto;text-align:left;flex-shrink:0}
+.mbox.auth-split{display:flex;padding:0;overflow:hidden;width:auto;min-height:720px}
+.auth-split .auth-art{flex:0 0 360px}
+.auth-split .auth-form-col{padding:30px 36px 28px;width:520px;max-width:92vw;box-sizing:border-box;overflow-y:auto;text-align:left;flex-shrink:0}
 /* 密码可见切换 */
 .auth-pass-wrap{position:relative}
 .auth-pass-wrap input{padding-right:44px}
@@ -523,13 +525,13 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .auth-split .mbox-foot{flex-direction:column-reverse;align-items:stretch;gap:var(--sp-3);margin-top:12px}
 .auth-or{display:flex;align-items:center;gap:var(--sp-4);margin:14px 0 0;color:var(--sub);font-size:11.5px}
 .auth-or::before,.auth-or::after{content:'';flex:1;height:1px;background:var(--line)}
-/* 弹窗自己的断点：插画 286 + 表单 398 + 弹窗左右 padding，视口 ≥ ~820 才放得下。
-   820 以下插画让位 —— 否则表单栏会被 flex 压到 200px，tab 竖排、
-   placeholder 截断、说明文字 3~4 字一行（用户截图里全都发生了）。 */
-@media (max-width:820px){
+/* 弹窗自己的断点：插画 360 + 表单 520 + 弹窗左右 padding，视口 ≥ ~960 才放得下。
+   960 以下插画让位 —— 否则表单栏会被 flex 压瘪：tab 竖排、
+   placeholder 截断、说明文字 3~4 字一行（用户截图里全都发生过）。 */
+@media (max-width:960px){
   .auth-split .auth-art{display:none}
   .auth-split{flex-direction:column}
-  .auth-split .auth-form-col{width:auto;flex-shrink:0}
+  .auth-split .auth-form-col{width:auto;flex-shrink:0;min-height:0}
 }
 @media (max-width:900px){
   .auth-card{flex-direction:column;height:min(680px,90vh)}
