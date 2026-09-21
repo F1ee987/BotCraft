@@ -763,7 +763,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-mini-node{position:absolute;border-radius:var(--r-2xs);background:var(--brand-line)}
 .cw-mini-node.sel{background:var(--brand-text)}
 .cw-mini-vp{position:absolute;border-radius:var(--r-2xs);border:1px solid var(--brand-text);background:var(--brand-tint)}
-.cw-menu{position:absolute;min-width:210px;padding:var(--sp-2);border-radius:var(--r-lg);background:var(--popover);border:1px solid var(--line);box-shadow:var(--lg-float);z-index:9}
+/* 菜单项 = 14 个节点类型 + 6 个动作，整列逼近 950px：不限高的话在 1080 高以下的窗口里
+   底部几项（撤销/重做）会被画布边缘切掉，看起来像「菜单少了一半」。
+   限高后自己滚 —— 配套改了 cwOnWheel：菜单上滚轮不能再去平移画布，否则滚不动。 */
+.cw-menu{position:absolute;min-width:210px;max-height:min(72vh,620px);overflow-y:auto;overscroll-behavior:contain;padding:var(--sp-2);border-radius:var(--r-lg);background:var(--popover);border:1px solid var(--line);box-shadow:var(--lg-float);z-index:9}
 .cw-mtitle{padding:var(--sp-3) var(--sp-5) var(--sp-2);font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.6px}
 .cw-mi{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4) var(--sp-5);border-radius:var(--r-sm);font-size:var(--fs-sm);color:var(--txt);cursor:pointer;white-space:nowrap}
 .cw-mi:hover{background:var(--fill)}
@@ -9935,6 +9938,15 @@ function cwCloseMenu() {
   cwSt.menu = null;
 }
 function cwOpenMenu(b, cx, cy) {
+  // 编辑态与菜单互斥：两个浮层同时开着，菜单（z-index 9）就盖在编辑面板的
+  // 「标题 / 描述 / 保存」上面 —— 用户看到的就是「编辑和功能菜单重叠了」。
+  // 这里**不静默收起编辑**：那等于替用户做「丢弃已输入内容」或「提交半成品」的决定，
+  // 两个都不该替他做（编辑面板里可能正打着字）。所以拒绝打开 + 说清怎么继续。
+  // 拦在 cwOpenMenu 里而不是两个调用点各写一遍：将来多一个入口也不必记得补。
+  if (cwSt.stage && cwSt.stage.querySelector('.node.editing')) {
+    toast('正在编辑节点：先点「保存」或「取消」，再在此处添加', 'warn');
+    return;
+  }
   cwCloseMenu();
   const root = cwSt.root;
   if (!root) return;
@@ -10203,6 +10215,9 @@ function cwOnUp(e) {
 function cwOnWheel(e) {
   const b = cwSt.bot, root = cwSt.root;
   if (!b || !root) return;
+  // 菜单内部滚动时放行：菜单限高后自己可滚（类型多时必滚），而 wheel 会冒泡到这里 ——
+  // 照旧 preventDefault + 平移的话，用户滚的是画布、菜单纹丝不动，看起来像「菜单滚不了」。
+  if (e.target && e.target.closest && e.target.closest('.cw-menu')) return;
   e.preventDefault();
   if (e.ctrlKey || e.metaKey) {
     cwZoomAt(b, e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0022));
