@@ -8557,7 +8557,12 @@ function refreshWorkspace() {
     topTag.textContent = ((typeof resolveModelLabel === 'function' ? resolveModelLabel(_effModel) : (_effModel || 'gpt-4o-mini')) || 'gpt-4o-mini');
   }
   renderNodes(b);
-  renderHistory(b);
+  // 生成期间不要重绘「正在生成的那个机器人」的聊天区：流式回答还没写进 history，
+  // 此时 renderHistory 用 chat.innerHTML = history 会把正在逐字构建的气泡整段清掉，
+  // 而普通对话分支收尾刻意不做 renderHistory（流式气泡就是最终结果）→ 回答在界面丢失。
+  //（saveSettings「取消串行输入」正是经 refreshWorkspace 走到这里触发。切换机器人时
+  //   b.id 已变成新机器人、不等于 _generatingBotId，仍照常重绘。）
+  if (!(sending && b.id === _generatingBotId)) renderHistory(b);
   const promptArea = document.getElementById('promptArea');
   if (promptArea) { promptArea.value = b.prompt; updatePromptCount(); }
   renderKbPanel(b); renderPromptTpls();
@@ -10878,6 +10883,7 @@ function updatePromptCount() {
 
 // ==================== 聊天（流式 + 真实上下文）====================
 let sending = false;
+let _generatingBotId = null;  // 正在生成回复的机器人 id：refreshWorkspace 据此决定要不要重绘聊天区
 let pendingImages = [];   // 待发送图片（Base64 DataURL），发送后清空
 let pendingAudios = [];  // 待发送音频（Base64 DataURL，WAV），发送后清空
 let pendingVideos = []; // 待发送视频（{url: objectURL, name}），发送后清空
@@ -11473,7 +11479,7 @@ async function runReply(b, opt) {
   const v = opt.text || entry.text || '';
   const imgs = entry.images || [];
   const auds = entry.audio || [];
-  sending = true; abortCtrl = new AbortController();
+  sending = true; abortCtrl = new AbortController(); _generatingBotId = b.id;
   chat.querySelectorAll('.typing').forEach(t => t.remove());
   const typing = document.createElement('div');
   typing.className = 'typing';
@@ -11677,7 +11683,7 @@ async function runReply(b, opt) {
     if (_onScreen()) renderHistory(b);
     saveBots();
   } finally {
-    sending = false; abortCtrl = null; setSendingUI(false);
+    sending = false; abortCtrl = null; _generatingBotId = null; setSendingUI(false);
     if (_onScreen()) _maybeNameSession(b);   // 首条用户消息自动成为会话名（只在没名字时写一次）；切走后再来命名，命中的是别人的会话
     // 非串行模式：自动发送排队的消息，保持顺序处理
     if (!getSerialInput() && pendingQueue.length) {
