@@ -292,6 +292,17 @@ body .sidebar{animation:bcSlideIn .56s var(--ease-out) .06s backwards}
 body #page-home .page-head{animation:bcRise .56s var(--ease-out) var(--dur-1) backwards}
 body #page-home .toolbar{animation:bcRise .56s var(--ease-out) var(--dur-3) backwards}
 body #page-home .grid, body #page-home .empty-home{animation:bcRise .6s var(--ease-out) .24s backwards}
+/* 页级入场推广（2026-09-21）：此前只有 #page-home 有错峰入场，其余页面切页是硬切，
+   用户感知就是「只有我的机器人点开有动画」。display:none→block 会重启 CSS 动画，
+   所以给所有 .main 页面的直接子代挂同一套 bcRise —— 每次进页都重放，与 home 一致。
+   标题栏走 0ms 档先起，其余内容统一 .2s 档跟上（home 的 id 规则更具体，保持原值）。
+   工作台（.workspace）单独配：侧栏沿用全局侧栏的 bcSlideIn 左滑入，主区 bcRise。
+   ⚠️ 已核实这两个容器内没有 position:fixed 后代（弹层/toast/悬浮面板都挂 body），
+   transform 动画不会劫持浮层定位；切页后若还有新 fixed 节点加进来，先查这条。 */
+body main.main > .page-head{animation:bcRise .56s var(--ease-out) var(--dur-1) backwards}
+body main.main > *:not(.page-head){animation:bcRise .6s var(--ease-out) .2s backwards}
+body #page-workspace .ws-side{animation:bcSlideIn .56s var(--ease-out) var(--dur-1) backwards}
+body #page-workspace .ws-main{animation:bcRise .6s var(--ease-out) var(--dur-2) backwards}
 /* 全局兜底只压 duration、不清 delay；backwards + delay 会让元素在延迟期保持 opacity:0，
    降级用户会看到「延迟空白」。这里逐条掐掉整条动画。
    ⚠️ 写成一行一条，别合并成长选择器列表 —— verify_css.js 用
@@ -303,6 +314,10 @@ body #page-home .grid, body #page-home .empty-home{animation:bcRise .6s var(--ea
   body #page-home .toolbar{animation:none}
   body #page-home .grid{animation:none}
   body #page-home .empty-home{animation:none}
+  body main.main > .page-head{animation:none}
+  body main.main > *:not(.page-head){animation:none}
+  body #page-workspace .ws-side{animation:none}
+  body #page-workspace .ws-main{animation:none}
 }
 
 /* ============ 材质策略：全局液态玻璃 ============
