@@ -792,10 +792,11 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-mini-vp{position:absolute;border-radius:var(--r-2xs);border:1px solid var(--brand-text);background:var(--brand-tint)}
 /* 窄画布兜底：底行并排放不下工具条(≈359px)+小地图(168px)，并排需要 ≥559px 画宽。
    不够时两者会叠在一起 —— z-index 同为 6、工具条 DOM 在后，直接压住小地图下半截，
-   取景框与底边被切（用户反馈「显示不全」）。挤不下就把小地图挪到右上角，
-   那个位置一直空着（.cw-hint 的 max-width:calc(100% - 190px) 就是为它留的）。
+   取景框与底边被切（用户反馈「显示不全」）。挤不下就把小地图挪到左下角，
+   工具条同时移到右下角并折行 —— 两者都在底边、互不重叠。
    判定与打点在 cwFitMini()：量的是画布宽度，用媒体查询没用（视口宽度说了不算）。 */
-.cw-root.cw-cramped .cw-mini{top:var(--sp-6);bottom:auto}
+.cw-root.cw-cramped .cw-mini{left:var(--sp-6);right:auto;bottom:var(--sp-6);top:auto}
+.cw-root.cw-cramped .cw-tools{right:var(--sp-6);left:auto;bottom:var(--sp-6);top:auto;max-width:calc(100% - var(--sp-6) - 168px - var(--sp-6) - 8px)}
 /* 菜单项 = 14 个节点类型 + 6 个动作，整列逼近 950px：不限高的话在 1080 高以下的窗口里
    底部几项（撤销/重做）会被画布边缘切掉，看起来像「菜单少了一半」。
    限高后自己滚 —— 配套改了 cwOnWheel：菜单上滚轮不能再去平移画布，否则滚不动。 */
