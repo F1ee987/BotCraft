@@ -684,7 +684,7 @@ body.embed-mode #wsName{font-size:15px}
 .ws-resizer::after{content:'';position:absolute;left:2px;top:0;bottom:0;width:2px;background:transparent;transition:background .16s var(--ease)}
 .ws-resizer:hover::after,body.resizing .ws-resizer::after{background:var(--brand-fill)}
 body.resizing{cursor:col-resize;user-select:none}
-.ws-side-toggle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:15px;height:38px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--popover);color:var(--sub);font-size:10px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)}
+.ws-side-toggle{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:15px;height:38px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--popover);color:var(--sub);font-size:10px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)}
 .ws-resizer:hover .ws-side-toggle,body.ws-side-collapsed .ws-side-toggle{opacity:1}
 .ws-side-toggle:hover{color:var(--txt);border-color:var(--brand)}
 body.ws-side-collapsed .ws-side{display:none}
@@ -797,6 +797,9 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
    判定与打点在 cwFitMini()：量的是画布宽度，用媒体查询没用（视口宽度说了不算）。 */
 .cw-root.cw-cramped .cw-mini{left:var(--sp-6);right:auto;bottom:var(--sp-6);top:auto}
 .cw-root.cw-cramped .cw-tools{right:var(--sp-6);left:auto;bottom:var(--sp-6);top:auto;max-width:calc(100% - var(--sp-6) - 168px - var(--sp-6) - 8px)}
+/* 画布窄到连小地图本身都放不下（< 左右边距+168+间隙）时：直接收起小地图。
+   否则 168px 固定宽的小地图必然溢出画布、压到折行成竖排的工具条上（穿模）。 */
+.cw-root.cw-tiny .cw-mini{display:none}
 /* 菜单项 = 14 个节点类型 + 6 个动作，整列逼近 950px：不限高的话在 1080 高以下的窗口里
    底部几项（撤销/重做）会被画布边缘切掉，看起来像「菜单少了一半」。
    限高后自己滚 —— 配套改了 cwOnWheel：菜单上滚轮不能再去平移画布，否则滚不动。 */
@@ -9680,9 +9683,14 @@ function cwFitMini() {
   // 摘类后读 offsetWidth 会强制同步重排，量到的一律是「未让位布局」的宽度，判定只跟
   // 画布宽有关 → 同一宽度永远同一结果。整段同步执行，中间态不会上屏。
   root.classList.remove('cw-cramped');
+  root.classList.remove('cw-tiny');                 // 先还原，量出的才是未收起状态的宽度
   const need = sp6 + tools.offsetWidth + 8;         // 工具条右边缘（含最小间隙）
   const have = bw - sp6 - mini.offsetWidth;         // 小地图左边缘
-  root.classList.toggle('cw-cramped', need > have);
+  // 画布窄到「小地图本身都放不下」（左右边距 + 168 + 间隙）→ 收起小地图，别让它
+  // 溢出画布压到工具条上（穿模）。此时让位判定一并失效（没有小地图要避让了）。
+  const tiny = bw < sp6 * 2 + mini.offsetWidth + 8;
+  root.classList.toggle('cw-tiny', tiny);
+  root.classList.toggle('cw-cramped', !tiny && need > have);
 }
 
 // ---------------------------------------------------------------
@@ -14058,13 +14066,17 @@ document.addEventListener('click', function (e) {
   let initC = false;
   try { initC = localStorage.getItem(CKEY) === '1'; } catch (e) {}
   applyCollapsed(initC);
-  let dragging = false;
+  let dragging = false, _dragMoved = false, _sx = 0, _sy = 0;
   rz.addEventListener('mousedown', function (e) {
-    if (e.button !== 0 || e.target === tg || collapsedNow() || isColumn()) return;
-    dragging = true; document.body.classList.add('resizing'); e.preventDefault();
+    // 收起按钮不再排除在拖拽之外：按在按钮上也能拖。是否算「点了按钮」由位移判别
+    //（click 时看 _dragMoved）—— 想拖就拖得动，想收起就原地点一下，两头都不误触。
+    if (e.button !== 0 || collapsedNow() || isColumn()) return;
+    dragging = true; _dragMoved = false; _sx = e.clientX; _sy = e.clientY;
+    document.body.classList.add('resizing'); e.preventDefault();
   });
   window.addEventListener('mousemove', function (e) {
     if (!dragging) return;
+    if (!_dragMoved && (Math.abs(e.clientX - _sx) > 4 || Math.abs(e.clientY - _sy) > 4)) _dragMoved = true;
     // 上限不只是「工作区最宽 560」，还要给聊天区留够 MIN_MAIN：把工作区拖到最宽时
     // 聊天区会被压到 460px 上下，头部就在那儿塌成一列竖排字。屏幕够宽时这个上限不起作用，
     // 拖拽手感与原来完全一致。
@@ -14086,6 +14098,7 @@ document.addEventListener('click', function (e) {
   });
   if (tg) tg.addEventListener('click', function (e) {
     e.stopPropagation();
+    if (_dragMoved) { _dragMoved = false; return; }   // 这次 click 是拖拽的收尾，不算点按钮
     const c = !collapsedNow();
     applyCollapsed(c);
     try { localStorage.setItem(CKEY, c ? '1' : '0'); } catch (e) {}
