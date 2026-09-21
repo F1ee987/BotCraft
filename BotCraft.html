@@ -285,7 +285,7 @@ html::after{
    后代的包含块，把弹层从「相对视口」改成「相对本元素」定位 —— .topbar 里有 .modal、
    .app 里有 .ws-more-menu，所以这两个只做 opacity 淡入。往后加动画前先查一遍。 */
 @keyframes bcFade{from{opacity:0}to{opacity:1}}
-@keyframes bcRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes bcRise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes bcSlideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
 body .topbar{animation:bcFade .5s var(--ease-out) backwards}
 body .sidebar{animation:bcSlideIn .56s var(--ease-out) .06s backwards}
@@ -299,10 +299,19 @@ body #page-home .grid, body #page-home .empty-home{animation:bcRise .6s var(--ea
    工作台（.workspace）单独配：侧栏沿用全局侧栏的 bcSlideIn 左滑入，主区 bcRise。
    ⚠️ 已核实这两个容器内没有 position:fixed 后代（弹层/toast/悬浮面板都挂 body），
    transform 动画不会劫持浮层定位；切页后若还有新 fixed 节点加进来，先查这条。 */
-body main.main > .page-head{animation:bcRise .56s var(--ease-out) var(--dur-1) backwards}
-body main.main > *:not(.page-head){animation:bcRise .6s var(--ease-out) .2s backwards}
+body main.main > .page-head{animation:bcRise .5s var(--ease-out) backwards}
+body main.main > *:not(.page-head){animation:bcRise .54s var(--ease-out) .1s backwards}
+/* 逐块错峰：整页所有块「同一时刻一起亮」正是廉价感的来源。按 DOM 顺序 50ms 一档递增，
+   到第 5 块收口 —— 再往后延会拖成「一个一个慢慢排队出现」，反而笨重。
+   ⚠️ 这里只覆盖 animation-delay（长写法），动画本体仍由上面那条 shorthand 决定，
+   顺序必须晚于它，否则会被 shorthand 的 delay 打回去。 */
+body main.main > *:not(.page-head):nth-child(2){animation-delay:.1s}
+body main.main > *:not(.page-head):nth-child(3){animation-delay:.15s}
+body main.main > *:not(.page-head):nth-child(4){animation-delay:.2s}
+body main.main > *:not(.page-head):nth-child(5){animation-delay:.25s}
+body main.main > *:not(.page-head):nth-child(n+6){animation-delay:.3s}
 body #page-workspace .ws-side{animation:bcSlideIn .56s var(--ease-out) var(--dur-1) backwards}
-body #page-workspace .ws-main{animation:bcRise .6s var(--ease-out) var(--dur-2) backwards}
+body #page-workspace .ws-main{animation:bcRise .56s var(--ease-out) var(--dur-2) backwards}
 /* 页面级「收起 / 展开」过场（2026-09-21）：此前只有进页动画，离页是硬切（内容瞬间消失）。
    做成**顺序式**而不是交叉淡化：所有 page 都是 .app 的 flex 子项，两个同时在场会互相
    挤开宽度（互相压缩成半屏），所以必须「旧页先收起 → 切可见性 → 新页展开」。
@@ -310,10 +319,10 @@ body #page-workspace .ws-main{animation:bcRise .6s var(--ease-out) var(--dur-2) 
    出场就是「从中展开」；收起 bcPageOut 反向、更短（180ms），让等待感不明显。
    ⚠️ 收起时长以这条 CSS 为准 —— JS 读 computed animation-duration 决定何时切换，
    改这里 JS 自动跟着走；降级用户这条是 animation:none → 时长 0 → 立即切不等动画。 */
-@keyframes bcPageIn{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
-@keyframes bcPageOut{from{opacity:1;transform:none}to{opacity:0;transform:scale(.985)}}
-body main.main, body .workspace{animation:bcPageIn .28s var(--ease-out) backwards}
-body main.bc-leaving, body .workspace.bc-leaving{animation:bcPageOut .18s var(--ease) forwards;pointer-events:none}
+@keyframes bcPageIn{from{opacity:0;transform:scale(.984) translateY(6px)}to{opacity:1;transform:none}}
+@keyframes bcPageOut{from{opacity:1;transform:none}to{opacity:0;transform:scale(.988) translateY(-4px)}}
+body main.main, body .workspace{animation:bcPageIn .32s var(--ease-out) backwards}
+body main.bc-leaving, body .workspace.bc-leaving{position:fixed;z-index:2;pointer-events:none;animation:bcPageOut .24s var(--ease) forwards}
 /* 全局兜底只压 duration、不清 delay；backwards + delay 会让元素在延迟期保持 opacity:0，
    降级用户会看到「延迟空白」。这里逐条掐掉整条动画。
    ⚠️ 写成一行一条，别合并成长选择器列表 —— verify_css.js 用
@@ -8491,17 +8500,19 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 else bindStickyHeads();
 window.addEventListener('resize', function () { syncStickyHead(); });
 
-/* ============ 页面切换：收起 → 切可见性 → 展开 ============
-   display:none → 可见会重启 CSS 动画，所以 applyPage 一落地，新页那套错位上浮自动重放。
-   收起时长取 .bc-leaving 的 computed animation-duration（改 CSS 不用改 JS）；降级用户那条
-   规则是 animation:none → 时长 0 → 立即切、不等动画。连点用 _goSeq 判废：等待期间又点了
-   别的页，只有最后一次会真正落地（旧页保持收起态被一并切走）。 */
-let _goSeq = 0;
-function applyPage(p) {
+/* ============ 页面切换：交叉淡化（旧页淡出 与 新页展开 同时在场） ============
+   display:none → 可见会重启 CSS 动画，所以新页那套错位上浮在 applyPage 落地时自动重放。
+   旧页被抬成 position:fixed（见 go() 里的注释）后才切可见性，两者不再互挤宽度。
+   淡出时长取 .bc-leaving 的 computed animation-duration（改 CSS 不用改 JS）；降级用户那条
+   规则是 animation:none → 时长 0 → 立即落地、不等动画。连点用 _goSeq 判废 + dropLeaveEl
+   立即收场：任何时候最多只有一张「正在淡出的旧页」，不会叠成一摞。 */
+let _goSeq = 0, _leaveEl = null, _leaveTimer = 0;
+function applyPage(p, keep) {
   pages.forEach(pg => {
     const el = document.getElementById('page-' + pg);
-    if (!el) return;
+    if (!el || el === keep) return;   /* keep = 正在淡出的旧页，它的收尾交给 dropLeaveEl */
     el.classList.remove('bc-leaving');
+    el.style.left = el.style.top = el.style.width = el.style.height = '';
     el.style.display = (pg === p ? (pg === 'workspace' ? 'flex' : 'block') : 'none');
   });
   if (p === 'analytics') renderAnalytics();
@@ -8513,11 +8524,22 @@ function applyPage(p) {
   if (p === 'home') { renderGrid(); syncEmptyHome(); }
   syncStickyHead(p);   /* 切页后补量标题栏高度（隐藏时量出来是 0） */
 }
+/* 正在淡出的旧页残留：动画结束后（或下次切页打岔时）立刻收干净 —— 清掉 fixed 坐标、
+   摘掉 .bc-leaving、真正 display:none。不收的话它会以 fixed 姿态永久浮在新页上面。 */
+function dropLeaveEl() {
+  clearTimeout(_leaveTimer); _leaveTimer = 0;
+  const el = _leaveEl; _leaveEl = null;
+  if (!el) return;
+  el.classList.remove('bc-leaving');
+  el.style.left = el.style.top = el.style.width = el.style.height = '';
+  el.style.display = 'none';
+}
 function go(p) {
   var _navEl = document.querySelector('.nav'); if (_navEl) _navEl.classList.remove('open');
-  /* 侧栏 / 顶栏的选中态立刻更新：内容稍 180ms 到位，但点击反馈必须是即时的 */
+  /* 侧栏 / 顶栏的选中态立刻更新：点击反馈必须即时，不该等动画 */
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === p));
   document.querySelectorAll('.sidebar .side-item').forEach(x => x.classList.toggle('active', x.dataset.page === p));
+  dropLeaveEl();   /* 上一次交叉淡化还没收干净就又点了：先把上一位送走 */
   let curEl = null;
   pages.forEach(function (pg) {
     if (curEl) return;
@@ -8526,13 +8548,27 @@ function go(p) {
     if (getComputedStyle(el).display !== 'none') curEl = el;
   });
   if (!curEl || curEl.id === 'page-' + p) { applyPage(p); return; }
-  const seq = ++_goSeq;
+  /* 交叉淡化：先把旧页以**此刻的坐标**抬成 position:fixed —— 它因此脱离文档流，不再与
+     新页互挤宽度（都是 .app 的 flex 子项，同时在场会被压成半屏），于是两页可以同时在场，
+     旧页在上层淡出、新页在下面展开，中间没有「等它消失」的空窗。
+     用 fixed 而不是 absolute 是有意的：absolute 需要给 .app 加定位，而那会改变一大堆
+     绝对定位后代的包含块；fixed 只依赖视口，对既有布局零影响。
+     ⚠️ 坐标必须在这行之前量（元素还在流里），抬走之后再量就只能量到 fixed 后的盒子了。 */
+  const r = curEl.getBoundingClientRect();
+  curEl.style.left = r.left + 'px';
+  curEl.style.top = r.top + 'px';
+  curEl.style.width = r.width + 'px';
+  curEl.style.height = r.height + 'px';
   curEl.classList.add('bc-leaving');
+  _leaveEl = curEl;
   const raw = String(getComputedStyle(curEl).animationDuration || '');
   const sec = parseFloat(raw);
   const ms = sec > 0 ? sec * (raw.indexOf('ms') >= 0 ? 1 : 1000) : 0;
-  if (!ms) { applyPage(p); return; }
-  setTimeout(function () { if (seq === _goSeq) applyPage(p); }, ms + 20);
+  /* keep 住旧页：applyPage 会把其余页面隐藏，但这一张要留到最后一口气再收获 */
+  applyPage(p, curEl);
+  if (!ms) { dropLeaveEl(); return; }   /* 降级用户没有收起动画，不必等 */
+  const seq = ++_goSeq;
+  _leaveTimer = setTimeout(function () { if (seq === _goSeq) dropLeaveEl(); }, ms + 40);
 }
 function toggleNav() { var n = document.querySelector('.nav'); if (n) n.classList.toggle('open'); }
 
