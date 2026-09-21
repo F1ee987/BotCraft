@@ -644,6 +644,13 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .node-del{position:absolute;top:8px;right:10px;font-size:11px;color:var(--sub);opacity:0;transition:var(--dur-2) var(--ease);cursor:pointer;background:var(--card);padding:2px 5px;border-radius:var(--r-2xs)}
 .node:hover .node-del{opacity:1}
 .node-del:hover{color:var(--danger-text)}
+/* ✎ 编辑按钮：双击卡片能进编辑态，但「双击」是个看不见的手势 —— 给一个看得见的入口。
+   与 ✕ 一样，按下阶段必须在 cwOnDown 里早退，否则 click 会被 pointer capture 吃掉。 */
+.node-edit{position:absolute;top:8px;right:32px;font-size:11px;color:var(--sub);opacity:0;transition:var(--dur-2) var(--ease);cursor:pointer;background:var(--card);padding:2px 5px;border-radius:var(--r-2xs)}
+.node:hover .node-edit{opacity:1}
+/* hover 用「品牌填充 + 白字」而不是只换文字颜色：单换 color:var(--brand)
+   在卡片底色上只有 3.4:1（深色主题）/ 4.2:1（浅色），过不了对比度门槛。 */
+.node-edit:hover{background:var(--brand-fill);color:#fff}
 .node.handoff{border-color:var(--brand);box-shadow:0 0 0 1px var(--glass-bg-active) inset}
 .node-handoff-to{font-size:11px;color:var(--brand-text);margin-top:5px;font-weight:590}
 .flow-arrow{text-align:center;color:var(--line);font-size:13px;margin:2px 0;font-weight:600}
@@ -666,6 +673,11 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-root.pan-mode{cursor:grab}
 .cw-grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px),linear-gradient(var(--brand-line) 1px,transparent 1px),linear-gradient(90deg,var(--brand-line) 1px,transparent 1px);background-repeat:repeat}
 .cw-stage{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0}
+/* 画布整体不可选中文字：拖动时手一抖就把卡片标题选成蓝色，观感很脏。
+   从前靠 pointerdown 的 preventDefault 兜住这件事，但那一下同时掐掉了
+   兼容鼠标事件（click / dblclick），「双击编辑」「点卡片上的按钮」就全断了 ——
+   改用 CSS 兜，编辑态里再放开（见 .node.editing 那条）。 */
+#cwRoot{user-select:none;-webkit-user-select:none}
 .cw-links{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 .cw-link{fill:none;stroke:var(--cw-link);stroke-width:2.5}
 /* 箭头 = 有向边在界面上的唯一表达。连线本来就是有向的（谁的数据流给谁），
@@ -1050,6 +1062,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .node .node-handle{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--sub);cursor:grab;opacity:0;transition:var(--dur-2) var(--ease)}
 .node:hover .node-handle{opacity:.7}
 .node.editing{border-color:var(--brand);box-shadow:0 0 0 3px var(--glass-bg-active)}
+/* 编辑态里把文字选择放开：输入框里要能拖动选择、双击选词 */
+.node.editing,.node.editing *{user-select:text;-webkit-user-select:text}
+/* 字段小标签：编辑态里没有它，「卡片上的那行小字」到底对应哪个框全靠猜 */
+.ne-cap{font-size:11px;color:var(--sub);margin:6px 0 2px;font-weight:600}
 .node.editing input,.node.editing textarea{width:100%;background:var(--fill);border:1px solid transparent;border-radius:var(--r-sm);color:var(--txt);font-size:12.5px;padding:6px 8px;margin:4px 0;font-family:inherit}
 .node.editing textarea{resize:vertical;min-height:40px}
 .node .node-edit-save{display:none;margin-top:6px;gap:var(--sp-3)}
@@ -8818,6 +8834,7 @@ function cwCard(b, nd, i) {
     '<span class="cw-ord" title="执行次序（拓扑序第 ' + (ord || i + 1) + ' 位）">' + (ord || i + 1) + '</span>' +
     '<span class="cw-port in" data-port="in" data-i="' + i + '" title="拖到这里：把别的节点接到「' + who + '」前面"></span>' +
     '<span class="node-del" data-i="' + i + '" title="删除节点">✕</span>' +
+    '<span class="node-edit" data-i="' + i + '" title="编辑节点（标题 / 描述小字）">✎</span>' +
     '<span class="node-ic">' + nodeIcon(lbl, h) + '</span>' +
     '<div class="lbl">' + escapeHtml(lbl) + kindTag + '</div><h4>' + escapeHtml(h) + '</h4><p>' + escapeHtml(p) + '</p>' + hint +
     '<div style="font-size:10px;color:var(--sub);margin-top:3px;word-break:break-all">输出 ' + escapeHtml('{{' + (nd.id || '') + '.' + outName + '}}') + '</div>' +
@@ -8984,132 +9001,141 @@ function addNode() {
 // 双击节点进入编辑态
 function bindNodeEdit(body, b) {
   body.querySelectorAll('.node:not(.add)').forEach(el => {
-    el.ondblclick = e => {
+    el.ondblclick = () => {
       if (el.classList.contains('editing')) return;
-      const i = +el.dataset.i;
-      const nd = b.nodes[i];
-      el.classList.add('editing');
-      const botOpts = (typeof bots !== 'undefined' && bots.length)
-        ? bots.filter(x => x.id !== b.id).map(x => `<option value="${x.id}" ${(nd.bot === x.id) ? 'selected' : ''}>${escapeHtml(x.n)}</option>`).join('')
-        : '';
-      const isHandoffType = (nd.lbl || '').indexOf('机器人') >= 0;
-      const isAprType = (nd.role === 'human');
-      const kindCfg = flowNodeCfgHtml(b, nd, i);
-      el.innerHTML = `
-        <span class="node-del" data-i="${i}" title="删除节点">✕</span>
-        <select class="ne-type" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px">
-          ${NODE_TYPES.map(t => `<option value="${t.lbl}" ${t.lbl === nd.lbl ? 'selected' : ''}>${t.lbl}</option>`).join('')}
-        </select>
-        <select class="ne-bot" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px;display:${isHandoffType ? 'block' : 'none'}" ${botOpts ? '' : 'disabled'}>
-          ${botOpts ? botOpts : '<option value="">（暂无其他机器人）</option>'}
-        </select>
-        <input class="ne-h" value="${escapeAttr(nd.h)}" placeholder="节点标题">
-        <textarea class="ne-p" placeholder="节点描述">${escapeHtml(nd.p)}</textarea>
-        ${kindCfg}
-        ${isAprType ? `
-        <div style="margin-top:6px">
-          <div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>
-          <textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical">${escapeHtml(nd.note || '')}</textarea>
-          <label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><input class="ne-autoreview" type="checkbox" ${nd.autoReview ? 'checked' : ''}> 启用预审（复用质检逻辑，发出前先出质检意见）</label>
-        </div>` : ''}
-        <div class="node-edit-save">
-          <button class="ok" data-act="save">保存</button>
-          <button class="cancel" data-act="cancel">取消</button>
-        </div>`;
-      const typeSel = el.querySelector('.ne-type');
-      const botSel = el.querySelector('.ne-bot');
-      const hInput = el.querySelector('.ne-h');
-      const pInput = el.querySelector('.ne-p');
-      // ---- 种类专有字段：直接写回并落盘 ----
-      el.querySelectorAll('.ne-cfg').forEach(inp2 => {
-        const flush = () => {
-          const nd2 = b.nodes[i];
-          if (!nd2) return;
-          const f = inp2.getAttribute('data-f');
-          if (!f) return;
-          const val = inp2.value;
-          if (f === 'branches') {
-            const k = +inp2.getAttribute('data-k');
-            if (!nd2.branches) nd2.branches = [];
-            if (!nd2.branches[k]) nd2.branches[k] = { label: '', when: '' };
-            nd2.branches[k][inp2.getAttribute('data-sub')] = val;
-          } else if (f === 'loopTimes') {
-            nd2.loopTimes = parseInt(val, 10) || 0;
-          } else if (f === 'infrom') {
-            const names = String(val || '').split(/\s+/).filter(Boolean);
-            nd2['in'] = names.map(function (n2, k2) { return { k: k2 ? ('in' + (k2 + 1)) : 'text', from: n2 }; });
-          } else {
-            nd2[f] = val;
-          }
-          b.updatedAt = Date.now(); saveBots();
-        };
-        inp2.onchange = flush;
-        inp2.oninput = flush;
-        inp2.onpointerdown = e2 => e2.stopPropagation();
-        inp2.ondblclick = e2 => e2.stopPropagation();
-      });
-      el.querySelectorAll('.ne-bradd').forEach(btn => {
-        btn.onpointerdown = e2 => e2.stopPropagation();
-        btn.onclick = e2 => {
-          e2.stopPropagation();
-          const nd2 = b.nodes[i];
-          if (!nd2) return;
-          if (!nd2.branches) nd2.branches = [];
-          nd2.branches.push({ label: '分支' + (nd2.branches.length + 1), when: '' });
-          b.updatedAt = Date.now(); saveBots(); renderNodes(b);
-        };
-      });
-      el.querySelectorAll('.ne-varpick').forEach(sel => {
-        sel.onpointerdown = e2 => e2.stopPropagation();
-        sel.onchange = e2 => {
-          e2.stopPropagation();
-          const nd2 = b.nodes[i];
-          const box = sel.closest('div').querySelector('input.ne-cfg');
-          if (!nd2 || !box || !sel.value) return;
-          const add = sel.value;
-          nd2['in'] = (nd2['in'] || []).concat([{ k: (nd2['in'] || []).length ? ('in' + (nd2['in'].length + 1)) : 'text', from: '{{' + add + '}}' }]);
-          box.value = nd2['in'].map(function (x) { return x.from; }).join(' ');
-          b.updatedAt = Date.now(); saveBots();
-          sel.value = '';
-          toast('已插入变量 ' + add, 'ok');
-        };
-      });
-
-      typeSel.onchange = () => {
-        botSel.style.display = (typeSel.value.indexOf('机器人') >= 0) ? 'block' : 'none';
-        const willHuman = ((NODE_TYPES.find(t => t.lbl === typeSel.value) || {}).role === 'human');
-        var aprBox = el.querySelector('.apr-box');
-        if (!aprBox) {
-          aprBox = document.createElement('div'); aprBox.className = 'apr-box';
-          aprBox.style.marginTop = '6px';
-          aprBox.innerHTML = '<div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>' +
-            '<textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical"></textarea>' +
-            '<label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><input class="ne-autoreview" type="checkbox" checked> 启用预审（复用质检逻辑，发出前先出质检意见）</label>';
-          el.insertBefore(aprBox, el.querySelector('.node-edit-save'));
-        }
-        aprBox.style.display = willHuman ? 'block' : 'none';
-      };
-      const close = () => { el.classList.remove('editing'); renderNodes(b); };
-      const save = () => {
-        const chosen = NODE_TYPES.find(t => t.lbl === typeSel.value) || NODE_TYPES[0];
-        const newH = (hInput.value || '').trim() || chosen.h;
-        const newP = (pInput.value || '').trim() || chosen.p;
-        const isHandoff = (typeSel.value || '').indexOf('机器人') >= 0;
-        const newBot = isHandoff ? (botSel.value || '') : '';
-        const newRole = (NODE_TYPES.find(t => t.lbl === typeSel.value) || {}).role || '';
-        const isHuman = (newRole === 'human');
-        const newNote = isHuman ? ((el.querySelector('.ne-note') || {}).value || '') : '';
-        const newAuto = isHuman ? !!(el.querySelector('.ne-autoreview') && el.querySelector('.ne-autoreview').checked) : false;
-        // 保留原对象的其它字段（尤其 x/y）：画布的坐标是视图状态，
-        // 重建对象时漏掉它，编辑一次节点就会跳回自动布局的默认位置。
-        b.nodes[i] = Object.assign({}, b.nodes[i], { lbl: typeSel.value, h: newH, p: newP, bot: newBot, role: newRole, note: newNote, autoReview: newAuto });
-        b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('节点已更新', 'ok');
-      };
-      el.querySelector('[data-act=save]').onclick = save;
-      el.querySelector('[data-act=cancel]').onclick = close;
-      setTimeout(() => hInput.focus(), 0);
+      cwBeginEdit(el, b, +el.dataset.i);
     };
   });
+}
+// 进入节点编辑态：双击卡片与卡片上的 ✎ 按钮共用**同一条**路径。
+// 抽成顶层函数的原因有两个 —— 入口有两个，逻辑写两份必然走偏；而且「双击」
+// 在真机上恰是最容易失效的那条路（见 cwOnDown 里 pointer capture 那段注释）。
+function cwBeginEdit(el, b, i) {
+  if (!el || !b || el.classList.contains('editing')) return;
+  const nd = b.nodes[i];
+  if (!nd) return;
+  el.classList.add('editing');
+  const botOpts = (typeof bots !== 'undefined' && bots.length)
+    ? bots.filter(x => x.id !== b.id).map(x => `<option value="${x.id}" ${(nd.bot === x.id) ? 'selected' : ''}>${escapeHtml(x.n)}</option>`).join('')
+    : '';
+  const isHandoffType = (nd.lbl || '').indexOf('机器人') >= 0;
+  const isAprType = (nd.role === 'human');
+  const kindCfg = flowNodeCfgHtml(b, nd, i);
+  el.innerHTML = `
+    <span class="node-del" data-i="${i}" title="删除节点">✕</span>
+    <select class="ne-type" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px">
+      ${NODE_TYPES.map(t => `<option value="${t.lbl}" ${t.lbl === nd.lbl ? 'selected' : ''}>${t.lbl}</option>`).join('')}
+    </select>
+    <select class="ne-bot" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px;display:${isHandoffType ? 'block' : 'none'}" ${botOpts ? '' : 'disabled'}>
+      ${botOpts ? botOpts : '<option value="">（暂无其他机器人）</option>'}
+    </select>
+    <div class="ne-cap">标题 <span style="font-weight:400">（卡片上的大字）</span></div>
+    <input class="ne-h" value="${escapeAttr(nd.h)}" placeholder="节点标题">
+    <div class="ne-cap">描述 <span style="font-weight:400">（卡片标题下的小字，卡片上最多显示 3 行）</span></div>
+    <textarea class="ne-p" placeholder="节点描述">${escapeHtml(nd.p)}</textarea>
+    ${kindCfg}
+    ${isAprType ? `
+    <div style="margin-top:6px">
+      <div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>
+      <textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical">${escapeHtml(nd.note || '')}</textarea>
+      <label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><input class="ne-autoreview" type="checkbox" ${nd.autoReview ? 'checked' : ''}> 启用预审（复用质检逻辑，发出前先出质检意见）</label>
+    </div>` : ''}
+    <div class="node-edit-save">
+      <button class="ok" data-act="save">保存</button>
+      <button class="cancel" data-act="cancel">取消</button>
+    </div>`;
+  const typeSel = el.querySelector('.ne-type');
+  const botSel = el.querySelector('.ne-bot');
+  const hInput = el.querySelector('.ne-h');
+  const pInput = el.querySelector('.ne-p');
+  // ---- 种类专有字段：直接写回并落盘 ----
+  el.querySelectorAll('.ne-cfg').forEach(inp2 => {
+    const flush = () => {
+      const nd2 = b.nodes[i];
+      if (!nd2) return;
+      const f = inp2.getAttribute('data-f');
+      if (!f) return;
+      const val = inp2.value;
+      if (f === 'branches') {
+        const k = +inp2.getAttribute('data-k');
+        if (!nd2.branches) nd2.branches = [];
+        if (!nd2.branches[k]) nd2.branches[k] = { label: '', when: '' };
+        nd2.branches[k][inp2.getAttribute('data-sub')] = val;
+      } else if (f === 'loopTimes') {
+        nd2.loopTimes = parseInt(val, 10) || 0;
+      } else if (f === 'infrom') {
+        const names = String(val || '').split(/\s+/).filter(Boolean);
+        nd2['in'] = names.map(function (n2, k2) { return { k: k2 ? ('in' + (k2 + 1)) : 'text', from: n2 }; });
+      } else {
+        nd2[f] = val;
+      }
+      b.updatedAt = Date.now(); saveBots();
+    };
+    inp2.onchange = flush;
+    inp2.oninput = flush;
+    inp2.onpointerdown = e2 => e2.stopPropagation();
+    inp2.ondblclick = e2 => e2.stopPropagation();
+  });
+  el.querySelectorAll('.ne-bradd').forEach(btn => {
+    btn.onpointerdown = e2 => e2.stopPropagation();
+    btn.onclick = e2 => {
+      e2.stopPropagation();
+      const nd2 = b.nodes[i];
+      if (!nd2) return;
+      if (!nd2.branches) nd2.branches = [];
+      nd2.branches.push({ label: '分支' + (nd2.branches.length + 1), when: '' });
+      b.updatedAt = Date.now(); saveBots(); renderNodes(b);
+    };
+  });
+  el.querySelectorAll('.ne-varpick').forEach(sel => {
+    sel.onpointerdown = e2 => e2.stopPropagation();
+    sel.onchange = e2 => {
+      e2.stopPropagation();
+      const nd2 = b.nodes[i];
+      const box = sel.closest('div').querySelector('input.ne-cfg');
+      if (!nd2 || !box || !sel.value) return;
+      const add = sel.value;
+      nd2['in'] = (nd2['in'] || []).concat([{ k: (nd2['in'] || []).length ? ('in' + (nd2['in'].length + 1)) : 'text', from: '{{' + add + '}}' }]);
+      box.value = nd2['in'].map(function (x) { return x.from; }).join(' ');
+      b.updatedAt = Date.now(); saveBots();
+      sel.value = '';
+      toast('已插入变量 ' + add, 'ok');
+    };
+  });
+
+  typeSel.onchange = () => {
+    botSel.style.display = (typeSel.value.indexOf('机器人') >= 0) ? 'block' : 'none';
+    const willHuman = ((NODE_TYPES.find(t => t.lbl === typeSel.value) || {}).role === 'human');
+    var aprBox = el.querySelector('.apr-box');
+    if (!aprBox) {
+      aprBox = document.createElement('div'); aprBox.className = 'apr-box';
+      aprBox.style.marginTop = '6px';
+      aprBox.innerHTML = '<div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>' +
+        '<textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical"></textarea>' +
+        '<label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><input class="ne-autoreview" type="checkbox" checked> 启用预审（复用质检逻辑，发出前先出质检意见）</label>';
+      el.insertBefore(aprBox, el.querySelector('.node-edit-save'));
+    }
+    aprBox.style.display = willHuman ? 'block' : 'none';
+  };
+  const close = () => { el.classList.remove('editing'); renderNodes(b); };
+  const save = () => {
+    const chosen = NODE_TYPES.find(t => t.lbl === typeSel.value) || NODE_TYPES[0];
+    const newH = (hInput.value || '').trim() || chosen.h;
+    const newP = (pInput.value || '').trim() || chosen.p;
+    const isHandoff = (typeSel.value || '').indexOf('机器人') >= 0;
+    const newBot = isHandoff ? (botSel.value || '') : '';
+    const newRole = (NODE_TYPES.find(t => t.lbl === typeSel.value) || {}).role || '';
+    const isHuman = (newRole === 'human');
+    const newNote = isHuman ? ((el.querySelector('.ne-note') || {}).value || '') : '';
+    const newAuto = isHuman ? !!(el.querySelector('.ne-autoreview') && el.querySelector('.ne-autoreview').checked) : false;
+    // 保留原对象的其它字段（尤其 x/y）：画布的坐标是视图状态，
+    // 重建对象时漏掉它，编辑一次节点就会跳回自动布局的默认位置。
+    b.nodes[i] = Object.assign({}, b.nodes[i], { lbl: typeSel.value, h: newH, p: newP, bot: newBot, role: newRole, note: newNote, autoReview: newAuto });
+    b.updatedAt = Date.now(); saveBots(); renderNodes(b); toast('节点已更新', 'ok');
+  };
+  el.querySelector('[data-act=save]').onclick = save;
+  el.querySelector('[data-act=cancel]').onclick = close;
+  setTimeout(() => hInput.focus(), 0);
 }
 // ---------------------------------------------------------------
 // 画布绘制：网格 / 平移缩放 / 连线 / 中点按钮 / 小地图
@@ -9817,6 +9843,13 @@ function cwOnDown(e) {
   // 派给捕获元素（画布 root）而不是按钮，cwOnClick 里 closest('.node-del') 落空，
   // 症状就是「删除按钮点了没反应」。顺带也避免了从删除按钮起拖整张卡。
   if (e.target.closest('.node-del')) return;
+  // ✎ 编辑按钮同理（同一个坑：click 会被 capture 重定向到画布，点了没反应）。
+  if (e.target.closest('.node-edit') || e.target.closest('.node-edit-save')) return;
+  // 编辑态里的输入控件整个交还给原生：input / textarea / select 要拿到焦点，
+  // 而画布分支会 capture + preventDefault —— 症状就是「点描述那个小字框点不进去」，
+  // 只能靠进入编辑态时自动聚焦的标题框打字，描述框形同虚设。
+  const editingCard = e.target.closest('.cw-card.editing');
+  if (editingCard && e.target.closest('input,textarea,select,label,button')) return;
   if (e.target.closest('.cw-tools') || e.target.closest('.cw-mid') || e.target.closest('.cw-menu')) return;
   cwCloseMenu();
   // 小地图：按下即跳、拖住连续平移 —— 视口框就是被拖的那个「把手」。
@@ -9826,8 +9859,9 @@ function cwOnDown(e) {
       cwMiniJump(e.clientX, e.clientY, cwSt.miniMap);
       cwSt.drag = { mode: 'mini', moved: false };
     }
-    try { root.setPointerCapture(e.pointerId); } catch (err) { }
-    e.preventDefault();
+    // 捕获推后到第一次 move：小地图上「按下即跳」是一次没有位移的点击，
+    // 在这里 capture 只有副作用（click 被派给捕获元素），没有好处。
+    cwSt.grabId = e.pointerId;
     return;
   }
   const port = e.target.closest('.cw-port');
@@ -9861,8 +9895,24 @@ function cwOnDown(e) {
     cwSt.drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: cwView(b).x, vy: cwView(b).y };
     root.classList.add('panning');
   }
-  try { root.setPointerCapture(e.pointerId); } catch (err) { }
-  e.preventDefault();
+  // **这里刻意不 setPointerCapture、也不 preventDefault。**
+  // 两个都是「按下一个手势就抢走原生行为」的重手：
+  //  · setPointerCapture 之后，浏览器把后续 click / dblclick 派给捕获元素
+  //    （画布 root），于是「双击卡片进编辑」「点卡片上的 ✎ / ✕」全部落空 ——
+  //    删除按钮点不动就是这个坑，修它时只给 ✕ 开了后门，其实根子在这儿；
+  //  · preventDefault 会掐掉兼容鼠标事件（mousedown / click / dblclick）。
+  //  没有位移的手势（单击、双击）必须保持原生行为，真拖动时才由 cwOnMove
+  //  里的 cwGrab 接管；防文字选中已改由 CSS user-select 兜（#cwRoot）。
+  cwSt.grabId = e.pointerId;
+}
+
+// 真正开始拖动时才捕获指针。capture 的作用是「指针移出画布也收得到 move/up」，
+// 所以第一次 move（此刻指针必然还在 root 内）再捕获完全来得及。
+function cwGrab(e) {
+  const root = cwSt.root;
+  if (!root || !e) return;
+  if (root.__cwCap === e.pointerId) return;
+  try { root.setPointerCapture(e.pointerId); root.__cwCap = e.pointerId; } catch (err) { }
 }
 
 function cwOnMove(e) {
@@ -9871,6 +9921,7 @@ function cwOnMove(e) {
   // 小地图拖拽：视口连续跟随，不受拖动阈值约束（阈值防的是手抖挪卡，
   // 而拖视口本来就要「指哪打哪」，抖一下跳一下反而对）。
   if (d.mode === 'mini') {
+    cwGrab(e);
     if (cwSt.miniMap) cwMiniJump(e.clientX, e.clientY, cwSt.miniMap);
     d.moved = true;
     return;
@@ -9883,6 +9934,7 @@ function cwOnMove(e) {
       if (Math.abs(jx) + Math.abs(jy) < CW_DRAG_T) return;
     }
   }
+  cwGrab(e);          // 越过阈值 = 这是一次真拖动，从这里起才接管指针
   d.moved = true;
   const v = cwView(b);
   if (d.mode === 'pan') {
@@ -9958,7 +10010,9 @@ function cwOnUp(e) {
   if (root) {
     root.classList.remove('panning', 'marqueeing');
     try { root.releasePointerCapture(e.pointerId); } catch (err) { }
+    root.__cwCap = 0;
   }
+  cwSt.grabId = 0;
   if (d.mode === 'node') {
     if (d.moved) { b.updatedAt = Date.now(); saveBots(); }
     else {
@@ -10044,6 +10098,13 @@ function cwOnClick(e) {
   if (e.target.closest('.cw-menu')) { cwCloseMenu(); return; }
   const del = e.target.closest('.node-del');
   if (del) { cwDelOne(b, +del.getAttribute('data-i')); return; }
+  // ✎ 与双击共用同一条进入编辑的路径（cwBeginEdit）—— 两个入口各写一份必然走偏
+  const edBtn = e.target.closest('.node-edit');
+  if (edBtn) {
+    const c = edBtn.closest('.cw-card');
+    if (c) cwBeginEdit(c, b, +c.getAttribute('data-i'));
+    return;
+  }
   const mid = e.target.closest('.cw-mid');
   if (mid) { cwInsertBetween(b, +mid.getAttribute('data-mid')); return; }
   const tbtn = e.target.closest('.cw-tbtn');
