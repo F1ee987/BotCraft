@@ -684,7 +684,7 @@ body.embed-mode #wsName{font-size:15px}
 .ws-resizer::after{content:'';position:absolute;left:2px;top:0;bottom:0;width:2px;background:transparent;transition:background .16s var(--ease)}
 .ws-resizer:hover::after,body.resizing .ws-resizer::after{background:var(--brand-fill)}
 body.resizing{cursor:col-resize;user-select:none}
-.ws-side-toggle{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:15px;height:38px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--popover);color:var(--sub);font-size:10px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)}
+.ws-side-toggle{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:22px;height:48px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--popover);color:var(--sub);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)}
 .ws-resizer:hover .ws-side-toggle,body.ws-side-collapsed .ws-side-toggle{opacity:1}
 .ws-side-toggle:hover{color:var(--txt);border-color:var(--brand)}
 body.ws-side-collapsed .ws-side{display:none}
@@ -9686,9 +9686,10 @@ function cwFitMini() {
   root.classList.remove('cw-tiny');                 // 先还原，量出的才是未收起状态的宽度
   const need = sp6 + tools.offsetWidth + 8;         // 工具条右边缘（含最小间隙）
   const have = bw - sp6 - mini.offsetWidth;         // 小地图左边缘
-  // 画布窄到「小地图本身都放不下」（左右边距 + 168 + 间隙）→ 收起小地图，别让它
-  // 溢出画布压到工具条上（穿模）。此时让位判定一并失效（没有小地图要避让了）。
-  const tiny = bw < sp6 * 2 + mini.offsetWidth + 8;
+  // 画布窄到让位布局也挤不下时（< 360：此时 cramped 的工具条只剩不到 168px 宽，
+  // 小地图紧贴着它，视觉上就是「图标穿进悬浮框」）→ 收起小地图，工具条恢复全宽折行。
+  // 物理放不下（<200）只是下限；实际体验的拐点在 360。
+  const tiny = bw < 360;
   root.classList.toggle('cw-tiny', tiny);
   root.classList.toggle('cw-cramped', !tiny && need > have);
 }
