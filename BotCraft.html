@@ -474,8 +474,10 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .auth-brand .logo{justify-content:center}
 .auth-brand p{color:var(--sub);font-size:13px;margin-top:12px}
 /* 分段控件（iOS Segmented Control） */
-.auth-tabs{display:flex;gap:var(--sp-1);margin-bottom:18px;background:var(--fill);padding:2px;border-radius:var(--r-sm);width:fit-content}
-.auth-tab{padding:6px 20px;border-radius:var(--r-xs);font-size:13px;background:transparent;color:var(--txt);font-weight:590;cursor:pointer;border:none;transition:background var(--dur-4) var(--ease)}
+.auth-tabs{display:flex;gap:var(--sp-1);margin-bottom:18px;background:var(--fill);padding:2px;border-radius:var(--r-sm);width:fit-content;flex-shrink:0}
+/* nowrap 是保命的：中文可以在任意字间断行，tab 一旦被 flex 压窄就会变成「登/录」竖排
+   （用户截图里真实发生过）。宽不够时宁可让容器溢出，也不许逐字竖排。 */
+.auth-tab{padding:6px 20px;border-radius:var(--r-xs);font-size:13px;background:transparent;color:var(--txt);font-weight:590;cursor:pointer;border:none;transition:background var(--dur-4) var(--ease);white-space:nowrap;flex-shrink:0}
 .auth-tab.active{background:var(--card);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.16)}
 #authModal .field input{padding:11px 13px}
 #auth-err{font-size:12px}
@@ -505,7 +507,7 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 /* 登录弹窗同样是分栏：左插画窄栏 + 右表单（覆盖 .mbox 的 padding 与滚动） */
 .auth-split{display:flex;padding:0;overflow:hidden;width:auto}
 .auth-split .auth-art{flex:0 0 286px}
-.auth-split .auth-form-col{padding:26px 30px 24px;width:398px;max-width:92vw;box-sizing:border-box;overflow-y:auto;text-align:left}
+.auth-split .auth-form-col{padding:26px 30px 24px;width:398px;max-width:92vw;box-sizing:border-box;overflow-y:auto;text-align:left;flex-shrink:0}
 /* 密码可见切换 */
 .auth-pass-wrap{position:relative}
 .auth-pass-wrap input{padding-right:44px}
@@ -518,6 +520,14 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .auth-split .mbox-foot{flex-direction:column-reverse;align-items:stretch;gap:var(--sp-3);margin-top:12px}
 .auth-or{display:flex;align-items:center;gap:var(--sp-4);margin:14px 0 0;color:var(--sub);font-size:11.5px}
 .auth-or::before,.auth-or::after{content:'';flex:1;height:1px;background:var(--line)}
+/* 弹窗自己的断点：插画 286 + 表单 398 + 弹窗左右 padding，视口 ≥ ~820 才放得下。
+   820 以下插画让位 —— 否则表单栏会被 flex 压到 200px，tab 竖排、
+   placeholder 截断、说明文字 3~4 字一行（用户截图里全都发生了）。 */
+@media (max-width:820px){
+  .auth-split .auth-art{display:none}
+  .auth-split{flex-direction:column}
+  .auth-split .auth-form-col{width:auto;flex-shrink:0}
+}
 @media (max-width:900px){
   .auth-card{flex-direction:column;height:min(680px,90vh)}
   .auth-card .auth-art{flex:0 0 168px}
@@ -1650,7 +1660,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <form id="authForm" data-mode="login" onsubmit="submitAuth(); return false;">
       <div class="field">
         <label>用户名</label>
-        <input id="auth-user" placeholder="3-20 位字母、数字、下划线" autocomplete="username" oninput="checkUsernameInput()">
+        <input id="auth-user" placeholder="字母 / 数字 / 下划线" autocomplete="username" oninput="checkUsernameInput()">
         <div id="auth-user-hint" class="hint" style="color:var(--danger-text);display:none;margin-top:5px">⚠️ 用户名仅支持字母、数字、下划线，请移除特殊符号</div>
       </div>
       <div class="field" id="auth-email-row" style="display:none">
@@ -1674,7 +1684,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="auth-or">或</div>
     <button type="button" class="btn btn-ghost" style="width:100%;margin-top:12px;border:1px solid var(--line)" onclick="closeAuth();enterGuestMode()">先试用，不登录</button>
     <div class="hint" id="auth-switch-text" style="text-align:center;margin-top:14px"></div>
-    <div class="hint" style="font-size:11px;margin-top:12px;opacity:.8">
+    <div class="hint" style="font-size:11px;margin-top:12px;opacity:.8;color:var(--sub)">
       🔒 密码经 PBKDF2-SHA256 加盐哈希后本地存储，绝不明文保存；演示用途，请勿用于真实敏感账号。
     </div>
     </div>
