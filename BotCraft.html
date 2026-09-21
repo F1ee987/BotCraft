@@ -5960,6 +5960,23 @@ function aiPlotValidate(spec, TYPES) {
     eSeen[key] = 1;
     outE.push({ from: f, to: t, port: port });
   }
+  // 引用存在性：when / toolQuery / loopWhen / subQuery / p 里的 {{节点id.字段}} 若指向
+  // 不存在的节点，运行时会**静默取到空** —— 这是「生成的图跑起来输出是空的」的头号来源。
+  // 不删内容（也许用户接下来会补节点），但必须留痕让人知道哪里断了。
+  var known = {};
+  out.forEach(function (n) { known[n.id] = 1; });
+  known.input = 1; known.prev = 1;   // 内置变量源：用户输入与旧式「上一步输出」
+  out.forEach(function (n) {
+    var texts = [];
+    ['p', 'toolQuery', 'loopWhen', 'subQuery'].forEach(function (f) { if (n[f]) texts.push(n[f]); });
+    (n.branches || []).forEach(function (bb) { if (bb && bb.when) texts.push(bb.when); });
+    texts.forEach(function (tx) {
+      flowTplRefs(tx).forEach(function (ref) {
+        var rid = String(ref).split('.')[0];
+        if (!known[rid]) warn('「' + n.id + '」引用了不存在的节点 ' + rid + '，运行时将取到空值');
+      });
+    });
+  });
   res.nodes = out; res.edges = outE; res.ok = true;
   return res;
 }
@@ -9119,27 +9136,48 @@ function closeAiPlot() {
   const m = document.getElementById('aiPlotModal'); if (m) m.classList.remove('on');
   const g = document.getElementById('aiPlotGo'); if (g) { g.disabled = false; g.textContent = '生成'; }
 }
-async function aiPlotRun() {
+async function aiPlotRun(refine) {
   const b = cwSt.bot; if (!b) return;
   if (!(window.BotCraftAI && BotCraftAI.canCall && BotCraftAI.canCall())) {
     toast('AI 编排需要真实模型：请先到「设置」填写 API Key', 'err'); return;
   }
-  const modeEl = document.querySelector('input[name=aiplot-mode]:checked');
-  const mode = modeEl ? modeEl.value : 'fresh';
-  const ask = (document.getElementById('aiPlotAsk') || {}).value || '';
+  let modeEl = document.querySelector('input[name=aiplot-mode]:checked');
+  let mode = modeEl ? modeEl.value : 'fresh';
+  let ask = (document.getElementById('aiPlotAsk') || {}).value || '';
+  // 「继续调整」：以上一次生成结果为底图，叠加一句调整意见再生成一轮 ——
+  // 一次生成很难完美，让用户重打整段需求太浪费；这就是轻量的对话式微调。
+  let plotBot = b;
+  if (refine) {
+    const prev = window.__aiPlotResult;
+    if (!prev || !prev.ok) { toast('还没有可调整的生成结果', 'err'); return; }
+    const note = (document.getElementById('aiPlotRefine') || {}).value || '';
+    if (!note.trim()) { toast('写一句想怎么调整', 'err'); return; }
+    mode = 'improve';
+    plotBot = { nodes: prev.nodes, edges: prev.edges };
+    ask = (ask.trim() ? ask.trim() + '\n' : '') + '【调整意见】' + note.trim();
+  }
   if (mode === 'fresh' && !ask.trim()) { toast('先描述你想要的流程', 'err'); return; }
-  if (mode === 'improve' && !(b.nodes || []).length) { toast('当前画布没有节点，选「从零生成」', 'err'); return; }
+  if (mode === 'improve' && !((plotBot.nodes || []).length)) { toast('当前画布没有节点，选「从零生成」', 'err'); return; }
   const btn = document.getElementById('aiPlotGo');
   if (btn) { btn.disabled = true; btn.textContent = '生成中…'; }
   const out = document.getElementById('aiPlotOut');
   if (out) out.innerHTML = '<div class="hint">⏳ 正在让模型编排…（约 5~20 秒）</div>';
   try {
     const F = window.BotCraftFlow;
-    const text = await BotCraftAI.request([
+    const msgs = [
       { role: 'system', content: aiPlotSysPrompt() },
-      { role: 'user', content: aiPlotUserPrompt(mode, ask, b) }
-    ]);
-    const spec = F.aiPlotParse(text);
+      { role: 'user', content: aiPlotUserPrompt(mode, ask, plotBot) }
+    ];
+    // 编排要确定性，不要发挥：温度压到 0.2（request 的 gen 覆盖，优先于全局配置）
+    let text = await BotCraftAI.request(msgs, null, false, null, { temperature: 0.2 });
+    let spec = F.aiPlotParse(text);
+    if (!spec) {
+      // 只对「输出里根本没有 JSON」自动重试一次 —— 模型偶尔会先客套两句；
+      // 结构性校验错误（超上限等）重试也没用，直接给理由。
+      if (out) out.innerHTML = '<div class="hint">⏳ 输出里没找到 JSON，自动重试一次…</div>';
+      text = await BotCraftAI.request(msgs, null, false, null, { temperature: 0.2 });
+      spec = F.aiPlotParse(text);
+    }
     const v = spec ? F.aiPlotValidate(spec, NODE_TYPES)
                    : { ok: false, error: '模型输出里找不到 JSON', warnings: [] };
     if (!v.ok) {
@@ -9157,16 +9195,36 @@ async function aiPlotRun() {
         + '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(n.h || '') + '</span>'
         + '<span style="margin-left:auto;color:var(--sub);font-size:11px;flex-shrink:0">' + escapeHtml(n.id) + '</span></div>';
     }).join('');
+    // 连线一目了然：哪条断了 / 哪条带分支，预览里就该看得见，而不是应用后才发现
+    const byId = {};
+    v.nodes.forEach(function (n) { byId[n.id] = n; });
+    const edgeRows = v.edges.length
+      ? '<div style="font-size:11px;color:var(--sub);margin:8px 0 3px;font-weight:600">连线</div>'
+        + v.edges.map(function (e) {
+          const f = byId[e.from] ? (byId[e.from].h || e.from) : e.from;
+          const t = byId[e.to] ? (byId[e.to].h || e.to) : e.to;
+          return '<div style="font-size:11.5px;color:var(--sub);padding:2px 0">'
+            + escapeHtml(f) + ' <span style="color:var(--brand-text)">→</span> ' + escapeHtml(t)
+            + (e.port > 0 ? ' <span style="color:var(--brand-text)">[分支' + (e.port + 1) + ']</span>' : '')
+            + '</div>';
+        }).join('')
+      : '<div class="hint" style="margin-top:6px">⚠️ 没有任何连线 —— 节点会各自独立执行</div>';
     const warnHtml = v.warnings.length
       ? '<div class="hint" style="margin-top:6px">已自动修正模型输出的 ' + v.warnings.length + ' 处问题：<br>· '
         + v.warnings.map(escapeHtml).join('<br>· ') + '</div>'
       : '';
     if (out) out.innerHTML =
       '<div style="border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;max-height:190px;overflow-y:auto">' + rows + '</div>'
+      + '<div style="border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;max-height:110px;overflow-y:auto;margin-top:8px">' + edgeRows + '</div>'
       + '<div class="hint" style="margin-top:6px">' + v.nodes.length + ' 个节点 · ' + v.edges.length + ' 条连线' + warnHtml + '</div>'
       + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">'
       + '<button class="btn btn-ghost" onclick="aiPlotApply(\'append\')">追加到画布</button>'
-      + '<button class="btn btn-primary" onclick="aiPlotApply(\'replace\')">替换画布</button></div>';
+      + '<button class="btn btn-primary" onclick="aiPlotApply(\'replace\')">替换画布</button></div>'
+      + '<div style="display:flex;gap:8px;margin-top:10px">'
+      + '<input id="aiPlotRefine" placeholder="想再调整？例：在最后加一个人工确认步骤" '
+      + 'style="flex:1;min-width:0;box-sizing:border-box;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--fill);color:var(--txt);padding:8px 10px;font-size:12.5px" '
+      + 'onkeydown="if(event.key===\'Enter\')aiPlotRun(1)">'
+      + '<button class="btn btn-ghost" onclick="aiPlotRun(1)" style="flex-shrink:0">继续调整</button></div>';
   } catch (e) {
     if (out) out.innerHTML = '<div class="hint" style="color:var(--danger-text)">调用失败：'
       + escapeHtml(String((e && e.message) || e)).slice(0, 200) + '</div>';
