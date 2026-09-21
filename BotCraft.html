@@ -2542,6 +2542,8 @@ window.__storage = __storage;
     { k: 'image', label: '配图说明', prio: 1, color: 'var(--ctx4)' },
     // 节点任务是「这一步具体干什么」的直接执行指令，比流程总述更该留
     { k: 'nodetask', label: '节点任务', prio: 1, color: 'var(--ctx12)' },
+    // 画布工具协议 = 能力契约：丢了模型就不知道自己能改画布（用户明确要求也只会干说）
+    { k: 'canvas', label: '画布工具', prio: 0, color: 'var(--ctx5)' },
     { k: 'flow', label: '工作流设定', prio: 2, color: 'var(--ctx9)' },
     { k: 'memory', label: '长期记忆', prio: 2, color: 'var(--ctx3)' },
     { k: 'tool', label: '工具结果', prio: 3, color: 'var(--ctx10)' },
@@ -2985,6 +2987,9 @@ window.__storage = __storage;
       var hasReal = bot.plugins.some(function (n) { return realTools.indexOf(n) >= 0; });
       var note = '\n【已启用插件】' + bot.plugins.join('、') + '。';
       note += '其中「网页搜索 / 联网检索」「天气查询」「图片生成」是由系统在生成前自动执行的真实工具，其结果会出现在下方【工具结果】区块，请直接依据这些结果回答用户，无需自己编造，也不要假装这些工具没被调用；';
+      note += (bot.plugins.indexOf('画布工具') >= 0)
+        ? '「画布工具」不是回答风格偏好，而是**你能真的执行的操作** —— 用法见下方【画布工具】区块，用户要改流程时必须按那里说的输出指令；'
+        : '';
       note += '其余插件为能力偏好提示，请在其擅长方向上按该专长作答。';
       note += '特别说明：当「图片生成」插件启用且用户需要配图时，系统会先调用文生图接口生成真实图片，并在聊天中直接展示；你只需在正文中说明「已为你生成配图」或简单引用，不要把图片 URL 当作纯文本重复输出。';
       pushSec('plugin', note);
@@ -2996,6 +3001,9 @@ window.__storage = __storage;
       imgNote += ' 特别重要：用户要的是「直接看到图片」，不是要你写「图片生成提示词、负面提示词、小红书/抖音配文、图片比例、分镜脚本」等；你禁止输出任何带【】方括号的板块标题，禁止输出 Midjourney/Stable Diffusion 提示词模板，禁止输出营销文案脚本。违者视为违规输出。';
       pushSec('image', imgNote);
     }
+    // 画布工具：能力契约（不是参考资料）。独立成保护区区块 —— 塞进 tool 区块时
+    // 模型把它当「工具结果」看，而且 prio=3 一紧就丢，表现成「说了改画布却没改」。
+    pushSec('canvas', canvasToolBlock(bot));
     // 真实工具执行结果（联网检索 / 天气查询等），由系统在调用模型前自动拉取并注入
     if (toolCtx && toolCtx.trim()) {
       pushSec('tool', '\n【工具结果】以下是已启用插件的实际执行结果，请据此作答：\n' + toolCtx.trim());
@@ -11045,7 +11053,13 @@ async function runReply(b, opt) {
       try {
         var _cF = window.BotCraftFlow;
         var _cOps = _cF && _cF.canvasOpsParse ? _cF.canvasOpsParse(full) : [];
-        if (_cOps.length) {
+        if (!_cOps.length && typeof looksLikeCanvasAsk === 'function' && looksLikeCanvasAsk(v)) {
+          // 用户明显在要求改画布，模型却没给出指令 —— 从前这里什么都不说，
+          // 用户看到的就是「明明说了要改，画布毫无变化」。宁可多说一句。
+          full = full.replace(/\s*$/, '') + (full ? '\n\n' : '')
+            + '> ℹ️ 这句话像是要改画布，但这次没有产生画布指令，所以画布没有变化。'
+            + '可以再说具体一点（例如「在第 2 步后面加一个润色节点」），或者点画布上的 🪄 用 AI 编排整张图。';
+        } else if (_cOps.length) {
           var _cV = _cF.canvasOpsValidate(_cOps, activeBot, (typeof NODE_TYPES !== 'undefined' ? NODE_TYPES : []));
           // 画布 UI 是否正打开着这个机器人：决定要不要压撤销栈 / 立刻重绘。
           // 用 typeof 守卫，别让「画布代码没加载」把整段工具打成静默失效。
@@ -14804,27 +14818,44 @@ window.__debug = {
         parts.push('【提醒工具】当用户要求设置提醒时，请在回复末尾追加一行严格格式：\n[REMINDER: 提醒标题 | 2026-08-28T09:00]\n时间用 24 小时制；可用“明天 09:00”等相对表述，请换算成具体日期时间。每行一个。系统会自动存储并在到点时通知用户。现有提醒：\n' + _remTxt);
       } catch (e) { }
     }
-    if (plugins.indexOf('画布工具') >= 0) {
-      try {
-        var _cb = getBot(currentId) || bot;
-        var _bl = (window.BotCraftFlow && window.BotCraftFlow.canvasBriefText) ? window.BotCraftFlow.canvasBriefText(_cb, 30) : '';
-        var _lbls = (typeof NODE_TYPES !== 'undefined' ? NODE_TYPES : []).map(function (t) { return t.lbl; }).join(' / ');
-        parts.push('【画布工具】你可以直接改这个机器人的**编排画布**。当用户要你改流程时，在回复**末尾**追加指令行'
-          + '（每行一条，系统会执行并从回复里删掉，不会显示给用户）：\n'
-          + '· 加节点：[CANVAS: add | 节点类型 | 标题 | 一句话说明 | after=接在哪个节点后面]\n'
-          + '· 连线：[CANVAS: link | 起点id | 终点id | port=出口序号]\n'
-          + '· 断线：[CANVAS: unlink | 起点id | 终点id]\n'
-          + '· 改节点：[CANVAS: update | 节点id | h=新标题 | p=新说明 | tool=kb/web/weather/image | query=查询内容 | url=地址 | method=方法 | times=循环次数]\n'
-          + '· 删节点：[CANVAS: remove | 节点id]\n'
-          + '· 重排：[CANVAS: layout]\n'
-          + '规则：节点类型只能用 ' + _lbls + '；id 必须是下面现有 id；'
-          + '**加在两步之间**就用 after=前一步的 id（若前一步只有一个下游，新节点会自动串进它们中间，不会并排多挂一路）；'
-          + 'after 省略 = 新节点不与任何节点相连（放在最右侧），除非用户明确说要独立节点，否则加节点都请带 after；'
-          + '指令之外用一两句话说明你改了什么，不要复述指令本身。\n'
-          + '【当前画布】\n' + _bl);
-      } catch (e) { }
-    }
     return parts.join('\n\n');
+  }
+
+  // 用户这句话是不是在要求改画布？（收窄到「动作 + 结构词」同时出现，
+  // 免得「帮我改一下这段文案」也被当成画布指令）
+  function looksLikeCanvasAsk(t) {
+    var s = String(t === null || t === undefined ? '' : t);
+    if (!s) return false;
+    var act = /(加一?个?|新增|添加|删掉|删除|去掉|移除|改成|换成|替换|连一?条?|连上|断开|拆开|重排|排序|调整顺序|插一?步|插到)/;
+    var obj = /(步骤|节点|流程|画布|工作流|环节|链路|第\s*[一二三四五六七八九十\d]+\s*步)/;
+    return act.test(s) && obj.test(s);
+  }
+
+  // 画布工具的协议与画布现状。**不放进 collectToolContext**：那里会被包成
+  // 「【工具结果】…请据此作答」，模型当参考资料不当能力，而且 tool 区块 prio=3
+  // 一紧就最先被丢。这里由 buildCtxSections 作为独立保护区块（prio 0）注入。
+  function canvasToolBlock(bot) {
+    try {
+      if (!bot || (bot.plugins || []).indexOf('画布工具') < 0) return '';
+      var cb = (typeof getBot === 'function' && typeof currentId !== 'undefined') ? (getBot(currentId) || bot) : bot;
+      var bl = (window.BotCraftFlow && window.BotCraftFlow.canvasBriefText) ? window.BotCraftFlow.canvasBriefText(cb, 30) : '';
+      var lbls = (typeof NODE_TYPES !== 'undefined' && NODE_TYPES.length ? NODE_TYPES : []).map(function (t) { return t.lbl; }).join(' / ');
+      return '\n【画布工具 · 你可以直接改这个机器人的编排画布】\n'
+        + '用户要求修改流程时，你**必须真的执行**：在回复**末尾**追加指令行（每行一条；系统会执行它们，并把指令行从回复里删掉，不会显示给用户）。'
+        + '不要只是描述「建议怎么做」或者写一段与流程无关的正文 —— 那等于没做。\n'
+        + '· 加节点：[CANVAS: add | 节点类型 | 标题 | 一句话说明 | after=接在哪个节点后面]\n'
+        + '· 连线：[CANVAS: link | 起点id | 终点id | port=出口序号]\n'
+        + '· 断线：[CANVAS: unlink | 起点id | 终点id]\n'
+        + '· 改节点：[CANVAS: update | 节点id | h=新标题 | p=新说明 | tool=kb/web/weather/image | query=查询内容 | url=地址 | method=方法 | times=循环次数]\n'
+        + '· 删节点：[CANVAS: remove | 节点id]\n'
+        + '· 重排：[CANVAS: layout]\n'
+        + '规则：节点类型只能用 ' + lbls + '；id 必须是下面现有的；'
+        + '**加在两步之间**就用 after=前一步的 id（前一步只有一个下游时，新节点会自动串进它们中间）；'
+        + 'after 省略 = 新节点不与任何节点相连（放在最右侧），除非用户明确要独立节点，否则加节点都请带 after；'
+        + '「第二步」这类说法按下面的节点顺序数（1 起）；'
+        + '指令之外用一两句话说明你改了什么，不要复述指令本身。\n'
+        + '【当前画布】\n' + bl;
+    } catch (e) { return ''; }
   }
 
   // ---------- 审批节点：暂停工作流，等待人工确认（含 AI 预审，复用 review 质检逻辑） ----------
