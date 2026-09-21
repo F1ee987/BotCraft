@@ -8800,13 +8800,19 @@ function cwPaintMini(b, v, W, H) {  const mini = cwSt.mini, kids = cwSt.miniKids
   }
   const vp = cwSt.miniVp;
   if (vp) {
-    // 视口框尺寸 = 视口世界宽 × 固定 s：缩放不变、s 不变，框的大小就恒定。
-    // 视口跑到节点包围盒之外时框会被 .cw-mini 的 overflow 裁掉 —— 这是刻意的：
-    // 把框 clamp 进小地图会让它的位置不再对应真实视口，反而骗人。
-    vp.style.left = (ox + (-v.x / v.s - minx) * s) + 'px';
-    vp.style.top = (oy + (-v.y / v.s - miny) * s) + 'px';
-    vp.style.width = Math.max(3, (W / v.s) * s) + 'px';
-    vp.style.height = Math.max(3, (H / v.s) * s) + 'px';
+    // 视口框 = 「你在哪」的取景框，尺寸**恒定**，不表示「你看到多大」。
+    // 按世界范围算（W/v.s × s）语义上更"准"（缩小画布确实看到更多世界），
+    // 但用户的直觉是取景框就该是这个大小 —— 一缩放就撑大/缩小，看起来就是故障
+    // （用户为此反馈过两次）。恒定尺寸 + 中心对齐视口中心，位置只反映位置。
+    const vw = Math.max(24, Math.round(mw * 0.42)), vh = Math.max(16, Math.round(mh * 0.42));
+    const cx = ox + (-v.x / v.s + (W / v.s) / 2 - minx) * s;   // 视口中心在小地图上的位置
+    const cy = oy + (-v.y / v.s + (H / v.s) / 2 - miny) * s;
+    // 位置夹在小地图可见范围内：尺寸恒定之后，框要是跑出边界就整块看不见了
+    // （尺寸会变的旧版还能靠裁切边缘残留一点）——贴边停住，拖动照常生效。
+    vp.style.width = vw + 'px';
+    vp.style.height = vh + 'px';
+    vp.style.left = Math.round(Math.max(0, Math.min(mw - vw, cx - vw / 2))) + 'px';
+    vp.style.top = Math.round(Math.max(0, Math.min(mh - vh, cy - vh / 2))) + 'px';
   }
 }
 
