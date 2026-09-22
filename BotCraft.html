@@ -7576,18 +7576,54 @@ function loadBots() {
   try { arr = JSON.parse(raw); }
   catch (e) { _botsLoadFailed(raw, 'JSON 解析失败：' + ((e && e.message) || e)); return; }
   if (!Array.isArray(arr)) { _botsLoadFailed(raw, '数据结构异常，预期是机器人数组'); return; }
-  // 逐条归一化：单条记录坏掉只丢这一条。原来是一条坏 → .map 整体抛错 → 全军覆没。
-  const out = []; let bad = 0;
+  // 逐条归一化。**坏记录一律挽救，绝不静默丢弃**：
+  // 曾发生过「重启后机器人消失」——根因就是某条记录 normalize 抛错被 bad++ 跳过，
+  // 界面看着一切正常，下一次 saveBots 把残缺数组写回磁盘，机器人就真没了。
+  // 现在 normalize 失败会走 salvageBot：原始字段原样保留 + 最小结构兜底，
+  // 宁可这条机器人渲染异常，也不能让它在下一次保存里消失。
+  const out = []; const salvaged = []; let bad = 0;
   arr.forEach(function (it) {
     if (!it || typeof it !== 'object' || Array.isArray(it)) { bad++; return; }
-    try { out.push(normalize(it)); } catch (e) { bad++; }
+    let normErr = null;
+    try { out.push(normalize(it)); return; } catch (e) { normErr = e; }
+    try {
+      const s = salvageBot(it);
+      out.push(s);
+      salvaged.push((it.n || it.name || '未命名') + '（' + ((normErr && normErr.message) || normErr || '未知原因') + '）');
+    } catch (e2) { bad++; }
   });
   bots = out;
   if (bad && !out.length) {
     try { toast('⚠️ 全部 ' + bad + ' 条机器人记录都无法读取，已跳过。磁盘上的原始数据仍然保留，未被覆盖。', 'err', 15000); } catch (e) { }
+  } else if (salvaged.length) {
+    try { toast('⚠️ 有 ' + salvaged.length + ' 条机器人记录结构异常，已原样保留（未丢失）：'
+      + salvaged.join('；'), 'warn', 15000); } catch (e) { }
   } else if (bad) {
     try { toast('已跳过 ' + bad + ' 条损坏的机器人记录，其余 ' + out.length + ' 条正常载入', 'warn', 8000); } catch (e) { }
   }
+}
+// normalize 失败时的保底挽救：**一个字段都不丢**。原始 JSON 字段原样保留，
+// 只给渲染必需的数组/对象补最小默认值；sessions 结构单独容错（失败就造一条默认会话）。
+function salvageBot(raw) {
+  const res = Object.assign({
+    id: raw.id || uid(), color: '', model: '', prompt: SAMPLE_PROMPT,
+    channels: ['网页嵌入', 'API 接口'], createdAt: Date.now(), updatedAt: Date.now(),
+    styleText: '', styleId: '', webSearch: false, brand: {}, versions: [],
+  }, raw);
+  if (!Array.isArray(res.history)) res.history = [];
+  if (!Array.isArray(res.plugins)) res.plugins = [];
+  if (!Array.isArray(res.knowledges)) res.knowledges = [];
+  if (!Array.isArray(res.nodes)) res.nodes = [];
+  if (!res.memory || typeof res.memory !== 'object') {
+    res.memory = { enabled: true, items: [], lastUpdate: 0, _seenLen: 0, pending: false };
+  }
+  try {
+    _initSessions(res);
+  } catch (e) {
+    res.sessions = [{ id: uid(), title: '', history: res.history, createdAt: Date.now(), updatedAt: Date.now() }];
+    res.activeSession = res.sessions[0].id;
+  }
+  return res;
 }
 // 每个机器人最多保留最近 N 条聊天历史，防止记录无限增长导致 JSON 序列化/写入越来越慢（越用越卡的根因）
 const HISTORY_LIMIT = 100;
