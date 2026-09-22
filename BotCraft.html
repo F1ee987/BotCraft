@@ -2394,12 +2394,17 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <div class="ssec-body" id="sec-core-body">
     <div class="field">
       <label>服务商</label>
-      <select id="set-provider"></select>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="set-provider" style="flex:1;min-width:0"></select>
+        <button class="btn btn-ghost" type="button" onclick="applyFreePreset()" style="white-space:nowrap;flex:none" title="套用实测可达的免密钥公共接口（无需注册、无需 Key，仅建议试用）">🆓 免 Key 试用</button>
+      </div>
+      <div id="freeHint" style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.6"></div>
     </div>
     <div class="field" id="field-key">
       <label>API Key</label>
-      <input id="set-key" type="password" placeholder="sk-..." autocomplete="off">
+      <input id="set-key" type="password" placeholder="sk-…（本地模型 / 免 Key 接口可留空）" autocomplete="off">
       <div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">API Key 不能为空（自定义模式下 baseURL 也必填）</div>
+      <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">留空也能保存：本地模型（Ollama / LM Studio，地址填 http://localhost:11434/v1）与免 Key 公共接口不需要鉴权。</div>
     </div>
     <div class="field" id="field-base">
       <label>接口地址（Base URL）</label>
@@ -16116,8 +16121,13 @@ function saveSettings() {
   setSerialInput(document.getElementById('set-serial').checked);
   const fKey = document.getElementById('field-key'), fBase = document.getElementById('field-base');
   fKey.classList.remove('invalid'); fBase.classList.remove('invalid');
-  if (directCall && !apiKey) { fKey.classList.add('invalid'); toast('请填写 API Key', 'err'); return; }
   if (directCall && !baseURL) { fBase.classList.add('invalid'); toast('请填写接口地址', 'err'); return; }
+  // Key 允许留空 —— 本地模型（Ollama / LM Studio）与免 Key 公共接口本来就不需要鉴权，
+  // 以前一律硬拦「请填写 API Key」，等于把这些用法全挡在门外。现在改成：只给一次明确
+  // 提示，不阻止保存；真需要鉴权的接口自然会在调用时返回 401，用户看得懂。
+  if (directCall && !apiKey && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseURL)) {
+    toast('未填 API Key：将以无鉴权方式调用（本地模型 / 免 Key 接口适用）。若该接口要求鉴权，会返回 401。', 'warn', 6000);
+  }
   if (!model) { toast('请选择或填写模型', 'err'); return; }
   BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std', sttEndpoint, sttModel, sttAPIKey });
   closeSettings();
@@ -16139,6 +16149,34 @@ function saveSettings() {
 }
 // 一键套用国内免费生图预设：只填「接口地址 + 模型」，Key 留给用户（各家密钥不通用，
 // 代填会误导）。接口路径 / 尺寸字段名 / 返回结构的差异由 generateImage 内部适配。
+// ==================== 免 Key 试用（一键套用） ====================
+/* 用户问「有没有无需 API Key 的模型」。先说结论：云端通用 LLM 几乎没有真正免凭证的
+   （有的话多半是灰产/随时关停）；**真正稳的免 Key 只有本地模型**（Ollama / LM Studio，
+   本机起服务、OpenAI 兼容、不需要任何密钥）。此外确实存在少量**免鉴权的公共接口**，
+   2026-09-22 在本机实测：
+     · text.pollinations.ai  → HTTP 200 / 3.96s，免 Key，返回正常中文 ✅
+     · blockrun.ai           → HTTP 429（免费容量常被打满）⚠️
+   这类第三方免费接口随时可能变动或限速，所以只做「试用」入口，不设为默认，也不承诺稳定。 */
+function applyFreePreset() {
+  var prov = document.getElementById('set-provider');
+  var base = document.getElementById('set-base');
+  var key = document.getElementById('set-key');
+  var modelSel = document.getElementById('set-model');
+  var custom = document.getElementById('set-model-custom');
+  if (prov) prov.value = 'custom';
+  if (base) base.value = 'https://text.pollinations.ai/v1';
+  if (key) key.value = '';
+  if (modelSel) modelSel.value = '__custom';
+  if (custom) { custom.style.display = ''; custom.value = 'openai-fast'; }
+  var hint = document.getElementById('freeHint');
+  if (hint) {
+    hint.innerHTML = '已套用 <b>Pollinations</b>（免注册、免密钥，本机实测可达）。它是第三方公益接口，'
+      + '随时可能变动或限速，<b>仅建议试用</b>；要稳定使用请填自己的 Key，或改用本地模型'
+      + '（Ollama：地址填 http://localhost:11434/v1，Key 留空）。';
+  }
+  toast('已套用免 Key 接口，保存后即可试用', 'ok');
+}
+window.applyFreePreset = applyFreePreset;
 function applyImagePreset(name) {
   var p = (window.BotCraftImagePresets || {})[name];
   var hint = document.getElementById('imgPresetHint');
