@@ -2404,6 +2404,10 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <label>API Key</label>
       <input id="set-key" type="password" placeholder="sk-…（本地模型 / 免 Key 接口可留空）" autocomplete="off">
       <div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">API Key 不能为空（自定义模式下 baseURL 也必填）</div>
+      <label for="set-noauth" style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:12px;color:var(--txt);cursor:pointer">
+        <input id="set-noauth" type="checkbox" style="width:15px;height:15px;flex:none;accent-color:var(--brand);cursor:pointer">
+        <span>该接口无需鉴权（免 Key 公共接口 / 本地模型，Key 留空也能调用）</span>
+      </label>
       <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">留空也能保存：本地模型（Ollama / LM Studio，地址填 http://localhost:11434/v1）与免 Key 公共接口不需要鉴权。</div>
     </div>
     <div class="field" id="field-base">
@@ -2937,6 +2941,9 @@ window.__storage = __storage;
     custom:   { label: '自定义 / 兼容网关', base: '',                                     models: [] },
   };
   const DEFAULT_CFG = {
+    // noAuth：该接口无需鉴权（免 Key 公共接口 / 本机模型）。默认 false —— 默认配置指向
+    // api.openai.com 且没有 Key，若当成「已配置」会让人一发消息就吃 401。
+    noAuth: false,
     provider: 'openai', baseURL: PROVIDERS.openai.base, apiKey: '', model: 'gpt-4o-mini',
     temperature: 0.7, maxTokens: 2048, directCall: true, proxyURL: '', fallback: 'smart', fastReply: false,
     // 上下文超预算时用压缩摘要代替截断（默认开）。压缩有缓存，同一份内容只压一次；
@@ -4355,7 +4362,24 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     return fakeStreamSync(text);
   }
 
-  function canCall() { return !!(cfg.apiKey && cfg.baseURL); }
+  // 免鉴权判定。以前 canCall 一律要求 cfg.apiKey，于是「免 Key 公共接口」和「本机
+  // Ollama / LM Studio」这两种本来不需要凭证的用法，全被判成「未配置」→ 直接走本地
+  // 演示回复，表现就是「套用了免 Key 却像没生效、回答一直很敷衍」（2026-09-22 报障）。
+  // 现在免鉴权有三条来源：①用户在设置里显式勾选；②已知免 Key 公共接口；③本机地址。
+  var NO_AUTH_HOST_RE = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?/i;
+  function isNoAuthEndpoint(u) {
+    var s = String(u || '');
+    if (!s) return false;
+    if (NO_AUTH_HOST_RE.test(s)) return true;           // 本机模型服务（Ollama / LM Studio）
+    if (/text\.pollinations\.ai/i.test(s)) return true;  // 实测免鉴权的公益接口（2026-09-22：HTTP 200）
+    return false;
+  }
+  function canCall() {
+    // 代理模式：凭证在代理侧，浏览器侧不需要 Key
+    if (cfg.proxyURL && !cfg.directCall) return true;
+    if (!cfg.baseURL) return false;
+    return !!(cfg.apiKey || cfg.noAuth === true || isNoAuthEndpoint(cfg.baseURL));
+  }
 
   function updateConfig(patch) {
     if (!patch) return getConfig();
@@ -4594,7 +4618,7 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     return new Promise(resolve => setTimeout(() => resolve(reply), 400 + Math.random() * 500));
   }
 
-  window.BotCraftAI = { chat, request, canCall, getConfig, updateConfig, getProviders, composeSystemPrompt };
+  window.BotCraftAI = { chat, request, canCall, isNoAuthEndpoint, getConfig, updateConfig, getProviders, composeSystemPrompt };
   // 品牌档案 / 模板导入导出：这三个函数此前只被内联事件属性调用，却没有导出。
   // 内联 on* 属性在**全局作用域**求值，而它们定义在本 IIFE 内 → 点击/输入时
   // 抛 ReferenceError，表现为「品牌信息改了不保存」「导出/导入模板点了没反应」。
@@ -12419,7 +12443,18 @@ async function runReply(b, opt) {
       // 普通对话：启用真实插件（联网检索 / 天气查询）时，先执行工具并把结果注入上下文
       let _toolCtx = '';
       try { _toolCtx = await collectToolContext(aiBot, v); } catch (e) { _toolCtx = ''; }
-      const stream = await BotCraftAI.chat(aiBot, historyForCall, { stream: true, signal, toolCtx: _toolCtx, imagePrompt: imagePromptText });
+      const stream = await BotCraftAI.chat(aiBot, historyForCall, {
+        stream: true, signal, toolCtx: _toolCtx, imagePrompt: imagePromptText,
+        // 配了接口却调用失败（401 / 429 限流 / 网络不通）时，chat 会静默退回本地兜底
+        // 文本 —— 用户看到的就是「模型突然变笨了」，真正的失败原因一个字都看不见。
+        // 免 Key 公共接口尤其容易被限流，这里必须把原因说出来。
+        // 未配置接口（e 为 null）保持静默：顶部本来就标着「演示模式」。
+        onDegrade: function (e) {
+          if (!e || e.name === 'AbortError') return;
+          var msg = (e && e.message) ? e.message : '未知错误';
+          try { toast('模型调用失败，下面这段是本地兜底回复（' + msg + '）', 'err', 6000); } catch (_) { }
+        }
+      });
     typing.remove();
     // 创建正在输入的「气泡」，逐字追加
     const bubble = document.createElement('div');
@@ -15971,6 +16006,10 @@ function openSettings() {
   const provSel = document.getElementById('set-provider');
   provSel.value = cfg.provider in PROVIDER_META ? cfg.provider : 'custom';
   document.getElementById('set-key').value = cfg.apiKey || '';
+  // 免鉴权回填：显式勾过就勾上；没勾过但地址本身属于免鉴权端点（本机 / 免 Key 公共接口）
+  // 也勾上，避免「明明能免 Key 调用，界面却显示未配置」的错位
+  var _naEl = document.getElementById('set-noauth');
+  if (_naEl) _naEl.checked = (cfg.noAuth === true) || (!cfg.apiKey && BotCraftAI.isNoAuthEndpoint && BotCraftAI.isNoAuthEndpoint(cfg.baseURL));
   document.getElementById('set-base').value = cfg.baseURL || '';
   document.getElementById('set-temp').value = cfg.temperature || 0.7;
   document.getElementById('set-temp-val').textContent = (cfg.temperature || 0.7).toFixed(1);
@@ -16125,13 +16164,20 @@ function saveSettings() {
   // Key 允许留空 —— 本地模型（Ollama / LM Studio）与免 Key 公共接口本来就不需要鉴权，
   // 以前一律硬拦「请填写 API Key」，等于把这些用法全挡在门外。现在改成：只给一次明确
   // 提示，不阻止保存；真需要鉴权的接口自然会在调用时返回 401，用户看得懂。
-  if (directCall && !apiKey && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseURL)) {
+  // 免鉴权：用户显式勾选，或地址本身属于免鉴权端点（本机模型 / 免 Key 公共接口）
+  const noAuthEl = document.getElementById('set-noauth');
+  const noAuth = !!(noAuthEl && noAuthEl.checked)
+    || (window.BotCraftAI && BotCraftAI.isNoAuthEndpoint ? BotCraftAI.isNoAuthEndpoint(baseURL) : /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseURL));
+  if (directCall && !apiKey && !noAuth) {
     toast('未填 API Key：将以无鉴权方式调用（本地模型 / 免 Key 接口适用）。若该接口要求鉴权，会返回 401。', 'warn', 6000);
   }
   if (!model) { toast('请选择或填写模型', 'err'); return; }
-  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std', sttEndpoint, sttModel, sttAPIKey });
+  BotCraftAI.updateConfig({ provider, apiKey, baseURL, noAuth, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std', sttEndpoint, sttModel, sttAPIKey });
   closeSettings();
-  const head = apiKey ? `已接入 ${PROVIDER_META[provider].label} · ${model}` : '已保存（无 Key，将使用本地降级回复）';
+  // 免鉴权（显式勾选 / 免 Key 端点）且地址填了，就是真的能调，别再报「本地降级回复」
+  const head = (apiKey || (noAuth && baseURL))
+    ? `已接入 ${PROVIDER_META[provider].label} · ${model}`
+    : '已保存（无 Key，将使用本地降级回复）';
   toast(head, 'ok');
   updateStats();
   // 保存后同步刷新：首页卡片计数 + 工作台「机器人下面」的模型行（wsFlow）
@@ -16163,9 +16209,13 @@ function applyFreePreset() {
   var key = document.getElementById('set-key');
   var modelSel = document.getElementById('set-model');
   var custom = document.getElementById('set-model-custom');
+  var noAuthBox = document.getElementById('set-noauth');
   if (prov) prov.value = 'custom';
   if (base) base.value = 'https://text.pollinations.ai/v1';
   if (key) key.value = '';
+  // 关键：勾上「无需鉴权」。只填地址不勾这个，保存后 canCall() 仍会因没有 Key 判成
+  // 「未配置」→ 走本地演示回复，正是「免 Key 用不了」的直接原因。
+  if (noAuthBox) noAuthBox.checked = true;
   if (modelSel) modelSel.value = '__custom';
   if (custom) { custom.style.display = ''; custom.value = 'openai-fast'; }
   var hint = document.getElementById('freeHint');
@@ -16209,10 +16259,14 @@ async function testConnection() {
   const apiKey = document.getElementById('set-key').value.trim();
   const baseURL = document.getElementById('set-base').value.trim();
   const provider = document.getElementById('set-provider').value;
-  if (!apiKey || !baseURL) { toast('请先填写 Key 与接口地址', 'err'); return; }
+  // 免 Key 接口（公共接口 / 本地模型）本来就没有凭证，这里不能要求 Key，否则永远测不了
+  const _naBox = document.getElementById('set-noauth');
+  const noAuth = !!(_naBox && _naBox.checked)
+    || (BotCraftAI.isNoAuthEndpoint ? BotCraftAI.isNoAuthEndpoint(baseURL) : false);
+  if (!baseURL) { toast('请先填写接口地址（免 Key 接口可不填 Key）', 'err'); return; }
   setConnStatus('正在测试连接…', '');
   const orig = BotCraftAI.getConfig();
-  BotCraftAI.updateConfig({ apiKey, baseURL, model: orig.model });
+  BotCraftAI.updateConfig({ apiKey, baseURL, noAuth, model: orig.model });
   try {
     // 非流式测试
     const reply = await BotCraftAI.chat(
