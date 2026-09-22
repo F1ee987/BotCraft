@@ -2452,6 +2452,26 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
 
     <div style="margin:14px 0 6px;padding:10px 12px;border:1px dashed var(--glass-border);border-radius:10px;background:var(--glass-bg)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">🎙️ 语音识别（录音后自动转成文字填进输入框）</div>
+      <!-- 默认硅基流动：OpenAI Whisper 兼容 multipart 接口，免费额度、中文效果好。
+           2026-09-22 实测 Allow-Origin:* ，浏览器可直接调，无需宿主转发。
+           转写结果填进输入框可修改后再发送；录音本身仍作为音频附件一并发送。 -->
+      <div class="field">
+        <label>转写接口</label>
+        <input id="set-stt-endpoint" placeholder="https://api.siliconflow.cn/v1/audio/transcriptions">
+      </div>
+      <div class="field">
+        <label>转写模型</label>
+        <input id="set-stt-model" placeholder="FunAudioLLM/SenseVoiceSmall（免费 · 中文效果好）">
+      </div>
+      <div class="field">
+        <label>转写 API Key</label>
+        <input id="set-stt-key" type="password" placeholder="留空则录音只作为音频附件发送，不转文字" autocomplete="off">
+      </div>
+      <div class="hint" style="margin-top:6px;font-size:11.5px;color:var(--sub)">默认硅基流动（open.siliconflow.cn 注册后有免费额度）。识别结果自动填进输入框，可修改后再发送。</div>
+    </div>
+
+    <div style="margin:14px 0 6px;padding:10px 12px;border:1px dashed var(--glass-border);border-radius:10px;background:var(--glass-bg)">
       <div style="font-weight:700;font-size:13px;margin-bottom:8px">🖼️ 文生图设置（可选）</div>
       <!-- 国内可直连的免费生图一键预设：省得用户去查端点、模型名与参数差异
            （智谱是 /api/paas/v4 路径，硅基流动的尺寸字段名与返回结构与 OpenAI 不同，
@@ -2884,6 +2904,11 @@ window.__storage = __storage;
     // 直接 502 失败（10.1s 才超时），而博查与智谱两个端点都在 0.5s 内返回 401
     // （无 Key 时的预期响应），说明可达。DuckDuckGo 保留为「免 Key 但国内可能不可达」的选项。
     searchProvider: 'bocha', searchApiKey: '', searchEndpoint: '', searchEngine: 'search_std',
+    // 语音识别（STT）：录音后自动转成文字填进输入框。默认硅基流动（免费额度、中文效果好；
+    // OpenAI Whisper 兼容 multipart 接口，2026-09-22 实测 Allow-Origin:* ，浏览器可直接调，
+    // 无需宿主转发）。Key 留空则录音只作为音频附件发送，不转写。
+    sttEndpoint: 'https://api.siliconflow.cn/v1/audio/transcriptions',
+    sttModel: 'FunAudioLLM/SenseVoiceSmall', sttAPIKey: '',
   };
   let cfg = loadConfig();
 
@@ -11972,6 +11997,7 @@ async function toggleRecord() {
       var wav = await encodeAudioToWav(blob);
       pendingAudios.push(wav);
       renderAudioPreview();
+      autoTranscribe(wav);   // 配了转写 Key 才会真正调接口；异步不阻塞发送
     } catch (e) { toast('音频处理失败', 'err'); }
     if (_recStream) { _recStream.getTracks().forEach(function (t) { t.stop(); }); _recStream = null; }
     _recorder = null;
@@ -11982,6 +12008,46 @@ async function toggleRecord() {
   toast('录音中…再次点击 🎤 停止', '');
 }
 function stopRecording() { if (_recorder && _recorder.state === 'recording') _recorder.stop(); }
+// ==================== 语音转文字（STT） ====================
+/* 录音结束后自动把 WAV 转成文字填进输入框。默认硅基流动的 Whisper 兼容接口
+   （FunAudioLLM/SenseVoiceSmall，免费额度、中文效果好）。2026-09-22 实测该服务
+   返回 Access-Allow-Origin:* 且 FormData POST 属于简单请求（无预检）—— 浏览器
+   直接 fetch 即可，不需要宿主转发。未配置 Key 时静默跳过（保持纯附件行为）。 */
+async function autoTranscribe(wavDataUrl) {
+  var cfg = {};
+  try { cfg = BotCraftAI.getConfig ? BotCraftAI.getConfig() : {}; } catch (e) { }
+  var ep = String(cfg.sttEndpoint || '').trim();
+  var key = String(cfg.sttAPIKey || '').trim();
+  var model = String(cfg.sttModel || 'FunAudioLLM/SenseVoiceSmall').trim();
+  if (!ep || !key) return;   // 未配置：录音只作为音频附件发送
+  toast('🎙️ 正在转写录音…', '');
+  try {
+    var b64 = String(wavDataUrl).split(',')[1] || '';
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var fd = new FormData();
+    fd.append('file', new Blob([bytes], { type: 'audio/wav' }), 'recording.wav');
+    fd.append('model', model);
+    var r = await fetch(ep, { method: 'POST', headers: { 'Authorization': 'Bearer ' + key }, body: fd });
+    if (!r.ok) {
+      var msg = '';
+      try { msg = (await r.text()).slice(0, 120); } catch (e2) { }
+      throw new Error('HTTP ' + r.status + (msg ? '：' + msg : ''));
+    }
+    var d = await r.json();
+    var txt = String((d && d.text) || '').trim();
+    if (!txt) { toast('语音识别完成，但没有识别到内容', 'warn'); return; }
+    var ta = document.getElementById('msgInput');
+    if (!ta) { toast('🎙️ ' + (txt.length > 60 ? txt.slice(0, 60) + '…' : txt), 'ok', 6000); return; }
+    insertText(ta, txt);
+    try { ta.focus(); } catch (e3) { }
+    toast('🎙️ 已把识别文字填入输入框，可修改后发送', 'ok');
+  } catch (e) {
+    toast('语音转写失败：' + (e && e.message ? e.message : e) + '。录音仍会作为音频附件发送', 'err', 8000);
+  }
+}
+window.autoTranscribe = autoTranscribe;
 function renderAudioPreview() {
   var box = document.getElementById('audioPreview'); if (!box) return;
   box.innerHTML = '';
@@ -15832,6 +15898,9 @@ function openSettings() {
   document.getElementById('set-img-key').value = cfg.imageAPIKey || '';
   document.getElementById('set-img-model').value = cfg.imageModel || 'dall-e-3';
   document.getElementById('set-img-size').value = cfg.imageSize || '1024x1024';
+  document.getElementById('set-stt-endpoint').value = cfg.sttEndpoint || '';
+  document.getElementById('set-stt-model').value = cfg.sttModel || '';
+  document.getElementById('set-stt-key').value = cfg.sttAPIKey || '';
   loadSearchSettings(cfg);
   fillModelOptions(cfg.provider, cfg.model);
   document.getElementById('set-model-custom').value =
@@ -15952,6 +16021,9 @@ function saveSettings() {
   const searchProvider = (document.getElementById('set-search-provider') || {}).value || 'bocha';
   const searchApiKey = ((document.getElementById('set-search-key') || {}).value || '').trim();
   const searchEndpoint = ((document.getElementById('set-search-endpoint') || {}).value || '').trim();
+  const sttEndpoint = ((document.getElementById('set-stt-endpoint') || {}).value || '').trim();
+  const sttModel = ((document.getElementById('set-stt-model') || {}).value || '').trim();
+  const sttAPIKey = ((document.getElementById('set-stt-key') || {}).value || '').trim();
   // 选了「自定义接口」却没有地址 = 检索必然静默失败，拦在保存前并说清怎么填
   if (searchProvider === 'custom' && !/^https?:\/\//i.test(searchEndpoint)) {
     const f = document.getElementById('field-search-endpoint');
@@ -15965,7 +16037,7 @@ function saveSettings() {
   if (directCall && !apiKey) { fKey.classList.add('invalid'); toast('请填写 API Key', 'err'); return; }
   if (directCall && !baseURL) { fBase.classList.add('invalid'); toast('请填写接口地址', 'err'); return; }
   if (!model) { toast('请选择或填写模型', 'err'); return; }
-  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std' });
+  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std', sttEndpoint, sttModel, sttAPIKey });
   closeSettings();
   const head = apiKey ? `已接入 ${PROVIDER_META[provider].label} · ${model}` : '已保存（无 Key，将使用本地降级回复）';
   toast(head, 'ok');
