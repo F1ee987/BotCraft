@@ -12399,23 +12399,42 @@ function imageSubjectDigest(text) {
   s = s.replace(/[#>*_]/g, ' ');
   // markdown 表格的分隔行会留下一串横线，对生图提示词是纯噪声
   s = s.replace(/[-—–]{3,}/g, ' ');
+  // 句级元话语过滤：「已为你生成配图」「可以继续告诉我：换风格：…」这类是**对话外壳**，
+  // 对画面零贡献，堆进提示词只会稀释主体、让生图模型输出无关内容（2026-09-22 用户实测
+  // 「生成的图片还是无关」——当时的提示词里元话语占了七成）。
+  var META = /(已为你|已为您|请查看|上方图片|如果你|可以告诉我|告诉我|随时说|我继续|需要我|要不要|这张|不满意|重新生成一张|换一种风格|换个风格|改内容|换配色|改行程|加细节|调整生成|整体色调|适合旅行分享|紧凑感|预设|已生成|换风格|改风格|仅作参考|文字方案|以我上面|为准|比如改成|配图|生图)/;
+  var kept = s.split(/[。！？\n]+/).map(function (x) {
+    // 句首寒暄只剥离词本身（后面可能跟着有价值的内容：「没问题！预算缩减到2000元…」），
+    // 不整句丢弃 —— 整句丢弃会把正文也杀掉。
+    x = x.replace(/^(好的|当然(可以)?|没问题|明白了|收到|嗯+)[，,！!。\s：:]*/, '').trim();
+    return x;
+  }).filter(function (x) {
+    return x.length >= 4 && !META.test(x);
+  });
+  s = kept.join('。');
   s = s.replace(/\s+/g, ' ').trim();
   // 末尾标点要摘掉：调用方用「。」拼接，留着会出现「500。。画成…」
   s = s.replace(/[。．.,，、；;：:\s]+$/, '');
   return s.length > 220 ? s.slice(0, 220) + '…' : s;
 }
-// 最近一条「实质性」的助手回复（跳过图片消息；太短说明没内容可借）
+// 从历史里借画面素材：在**最近 8 条文本回复**里选元话语清洗后**信息量最大**的那条 ——
+// 最近一条常是「好的，已为你生成配图…可以继续告诉我：换风格…」这类外壳回复，真正有
+// 画面内容（行程详情/数据表）的往往在它前面几轮（2026-09-22 用户实测：选了外壳回复，
+// 提示词里七成是元话语，图生成得完全无关）。清洗后都不足 20 字就宁可不用，别硬凑。
 function lastSubjectFromHistory(hist) {
   var arr = (Object.prototype.toString.call(hist) === '[object Array]') ? hist : [];
-  for (var i = arr.length - 1; i >= 0; i--) {
+  var best = '';
+  var checked = 0;
+  for (var i = arr.length - 1; i >= 0 && checked < 8; i--) {
     var m = arr[i];
     if (!m || typeof m !== 'object' || m.role !== 'bot') continue;
     var t = String(m.text || '');
-    if (t.indexOf('data:image') >= 0) continue;
+    if (t.indexOf('data:image') >= 0) continue;   // 独立图片消息：没有文字素材可借
+    checked++;
     var clean = imageSubjectDigest(t);
-    if (clean.length >= 20) return clean;
+    if (clean.length > best.length) best = clean;
   }
-  return '';
+  return best.length >= 20 ? best : '';
 }
 // 输出规格：只在「主题来自上下文」时给（= 把刚聊的内容画成图），用户明确要人像则不干预
 function imageSpecHint(raw, usedContext) {
