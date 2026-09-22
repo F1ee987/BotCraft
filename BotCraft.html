@@ -2416,6 +2416,32 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
 
     <div style="margin:14px 0 6px;padding:10px 12px;border:1px dashed var(--glass-border);border-radius:10px;background:var(--glass-bg)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">🔍 联网检索（机器人启用「网页搜索」插件时生效）</div>
+      <!-- 2026-09-22：默认源从 DuckDuckGo 换成国产。桌面版统一走宿主 bc_http 转发：
+           不受同源限制、对不给跨域头的服务（自定义接口常见）也一视同仁，还自带
+           内网地址拒绝与 20s 超时。实测博查给 CORS 头、智谱回显 origin，
+           浏览器直开时能不能用要看服务端策略，所以宿主才是可靠主通道。 -->
+      <div class="field">
+        <label>检索源</label>
+        <select id="set-search-provider" onchange="onSearchProviderChange()">
+          <option value="bocha">博查 Bocha（国产 · 新用户有免费额度 · 中文质量好）</option>
+          <option value="zhipu">智谱 Web Search（与主模型共用一个 GLM Key，按次计费）</option>
+          <option value="ddg">DuckDuckGo 即时答案（免 Key，但国内可能不可达）</option>
+          <option value="custom">自定义接口（自己填地址，见下方说明）</option>
+        </select>
+      </div>
+      <div class="field" id="field-search-key">
+        <label>检索 API Key</label>
+        <input id="set-search-key" type="password" placeholder="留空则联网检索拿不到结果（其余功能不受影响）" autocomplete="off">
+      </div>
+      <div class="field" id="field-search-endpoint" style="display:none">
+        <label>自定义检索地址</label>
+        <input id="set-search-endpoint" placeholder="https://example.com/search?q={q}（没有 {q} 则自动在末尾追加关键词）">
+      </div>
+      <div id="searchHint" style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.6"></div>
+    </div>
+
+    <div style="margin:14px 0 6px;padding:10px 12px;border:1px dashed var(--glass-border);border-radius:10px;background:var(--glass-bg)">
       <div style="font-weight:700;font-size:13px;margin-bottom:8px">🖼️ 文生图设置（可选）</div>
       <!-- 国内可直连的免费生图一键预设：省得用户去查端点、模型名与参数差异
            （智谱是 /api/paas/v4 路径，硅基流动的尺寸字段名与返回结构与 OpenAI 不同，
@@ -2829,6 +2855,10 @@ window.__storage = __storage;
     // 若关闭，则完全回退到旧行为（超限直接截断/丢弃，不产生任何额外调用）
     autoCompress: true,
     imageBaseURL: '', imageAPIKey: '', imageModel: 'dall-e-3', imageSize: '1024x1024',
+    // 联网检索源。默认换国产（博查）：2026-09-22 实测 api.duckduckgo.com 从国内网络
+    // 直接 502 失败（10.1s 才超时），而博查与智谱两个端点都在 0.5s 内返回 401
+    // （无 Key 时的预期响应），说明可达。DuckDuckGo 保留为「免 Key 但国内可能不可达」的选项。
+    searchProvider: 'bocha', searchApiKey: '', searchEndpoint: '', searchEngine: 'search_std',
   };
   let cfg = loadConfig();
 
@@ -4657,7 +4687,7 @@ function factoryExpertiseOf(name) {
 }
 
 const plugins = [
-  { n: '网页搜索', d: '实时联网获取最新信息', ic: '🔍', c: 'linear-gradient(135deg,#4dd0e1,#2bb5e8)', cat: '联网', cap: '调用 DuckDuckGo 即时答案接口实时检索网页摘要与相关条目，让机器人回答包含最新资讯。启用即为该机器人开启联网检索，工作流会在需要外部事实的步骤自动注入检索片段。' },
+  { n: '网页搜索', d: '实时联网获取最新信息', ic: '🔍', c: 'linear-gradient(135deg,#4dd0e1,#2bb5e8)', cat: '联网', cap: '让机器人查到最新资讯：启用后，工作流在需要外部事实的步骤会自动检索网页并注入摘要片段（带标题与站点，便于它引用来源）。检索源在「设置 → 联网检索」里选——默认博查 Bocha（国产、中文检索质量好、新用户有免费额度），也可选智谱 Web Search（与主模型共用一个 Key）／DuckDuckGo（免 Key 但国内通常不可达）／自定义接口；需要填对应平台的 API Key。没配 Key 时该插件会跳过联网并提示一次，其余功能不受影响。' },
   { n: '图片生成', d: '调用文生图模型创作配图', ic: '🖼️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', cat: '内容', cap: '根据文本描述生成真实配图，适用于种草图文、海报、插画等场景。启用后，当用户请求配图/生图时，系统会自动调用文生图接口生成图片并直接展示在聊天中。接口可「设置 → 🖼️ 文生图设置」一键切换：智谱 CogView-3-Flash（官方免费）与硅基流动 Kwai-Kolors/Kolors（官方定价 ¥0）都已适配（各自端点、参数名与返回结构差异由程序处理），未配置时回退 pollinations.ai 免费图床（海外，部分网络不可达）。说「再试一次 / 换一张」会承接上一张的提示词继续生成。' },
   { n: '天气查询', d: '获取全球城市实时天气', ic: '🌤️', c: 'linear-gradient(135deg,#7c4dff,#4dd0e1)', cat: '数据', cap: '调用天气接口，返回指定城市当前气温、天气、风力与未来预报，适合行程规划、生活助手类机器人。' },
   { n: '日历/提醒', d: '创建与管理日程提醒', ic: '📅', c: 'linear-gradient(135deg,#a1887f,#795548)', cat: '数据', cap: '创建提醒事项与日程，支持按时间触发，适合待办管理、日程助理类机器人。到点优先弹系统通知（应用最小化/切到后台也能收到），未授权或环境不支持时回退应用内提示；可在插件详情面板里一键开启系统通知并查看当前状态。也可以直接在对话里说「提醒我明天 9:00 开会」，模型会用 [REMINDER] 指令真实建提醒。' },
@@ -15531,6 +15561,7 @@ function openSettings() {
   document.getElementById('set-img-key').value = cfg.imageAPIKey || '';
   document.getElementById('set-img-model').value = cfg.imageModel || 'dall-e-3';
   document.getElementById('set-img-size').value = cfg.imageSize || '1024x1024';
+  loadSearchSettings(cfg);
   fillModelOptions(cfg.provider, cfg.model);
   document.getElementById('set-model-custom').value =
     (cfg.model && !(PROVIDER_META[cfg.provider] || {}).models?.includes(cfg.model)) ? cfg.model : '';
@@ -15647,13 +15678,23 @@ function saveSettings() {
   const imageAPIKey = document.getElementById('set-img-key').value.trim();
   const imageModel = document.getElementById('set-img-model').value.trim() || 'dall-e-3';
   const imageSize = document.getElementById('set-img-size').value || '1024x1024';
+  const searchProvider = (document.getElementById('set-search-provider') || {}).value || 'bocha';
+  const searchApiKey = ((document.getElementById('set-search-key') || {}).value || '').trim();
+  const searchEndpoint = ((document.getElementById('set-search-endpoint') || {}).value || '').trim();
+  // 选了「自定义接口」却没有地址 = 检索必然静默失败，拦在保存前并说清怎么填
+  if (searchProvider === 'custom' && !/^https?:\/\//i.test(searchEndpoint)) {
+    const f = document.getElementById('field-search-endpoint');
+    if (f) f.classList.add('invalid');
+    toast('自定义检索地址需要以 http(s):// 开头', 'err');
+    return;
+  }
   setSerialInput(document.getElementById('set-serial').checked);
   const fKey = document.getElementById('field-key'), fBase = document.getElementById('field-base');
   fKey.classList.remove('invalid'); fBase.classList.remove('invalid');
   if (directCall && !apiKey) { fKey.classList.add('invalid'); toast('请填写 API Key', 'err'); return; }
   if (directCall && !baseURL) { fBase.classList.add('invalid'); toast('请填写接口地址', 'err'); return; }
   if (!model) { toast('请选择或填写模型', 'err'); return; }
-  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize });
+  BotCraftAI.updateConfig({ provider, apiKey, baseURL, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std' });
   closeSettings();
   const head = apiKey ? `已接入 ${PROVIDER_META[provider].label} · ${model}` : '已保存（无 Key，将使用本地降级回复）';
   toast(head, 'ok');
@@ -16048,39 +16089,244 @@ window.__debug = {
     return '[模拟输出·请配置api Key] 步骤「' + name + '」已按工作流执行（降级演示，配置 API Key 后将由真实模型生成内容）。';
   }
 
-  // ---------- 联网检索（默认 DuckDuckGo 即时答案 API，失败优雅降级） ----------
+  // ---------- 联网检索（默认国产源：博查 / 智谱；DuckDuckGo 与自定义接口保留） ----------
+  /* 为什么换默认源：2026-09-22 实测 api.duckduckgo.com 从国内网络直接 502 失败（10.1s 才
+     超时），而博查、智谱两个端点都在 0.5s 内返回 401（无 Key 时的预期响应）→ 可达。
+     为什么仍走宿主转发：博查实测给 CORS 头（Allow-Origin/Headers 都是 *），智谱则回显
+     origin（file:// 下是 null），浏览器直开时能不能用要赌服务端的跨域策略；而桌面版统一
+     走宿主 bc_http（Python urllib 转发，不受同源限制，自带内网地址拒绝与 20s 超时），
+     对「自定义接口」那种不给跨域头的服务也一视同仁。浏览器直开时才退回 fetch。 */
+  var SEARCH_PROVIDERS = {
+    bocha: {
+      label: '博查 Bocha',
+      url: 'https://api.bocha.cn/v1/web-search',
+      // 两个域名实测都能用（均返回 401），主域名连不上时才换这个，别白等
+      fallbackUrl: 'https://api.bochaai.com/v1/web-search',
+      needsKey: true
+    },
+    zhipu: {
+      label: '智谱 Web Search',
+      url: 'https://open.bigmodel.cn/api/paas/v4/web_search',
+      needsKey: true
+    },
+    ddg: { label: 'DuckDuckGo 即时答案', needsKey: false },
+    custom: { label: '自定义接口', needsKey: false }
+  };
+  var _searchKeyWarned = false;   // 缺 Key 只提醒一次，否则每轮对话都刷屏
+
+  function searchProviderOf() {
+    var c = (window.BotCraftAI && BotCraftAI.getConfig) ? BotCraftAI.getConfig() : {};
+    var id = String(c.searchProvider || 'bocha');
+    if (!SEARCH_PROVIDERS[id]) id = 'bocha';
+    return {
+      id: id,
+      key: String(c.searchApiKey || '').trim(),
+      url: String(c.searchEndpoint || '').trim(),
+      engine: String(c.searchEngine || 'search_std').trim() || 'search_std'
+    };
+  }
+  // 智谱的搜索引擎档位固定用 search_std（基础版 0.01 元/次，常规问答够用）。
+  // 界面上不暴露这个开关：档位差异对普通用户不可判，多一个下拉只会增加决策成本。
+
+  // 统一成一行「标题（站点）：摘要」——给模型带上来源线索便于引用；无标题就只留摘要
+  function _searchLine(title, site, body) {
+    var t = String(title == null ? '' : title).trim();
+    var s = String(site == null ? '' : site).trim();
+    var b = String(body == null ? '' : body).trim();
+    if (!b) return '';
+    return (t ? '「' + t + '」' + (s ? '（' + s + '）' : '') + '：' : '') + b;
+  }
+  // 收尾统一处理：去标签 → 去空 → 单条截断（防止一条长文撑爆上下文）→ 取前 k 条
+  function _searchFinish(rows, k) {
+    return (rows || [])
+      .map(function (s) { return String(s == null ? '' : s).replace(/<\/?[^>]+>/g, '').trim(); })
+      .filter(Boolean)
+      .map(function (s) { return s.length > 600 ? s.slice(0, 600) + '…' : s; })
+      .slice(0, k || 4);
+  }
+
+  function _searchHostApi() {
+    var a = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+    return (a && typeof a.bc_http === 'function') ? a : null;
+  }
+  function _searchErr(status, text, fallbackMsg) {
+    var detail = text ? String(text).replace(/\s+/g, ' ').slice(0, 160) : '';
+    var e = new Error((status ? 'HTTP ' + status : '网络错误') + (detail ? '：' + detail : (fallbackMsg ? '：' + fallbackMsg : '')));
+    e.status = status || 0;
+    return e;
+  }
+  function _searchPostJson(url, headers, bodyObj) {
+    var hdrs = Object.assign({ 'Content-Type': 'application/json' }, headers || {});
+    var body = JSON.stringify(bodyObj);
+    var host = _searchHostApi();
+    if (host) {
+      return Promise.resolve(host.bc_http(url, 'POST', hdrs, body)).then(function (r) {
+        if (!r || !r.ok) throw _searchErr((r && r.status) || 0, r && r.text, '宿主转发失败');
+        return JSON.parse(r.text);
+      });
+    }
+    return fetch(url, { method: 'POST', headers: hdrs, body: body }).then(function (r) {
+      if (!r.ok) throw _searchErr(r.status, '', '浏览器直开没有宿主转发，检索接口多半不给跨域头');
+      return r.json();
+    });
+  }
+  function _searchGetJson(url) {
+    var host = _searchHostApi();
+    if (host) {
+      return Promise.resolve(host.bc_http(url, 'GET', { 'Accept': 'application/json' }, '')).then(function (r) {
+        if (!r || !r.ok) throw _searchErr((r && r.status) || 0, r && r.text, '宿主转发失败');
+        return JSON.parse(r.text);
+      });
+    }
+    return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (r) {
+      if (!r.ok) throw _searchErr(r.status, '', '');
+      return r.json();
+    });
+  }
+
+  function _searchBocha(q, k, cfg) {
+    var body = { query: q, count: Math.max(1, Math.min(50, k)), summary: true, freshness: 'noLimit' };
+    var hdrs = { 'Authorization': 'Bearer ' + cfg.key };
+    return _searchPostJson(SEARCH_PROVIDERS.bocha.url, hdrs, body).catch(function (e) {
+      // 只有「压根没连上」（status 0）才换域名；401/403/余额不足换域名也一样，别白等一轮
+      if (e && e.status === 0 && SEARCH_PROVIDERS.bocha.fallbackUrl) {
+        return _searchPostJson(SEARCH_PROVIDERS.bocha.fallbackUrl, hdrs, body);
+      }
+      throw e;
+    });
+  }
+  function _rowsBocha(d) {
+    var arr = (d && d.webPages && d.webPages.value)
+      || (d && d.data && d.data.webPages && d.data.webPages.value) || [];
+    if (!Array.isArray(arr)) arr = [];
+    return arr.map(function (r) {
+      return _searchLine(r && r.name, r && r.siteName, (r && (r.snippet || r.summary)) || '');
+    });
+  }
+  function _searchZhipu(q, k, cfg) {
+    // search_query 官方限长 70 字符，超了会被拒（不是截断），所以这里主动切
+    var body = {
+      search_query: String(q).slice(0, 70),
+      search_engine: cfg.engine,
+      count: Math.max(1, Math.min(50, k)),
+      content_size: 'medium'
+    };
+    return _searchPostJson(SEARCH_PROVIDERS.zhipu.url, { 'Authorization': 'Bearer ' + cfg.key }, body);
+  }
+  function _rowsZhipu(d) {
+    var arr = (d && d.search_result) || [];
+    if (!Array.isArray(arr)) arr = [];
+    return arr.map(function (r) {
+      return _searchLine(r && r.title, r && r.media, (r && r.content) || '');
+    });
+  }
+  function _rowsDdg(d) {
+    var out = [];
+    if (!d) return out;
+    if (d.AbstractText) out.push(d.AbstractText);
+    if (Array.isArray(d.RelatedTopics)) {
+      d.RelatedTopics.forEach(function (t) {
+        if (!t) return;
+        if (t.Text) out.push(t.Text);
+        else if (t.Result && t.Result.Text) out.push(t.Result.Text);
+      });
+    }
+    return out;
+  }
+  /* 自定义接口：返回结构不设限，尽量宽容地认出来。
+     支持 顶层数组 / {results|items|data:[]} / 博查式 {webPages:{value:[]}}；
+     数组元素可以是字符串，也可以是带 title|name + snippet|summary|content 的对象。 */
+  function _rowsGeneric(d) {
+    var arr = null;
+    if (Array.isArray(d)) arr = d;
+    else if (d && Array.isArray(d.results)) arr = d.results;
+    else if (d && Array.isArray(d.items)) arr = d.items;
+    else if (d && Array.isArray(d.data)) arr = d.data;
+    else if (d && d.data && Array.isArray(d.data.webPages && d.data.webPages.value)) arr = d.data.webPages.value;
+    else if (d && d.webPages && Array.isArray(d.webPages.value)) arr = d.webPages.value;
+    else if (d && d.search_result) arr = d.search_result;
+    if (!Array.isArray(arr)) return [];
+    return arr.map(function (r) {
+      if (typeof r === 'string') return r;
+      if (!r || typeof r !== 'object') return '';
+      return _searchLine(
+        r.title || r.name,
+        r.siteName || r.media || r.source || r.site,
+        r.snippet || r.summary || r.content || r.description || r.text || ''
+      );
+    });
+  }
+
   function searchWeb(query, k) {
     k = k || 4;
     return new Promise(function (resolve) {
       try {
-        var q = encodeURIComponent((query || '').slice(0, 200));
-        if (!q) return resolve([]);
-        // 可选自定义检索接口（设置里可配 searchEndpoint）；默认用 DuckDuckGo 即时答案 API（免 Key、支持跨域）
-        var endpoint = (window.BotCraftAI && BotCraftAI.getConfig && BotCraftAI.getConfig().searchEndpoint)
-          ? BotCraftAI.getConfig().searchEndpoint
-          : ('https://api.duckduckgo.com/?q=' + q + '&format=json&no_html=1&skip_disambig=1');
-        fetch(endpoint, { headers: { 'Accept': 'application/json' } })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (data) {
-            var out = [];
-            if (data) {
-              if (data.AbstractText) out.push(data.AbstractText);
-              if (Array.isArray(data.RelatedTopics)) {
-                data.RelatedTopics.forEach(function (t) {
-                  if (!t) return;
-                  if (t.Text) out.push(t.Text);
-                  else if (t.Result && t.Result.Text) out.push(t.Result.Text);
-                });
-              }
-            }
-            out = out.map(function (s) { return String(s).replace(/<\/?[^>]+>/g, '').trim(); }).filter(Boolean);
-            // 单条结果截断，避免单条网页摘要过长撑爆上下文
-            out = out.map(function (s) { return s.length > 600 ? s.slice(0, 600) + '…' : s; });
-            resolve(out.slice(0, k));
-          })
+        var raw = String(query == null ? '' : query).slice(0, 200).trim();
+        if (!raw) return resolve([]);
+        var cfg = searchProviderOf();
+        var P = SEARCH_PROVIDERS[cfg.id];
+        // 需要 Key 却没配：给一次可行动提示，然后安静返回空（别让整轮对话失败）
+        if (P.needsKey && !cfg.key) {
+          if (!_searchKeyWarned) {
+            _searchKeyWarned = true;
+            toast('联网检索还没配 Key（当前源：' + P.label + '），本次已跳过联网。到「设置 → 联网检索」填一个即可', 'warn', 9000);
+          }
+          return resolve([]);
+        }
+        var task;
+        if (cfg.id === 'bocha') task = _searchBocha(raw, k, cfg).then(_rowsBocha);
+        else if (cfg.id === 'zhipu') task = _searchZhipu(raw, k, cfg).then(_rowsZhipu);
+        else if (cfg.id === 'custom') {
+          if (!cfg.url) return resolve([]);
+          var q = encodeURIComponent(raw);
+          var url = cfg.url.indexOf('{q}') >= 0 ? cfg.url.replace(/\{q\}/g, q) : (cfg.url + q);
+          task = _searchGetJson(url).then(_rowsGeneric);
+        } else {
+          task = _searchGetJson('https://api.duckduckgo.com/?q=' + encodeURIComponent(raw)
+            + '&format=json&no_html=1&skip_disambig=1').then(_rowsDdg);
+        }
+        task.then(function (rows) { resolve(_searchFinish(rows, k)); })
           .catch(function (e) { console.warn('[searchWeb] 失败：', e); resolve([]); });
       } catch (e) { console.warn('[searchWeb] 异常：', e); resolve([]); }
     });
+  }
+
+  // 设置面板：检索源的加载 / 切换 / 提示
+  function loadSearchSettings(c) {
+    c = c || {};
+    var sp = document.getElementById('set-search-provider');
+    var sk = document.getElementById('set-search-key');
+    var se = document.getElementById('set-search-endpoint');
+    if (sp) sp.value = c.searchProvider || 'bocha';
+    if (sk) sk.value = c.searchApiKey || '';
+    if (se) se.value = c.searchEndpoint || '';
+    onSearchProviderChange();
+  }
+  function onSearchProviderChange() {
+    var sp = document.getElementById('set-search-provider');
+    var id = (sp && sp.value) || 'bocha';
+    var needsKey = !!(SEARCH_PROVIDERS[id] && SEARCH_PROVIDERS[id].needsKey);
+    var fk = document.getElementById('field-search-key');
+    var fe = document.getElementById('field-search-endpoint');
+    if (fk) fk.style.display = needsKey ? '' : 'none';
+    if (fe) fe.style.display = (id === 'custom') ? '' : 'none';
+    var hint = document.getElementById('searchHint');
+    if (!hint) return;
+    if (id === 'bocha') {
+      hint.innerHTML = '博查：<b>open.bochaai.com</b> 注册后在「API KEY 管理」创建密钥（新用户有免费额度）。<br>'
+        + '国内服务，中文检索质量好；额度用尽后按次付费。';
+    } else if (id === 'zhipu') {
+      hint.innerHTML = '智谱：<b>open.bigmodel.cn</b> → API Keys 创建密钥。<br>'
+        + '若主模型已用智谱，同一个 Key 直接填这里即可（搜索按次计费，基础版 0.01 元/次）。';
+    } else if (id === 'ddg') {
+      hint.innerHTML = 'DuckDuckGo 即时答案免 Key，但<b>国内网络通常不可达</b>（2026-09 实测 502）。'
+        + '<br>仅在能直连海外时选它。';
+    } else {
+      hint.innerHTML = '自定义接口：填一个返回 JSON 的检索地址。'
+        + '<br>地址里写 <code>{q}</code> 会把关键词替换进去（如 <code>https://x.com/s?q={q}</code>）；不写则自动追加在末尾。'
+        + '<br>能识别的返回结构：顶层数组、<code>{results|items|data:[]}</code>、博查式 <code>webPages.value[]</code>；'
+        + '元素可以是字符串，也可以是带 title + snippet/content 的对象。';
+    }
   }
 
   // ---------- 天气查询（open-meteo，免费免 Key、支持跨域） ----------
@@ -17139,6 +17385,10 @@ window.__debug = {
   window.getNodeRole = getNodeRole; // 暴露给主脚本 normalize() 使用（否则注册/登录后 loadBots 崩溃）
   window.searchKB = searchKB;
   window.searchWeb = searchWeb;
+  // 检索设置面板的两个入口必须导出：本块是 'use strict' 的 IIFE，而设置面板的
+  // openSettings / 内联 onchange 都在外面的主脚本里，靠裸名调用拿不到这里的函数。
+  window.loadSearchSettings = loadSearchSettings;
+  window.onSearchProviderChange = onSearchProviderChange;
   window.generateImage = generateImage;
   // 预设表挂到 window 供设置面板的一键按钮使用（IIFE 内部的常量，外面取不到）
   window.BotCraftImagePresets = IMAGE_PRESETS;
