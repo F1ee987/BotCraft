@@ -5437,19 +5437,33 @@ function escapeAttr(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp
 // 设计原则：先抽出代码块与行内码占位，避免被行内解析破坏；整段转义后做块级解析；链接仅放行 http(s)/mailto/相对路径，过滤引号防 XSS。
 // 裸 data URL / 被围栏包住的 data URL → Markdown 图片（渲染层归一）。
 // 场景：生图节点输出 `![生成图片](data:...)` 后，下游 LLM 润色节点会把巨型 base64
-// 当上下文**回显**进最终回答（裸着或包在 ``` 围栏里）—— 用户看到的就是一屏
-// base64 乱码。归一后无论 LLM 怎么回显，图片都按图片渲染；已存历史同样受益。
-// 长度阈值 512：真图片的 base64 远超此数，代码示例里的短 data URI 不误伤。
+// 当上下文**回显**进最终回答 —— 用户看到的就是一整屏 base64 乱码。
+// 实测两种回显形态都要处理：
+//   ① 包在 ``` 围栏里（含**未闭合**围栏）—— 围栏整体按代码渲染，在里面转图片语法
+//      是无效的，必须把整段围栏换成图片；
+//   ② 裸着输出，且 LLM 爱按 76 列**折行**（载荷里混着换行/空格）—— 匹配必须容忍
+//      base64 字符之间夹着空白，否则 {512,} 在第一个换行处就断掉，归一失灵。
+// 长度阈值：载荷≥256 个 base64 字符（真图片远超此数，代码示例里的短 data URI 不误伤）。
 function sanitizeBareImageDataUrls(text) {
   let s = String(text || '');
   if (s.indexOf('data:image') < 0) return s;
-  const img = function (u) { return '![配图](' + u + ')'; };
-  // ① 整段代码围栏里只有一个 data URL：围栏里放不出图片，整个围栏换成 Markdown 图片
-  s = s.replace(/```[^\n`]*\n?\s*(data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{512,})\s*\n?```/gi,
-    function (m, u) { return img(u); });
-  // ② 裸 data URL（前面不是 Markdown 图片语法的 ]( ）→ 转 Markdown 图片
-  s = s.replace(/(?<!\]\()(data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{512,})/gi,
-    function (m, u) { return img(u); });
+  const PAYLOAD = 'data:image\\/[a-z0-9.+-]+;base64,\\s*(?:[A-Za-z0-9+\\/=][ \\t\\r\\n]{0,2}){256,}';
+  const img = function (u) { return '![配图](' + u.replace(/[ \t\r\n]+/g, '') + ')'; };
+  // ① 已闭合围栏：只要围栏内含 data URL，整段换成图片（一个围栏可能有多张）
+  s = s.replace(/```[^\n`]*\n?([\s\S]*?)```/g, function (m, inner) {
+    if (inner.indexOf('data:image') < 0) return m;
+    const urls = inner.match(new RegExp(PAYLOAD, 'gi'));
+    if (!urls || !urls.length) return m;
+    return urls.map(img).join('\n');
+  });
+  // ② 未闭合围栏：从 ``` 语言行到文末（LLM 忘写收尾的 ``` 很常见）
+  s = s.replace(/```[^\n`]*\n?([\s\S]*data:image[\s\S]*)$/i, function (m, inner) {
+    const urls = inner.match(new RegExp(PAYLOAD, 'gi'));
+    if (!urls || !urls.length) return m;
+    return urls.map(img).join('\n');
+  });
+  // ③ 裸 data URL（前面不是 Markdown 图片语法的 ]( ）→ 转 Markdown 图片
+  s = s.replace(new RegExp('(?<!\\]\\()' + PAYLOAD, 'gi'), function (m) { return img(m); });
   return s;
 }
 function renderMarkdown(text) {
