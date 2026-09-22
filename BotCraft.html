@@ -11795,11 +11795,14 @@ async function runReply(b, opt) {
   // 流式的 AbortController 信号
   const signal = { then(cb) { if (abortCtrl) abortCtrl.signal.addEventListener('abort', cb, { once: true }); } };
 
-  // 图片生成：只要用户表达明确生图意图（无论是否启用插件），都自动调用文生图
+  // 图片生成：只要用户表达明确生图意图（无论是否启用插件），都自动调用文生图。
+  // 「再试一次」这类追问本身不含生图字眼，但上一轮在生图 → 承接那次提示词继续生成。
   const hasImagePlugin = ((aiBot.plugins || []).indexOf('图片生成') >= 0);
   const userWantsImage = wantsImageGeneration(v);
-  const wantsImage = userWantsImage;
-  const imagePromptText = userWantsImage ? extractImagePrompt(v) : '';
+  const _retryPrompt = (!userWantsImage && isImageRetryAsk(v) && recentImageContext(b.history))
+    ? lastImagePromptInHistory(b.history) : '';
+  const wantsImage = userWantsImage || !!_retryPrompt;
+  const imagePromptText = userWantsImage ? extractImagePrompt(v) : _retryPrompt;
   let imagePromise = null;
   if (wantsImage) {
     imagePromise = window.generateImage(imagePromptText);
@@ -11873,6 +11876,20 @@ async function runReply(b, opt) {
             }
           } else if (_onScreen()) { appendImageError('未返回图片地址', activeBot.n); }
         } catch (e) { console.warn('[图片生成] 失败：', e); if (_onScreen()) appendImageError(e && e.message ? e.message : e, activeBot.n); }
+      } else if (!hasImageMarkdown(result.final) && claimsImageGenerated(result.final)) {
+        // 模型谎报「已生成配图」：本轮没起生图任务、正文里也没有图 —— 代码负责兑现，
+        // 用上下文里最近一次生图提示词真生成一张（「再试一次」这类追问最容易触发谎报）。
+        const _lp = lastImagePromptInHistory(b.history);
+        if (_lp) {
+          try {
+            const _u = await window.generateImage(_lp);
+            if (_u) {
+              if (_onScreen()) document.querySelectorAll('.img-tip').forEach(el => el.remove());
+              _histRef.push({ role: 'bot', text: '![配图](' + _u + ')', who: activeBot.n, t: Date.now() });
+              if (_onScreen()) { renderHistory(b); attachCopyBtns(); renderQuickBar(); _scrollChat(true); }
+            }
+          } catch (e) { console.warn('[图片生成] 补生成失败：', e); }
+        }
       }
     } else {
       // 普通对话：启用真实插件（联网检索 / 天气查询）时，先执行工具并把结果注入上下文
@@ -11972,6 +11989,19 @@ async function runReply(b, opt) {
           }
         } else if (_onScreen()) { appendImageError('未返回图片地址', activeBot.n); }
       } catch (e) { console.warn('[图片生成] 失败：', e); if (_onScreen()) appendImageError(e && e.message ? e.message : e, activeBot.n); }
+    } else if (!hasImageMarkdown(full) && claimsImageGenerated(full)) {
+      // 同上：模型声称生成了图但没真生成 → 用最近一次生图提示词兑现
+      const _lp2 = lastImagePromptInHistory(b.history);
+      if (_lp2) {
+        try {
+          const _u2 = await window.generateImage(_lp2);
+          if (_u2) {
+            if (_onScreen()) document.querySelectorAll('.img-tip').forEach(el => el.remove());
+            _histRef.push({ role: 'bot', text: '![配图](' + _u2 + ')', who: activeBot.n, t: Date.now() });
+            if (_onScreen()) { renderHistory(b); attachCopyBtns(); renderQuickBar(); _scrollChat(true); }
+          }
+        } catch (e) { console.warn('[图片生成] 补生成失败：', e); }
+      }
     }
     }
   } catch (err) {
@@ -12010,6 +12040,40 @@ function setSendingUI(sending) {
     if (sending && serial) { inp.disabled = true; inp.style.opacity = '.5'; inp.style.cursor = 'not-allowed'; inp.placeholder = 'AI 回复中…（串行模式已锁定输入）'; }
     else { inp.disabled = false; inp.style.opacity = ''; inp.style.cursor = ''; inp.placeholder = '输入消息测试你的机器人… (Enter 发送)'; }
   }
+}
+// 「再来一次」类追问：本身没有任何「图 / 画」字眼，但上下文正在生图 —— 必须承接上次提示词。
+// 实测：先说「生成一张小猫图片」成功，再说「再试一次」就没图了 —— 意图识别只认
+// 「生成/画/图」这些词，「再试一次」一个都不沾，于是压根没起生图任务；
+// 而模型顺着上文回一句「已为你生成配图」，用户看到的就是「说了生成却没有图」。
+function isImageRetryAsk(userMsg) {
+  return /(再试|重试|重新试|再来|再生成|重新生成|再画|重新画|重画|换一张|换个|换一个|再给我|还要一张|多来一张|继续画|换种风格|换个风格)/.test(String(userMsg || ''));
+}
+// 最近几条消息里是否有生图语境（用户提过生图需求，或已经生成出过图）
+function recentImageContext(hist) {
+  var arr = (Object.prototype.toString.call(hist) === '[object Array]') ? hist.slice(-6) : [];
+  for (var i = arr.length - 1; i >= 0; i--) {
+    var m = arr[i]; if (!m || typeof m !== 'object') continue;
+    var t = String(m.text || '');
+    if (t.indexOf('data:image') >= 0 || /!\[[^\]]*\]\(/.test(t)) return true;
+    if (m.role === 'me' && wantsImageGeneration(t)) return true;
+  }
+  return false;
+}
+// 从历史里回捞最近一次生图提示词（供「再试一次」复用）
+function lastImagePromptInHistory(hist) {
+  var arr = (Object.prototype.toString.call(hist) === '[object Array]') ? hist : [];
+  for (var i = arr.length - 1; i >= 0; i--) {
+    var m = arr[i]; if (!m || m.role !== 'me') continue;
+    var t = String(m.text || '');
+    if (wantsImageGeneration(t)) { var p = extractImagePrompt(t); if (p) return p; }
+  }
+  return '';
+}
+// 模型自称「已生成配图」的措辞。代码要么真生成、要么明说没生成 ——
+// 不允许它空口白话（用户会以为图丢了/坏了，实际是根本没生成）。
+function claimsImageGenerated(text) {
+  var s = String(text || '');
+  return /(已(为你|为您|帮你|给您)?\s*(生成|画好|做好|绘制)|已经生成|生成好了|图片已生成|配图已生成)|请(查看|看)\s*上方(的)?\s*(图片|配图)/.test(s);
 }
 function wantsImageGeneration(userMsg) {
   if (!userMsg) return false;
