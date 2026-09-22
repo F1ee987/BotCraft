@@ -5462,8 +5462,12 @@ function sanitizeBareImageDataUrls(text) {
     if (!urls || !urls.length) return m;
     return urls.map(img).join('\n');
   });
-  // ③ 裸 data URL（前面不是 Markdown 图片语法的 ]( ）→ 转 Markdown 图片
-  s = s.replace(new RegExp('(?<!\\]\\()' + PAYLOAD, 'gi'), function (m) { return img(m); });
+  // ③ 裸 data URL → 转 Markdown 图片。
+  //    排除条件是「前面是 !](」—— 那是正常图片语法，别动。
+  //    ⚠️ 不能只排除「](」：LLM 回显时常把感叹号丢了，输出**链接形式**
+  //    `[配图](data:...)` —— 渲染器的链接规则不认 data: 协议，会原样落成文字
+  //    （用户实测「还是这样」的漏网形态就是它）。链接形式的 data URL 一样转图片。
+  s = s.replace(new RegExp('(?<!!\\]\\()' + PAYLOAD, 'gi'), function (m) { return img(m); });
   return s;
 }
 function renderMarkdown(text) {
