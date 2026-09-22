@@ -1040,6 +1040,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg.bot.img-tip .msg-body{font-style:italic;color:var(--sub);background:var(--fill);border-left:3px solid var(--brand)}
 .msg.bot.img-tip.img-err-bubble .msg-body{font-style:normal;color:var(--danger-text);background:rgba(255,69,58,.12);border-left:3px solid var(--danger)}
 .md-img-placeholder{padding:16px;border:1px dashed var(--line);border-radius:var(--r-md);background:var(--bg);color:var(--danger-text);text-align:center;font-size:13px;line-height:1.6}
+.md-img-omitted{display:inline-block;padding:8px 12px;border:1px dashed var(--line);border-radius:var(--r-md);background:var(--bg);color:var(--sub);font-size:12.5px;margin:4px 0}
 .msg.bot a{color:var(--brand-text);text-decoration:underline;text-underline-offset:2px}
 .msg.bot a:hover{opacity:.82}
 .msg.bot pre.md-code{position:relative;padding-top:34px}
@@ -2888,7 +2889,14 @@ window.__storage = __storage;
   // 阈值 200：短 base64（示例、图标）留着不影响，真图片的 base64 远超此数。
   var CTX_INLINE_MEDIA_RE = /data:([a-z]+)\/([a-z0-9.+-]+);base64,[A-Za-z0-9+/=]{200,}/gi;
   function stripInlineMediaForCtx(text) {
-    return String(text == null ? '' : text).replace(CTX_INLINE_MEDIA_RE, function (_m, kind) {
+    var s = String(text == null ? '' : text);
+    // 先把**整个 Markdown 图片语法**摘掉，而不是只换 URL：只换 URL 会留下
+    // `![配图](〔图片已省略〕)` 这种带假 URL 的图片语法 —— 模型会照猫画虎学舌输出同款，
+    // 而 hasImageMarkdown 只看语法就误判「回复里已有图」，把刚生成的真图顶掉
+    // （2026-09-22 用户实测「图片呢」的真因）。换成纯文本占位，模型无从模仿。
+    s = s.replace(/!\[[^\]]*\]\(\s*data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{200,}\s*\)/gi,
+      '\n〔历史消息中有一张图片，已省略〕\n');
+    return s.replace(CTX_INLINE_MEDIA_RE, function (_m, kind) {
       var label = (kind === 'image') ? '图片' : (kind === 'audio' ? '音频' : '视频');
       return '〔' + label + '已省略〕';
     });
@@ -5625,6 +5633,9 @@ function renderMarkdown(text) {
     // 结果是 `![alt](url)` 渲染成 `!<a href="url">alt</a>` —— 图片永远显示不出来。
     s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, u) {
       if (/^(https?:|data:image|\/)/i.test(u) && !/["'<>]/.test(u)) return '<img src="' + u + '" alt="' + escapeAttr(alt) + '" class="md-img" onload="scrollChatToBottom()" onerror="onImageError(this,\'' + escapeHtml(u).replace(/'/g, '\\\'') + '\')">';
+      // 假图：历史图片剥离后的占位符被模型学舌进回复（URL 是「〔图片已省略〕」这类占位文本）。
+      // 渲染成灰字说明而不是裂图/字面 markdown —— 历史里已落盘的脏消息也直接变正常。
+      if (/已省略/.test(u)) return '<span class="md-img-omitted">🖼️ ' + escapeHtml(alt || '图片') + '（历史图片已省略；需要时说「重新生成一张」）</span>';
       return m;
     });
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, t, u) {
@@ -12285,9 +12296,11 @@ function recentImageContext(hist) {
     // 所以末尾这条就是本次输入 —— 它「是不是生图请求」由 wantsImageGeneration 单独判定，
     // 这里要看的是它**之前**那条助手回复。
     if (m.role === 'me') continue;
-    // 最近一条助手回复：它就是图片 → 语境成立；是普通回复 → 生图那件事已经过去
+    // 最近一条助手回复：它就是图片 → 语境成立；是普通回复 → 生图那件事已经过去。
+    // 图片判定必须走 hasImageMarkdown（验 URL 真实性）—— 模型学舌的
+    // `![配图](〔图片已省略〕)` 假图语法不算图，否则承接判定又被假图污染。
     var t = String(m.text || '');
-    return (t.indexOf('data:image') >= 0 || /!\[[^\]]*\]\(/.test(t));
+    return hasImageMarkdown(t);
   }
   return false;
 }
@@ -12324,7 +12337,10 @@ function wantsImageGeneration(userMsg) {
 function hasImageMarkdown(text) {
   if (!text) return false;
   var s = String(text);
-  return /!\[[^\]]*\]\([^)\s]+\)/.test(s) || /<img\s/i.test(s);
+  // URL 必须真实（data:image / http(s)）。模型会把历史图片剥离后的占位符学舌成
+  // `![配图](〔图片已省略〕)` —— 那不是图；只看语法会把刚生成的真图顶掉（2026-09-22 实测）。
+  return /!\[[^\]]*\]\(\s*(data:image|https?:\/\/)[^)\s]*\)/i.test(s) ||
+         /<img\s[^>]*src\s*=\s*["']?(data:image|https?:)/i.test(s);
 }
 function extractImagePrompt(userMsg) {
   var s = String(userMsg || '');
