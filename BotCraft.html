@@ -2399,13 +2399,28 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
     <div style="margin:14px 0 6px;padding:10px 12px;border:1px dashed var(--glass-border);border-radius:10px;background:var(--glass-bg)">
       <div style="font-weight:700;font-size:13px;margin-bottom:8px">🖼️ 文生图设置（可选）</div>
+      <!-- 国内可直连的免费生图一键预设：省得用户去查端点、模型名与参数差异
+           （智谱是 /api/paas/v4 路径，硅基流动的尺寸字段名与返回结构与 OpenAI 不同，
+           这些差异由代码适配，用户只需点一下 + 填自己的 Key） -->
+      <div class="field">
+        <label>一键预设（国内免费）</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost" onclick="applyImagePreset('zhipu')">智谱 CogView-3-Flash（免费）</button>
+          <button type="button" class="btn btn-ghost" onclick="applyImagePreset('siliconflow')">硅基流动 Kolors（免费）</button>
+          <button type="button" class="btn btn-ghost" onclick="applyImagePreset('pollinations')">海外免费兜底</button>
+        </div>
+        <div id="imgPresetHint" style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.6">
+          智谱：open.bigmodel.cn 注册后在「API Keys」创建密钥，模型 cogview-3-flash 官方免费。<br>
+          硅基流动：cloud.siliconflow.cn 注册后创建密钥，模型 Kwai-Kolors/Kolors 官方定价 ¥0。
+        </div>
+      </div>
       <div class="field">
         <label>文生图接口地址（Base URL）</label>
-        <input id="set-img-base" placeholder="留空则使用免费默认图床 pollination.ai">
+        <input id="set-img-base" placeholder="留空则使用免费默认图床 pollination.ai（海外，可能不可达）">
       </div>
       <div class="field">
         <label>文生图 API Key</label>
-        <input id="set-img-key" type="password" placeholder="配置后走 OpenAI Images 兼容接口 /v1/images/generations" autocomplete="off">
+        <input id="set-img-key" type="password" placeholder="填对应平台的密钥；留空则用默认免费图床" autocomplete="off">
       </div>
       <div class="field">
         <label>文生图模型与尺寸</label>
@@ -15380,6 +15395,36 @@ function saveSettings() {
     _tg.textContent = (typeof resolveModelLabel === 'function' ? resolveModelLabel(_m) : _m) || _m || '未配置';
   }
 }
+// 一键套用国内免费生图预设：只填「接口地址 + 模型」，Key 留给用户（各家密钥不通用，
+// 代填会误导）。接口路径 / 尺寸字段名 / 返回结构的差异由 generateImage 内部适配。
+function applyImagePreset(name) {
+  var p = (window.BotCraftImagePresets || {})[name];
+  var hint = document.getElementById('imgPresetHint');
+  if (!p) return;
+  var baseEl = document.getElementById('set-img-base');
+  var modelEl = document.getElementById('set-img-model');
+  var sizeEl = document.getElementById('set-img-size');
+  if (baseEl) baseEl.value = p.base || '';
+  if (modelEl) modelEl.value = p.model || '';
+  if (sizeEl && p.size) {
+    var has = false;
+    for (var i = 0; i < sizeEl.options.length; i++) if (sizeEl.options[i].value === p.size) has = true;
+    if (!has) {
+      var op = document.createElement('option');
+      op.value = p.size; op.textContent = p.size;
+      sizeEl.appendChild(op);
+    }
+    sizeEl.value = p.size;
+  }
+  if (hint) {
+    hint.innerHTML = '已套用：<b>' + escapeHtml(p.label) + '</b>'
+      + (p.keyUrl ? '　获取密钥：<a href="' + escapeAttr(p.keyUrl) + '" target="_blank" rel="noopener">' + escapeHtml(p.keyUrl) + '</a>' : '')
+      + '<br>还需要把该平台的 API Key 填进下面的输入框，然后「保存」。'
+      + (p.base ? '' : '<br>（未配置接口时走海外免费图床，国内网络可能不可达。）');
+  }
+  toast('已套用：' + p.label, 'ok', 3000);
+}
+window.applyImagePreset = applyImagePreset;
 async function testConnection() {
   const apiKey = document.getElementById('set-key').value.trim();
   const baseURL = document.getElementById('set-base').value.trim();
@@ -15803,7 +15848,52 @@ window.__debug = {
     });
   }
 
-  // ---------- 文生图（OpenAI Images 兼容接口；未配置时回退 pollinations.ai 免费图床） ----------
+  // ---------- 文生图（国内免费接口优先；未配置时回退 pollinations.ai） ----------
+  // 接口预设：把「端点路径 / 尺寸字段名 / 返回结构」三家差异集中在这里适配，
+  // 用户只需要点一下按钮 + 填自己的 Key，不必去查各家文档。
+  const IMAGE_PRESETS = {
+    zhipu: {
+      label: '智谱 CogView-3-Flash（免费）',
+      base: 'https://open.bigmodel.cn/api/paas/v4',
+      model: 'cogview-3-flash',
+      size: '1024x1024',
+      keyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
+    },
+    siliconflow: {
+      label: '硅基流动 Kolors（免费）',
+      base: 'https://api.siliconflow.cn/v1',
+      model: 'Kwai-Kolors/Kolors',
+      size: '1024x1024',
+      keyUrl: 'https://cloud.siliconflow.cn/account/ak',
+    },
+    pollinations: { label: '海外免费兜底', base: '', model: '', size: '1024x1024', keyUrl: '' },
+  };
+  // Base URL → 真正的请求地址。三种写法都要认：
+  //   ① 已经是完整端点（…/images/generations）→ 原样用；
+  //   ② 带版本段的基址（智谱 /api/paas/v4、通用 /v1）→ 拼 /images/generations；
+  //   ③ 只给域名 → 按 OpenAI 兼容习惯拼 /v1/images/generations。
+  function imageEndpointOf(base) {
+    const b = String(base || '').trim().replace(/\/+$/, '');
+    if (!b) return '';
+    if (/\/images\/generations$/i.test(b)) return b;
+    if (/\/(v\d+[a-z]*|api\/paas\/v\d+)$/i.test(b)) return b + '/images/generations';
+    return b + '/v1/images/generations';
+  }
+  // 尺寸字段名：硅基流动用 image_size，其余（OpenAI / 智谱 / 大多数网关）用 size
+  function imageSizeFieldOf(base) {
+    return /siliconflow\.cn/i.test(String(base || '')) ? 'image_size' : 'size';
+  }
+  // 返回结构兼容：OpenAI/智谱 data[0]，硅基流动 images[0]，也有网关直接给顶层 url
+  function pickImageFromResponse(d) {
+    if (!d) return null;
+    const it = (d.data && d.data[0]) || (d.images && d.images[0]) || (typeof d === 'string' ? d : d);
+    if (!it) return null;
+    if (typeof it === 'string') return /^(https?:|data:)/i.test(it) ? { url: it } : null;
+    if (it.b64_json) return { b64: it.b64_json };
+    if (it.url) return { url: String(it.url) };
+    return null;
+  }
+
   function generateImage(prompt) {
     return new Promise(function (resolve, reject) {
       try {
@@ -15821,9 +15911,18 @@ window.__debug = {
         }
         function _clearTimer() { if (timer) { clearTimeout(timer); timer = null; } }
         // 把图片 URL 真正下载成 data URL，直接内嵌进聊天，避免浏览器二次外链加载失败 / 跨域裂图
+        // 顺序：桌面壳后端（无 CORS 限制）→ 浏览器 fetch → 原始 URL（由 <img> 自行加载）
         function _toDataUrl(url, ms) {
-          return Promise.race([
-            fetch(url).then(function (r) {
+          var _viaHost = function () {
+            var api = window.pywebview && window.pywebview.api;
+            if (!api || !api.bc_http_b64) return Promise.reject(new Error('no-host'));
+            return Promise.resolve(api.bc_http_b64(url)).then(function (r) {
+              if (!r || !r.ok || !r.b64) throw new Error((r && r.err) || '后端取图失败');
+              return 'data:' + (r.mime || 'image/png') + ';base64,' + r.b64;
+            });
+          };
+          var _viaFetch = function () {
+            return fetch(url).then(function (r) {
               if (!r.ok) throw new Error('HTTP ' + r.status);
               return r.blob();
             }).then(function (blob) {
@@ -15833,26 +15932,32 @@ window.__debug = {
                 fr.onerror = function () { rej(new Error('图片读取失败')); };
                 fr.readAsDataURL(blob);
               });
-            }),
+            });
+          };
+          return Promise.race([
+            _viaHost().catch(_viaFetch),
             _timeout(ms, '图片下载超时')
           ]);
         }
         if (base && key) {
-          // OpenAI Images 兼容接口
+          // OpenAI Images 兼容接口（含智谱 /api/paas/v4 与硅基流动 /v1）
+          var endpoint = imageEndpointOf(base);
+          var body = { model: model, prompt: prompt, n: 1 };
+          body[imageSizeFieldOf(base)] = size;   // size / image_size 两家写法不同
           Promise.race([
-            fetch(base + '/v1/images/generations', {
+            fetch(endpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-              body: JSON.stringify({ model: model, prompt: prompt, n: 1, size: size })
+              body: JSON.stringify(body)
             }).then(function (r) {
               if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + '：' + t); });
               return r.json();
             }).then(function (d) {
-              var item = d && d.data && d.data[0];
-              if (!item) throw new Error('接口未返回图片');
-              if (item.b64_json) return resolve('data:image/png;base64,' + item.b64_json);
-              // 优先内嵌 data URL；若图片服务不支持跨域读取，再回退原始 URL（由聊天图片自行加载）
-              return _toDataUrl(item.url, 60000).then(function (du) { resolve(du); }, function () { resolve(String(item.url)); });
+              var got = pickImageFromResponse(d);
+              if (!got) throw new Error('接口未返回图片（可能是模型名不对、额度用尽，或该接口格式不受支持）');
+              if (got.b64) return resolve('data:image/png;base64,' + got.b64);
+              // 优先内嵌 data URL；若下载受限再回退原始 URL（由聊天图片自行加载）
+              return _toDataUrl(got.url, 60000).then(function (du) { resolve(du); }, function () { resolve(String(got.url)); });
             }),
             _timeout(120000, '图片生成接口响应超时（120s），请检查网络或 API 状态')
           ]).then(function () { _clearTimer(); }).catch(function (e) { _clearTimer(); reject(e); });
@@ -16752,6 +16857,8 @@ window.__debug = {
   window.searchKB = searchKB;
   window.searchWeb = searchWeb;
   window.generateImage = generateImage;
+  // 预设表挂到 window 供设置面板的一键按钮使用（IIFE 内部的常量，外面取不到）
+  window.BotCraftImagePresets = IMAGE_PRESETS;
   window.injectLogPanel = injectLogPanel;
   window.collectToolContext = collectToolContext; // 暴露给主脚本 sendMsg 单节点对话路径，否则联网检索/天气工具上下文被 try/catch 静默吞掉
   window.renderRunLogs = renderRunLogs;
