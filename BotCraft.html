@@ -12941,29 +12941,32 @@ document.addEventListener('keydown', function (e) {
     try { el.setSelectionRange(np, np); } catch (e2) {}
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  function doPaste(el) {
-    /* 三级回落：① 剪贴板 API（WebView2 对 file:// 页面默认拒绝授权）→
-       ② 桌面壳 bc_clip_text（Python ctypes 直读 Win32 剪贴板，无权限门槛）→
-       ③ 都不行才提示改用 Ctrl+V。②是桌面版的实际主通道，成功时不弹任何提示。 */
-    let p = null;
-    try { p = navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText() : null; } catch (e) { p = null; }
-    if (p) {
-      p.then(function (txt) {
-        if (txt) { insertText(el, txt); return; }
-        toast('剪贴板是空的', 'err');
-      }).catch(function () { viaBackend(el); });
-      return;
-    }
-    viaBackend(el);
-  }
   function viaBackend(el) {
     const api = window.pywebview && window.pywebview.api;
     if (!api || !api.bc_clip_text) { toast('无法读取剪贴板，请用 Ctrl+V 粘贴', 'err'); return; }
     Promise.resolve(api.bc_clip_text()).then(function (r) {
       const txt = (r && r.ok) ? (r.text || '') : '';
       if (txt) { insertText(el, txt); return; }
+      if (r && r.ok && r.kind === 'non-text') { toast('剪贴板里不是文本，图片请用 Ctrl+V 粘贴', 'err'); return; }
       toast(r && r.ok ? '剪贴板是空的' : ('无法读取剪贴板：' + (r && r.text || '未知原因')), 'err');
     }).catch(function () { toast('无法读取剪贴板，请用 Ctrl+V 粘贴', 'err'); });
+  }
+  function doPaste(el) {
+    /* 桌面版**直接走后端**（bc_clip_text，Python ctypes 读系统剪贴板，无权限门槛）：
+       不碰 navigator.clipboard —— WebView2 对它的 clipboard-read 权限默认拒绝/弹提示，
+       那是「每次右键粘贴都有弹窗」的根因。浏览器直开（无 pywebview）才走剪贴板 API。 */
+    const api = window.pywebview && window.pywebview.api;
+    if (api && api.bc_clip_text) { viaBackend(el); return; }
+    let p = null;
+    try { p = navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText() : null; } catch (e) { p = null; }
+    if (p) {
+      p.then(function (txt) {
+        if (txt) { insertText(el, txt); return; }
+        toast('剪贴板是空的', 'err');
+      }).catch(function () { toast('无法读取剪贴板，请用 Ctrl+V 粘贴', 'err'); });
+      return;
+    }
+    toast('无法读取剪贴板，请用 Ctrl+V 粘贴', 'err');
   }
   function buildMenu(x, y, el) {
     closeMenu();
