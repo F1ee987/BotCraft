@@ -1064,6 +1064,11 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg-copy:hover{background:var(--fill-strong);color:var(--brand-text)}
 .msg-copy:active{transform:scale(.97)}
 .msg-copy.copied{color:#fff;background:var(--brand-fill);border-color:transparent}
+/* 自己的气泡是品牌紫渐变底（.msg.me，白字）—— 默认灰字按钮会陷进去，改半透明白玻璃 */
+.msg.me .msg-copy{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.28)}
+.msg.me .msg-copy:hover{background:rgba(255,255,255,.28);color:#fff}
+.msg.me .msg-act{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.28)}
+.msg.me .msg-act:hover{background:rgba(255,255,255,.28);color:#fff}
 /* 消息操作：重新生成 / 编辑重发。与「复制」同族，靠 margin-left 水平排开在气泡下方 */
 .msg-act{margin-top:8px;margin-left:6px;display:inline-flex;align-items:center;gap:var(--sp-2);padding:5px 12px;border-radius:var(--r-full);font-size:11.5px;font-weight:590;cursor:pointer;
   background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease);font-family:inherit}
@@ -11113,11 +11118,13 @@ function msgPlainText(msg) {
   // 2) 能回到数据源就回数据源：折叠态、「已折叠…展开全文」按钮文字、
   //    参考来源条一概不掺进来。注意 img-tip 之类的临时气泡没有 data-mi，
   //    而 +null === 0，所以必须先把「没有属性」和「值就是 0」区分开。
+  //    自己的消息（role === 'me'）同样走这里：.msg.me 的 DOM textContent 会把
+  //    「✏️ 编辑 / 💿 复制」按钮文字一起带上，history 里的 m.text 才是干净正文。
   var raw = msg.getAttribute('data-mi');
   var mi = (raw === null || raw === '') ? NaN : +raw;
   var b = getBot(currentId);
   var m = (b && b.history && isFinite(mi)) ? b.history[mi] : null;
-  if (m && m.role !== 'me' && typeof m.text === 'string' && m.text) return m.text;
+  if (m && typeof m.text === 'string' && m.text) return m.text;
   // 3) 兜底：克隆气泡正文后剔掉说话人与参考来源，别动原节点
   var body = msg.querySelector('.msg-body');
   if (!body) return msg.textContent || '';
@@ -11128,31 +11135,15 @@ function msgPlainText(msg) {
 function attachCopyBtns() {
   var chat = document.getElementById('chat'); if (!chat) return;
   var _lastBot = _lastBotIndex(getBot(currentId));
-  // 编辑：挂在用户自己发出去的消息上
-  chat.querySelectorAll('.msg.me:not([data-edit-bound])').forEach(function (msg) {
-    msg.setAttribute('data-edit-bound', '1');
-    var ed = document.createElement('button');
-    ed.type = 'button'; ed.className = 'msg-act'; ed.textContent = '\u270F\uFE0F 编辑';
-    ed.title = '修改这条消息并重新发送（它之后的对话会被清除）';
-    ed.onclick = function () { openEditMsg(+msg.getAttribute('data-mi')); };
-    msg.appendChild(ed);
-  });
-  chat.querySelectorAll('.msg.bot:not([data-copy-bound])').forEach(function (msg) {
-    msg.setAttribute('data-copy-bound', '1');
-    // 重新生成：只给最后一条 AI 回复挂，挂在别处没有意义
-    if (+msg.getAttribute('data-mi') === _lastBot && !msg.classList.contains('img-tip')) {
-      var rg = document.createElement('button');
-      rg.type = 'button'; rg.className = 'msg-act'; rg.textContent = '\uD83D\uDD04 重新生成';
-      rg.title = '用同样的上下文重新请求一次回答';
-      rg.onclick = function () { regenLastReply(); };
-      msg.appendChild(rg);
-    }
+  /* 复制按钮：机器人气泡和自己的气泡共用一套（复制按钮是程序化写剪贴板，
+     不依赖 WebView2 的 Ctrl+C 加速键 —— 后者偶发被吞，见文件里 Ctrl+C 兜底那段）。 */
+  function addCopyBtn(msg) {
     var copy = document.createElement('button');
     copy.className = 'msg-copy'; copy.textContent = '\uD83D\uDCBF 复制';
     copy.onclick = function () {
       var text = msgPlainText(msg);
       var done = function () {
-        toast('已复制回复', 'ok');
+        toast('已复制', 'ok');
         copy.classList.add('copied');
         copy.textContent = '✓ 已复制';
         setTimeout(function () {
@@ -11170,6 +11161,28 @@ function attachCopyBtns() {
       }
     };
     msg.appendChild(copy);
+  }
+  // 自己的消息：编辑 + 复制两个按钮
+  chat.querySelectorAll('.msg.me:not([data-edit-bound])').forEach(function (msg) {
+    msg.setAttribute('data-edit-bound', '1');
+    var ed = document.createElement('button');
+    ed.type = 'button'; ed.className = 'msg-act'; ed.textContent = '\u270F\uFE0F 编辑';
+    ed.title = '修改这条消息并重新发送（它之后的对话会被清除）';
+    ed.onclick = function () { openEditMsg(+msg.getAttribute('data-mi')); };
+    msg.appendChild(ed);
+    addCopyBtn(msg);
+  });
+  chat.querySelectorAll('.msg.bot:not([data-copy-bound])').forEach(function (msg) {
+    msg.setAttribute('data-copy-bound', '1');
+    // 重新生成：只给最后一条 AI 回复挂，挂在别处没有意义
+    if (+msg.getAttribute('data-mi') === _lastBot && !msg.classList.contains('img-tip')) {
+      var rg = document.createElement('button');
+      rg.type = 'button'; rg.className = 'msg-act'; rg.textContent = '\uD83D\uDD04 重新生成';
+      rg.title = '用同样的上下文重新请求一次回答';
+      rg.onclick = function () { regenLastReply(); };
+      msg.appendChild(rg);
+    }
+    addCopyBtn(msg);
   });
 }
 // ==================== 输入框自适应高度 ====================
@@ -12852,6 +12865,29 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault(); toggleCmdK();
   }
+});
+
+/* ============ Ctrl+C 复制兜底（2026-09-22） ============
+   用户反馈「划选自己发的消息后 Ctrl+C 复制不出来」。排查结论：全站没有任何代码拦截
+   键盘 / copy 事件、也没有 user-select 压制，问题出在 WebView2 的加速键层 ——
+   「有文档选区但 Ctrl+C 没落到剪贴板」偶发且难复现。与其赌加速键，不如统一接管：
+   有文档选区时就 preventDefault 并自己把选区文本写进剪贴板，行为全平台确定。
+   ⚠️ 两个不接管的情形：
+   · 焦点在输入框 / 文本域 / 可编辑元素里 —— 输入框内的选区不反映在 document selection，
+     原生行为最准（window.getSelection() 在 Chromium 里对输入框内选区返回空）；
+   · 没有文档选区 —— 让原生行为走（比如复制按钮聚焦时按下无意义，不拦）。 */
+document.addEventListener('keydown', function (e) {
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+  const _k = String(e.key || '').toLowerCase();
+  if (_k !== 'c') return;
+  const ae = document.activeElement;
+  if (ae && (ae.isContentEditable || ae.tagName === 'TEXTAREA' ||
+      (ae.tagName === 'INPUT' && !/^(button|submit|checkbox|radio)$/.test(ae.type || '')))) return;
+  const sel = window.getSelection ? window.getSelection() : null;
+  const txt = sel ? String(sel) : '';
+  if (!txt) return;
+  e.preventDefault();
+  copyTextRobust(txt);   /* 只复制不弹 toast：划选复制是高频操作，别每次都打脸 */
 });
 
 // ==================== 命令面板 ====================
