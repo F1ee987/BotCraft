@@ -3448,7 +3448,8 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     }
     // 用户当前请求需要配图：明确告知 AI 系统会自动生成并展示图片，避免模型自己编造/重复 URL
     if (imagePrompt) {
-      var imgNote = '\n【图片生成】用户当前请求「' + imagePrompt.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。';
+      var imgNote = '\n【图片生成】用户当前请求「' + imagePrompt.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。'
+        + '\n⚠️ 但你**看不到**这张图：不要描述画面内容、不要列举图里有什么元素（用户会以为你在看图，实际是你在编）。只说已生成，并说明可以怎么调整（换风格 / 加细节 / 重新生成）。';
       imgNote += ' 你只需在正文里自然说明「已为你生成配图」或简单引用，绝对不要输出图片 URL，不要把图片地址当纯文本重复，也不要自行描述不存在的图片内容。';
       imgNote += ' 特别重要：用户要的是「直接看到图片」，不是要你写「图片生成提示词、负面提示词、小红书/抖音配文、图片比例、分镜脚本」等；你禁止输出任何带【】方括号的板块标题，禁止输出 Midjourney/Stable Diffusion 提示词模板，禁止输出营销文案脚本。违者视为违规输出。';
       pushSec('image', imgNote);
@@ -12015,7 +12016,9 @@ async function runReply(b, opt) {
   const _retryPrompt = (!userWantsImage && isImageRetryAsk(v) && recentImageContext(b.history))
     ? lastImagePromptInHistory(b.history) : '';
   const wantsImage = userWantsImage || !!_retryPrompt;
-  const imagePromptText = userWantsImage ? extractImagePrompt(v) : _retryPrompt;
+  // 提示词必须做上下文补足：用户常说「生成行程配图」这类指代句，只抽出「行程」两个字
+  // 发给生图接口，出来的图必然与要求不符（2026-09-22 用户实测：要行程图，得到一张人像）。
+  const imagePromptText = userWantsImage ? buildImagePrompt(v, b.history) : _retryPrompt;
   let imagePromise = null;
   if (wantsImage) {
     imagePromise = window.generateImage(imagePromptText);
@@ -12278,7 +12281,9 @@ function lastImagePromptInHistory(hist) {
   for (var i = arr.length - 1; i >= 0; i--) {
     var m = arr[i]; if (!m || m.role !== 'me') continue;
     var t = String(m.text || '');
-    if (wantsImageGeneration(t)) { var p = extractImagePrompt(t); if (p) return p; }
+    // 走 buildImagePrompt 而不是裸 extractImagePrompt：这样「再试一次」复用提示词时
+    // 也会做上下文补足，而不是把当年那两个字的「行程」原样再发一遍
+    if (wantsImageGeneration(t)) { var p = buildImagePrompt(t, arr); if (p) return p; }
   }
   return '';
 }
@@ -12325,8 +12330,80 @@ function extractImagePrompt(userMsg) {
     }
   }
   s = s.trim();
+  // 量词泄漏：「给我画个封面」会走到 m2 分支产出「个 封面」——开头孤零零一个量词要摘掉
+  s = s.replace(/^[一二三四五六七八九十]?\s*[张幅个组份支台只条头匹]\s+/, '').trim();
   if (!s) s = userMsg;
   return s;
+}
+
+/* ==================== 生图提示词的「上下文补足」 ====================
+   病灶（2026-09-22 用户实测）：用户说「生成行程配图」，extractImagePrompt 只抽出「行程」
+   两个字就发给生图接口 —— 结果出来一张完全不相关的人像。上一轮回复里明明有完整的
+   3 天行程，却一个字都没用上。纯指代型请求（「来张图」「生成图片」「配个图」）更糟：
+   提取直接失败，原句被当成提示词发出去。
+   这里补两层：
+     ① 指代型 → 从最近一条实质性助手回复里抽出主题，让图对上「刚聊的那件事」；
+     ② 主题来自上下文 → 补一句输出规格（中文图文排版的信息图），避免接口自由发挥。
+   注意：「小猫」这种短但具体的词不是指代，绝不能拿上下文去覆盖它。 */
+function isReferentialSubject(subject) {
+  var t = String(subject || '').trim();
+  if (!t) return true;
+  // 整句只有「动作 + 量词 + 图」、没有主体（来张图 / 生成图片 / 配个图）→ 必然要靠上下文。
+  // 这类在真实流程里也能靠「提取失败→原句」兜住，但让本函数自认它们，语义才自洽。
+  if (/^(来|画|配|生成|做|给|弄|搞|要|想|需要|帮我|给我|请)\s*[一二三四五六七八九十]?\s*[张幅个组份支台只条头匹]?\s*(图片?|图像|图|配图|海报|插画|封面|宣传图|banner|草图|照片|相片|写真)$/i.test(t)) return true;
+  if (t.length > 8) return false;          // 有实质描述的长句不动它
+  if (/^(图片?|配图|海报|插画|封面|宣传图|草图|照片|相片|写真|行程|路线|方案|计划|规划|攻略|内容|概览|总结|摘要|清单|明细|对比|结果|上面|上述|刚才|之前|这个|那个|这些|那些|它|此|该)/.test(t)) return true;
+  return /(行程|路线|方案|计划|规划|概览|总结|摘要|清单|明细|结果|内容)(图|表|海报)?$/.test(t);
+}
+// 把一条助手回复压成一句可画的主题描述：去掉图片语法 / 代码块 / 表格竖线 / 标记符
+function imageSubjectDigest(text) {
+  var s = String(text || '');
+  s = s.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ');
+  // ⚠️ 代码围栏用 \x60 转义写，**不要**在正则里放字面反引号：所有测试夹具用的是简易
+  // 扫描器（遇反引号当作模板字符串起始），正则会把它当成字符串开头而越界吞掉整个文件。
+  s = s.replace(/\x60{3}[\s\S]*?\x60{3}/g, ' ');
+  s = s.replace(/\|/g, ' ');
+  s = s.replace(/^\s*[-*+]\s+/gm, '');
+  s = s.replace(/[#>*_]/g, ' ');
+  // markdown 表格的分隔行会留下一串横线，对生图提示词是纯噪声
+  s = s.replace(/[-—–]{3,}/g, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+  // 末尾标点要摘掉：调用方用「。」拼接，留着会出现「500。。画成…」
+  s = s.replace(/[。．.,，、；;：:\s]+$/, '');
+  return s.length > 220 ? s.slice(0, 220) + '…' : s;
+}
+// 最近一条「实质性」的助手回复（跳过图片消息；太短说明没内容可借）
+function lastSubjectFromHistory(hist) {
+  var arr = (Object.prototype.toString.call(hist) === '[object Array]') ? hist : [];
+  for (var i = arr.length - 1; i >= 0; i--) {
+    var m = arr[i];
+    if (!m || typeof m !== 'object' || m.role !== 'bot') continue;
+    var t = String(m.text || '');
+    if (t.indexOf('data:image') >= 0) continue;
+    var clean = imageSubjectDigest(t);
+    if (clean.length >= 20) return clean;
+  }
+  return '';
+}
+// 输出规格：只在「主题来自上下文」时给（= 把刚聊的内容画成图），用户明确要人像则不干预
+function imageSpecHint(raw, usedContext) {
+  if (/写真|人像|头像|自拍|证件照/.test(String(raw || ''))) return '';
+  if (!usedContext) return '';
+  return '画成中文图文排版的信息图：标题清晰、内容分块列出，重点是可读的概览与数据；不要人像或人脸特写';
+}
+/* 组装最终发给生图接口的提示词。返回空串表示「没有可用主题」，调用方应按原逻辑处理。 */
+function buildImagePrompt(userMsg, history) {
+  var raw = String(userMsg == null ? '' : userMsg).trim();
+  var core = String(extractImagePrompt(raw) || '').trim();
+  // 提取失败（原句原样返回）或抽出来只是个指代词 → 用上下文补足主体
+  var referential = (core === raw) || isReferentialSubject(core);
+  var subject = referential ? lastSubjectFromHistory(history) : '';
+  var parts = [];
+  if (subject) parts.push(core && core !== raw ? (core + '｜' + subject) : subject);
+  else parts.push(core || raw);
+  var hint = imageSpecHint(raw, !!subject);
+  if (hint) parts.push(hint);
+  return parts.filter(Boolean).join('。').slice(0, 800);   // 别堆到接口的提示词上限
 }
 function stopGenerate() {
   if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
@@ -17099,7 +17176,8 @@ window.__debug = {
       if ((role === 'review' || role === 'generate') && bot.styleText) sys += '\n\n【写作风格】请按以下文体要求输出：' + bot.styleText;
       // 图片生成说明：最终节点知道系统会自动配图，避免自己编造 URL 或重复图片地址
       if (_imagePromptForNodes && !isIntermediate) {
-        sys += '\n\n【图片生成】用户当前请求「' + _imagePromptForNodes.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。';
+        sys += '\n\n【图片生成】用户当前请求「' + _imagePromptForNodes.replace(/[\n\r]/g, ' ').slice(0, 80) + '」需要配图。系统已自动调用文生图接口生成真实图片，图片将在本回复之后直接展示在聊天中。'
+      + '\n⚠️ 但你**看不到**这张图：不要描述画面内容、不要列举图里有什么元素（用户会以为你在看图，实际是你在编）。只说已生成，并说明可以怎么调整。';
         sys += ' 你只需在正文里自然说明「已为你生成配图」或简单引用，绝对不要输出图片 URL，不要把图片地址当纯文本重复。';
         sys += ' 特别重要：用户要的是「直接看到图片」，不是要你写「图片生成提示词、负面提示词、小红书/抖音配文、图片比例、分镜脚本」等内容；因此你禁止输出任何带【】方括号的板块标题，禁止输出 Midjourney/Stable Diffusion 提示词模板，禁止输出文案脚本。违者视为违规输出。';
       }
