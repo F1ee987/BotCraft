@@ -5435,9 +5435,26 @@ function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;'
 function escapeAttr(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 // 完整 markdown 子集渲染：标题/加粗/斜体/删除线/有序·无序·任务列表/表格/引用/分隔线/链接/行内码/代码块(带语言标签)
 // 设计原则：先抽出代码块与行内码占位，避免被行内解析破坏；整段转义后做块级解析；链接仅放行 http(s)/mailto/相对路径，过滤引号防 XSS。
+// 裸 data URL / 被围栏包住的 data URL → Markdown 图片（渲染层归一）。
+// 场景：生图节点输出 `![生成图片](data:...)` 后，下游 LLM 润色节点会把巨型 base64
+// 当上下文**回显**进最终回答（裸着或包在 ``` 围栏里）—— 用户看到的就是一屏
+// base64 乱码。归一后无论 LLM 怎么回显，图片都按图片渲染；已存历史同样受益。
+// 长度阈值 512：真图片的 base64 远超此数，代码示例里的短 data URI 不误伤。
+function sanitizeBareImageDataUrls(text) {
+  let s = String(text || '');
+  if (s.indexOf('data:image') < 0) return s;
+  const img = function (u) { return '![配图](' + u + ')'; };
+  // ① 整段代码围栏里只有一个 data URL：围栏里放不出图片，整个围栏换成 Markdown 图片
+  s = s.replace(/```[^\n`]*\n?\s*(data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{512,})\s*\n?```/gi,
+    function (m, u) { return img(u); });
+  // ② 裸 data URL（前面不是 Markdown 图片语法的 ]( ）→ 转 Markdown 图片
+  s = s.replace(/(?<!\]\()(data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{512,})/gi,
+    function (m, u) { return img(u); });
+  return s;
+}
 function renderMarkdown(text) {
   if (text == null) return '';
-  text = String(text);
+  text = sanitizeBareImageDataUrls(String(text));
   const codeBlocks = [];
   function pushCodeBlock(lang, code) {
     const id = codeBlocks.length;
