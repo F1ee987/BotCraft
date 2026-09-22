@@ -4624,10 +4624,10 @@ function factoryExpertiseOf(name) {
 
 const plugins = [
   { n: '网页搜索', d: '实时联网获取最新信息', ic: '🔍', c: 'linear-gradient(135deg,#4dd0e1,#2bb5e8)', cat: '联网', cap: '调用 DuckDuckGo 即时答案接口实时检索网页摘要与相关条目，让机器人回答包含最新资讯。启用即为该机器人开启联网检索，工作流会在需要外部事实的步骤自动注入检索片段。' },
-  { n: '图片生成', d: '调用文生图模型创作配图', ic: '🖼️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', cat: '内容', cap: '根据文本描述生成真实配图，适用于种草图文、海报、插画等场景。启用后，当用户请求配图/生图时，系统会自动调用文生图接口生成图片并直接展示在聊天中；未配置专用接口时默认使用 pollinations.ai 免费图床（无需 Key），也可在「设置」中接入 OpenAI Images 兼容接口（如部分国内网关）获得更高质量。' },
+  { n: '图片生成', d: '调用文生图模型创作配图', ic: '🖼️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', cat: '内容', cap: '根据文本描述生成真实配图，适用于种草图文、海报、插画等场景。启用后，当用户请求配图/生图时，系统会自动调用文生图接口生成图片并直接展示在聊天中。接口可「设置 → 🖼️ 文生图设置」一键切换：智谱 CogView-3-Flash（官方免费）与硅基流动 Kwai-Kolors/Kolors（官方定价 ¥0）都已适配（各自端点、参数名与返回结构差异由程序处理），未配置时回退 pollinations.ai 免费图床（海外，部分网络不可达）。说「再试一次 / 换一张」会承接上一张的提示词继续生成。' },
   { n: '天气查询', d: '获取全球城市实时天气', ic: '🌤️', c: 'linear-gradient(135deg,#7c4dff,#4dd0e1)', cat: '数据', cap: '调用天气接口，返回指定城市当前气温、天气、风力与未来预报，适合行程规划、生活助手类机器人。' },
-  { n: '日历/提醒', d: '创建与管理日程提醒', ic: '📅', c: 'linear-gradient(135deg,#a1887f,#795548)', cat: '数据', cap: '创建提醒事项与日程，支持按时间触发，适合待办管理、日程助理类机器人。' },
-  { n: '代码执行器', d: '安全沙盒中运行代码片段', ic: '⚙️', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', cat: '开发', cap: '在本地沙盒中试运行 JavaScript 片段（仅 JavaScript，不支持 Python），用于算法验证、数据转换与格式清洗。注意：当前只在插件详情面板手动运行，工作流不会自动执行代码。' },
+  { n: '日历/提醒', d: '创建与管理日程提醒', ic: '📅', c: 'linear-gradient(135deg,#a1887f,#795548)', cat: '数据', cap: '创建提醒事项与日程，支持按时间触发，适合待办管理、日程助理类机器人。到点优先弹系统通知（应用最小化/切到后台也能收到），未授权或环境不支持时回退应用内提示；可在插件详情面板里一键开启系统通知并查看当前状态。也可以直接在对话里说「提醒我明天 9:00 开会」，模型会用 [REMINDER] 指令真实建提醒。' },
+  { n: '代码执行器', d: '安全沙盒中运行代码片段', ic: '⚙️', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', cat: '开发', cap: '在隔离沙箱中试运行代码：JavaScript 走浏览器 iframe 沙箱（两端都可用），桌面版另支持 Python —— 由后端白名单执行（只放行 math/re/json/collections 等纯计算模块，无文件/网络/子进程能力，8 秒超时，输出行数封顶）。两个入口：聊天里的代码块点「▶ 运行」，或本插件详情面板里选语言试运行。注意：均需你手动触发，模型输出永不自动执行。' },
   { n: '画布工具', d: '在聊天里直接增删改连工作流画布', ic: '🧩', c: 'linear-gradient(135deg,#8b5cf6,#32ade6)', cat: '开发', cap: '勾选后，你可以用聊天的方式让机器人改当前机器人的编排画布：加节点、连线、断线、改标题与说明、删节点、按执行次序排布。机器人会在回复末尾输出 [CANVAS: ...] 指令行（不会显示在聊天里），系统校验通过后立即应用到画布。一次回复里的所有改动算一步，Ctrl+Z 可整体撤销；类型与连线都会被校验（不认的类型、指空的 id、成环的连线一律拒绝并回报）。' },
 ];
 // 内置插件名单（由 plugins 派生，不手抄）：normalize 用它过滤已下架插件的幽灵声明
@@ -14216,8 +14216,14 @@ function renderRemindersInModal(){
   }).join('');
 }
 function remindersExtraHTML(){
+  var N = _notifySupported();
+  var needAsk = !N || N.permission !== 'granted';
   return `<div style="margin-top:14px">
     <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">📅 我的提醒（本地存储，到点弹出通知）</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--glass-bg)">
+      <div id="notifyState" style="flex:1;min-width:0;font-size:11.5px;color:var(--sub);line-height:1.5">${escapeHtml(notifyStateText())}</div>
+      ${needAsk ? '<button class="btn btn-ghost btn-sm" onclick="askNotificationPermission()">开启系统通知</button>' : ''}
+    </div>
     <div id="remindListBox"></div>
     <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
       <input id="remindTitle" placeholder="提醒内容，如：提交周报" style="flex:1;min-width:140px;padding:9px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
@@ -14237,18 +14243,82 @@ function addReminderFromUI(){
   else toast('该提醒已存在','err');
 }
 let _reminderTimer=null;
+// 到点投递：优先**系统通知**（应用最小化/切到别的窗口也看得见），
+// 不可用（浏览器没这个 API、桌面壳未授权）或被拒时回退应用内 toast。
+// 之前的实现只有 toast —— 面板文案却写着「到点弹出通知」，等于承诺了没做的事：
+// 应用不在前台时提醒等于没提醒。
+function _notifySupported() {
+  try { return (typeof Notification !== 'undefined') && Notification; } catch (e) { return null; }
+}
+function notifyStateText() {
+  var N = _notifySupported();
+  if (!N) return '当前环境不支持系统通知，到点将在应用内提示（请保持窗口可见）';
+  if (N.permission === 'granted') return '系统通知已开启：到点会在桌面右下角弹出，应用在后台也能收到';
+  if (N.permission === 'denied') return '系统通知被拒绝：到点只能在应用内提示（可在系统设置里为 BotCraft 重新允许通知）';
+  return '尚未开启系统通知：到点只在应用内提示，点右侧按钮开启系统通知';
+}
+function askNotificationPermission() {
+  var N = _notifySupported();
+  if (!N) { toast('当前环境不支持系统通知', 'warn'); return; }
+  try {
+    var p = N.requestPermission();
+    if (p && p.then) {
+      p.then(function () { toast(notifyStateText(), 'ok', 5000); renderRemindersInModal(); })
+        .catch(function () { toast('申请系统通知失败，可稍后再试', 'err'); });
+    } else {
+      toast(notifyStateText(), 'ok', 5000); renderRemindersInModal();
+    }
+  } catch (e) { toast('申请系统通知失败：' + ((e && e.message) || e), 'err'); }
+}
+function notifyReminder(title) {
+  var text = String(title || '');
+  var N = _notifySupported();
+  var fallback = function () { try { toast('⏰ 提醒：' + text, 'ok', 7000); } catch (e) { } };
+  if (!N) { fallback(); return 'toast'; }
+  try {
+    if (N.permission === 'granted') {
+      try { new Notification('⏰ BotCraft 提醒', { body: text, tag: 'bc-remind' }); return 'system'; }
+      catch (e) { fallback(); return 'toast'; }
+    }
+    if (N.permission === 'default') {
+      // 首次到点顺手申请授权：无论用户怎么选，**应用内提示都照发**，不让提醒落空
+      try {
+        var r = N.requestPermission();
+        if (r && r.then) {
+          r.then(function (st) {
+            if (st === 'granted') { try { new Notification('⏰ BotCraft 提醒', { body: text, tag: 'bc-remind' }); } catch (e) { } }
+          }).catch(function () { });
+        }
+      } catch (e) { }
+      fallback();
+      return 'toast+ask';
+    }
+  } catch (e) { }
+  fallback();
+  return 'toast';
+}
 function startReminderChecker(){
   if(_reminderTimer) return;
   const tick=()=>{
     const now=Date.now(); const list=loadReminders(); let changed=false;
-    list.forEach(r=>{ if(!r.notified && !r.done && r.time && r.time<=now){ r.notified=true; changed=true; toast('⏰ 提醒：'+r.title,'ok',7000); } });
+    list.forEach(r=>{ if(!r.notified && !r.done && r.time && r.time<=now){ r.notified=true; changed=true; notifyReminder(r.title); } });
     if(changed) saveReminders(list);
   };
   _reminderTimer=setInterval(tick,20000); tick();
 }
 function codeRunnerExtraHTML(){
+  // 语言可选：JS 走浏览器 iframe 沙箱（两端都能用）；Python 走桌面端后端
+  // （bc_py_run，白名单 + 超时）。此前面板写死 JS，而聊天里的 Python 代码块早就能
+  // 点「▶ 运行」—— 能力在、入口没接上，属于「存在但未实现」。
+  var api = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+  var canPy = !!(api && typeof api.bc_py_run === 'function');
   return `<div style="margin-top:14px">
-    <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">⚙️ 试运行（隔离沙箱内运行·支持 console.log / print()，不会上传）</div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">⚙️ 试运行（隔离环境内运行·不会上传）</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" id="codeLangJs" onclick="setCodeRunnerLang('js')">JavaScript</button>
+      <button class="btn btn-ghost btn-sm" id="codeLangPy" onclick="setCodeRunnerLang('py')"${canPy ? '' : ' disabled title="Python 运行需要桌面版"'} style="${canPy ? '' : 'opacity:.5;cursor:not-allowed'}">Python${canPy ? '' : '（需桌面版）'}</button>
+      <span style="font-size:11.5px;color:var(--sub)" id="codeLangHint">${canPy ? '桌面版可用：JavaScript 走浏览器沙箱，Python 走后端白名单沙箱' : '浏览器直开只能跑 JavaScript；桌面版另支持 Python'}</span>
+    </div>
     <textarea id="codeRunnerInput" placeholder="// 在此输入 JavaScript 代码，点击运行查看输出&#10;console.log(1+2);" style="width:100%;height:120px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:12.5px;font-family:var(--font-mono);resize:vertical"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn btn-primary btn-sm" onclick="runCodeInSandbox()">▶ 运行</button>
@@ -14256,6 +14326,28 @@ function codeRunnerExtraHTML(){
     </div>
     <pre id="codeRunnerOut" style="margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--sub);font-size:12px;white-space:pre-wrap;min-height:20px"></pre>
   </div>`;
+}
+// 面板语言切换：按钮高亮 + 输入框占位与提示同步（示例代码只在空框时替换，不动用户已写的内容）
+let _panelLang = 'js';
+function setCodeRunnerLang(lang){
+  _panelLang = (lang === 'py') ? 'py' : 'js';
+  var inp = document.getElementById('codeRunnerInput');
+  var out = document.getElementById('codeRunnerOut');
+  var bj = document.getElementById('codeLangJs'), bp = document.getElementById('codeLangPy');
+  var hint = document.getElementById('codeLangHint');
+  if (bj) bj.className = 'btn ' + (_panelLang === 'js' ? 'btn-primary' : 'btn-ghost') + ' btn-sm';
+  if (bp) bp.className = 'btn ' + (_panelLang === 'py' ? 'btn-primary' : 'btn-ghost') + ' btn-sm';
+  if (inp) {
+    inp.placeholder = (_panelLang === 'py')
+      ? 'print(sum(range(10)))\\n# 支持 math / re / json / collections 等纯计算模块'
+      : '// 在此输入 JavaScript 代码，点击运行查看输出\\nconsole.log(1+2);';
+  }
+  if (out) { out.textContent = ''; }
+  if (hint) hint.textContent = (_panelLang === 'py')
+    ? 'Python 由桌面端后端执行：白名单模块 + 8 秒超时，无文件/网络/子进程能力'
+    : ((window.pywebview && window.pywebview.api && window.pywebview.api.bc_py_run)
+      ? 'JavaScript 走浏览器沙箱；切到 Python 可走后端白名单沙箱'
+      : '浏览器直开只能跑 JavaScript；桌面版另支持 Python');
 }
 // 内置「代码执行器」面板：走的是与代码块同一套沙箱。
 // 原来这里是 new Function 在**主文档**里执行 —— 那段代码能直接摸到 localStorage，
@@ -14265,12 +14357,28 @@ function runCodeInSandbox(){
   if(!inp||!out) return;
   const code=inp.value;
   if(!code.trim()){ out.style.color='var(--sub)'; out.textContent='（无代码）'; return; }
-  if(_panelRun && _panelRun.kill) _panelRun.kill();
-  const lines=[]; const t0=Date.now(); let n=0;
   function render(tag){
     out.style.color='var(--sub)';
     out.innerHTML = runLinesHtml(lines) + (tag ? '<span class="md-runout-line dim">' + escapeHtml(tag) + '</span>' : '');
   }
+  const lines=[]; const t0=Date.now(); let n=0;
+  // Python：走桌面端后端白名单沙箱（与聊天代码块的 ▶ 运行同一条链路）
+  if (_panelLang === 'py') {
+    const api=(window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+    if(!api || typeof api.bc_py_run!=='function'){ out.style.color='var(--danger-text)'; out.textContent='✗ Python 运行需要桌面版（浏览器直开没有后端）'; return; }
+    render('运行中…');
+    Promise.resolve(api.bc_py_run(code)).then(function(res){
+      (res && res.lines || []).forEach(function(x){ n++; lines.push({ lvl:(x.lvl==='err'?'err':(x.lvl==='warn'?'warn':'log')), text:x.text }); });
+      const ms=(res && res.ms)||0;
+      render((res && res.timeout) ? '⏱ 运行超时，已终止'
+        : (res && res.ok ? ('✓ 运行完成 · ' + ms + 'ms · ' + n + ' 条输出') : ('✗ ' + ms + 'ms')));
+    }).catch(function(e){
+      lines.push({ lvl:'err', text:String((e && e.message) || e) });
+      render('✗ Python 运行失败');
+    });
+    return;
+  }
+  if(_panelRun && _panelRun.kill) _panelRun.kill();
   render('');
   _panelRun = runInSandbox('js', code, function(ev){
     if(ev.type==='log'){ n++; lines.push(ev); render(''); return; }
