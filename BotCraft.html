@@ -5437,17 +5437,19 @@ function escapeAttr(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp
 // 设计原则：先抽出代码块与行内码占位，避免被行内解析破坏；整段转义后做块级解析；链接仅放行 http(s)/mailto/相对路径，过滤引号防 XSS。
 // 裸 data URL / 被围栏包住的 data URL → Markdown 图片（渲染层归一）。
 // 场景：生图节点输出 `![生成图片](data:...)` 后，下游 LLM 润色节点会把巨型 base64
-// 当上下文**回显**进最终回答 —— 用户看到的就是一整屏 base64 乱码。
-// 实测两种回显形态都要处理：
-//   ① 包在 ``` 围栏里（含**未闭合**围栏）—— 围栏整体按代码渲染，在里面转图片语法
-//      是无效的，必须把整段围栏换成图片；
-//   ② 裸着输出，且 LLM 爱按 76 列**折行**（载荷里混着换行/空格）—— 匹配必须容忍
-//      base64 字符之间夹着空白，否则 {512,} 在第一个换行处就断掉，归一失灵。
-// 长度阈值：载荷≥256 个 base64 字符（真图片远超此数，代码示例里的短 data URI 不误伤）。
+// 当上下文**回显**进最终回答。已实测三种回显形态，全部要处理：
+//   ① 包在 ``` 围栏里（含未闭合围栏）—— 围栏整体按代码渲染，必须整段换成图片；
+//   ② 裸着输出且按 76 列**折行**（载荷里夹换行）—— 匹配要容忍换行；
+//   ③ **链接形式** `[配图](data:...)`（LLM 丢了感叹号）—— 渲染器的链接规则不认
+//      data: 协议，原样落成文字。
+// ⚠️ 空白容忍只允许 `\r?\n`（折行），**绝不允许空格/制表符**：英文字母数字本身就是
+//    base64 字符，允许空格会让匹配从 data URL 一路吞进后面的正文与另一份图片语法，
+//    整体转出一个解析失败的巨链 —— 表现正是「base64 出现两次、图片消失」（实测踩过）。
+// 阈值：载荷 ≥256 个 base64 字符（真图片远超此数，代码示例里的短 data URI 不误伤）。
 function sanitizeBareImageDataUrls(text) {
   let s = String(text || '');
   if (s.indexOf('data:image') < 0) return s;
-  const PAYLOAD = 'data:image\\/[a-z0-9.+-]+;base64,\\s*(?:[A-Za-z0-9+\\/=][ \\t\\r\\n]{0,2}){256,}';
+  const PAYLOAD = 'data:image\\/[a-z0-9.+-]+;base64,\\s*(?:[A-Za-z0-9+/=]\\r?\\n?){256,}';
   const img = function (u) { return '![配图](' + u.replace(/[ \t\r\n]+/g, '') + ')'; };
   // ① 已闭合围栏：只要围栏内含 data URL，整段换成图片（一个围栏可能有多张）
   s = s.replace(/```[^\n`]*\n?([\s\S]*?)```/g, function (m, inner) {
@@ -5456,17 +5458,20 @@ function sanitizeBareImageDataUrls(text) {
     if (!urls || !urls.length) return m;
     return urls.map(img).join('\n');
   });
-  // ② 未闭合围栏：从 ``` 语言行到文末（LLM 忘写收尾的 ``` 很常见）
-  s = s.replace(/```[^\n`]*\n?([\s\S]*data:image[\s\S]*)$/i, function (m, inner) {
-    const urls = inner.match(new RegExp(PAYLOAD, 'gi'));
-    if (!urls || !urls.length) return m;
-    return urls.map(img).join('\n');
-  });
+  // ② 未闭合围栏：**最后一个** ``` 开头之后若再无闭合且含 data URL，才整段换成图片。
+  //    不能用「第一个 ``` 到文末」的粗匹配 —— 前面正常的已闭合代码块会被一起吞掉。
+  const lastOpen = s.lastIndexOf('```');
+  if (lastOpen >= 0) {
+    const tail = s.slice(lastOpen + 3);
+    if (tail.indexOf('```') < 0 && /data:image\/[a-z0-9.+-]+;base64/i.test(tail)) {
+      const urls = tail.match(new RegExp(PAYLOAD, 'gi')) || [];
+      if (urls.length) s = s.slice(0, lastOpen) + urls.map(img).join('\n');
+    }
+  }
   // ③ 裸 data URL → 转 Markdown 图片。
   //    排除条件是「前面是 !](」—— 那是正常图片语法，别动。
   //    ⚠️ 不能只排除「](」：LLM 回显时常把感叹号丢了，输出**链接形式**
-  //    `[配图](data:...)` —— 渲染器的链接规则不认 data: 协议，会原样落成文字
-  //    （用户实测「还是这样」的漏网形态就是它）。链接形式的 data URL 一样转图片。
+  //    `[配图](data:...)` —— 渲染器的链接规则不认 data: 协议，会原样落成文字。
   s = s.replace(new RegExp('(?<!!\\]\\()' + PAYLOAD, 'gi'), function (m) { return img(m); });
   return s;
 }
