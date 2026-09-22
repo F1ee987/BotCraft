@@ -2815,6 +2815,21 @@ window.__storage = __storage;
   function saveConfig() { try { __storage.setItem(LS_CFG, JSON.stringify(cfg)); } catch (e) {} }
   function getConfig() { return Object.assign({}, cfg); }
 
+  // 内联媒体（图片/音频/视频的 base64）**绝不能进文本上下文**：
+  //  · 文本模型读不懂 base64，纯属白烧 token（一张 1MB 的图 ≈ 1.4 万 token）；
+  //  · 它还会把**历史预算**顶满 —— 底部用量条会显示「历史 69.1k / 60.0k 已丢弃最旧 20 条」，
+  //    而自动压缩只压系统区块（人设/知识库/记忆/工作流…），压根不碰历史，
+  //    那张图又是最新一条丢不得，结果只能一路丢老消息（用户实测的疑问就是这个）。
+  // 这里只在**构造请求时**替换成语义占位符；聊天界面与落盘数据完全不动。
+  // 阈值 200：短 base64（示例、图标）留着不影响，真图片的 base64 远超此数。
+  var CTX_INLINE_MEDIA_RE = /data:([a-z]+)\/([a-z0-9.+-]+);base64,[A-Za-z0-9+/=]{200,}/gi;
+  function stripInlineMediaForCtx(text) {
+    return String(text == null ? '' : text).replace(CTX_INLINE_MEDIA_RE, function (_m, kind) {
+      var label = (kind === 'image') ? '图片' : (kind === 'audio' ? '音频' : '视频');
+      return '〔' + label + '已省略〕';
+    });
+  }
+
   // 构造 messages（含历史上下文 + 系统提示）
   // opts.preview=true 为纯预演：不累加记忆使用次数、不写盘，供上下文面板测算用量
   function buildMessages(bot, history, toolCtx, imagePrompt, opts) {
@@ -2832,7 +2847,7 @@ window.__storage = __storage;
       if (m.role === 'me' && ((m.images && m.images.length) || (m.audio && m.audio.length) || (m.frames && m.frames.length))) {
         if (_idx !== _lastMeIdx) {
           // 历史媒体：不重发 base64，仅用占位文本保留上下文语义，防止请求体过大
-          let _ph = (m.text || '');
+          let _ph = stripInlineMediaForCtx(m.text || '');
           if (m.images && m.images.length) _ph += (_ph ? ' ' : '') + '[用户此前发送了 ' + m.images.length + ' 张图片]';
           if (m.frames && m.frames.length) _ph += (_ph ? ' ' : '') + '[用户此前发送了 ' + m.frames.length + ' 段视频]';
           if (m.audio && m.audio.length) _ph += (_ph ? ' ' : '') + '[用户此前发送了 ' + m.audio.length + ' 段音频]';
@@ -2840,7 +2855,7 @@ window.__storage = __storage;
           return;
         }
         const parts = [];
-        if (m.text) parts.push({ type: 'text', text: m.text });
+        if (m.text) parts.push({ type: 'text', text: stripInlineMediaForCtx(m.text) });
         (m.images || []).forEach(function (src) { parts.push({ type: 'image_url', image_url: { url: src } }); });
         (m.frames || []).forEach(function (src) { parts.push({ type: 'image_url', image_url: { url: src } }); });
         (m.audio || []).forEach(function (src) {
@@ -2854,7 +2869,7 @@ window.__storage = __storage;
         });
         msgs.push({ role: 'user', content: parts });
       } else {
-        msgs.push({ role: m.role === 'me' ? 'user' : 'assistant', content: String(m.text || '') });
+        msgs.push({ role: m.role === 'me' ? 'user' : 'assistant', content: stripInlineMediaForCtx(m.text) });
       }
     });
     // 安全预算：仅在请求体确实过大（远超正常聊天）时才从最旧历史开始裁剪，
@@ -3647,7 +3662,7 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     var recent = (b.history || []).slice(-12);
     if (recent.length < 2) { b.memory.pending = false; return; }
     b.memory.pending = true; renderMemoryPanelIfOpen(b);
-    var convo = recent.map(function (m) { return (m.role === 'me' ? '用户' : '助手') + '：' + (m.text || ''); }).join('\n');
+    var convo = recent.map(function (m) { return (m.role === 'me' ? '用户' : '助手') + '：' + stripInlineMediaForCtx(m.text || ''); }).join('\n');
     var existing = (b.memory.items || []).map(function (it) { return it.text; }).join('\n');
     var sys = '你是记忆管理员。阅读对话与已有记忆，产出【更新后的长期记忆清单】。规则：'
       + '1) 优先沉淀「跨会话长期有效」的信息，按价值排序：a) 用户禁忌/偏好/身份（最重要，必须保留）；b) 用户与助手达成的约定、助手给出且用户未反对的结论/方案；c) 用户在学或在用的技术主题、操作步骤、代码用法、工具配置、关键参数（记为「术语」或「方案」，便于后续承接）；'
