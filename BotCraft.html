@@ -5451,6 +5451,15 @@ function sanitizeBareImageDataUrls(text) {
   if (s.indexOf('data:image') < 0) return s;
   const PAYLOAD = 'data:image\\/[a-z0-9.+-]+;base64,\\s*(?:[A-Za-z0-9+/=]\\r?\\n?){256,}';
   const img = function (u) { return '![配图](' + u.replace(/[ \t\r\n]+/g, '') + ')'; };
+  // ⓪ **先保护已成形的 Markdown 图片** `![任意alt](data:...)`，用占位符顶替，
+  //    最后再还原。这一步不能省，也不能改用 lookbehind 排除：
+  //    `![配图](data:...)` 里 URL 紧邻的是「](」，而 `!` 在 alt **之前**
+  //    （`![配图](data:` 的 URL 前三个字符是「图](」，中文 alt 尤其明显），
+  //    定长 lookbehind 根本判不准是谁的开头 → 合法图片被再套一层 `![配图](`，
+  //    变成坏语法：图片加载失败、base64 整段裸露（这就是「生成不出图片」的真凶）。
+  const keep = [];
+  s = s.replace(/!\[[^\]]*\]\(data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+\/=]+\)/gi,
+    function (m) { keep.push(m); return '\u0000KEEP' + (keep.length - 1) + '\u0000'; });
   // ① 已闭合围栏：只要围栏内含 data URL，整段换成图片（一个围栏可能有多张）
   s = s.replace(/```[^\n`]*\n?([\s\S]*?)```/g, function (m, inner) {
     if (inner.indexOf('data:image') < 0) return m;
@@ -5468,11 +5477,11 @@ function sanitizeBareImageDataUrls(text) {
       if (urls.length) s = s.slice(0, lastOpen) + urls.map(img).join('\n');
     }
   }
-  // ③ 裸 data URL → 转 Markdown 图片。
-  //    排除条件是「前面是 !](」—— 那是正常图片语法，别动。
-  //    ⚠️ 不能只排除「](」：LLM 回显时常把感叹号丢了，输出**链接形式**
-  //    `[配图](data:...)` —— 渲染器的链接规则不认 data: 协议，会原样落成文字。
-  s = s.replace(new RegExp('(?<!!\\]\\()' + PAYLOAD, 'gi'), function (m) { return img(m); });
+  // ③ 其余 data URL（裸的、以及 LLM 丢了感叹号的**链接形式** `[配图](data:...)`）
+  //    → 转 Markdown 图片。合法图片此时已被 ⓪ 摘走，不必再判前后文。
+  s = s.replace(new RegExp(PAYLOAD, 'gi'), function (m) { return img(m); });
+  // 还原被保护的合法图片
+  s = s.replace(/\u0000KEEP(\d+)\u0000/g, function (_, n) { return keep[+n]; });
   return s;
 }
 function renderMarkdown(text) {
@@ -10789,6 +10798,25 @@ function _body(who,inner){return '<div class="msg-body"><div class="who">'+who+'
 // innerHTML 时就开始解码，实测一条 268,884 字符的 base64 音频足以让渲染线程停摆（界面卡死）。
 var LAZY_MEDIA_MIN = 20000;
 var MSG_FOLD_LEN = 3000; // 单条文本超过该长度先折叠，展开时才跑 renderMarkdown 全量
+// 折叠判据必须**剔除内联图片 data URL**：图片 base64 动辄几万到几十万字符，
+// 按总长折叠会把 Markdown 图片语法从中间切断（失去收尾的 ")"），
+// 渲染出来就是「[配图] + 一屏 base64 乱码」—— 「机器人发来的图片显示不出来」的真根因，
+// 与渲染层的 data URL 归一无关（那条消息本来就是合法图片语法）。
+// 剔除内联媒体后再判长：一条只有图片的消息不再触发折叠，图片正常显示。
+var LONG_DATA_URI_RE = /data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+\/=]+/gi;
+function _foldBodyLen(t) { return String(t || '').replace(LONG_DATA_URI_RE, '').length; }
+// 折叠截断点也必须在 data URL 之外：长正文 + 图片混排时，第 3000 个字符可能正落在
+// base64 中间 —— 那就回退到这个 data URL 之前，宁可少显示一点也不切坏语法。
+function _foldSlice(t, n) {
+  var s = String(t || '');
+  if (s.length <= n) return s;
+  var cut = s.slice(0, n);
+  var re = new RegExp(LONG_DATA_URI_RE.source, 'gi');
+  var m, last = -1;
+  while ((m = re.exec(cut))) last = m.index;
+  if (last >= 0 && !/[)\s]/.test(cut.slice(last))) return s.slice(0, last);
+  return cut;
+}
 function _lazyMedia(box, el, src, label) {
   src = src || '';
   if (String(src).length < LAZY_MEDIA_MIN) return false;
@@ -10863,7 +10891,7 @@ function renderHistory(b) {
     chat.innerHTML = b.history.map(function (m, i) {
       if (m.role === 'me') {
         var mt = m.text || '';
-        var mh = mt.length > MSG_FOLD_LEN ? escapeHtml(mt.slice(0, MSG_FOLD_LEN)) + _foldHtml(i, mt.length) : escapeHtml(mt);
+        var mh = _foldBodyLen(mt) > MSG_FOLD_LEN ? escapeHtml(_foldSlice(mt, MSG_FOLD_LEN)) + _foldHtml(i, mt.length) : escapeHtml(mt);
         return '<div class="msg me" data-mi="' + i + '">' + mh
           + ((m.images && m.images.length) ? m.images.map(function (s) { return '<img class="msg-img" data-src="' + escapeAttr(s) + '" alt="图片">'; }).join('') : '')
           + ((m.audio && m.audio.length) ? m.audio.map(function (s) { return '<audio class="msg-audio" data-src="' + escapeAttr(s) + '" controls preload="none"></audio>'; }).join('') : '')
@@ -10871,7 +10899,7 @@ function renderHistory(b) {
           + '</div>';
       }
       var bt = m.text || '';
-      var bh = bt.length > MSG_FOLD_LEN ? renderMarkdown(bt.slice(0, MSG_FOLD_LEN)) + _foldHtml(i, bt.length) : renderMarkdown(bt);
+      var bh = _foldBodyLen(bt) > MSG_FOLD_LEN ? renderMarkdown(_foldSlice(bt, MSG_FOLD_LEN)) + _foldHtml(i, bt.length) : renderMarkdown(bt);
       return '<div class="msg bot" data-mi="' + i + '">' + _body(escapeHtml(m.who || b.n), bh) + _kbCiteHtml(m.kbHits) + '</div>';
     }).join('');
   }
