@@ -11716,6 +11716,14 @@ function attachCopyBtns() {
     ed.title = '修改这条消息并重新发送（它之后的对话会被清除）';
     ed.onclick = function () { openEditMsg(+msg.getAttribute('data-mi')); };
     msg.appendChild(ed);
+    // 删除（连带它下面的回复 → 整轮对话一起删）
+    if (msg.hasAttribute('data-mi')) {
+      var dm = document.createElement('button');
+      dm.type = 'button'; dm.className = 'msg-act'; dm.textContent = '\uD83D\uDDD1 删除';
+      dm.title = '删除这条消息（连同它下面的回复一起删掉）';
+      dm.onclick = function () { deleteMsg(+msg.getAttribute('data-mi')); };
+      msg.appendChild(dm);
+    }
     addCopyBtn(msg);
   });
   chat.querySelectorAll('.msg.bot:not([data-copy-bound])').forEach(function (msg) {
@@ -11728,9 +11736,42 @@ function attachCopyBtns() {
       rg.onclick = function () { regenLastReply(); };
       msg.appendChild(rg);
     }
+    if (msg.hasAttribute('data-mi')) {
+      var db = document.createElement('button');
+      db.type = 'button'; db.className = 'msg-act'; db.textContent = '\uD83D\uDDD1 删除';
+      db.title = '删除这条回复';
+      db.onclick = function () { deleteMsg(+msg.getAttribute('data-mi')); };
+      msg.appendChild(db);
+    }
     addCopyBtn(msg);
   });
 }
+
+// ==================== 删除指定的一条对话 ====================
+/* 删除范围：点机器人回复 → 只删这一条；点自己发的消息 → **连同它下面的回复一起删**
+   （一问一答才算「一轮对话」，只删提问会留下一条没有提问的回复，看着更奇怪）。
+   删除前二次确认并说明条数与不可恢复；生成中不允许删（避免与流式写入打架）。 */
+async function deleteMsg(i) {
+  const b = getBot(currentId); if (!b || !b.history) return;
+  if (sending) { toast('正在生成中，请稍候…', 'warn'); return; }
+  var m = b.history[i];
+  if (!m) return;
+  var end = i + 1;
+  if (m.role === 'me') {                       // 连同后续连续的助手回复（可能有多条，如配图消息）
+    while (end < b.history.length && b.history[end].role !== 'me') end++;
+  }
+  var n = end - i;
+  var preview = String(m.text || '').replace(/!\[[^\]]*\]\([^)]*\)/g, '〔图片〕').replace(/\s+/g, ' ').slice(0, 40);
+  var tip = n > 1
+    ? ('删除这轮对话（共 ' + n + ' 条，含它的回复）？\n「' + preview + (preview ? '…' : '') + '」\n删除后不可恢复。')
+    : ('删除这条消息？\n「' + preview + (preview ? '…' : '') + '」\n删除后不可恢复。');
+  if (!(await confirmDialog(tip, { danger: true, okText: '删除' }))) return;
+  b.history.splice(i, n);
+  b.updatedAt = Date.now(); saveBots();
+  renderHistory(b); renderQuickBar();
+  toast(n > 1 ? ('已删除这轮对话（' + n + ' 条）') : '已删除这条消息', 'ok');
+}
+window.deleteMsg = deleteMsg;
 // ==================== 输入框自适应高度 ====================
 // 高度跟着内容走：写完变高、删掉变矮，到 data-grow-max 才停住并转为内部滚动。
 // 三个反直觉、但必须守住的点：
