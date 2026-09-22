@@ -463,6 +463,18 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .pop-menu button{padding:8px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;transition:background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .pop-menu button:hover{background:var(--fill)}
 .pop-menu button.danger{color:var(--danger-text)}
+/* ============ 输入框右键菜单（复制/粘贴/剪切/全选） ============
+   桌面壳（WebView2）里默认右键菜单不出现，输入框此前只能靠 Ctrl+V。
+   菜单本体用实底 --popover（不用玻璃）：它是纯操作浮层，压在输入框上，
+   半透明会把底下文字透出来。z-index 400：浮在浮层之上，仅低于 toast。 */
+.ctx-edit-menu{position:fixed;z-index:400;min-width:132px;border-radius:var(--r-lg);padding:5px;display:flex;flex-direction:column;gap:var(--sp-1);
+  background:var(--popover);border:1px solid var(--glass-border);box-shadow:var(--lg-shadow);
+  animation:bcMenuIn .14s var(--ease-out) backwards}
+.ctx-edit-menu button{padding:7px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;font-family:inherit;cursor:pointer;transition:background var(--dur-2) var(--ease)}
+.ctx-edit-menu button:hover{background:var(--fill)}
+.ctx-edit-menu button:active{transform:scale(.97)}
+.ctx-edit-menu button[disabled]{opacity:.4;cursor:default;pointer-events:none}
+@keyframes bcMenuIn{from{opacity:0;transform:scale(.96) translateY(-3px)}to{opacity:1;transform:none}}
 /* 账号菜单挂在 body 上（原因见 renderUserMenu 的注释），层级要「在顶栏之上、
    各种遮罩之下」：60 高于 .topbar(50)，低于 .auth-mask/.ctxp(90)、.modal(100)、
    .cmdk(150) —— 下拉菜单不该浮在弹窗遮罩上面。
@@ -12889,6 +12901,97 @@ document.addEventListener('keydown', function (e) {
   e.preventDefault();
   copyTextRobust(txt);   /* 只复制不弹 toast：划选复制是高频操作，别每次都打脸 */
 });
+
+/* ============ 输入框右键菜单（复制 / 粘贴 / 剪切 / 全选） ============
+   用户反馈「输入框无法右键粘贴」：桌面壳里 WebView2 的默认右键菜单不出现，
+   输入框此前只能靠 Ctrl+V。这里给所有可编辑元素自建轻量右键菜单。
+   要点：
+   · 只接管**可编辑元素**上的右键；画布的 cwOnMenu 会先 preventDefault（冒泡到
+     document 时 e.defaultPrevented 已为 true），自动避让，两套菜单互不打架；
+   · 粘贴走 navigator.clipboard.readText()（WebView2 对用户手势内的读取一般放行），
+     读取被拒时明确提示改用 Ctrl+V（键盘粘贴走原生加速键，一直是通的）；
+   · 插入用 execCommand('insertText')：会触发 input 事件，自适应高度 / 斜杠菜单 /
+     字数统计等既有链路自动跟上；execCommand 不可用（理论上）才手拼 value + 派发 input。 */
+(function () {
+  let menu = null;
+  function closeMenu() { if (menu) { menu.remove(); menu = null; } }
+  function editableOf(t) {
+    if (!t || !t.closest) return null;
+    return t.closest('textarea, input, [contenteditable="true"], [contenteditable=""]');
+  }
+  function hasSel(el) {
+    if (typeof el.selectionStart === 'number') return el.selectionStart !== el.selectionEnd;
+    const s = window.getSelection ? window.getSelection() : null;
+    return !!(s && String(s));
+  }
+  function selText(el) {
+    if (typeof el.selectionStart === 'number') return el.value.slice(el.selectionStart, el.selectionEnd);
+    const s = window.getSelection ? window.getSelection() : null;
+    return s ? String(s) : '';
+  }
+  function insertText(el, text) {
+    el.focus();
+    if (text && document.execCommand && document.execCommand('insertText', false, text)) return;
+    /* 兜底：手拼 value。execCommand('insertText','') 常被当 no-op，删除选区走 delete */
+    if (!text && document.execCommand) { document.execCommand('delete'); return; }
+    const s = (typeof el.selectionStart === 'number') ? el.selectionStart : el.value.length;
+    const en = (typeof el.selectionEnd === 'number') ? el.selectionEnd : s;
+    el.value = el.value.slice(0, s) + text + el.value.slice(en);
+    const np = s + text.length;
+    try { el.setSelectionRange(np, np); } catch (e2) {}
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function doPaste(el) {
+    let p;
+    try { p = navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText() : null; } catch (e) { p = null; }
+    if (!p) { toast('无法读取剪贴板，请用 Ctrl+V 粘贴', 'err'); return; }
+    p.then(function (txt) { if (txt) insertText(el, txt); })
+     .catch(function () { toast('无法读取剪贴板，请用 Ctrl+V 粘贴', 'err'); });
+  }
+  function buildMenu(x, y, el) {
+    closeMenu();
+    menu = document.createElement('div');
+    menu.className = 'ctx-edit-menu';
+    const hs = hasSel(el);
+    [
+      ['✂️ 剪切', hs, function () { const s = selText(el); if (s) copyTextRobust(s); insertText(el, ''); }],
+      ['💿 复制', hs, function () { const s = selText(el); if (s) copyTextRobust(s); }],
+      ['📋 粘贴', true, function () { doPaste(el); }],
+      ['🔠 全选', true, function () {
+        el.focus();
+        if (typeof el.selectionStart === 'number' && typeof el.select === 'function') {
+          try { el.select(); return; } catch (e2) {}
+        }
+        const r = document.createRange(); r.selectNodeContents(el);
+        const s = window.getSelection(); if (s) { s.removeAllRanges(); s.addRange(r); }
+      }],
+    ].forEach(function (it) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = it[0];
+      if (!it[1]) b.setAttribute('disabled', '');
+      b.onclick = function () { closeMenu(); it[2](); };
+      menu.appendChild(b);
+    });
+    document.body.appendChild(menu);
+    /* 贴边收进视口：先挂载量尺寸，再定位 */
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    menu.style.left = Math.min(x, window.innerWidth - w - 8) + 'px';
+    menu.style.top = Math.min(y, window.innerHeight - h - 8) + 'px';
+  }
+  document.addEventListener('contextmenu', function (e) {
+    if (e.defaultPrevented) return;              /* 画布等已自建菜单的区域让路 */
+    if (menu && menu.contains(e.target)) return; /* 菜单内部右键不重建 */
+    const el = editableOf(e.target);
+    if (!el) return;
+    e.preventDefault();
+    buildMenu(e.clientX, e.clientY, el);
+  });
+  document.addEventListener('pointerdown', function (e) {
+    if (menu && !menu.contains(e.target)) closeMenu();
+  }, true);
+  window.addEventListener('blur', closeMenu);
+  window.addEventListener('resize', closeMenu);
+})();
 
 // ==================== 命令面板 ====================
 const CMDK_COMMANDS = [
