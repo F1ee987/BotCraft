@@ -1041,6 +1041,15 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg.bot.img-tip.img-err-bubble .msg-body{font-style:normal;color:var(--danger-text);background:rgba(255,69,58,.12);border-left:3px solid var(--danger)}
 .md-img-placeholder{padding:16px;border:1px dashed var(--line);border-radius:var(--r-md);background:var(--bg);color:var(--danger-text);text-align:center;font-size:13px;line-height:1.6}
 .md-img-omitted{display:inline-block;padding:8px 12px;border:1px dashed var(--line);border-radius:var(--r-md);background:var(--bg);color:var(--sub);font-size:12.5px;margin:4px 0}
+.msg.bot img.md-img{cursor:zoom-in}
+/* ===== 图片查看器（点击聊天图片放大）===== */
+#imgViewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:600;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none}
+#imgViewer.on{display:flex}
+#imgViewer img{max-width:92vw;max-height:88vh;transform-origin:center center;box-shadow:0 12px 48px rgba(0,0,0,.5);border-radius:var(--r-sm)}
+.iv-bar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:var(--sp-2);align-items:center;padding:8px 12px;border-radius:var(--r-lg);background:rgba(30,30,38,.9);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(8px)}
+.iv-btn{min-width:34px;height:30px;padding:0 8px;border:1px solid rgba(255,255,255,.16);border-radius:var(--r-sm);background:transparent;color:#fff;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.iv-btn:hover{background:rgba(255,255,255,.14)}
+.iv-pct{color:rgba(255,255,255,.75);font-size:12px;min-width:44px;text-align:center}
 .msg.bot a{color:var(--brand-text);text-decoration:underline;text-underline-offset:2px}
 .msg.bot a:hover{opacity:.82}
 .msg.bot pre.md-code{position:relative;padding-top:34px}
@@ -2565,6 +2574,21 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <button class="btn btn-ghost" id="confirmCancelBtn" onclick="closeConfirm(false)">取消</button>
       <button class="btn btn-primary" id="confirmOkBtn" onclick="closeConfirm(true)">确定</button>
     </div>
+  </div>
+</div>
+
+<!-- ==================== 图片查看器（点击聊天图片放大） ==================== -->
+<!-- z-index 600：要盖过确认框（500）与画布右键菜单（400）。滚轮缩放/拖拽平移/双击放大，
+     Esc 或点遮罩关闭；下载原图用 a[download]（data: 与 http 皆可用）。 -->
+<div id="imgViewer" role="dialog" aria-modal="true" aria-label="图片查看" tabindex="-1">
+  <img id="ivImg" alt="" draggable="false">
+  <div class="iv-bar">
+    <button class="iv-btn" onclick="ivZoomBy(1.25)" title="放大" aria-label="放大">＋</button>
+    <button class="iv-btn" onclick="ivZoomBy(0.8)" title="缩小" aria-label="缩小">－</button>
+    <button class="iv-btn" onclick="ivReset()" title="重置为 100%" aria-label="重置缩放">1:1</button>
+    <a class="iv-btn" id="ivDl" download title="下载原图" aria-label="下载原图">⬇ 保存</a>
+    <span class="iv-pct" id="ivPct">100%</span>
+    <button class="iv-btn" onclick="closeImgViewer()" title="关闭（Esc）" aria-label="关闭">✕</button>
   </div>
 </div>
 
@@ -8660,6 +8684,124 @@ function confirmModalKey(e) {
   var m = document.getElementById('confirmModal');
   if (m) m.addEventListener('click', function (e) { if (e.target.id === 'confirmModal') closeConfirm(false); });
 })();
+
+// ==================== 图片查看器 ====================
+/* 点击聊天里的图片放大查看：滚轮缩放（以鼠标为中心）/ 拖拽平移 / 双击放大 / Esc 关闭。
+   交互挂在 #imgViewer 自身与 #chat 的**事件委托**上 —— renderHistory 每次整体重绘，
+   逐个给 img 绑 onclick 会被冲掉，委托一次搞定且对动态内容免疫。 */
+var IV_MIN = 0.2, IV_MAX = 8;
+var ivScale = 1, ivTx = 0, ivTy = 0, ivDrag = null;
+function ivClampScale(v) { return Math.min(IV_MAX, Math.max(IV_MIN, v)); }
+function ivWheelScale(cur, deltaY) { return ivClampScale(cur * (deltaY < 0 ? 1.15 : 1 / 1.15)); }
+// 以屏幕点 (mx,my) 为中心缩放：保持鼠标下的图像内容不动（先缩放平移量，再换算）
+function ivZoomAt(curS, newS, tx, ty, mx, my) {
+  var k = newS / curS;
+  return [mx - (mx - tx) * k, my - (my - ty) * k];
+}
+function ivApply() {
+  var img = document.getElementById('ivImg');
+  if (!img) return;
+  img.style.transform = 'translate(' + ivTx + 'px,' + ivTy + 'px) scale(' + ivScale + ')';
+  var pct = document.getElementById('ivPct');
+  if (pct) pct.textContent = Math.round(ivScale * 100) + '%';
+}
+function ivZoomBy(f) {
+  var ns = ivClampScale(ivScale * f);
+  var t = ivZoomAt(ivScale, ns, ivTx, ivTy, window.innerWidth / 2, window.innerHeight / 2);
+  ivScale = ns; ivTx = t[0]; ivTy = t[1]; ivApply();
+}
+function ivReset() { ivScale = 1; ivTx = 0; ivTy = 0; ivApply(); }
+function openImgViewer(src, alt) {
+  var box = document.getElementById('imgViewer');
+  var img = document.getElementById('ivImg');
+  if (!box || !img) return;
+  img.src = src; img.alt = alt || '';
+  var dl = document.getElementById('ivDl');
+  if (dl) { dl.href = src; dl.setAttribute('download', (alt || 'image').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40) + '.png'); }
+  ivReset();
+  box.classList.add('on');
+  box.focus();
+}
+function closeImgViewer() {
+  var box = document.getElementById('imgViewer');
+  if (!box) return;
+  box.classList.remove('on');
+  var img = document.getElementById('ivImg');
+  if (img) img.src = '';   // 释放内存：base64 大图不该常驻
+}
+(function () {
+  var box = document.getElementById('imgViewer');
+  if (!box) return;
+  // 滚轮缩放（以鼠标为中心）
+  box.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var ns = ivWheelScale(ivScale, e.deltaY);
+    var t = ivZoomAt(ivScale, ns, ivTx, ivTy, e.clientX, e.clientY);
+    ivScale = ns; ivTx = t[0]; ivTy = t[1]; ivApply();
+  }, { passive: false });
+  // 拖拽平移
+  box.addEventListener('mousedown', function (e) {
+    if (e.target.closest && e.target.closest('.iv-bar')) return;
+    ivDrag = { x: e.clientX - ivTx, y: e.clientY - ivTy };
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (!ivDrag) return;
+    ivTx = e.clientX - ivDrag.x; ivTy = e.clientY - ivDrag.y; ivApply();
+  });
+  document.addEventListener('mouseup', function () { ivDrag = null; });
+  // 双击：100% ↔ 2.5 倍
+  box.addEventListener('dblclick', function (e) {
+    if (e.target.closest && e.target.closest('.iv-bar')) return;
+    if (ivScale === 1) {
+      var ns = ivClampScale(2.5);
+      var t = ivZoomAt(ivScale, ns, ivTx, ivTy, e.clientX, e.clientY);
+      ivScale = ns; ivTx = t[0]; ivTy = t[1];
+    } else ivReset();
+    ivApply();
+  });
+  // 点遮罩空白处关闭（点图/工具栏不关）
+  box.addEventListener('click', function (e) {
+    if (e.target === box) closeImgViewer();
+  });
+  box.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeImgViewer(); }
+  });
+  // Esc 全局兜底：焦点可能还在聊天输入框等处（viewer 的 tabindex 只保证可编程聚焦）
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && box.classList.contains('on')) { e.preventDefault(); closeImgViewer(); }
+  });
+  // 触摸双指缩放（桌面壳偶有触屏场景）
+  var pinch = null;
+  box.addEventListener('touchstart', function (e) {
+    if (e.touches.length === 2) {
+      pinch = { d: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY), s: ivScale };
+    }
+  }, { passive: true });
+  box.addEventListener('touchmove', function (e) {
+    if (pinch && e.touches.length === 2) {
+      e.preventDefault();
+      var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      ivScale = ivClampScale(pinch.s * d / pinch.d); ivApply();
+    }
+  }, { passive: false });
+  box.addEventListener('touchend', function () { pinch = null; }, { passive: true });
+  // 聊天区事件委托：点击 .md-img 打开查看器（排除加载失败图）。全局只绑一次。
+  var chat = document.getElementById('chat');
+  if (chat && !chat.__ivDelegated) {
+    chat.__ivDelegated = true;
+    chat.addEventListener('click', function (e) {
+      var el = e.target;
+      if (!el || el.tagName !== 'IMG' || !el.classList.contains('md-img')) return;
+      if (el.classList.contains('img-err')) return;
+      openImgViewer(el.src, el.alt);
+    });
+  }
+})();
+window.openImgViewer = openImgViewer;
+window.closeImgViewer = closeImgViewer;
+window.ivZoomBy = ivZoomBy;
+window.ivReset = ivReset;
 
 // ==================== 键盘可达性兜底 ====================
 /* 界面里有二十多个「非 button 元素 + onclick」的控件：侧栏新建、聊天区菜单项、
