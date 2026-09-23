@@ -14887,12 +14887,15 @@ function renderRemindersInModal(){
 }
 function remindersExtraHTML(){
   var N = _notifySupported();
-  var needAsk = !N || N.permission !== 'granted';
+  var desk = _isDesktop();
+  // 桌面版通知走 Python 后端，无需系统授权 → 也要给入口（按钮语义是「发一条测试」）
+  var needAsk = desk || !N || N.permission !== 'granted';
+  var askBtnText = desk ? '发送测试通知' : '开启系统通知';
   return `<div style="margin-top:14px">
     <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">📅 我的提醒（本地存储，到点弹出通知）</div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--glass-bg)">
       <div id="notifyState" style="flex:1;min-width:0;font-size:11.5px;color:var(--sub);line-height:1.5">${escapeHtml(notifyStateText())}</div>
-      ${needAsk ? '<button class="btn btn-ghost btn-sm" onclick="askNotificationPermission()">开启系统通知</button>' : ''}
+      ${needAsk ? '<button class="btn btn-ghost btn-sm" onclick="askNotificationPermission()">'+askBtnText+'</button>' : ''}
     </div>
     <div id="remindListBox"></div>
     <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
@@ -14920,7 +14923,18 @@ let _reminderTimer=null;
 function _notifySupported() {
   try { return (typeof Notification !== 'undefined') && Notification; } catch (e) { return null; }
 }
+// 桌面壳判定：桌面版通知走 Python 后端（bc_notify 直接投递 Windows toast），
+// 不碰 Web Notification —— WebView2 对通知权限默认拒绝/挂起，页面的
+// requestPermission() 永远不 resolve，按钮看起来「无响应」（2026-09-23 实测根因）。
+function _isDesktop() {
+  try { return !!(window.__BC_HOST_STORAGE__ && window.pywebview && window.pywebview.api); } catch (e) { return false; }
+}
+function setNotifyState(txt) {
+  var el = document.getElementById('notifyState');
+  if (el) el.textContent = txt;
+}
 function notifyStateText() {
+  if (_isDesktop()) return '桌面壳通知：到点由 BotCraft 直接投递 Windows 系统通知（应用在后台也能收到），可点右侧按钮发一条测试';
   var N = _notifySupported();
   if (!N) return '当前环境不支持系统通知，到点将在应用内提示（请保持窗口可见）';
   if (N.permission === 'granted') return '系统通知已开启：到点会在桌面右下角弹出，应用在后台也能收到';
@@ -14928,6 +14942,22 @@ function notifyStateText() {
   return '尚未开启系统通知：到点只在应用内提示，点右侧按钮开启系统通知';
 }
 function askNotificationPermission() {
+  // 桌面版：通知由 Python 后端直投，点按钮发一条测试通知让用户立刻看到效果
+  if (_isDesktop()) {
+    var hostApi = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+    if (!(hostApi && typeof hostApi.bc_notify === 'function')) {
+      setNotifyState('桌面壳通知接口不可用（请更新到最新版），到点将在应用内提示');
+      return;
+    }
+    setNotifyState('正在发送测试通知…');
+    Promise.resolve(hostApi.bc_notify('⏰ BotCraft', '通知通道已打通：日程到点会这样弹出系统提醒'))
+      .then(function (r) {
+        setNotifyState((r && r.ok) ? '桌面壳通知已可用（刚才那条就是到点时的效果）' : '桌面壳通知发送失败，到点将在应用内提示');
+        try { renderRemindersInModal(); } catch (eM) { } // 面板未打开时该函数不存在，别让它毁了结果反馈
+      })
+      .catch(function () { setNotifyState('桌面壳通知发送失败，到点将在应用内提示'); });
+    return;
+  }
   var N = _notifySupported();
   if (!N) { toast('当前环境不支持系统通知', 'warn'); return; }
   try {
@@ -14942,6 +14972,16 @@ function askNotificationPermission() {
 }
 function notifyReminder(title) {
   var text = String(title || '');
+  // 桌面版：优先由 Python 后端直投 Windows toast（不依赖 Web Notification 权限）
+  if (_isDesktop()) {
+    try {
+      var hostApi = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+      if (hostApi && typeof hostApi.bc_notify === 'function') {
+        Promise.resolve(hostApi.bc_notify('⏰ BotCraft 提醒', text)).catch(function () { });
+        return 'system';
+      }
+    } catch (eD) { }
+  }
   var N = _notifySupported();
   var fallback = function () { try { toast('⏰ 提醒：' + text, 'ok', 7000); } catch (e) { } };
   if (!N) { fallback(); return 'toast'; }
