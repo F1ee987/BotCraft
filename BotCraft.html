@@ -16428,16 +16428,19 @@ function checkForUpdate() {
       return;
     }
     setUpdateStatus('正在检查更新…');
-    fetch('https://api.github.com/repos/F1ee987/BotCraft/commits/main',
+    // 用 GitHub compare 接口而不是比对最新 commit sha：exe 打包于 commit 之前，
+    // 本地指纹天然落后 1~N 个提交 —— 若只比最新 sha 会永远误报「有新版本」。
+    // compare(本地...main)：identical/behind = 仓库没有比本地更新的提交 → 已是最新；
+    // ahead = main 领先本地 → 真有新版本；diverged = 分叉 → 建议重新下载。
+    fetch('https://api.github.com/repos/F1ee987/BotCraft/compare/' +
+        BC_BUILD_COMMIT + '...main',
       { headers: { 'Accept': 'application/vnd.github+json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
-        if (!j || !j.sha) { setUpdateStatus('检查失败（网络不通或接口限流），稍后再试'); return; }
-        if (String(j.sha).toLowerCase().indexOf(BC_BUILD_COMMIT.toLowerCase()) === 0) {
-          setUpdateStatus('✅ 已是最新版本');
-          return;
-        }
-        setUpdateStatus('🆕 有新版本！请到 GitHub（F1ee987/BotCraft）下载最新 exe');
+        if (!j || !j.status) { setUpdateStatus('检查失败（网络不通或接口限流），稍后再试'); return; }
+        if (j.status === 'ahead') setUpdateStatus('发现新版本：请到 GitHub（F1ee987/BotCraft）下载最新 exe');
+        else if (j.status === 'diverged') setUpdateStatus('本地版本与仓库分叉，建议重新下载最新 exe');
+        else setUpdateStatus('已是最新版本');
       })
       .catch(function () { setUpdateStatus('检查失败（网络不通），稍后再试'); });
   } catch (eU) { }
@@ -16447,7 +16450,7 @@ window.manualCheckUpdate = manualCheckUpdate;
 
 function safeStart() {
   try { initTheme(); } catch (e) { console.error('initTheme failed', e); }
-  // 版本更新检查已改为设置面板「🔄 检查更新」按钮（用户明确要求启动不弹窗），启动时不再自动检查
+  // 版本检查是设置弹窗底部的手动按钮（用户明确要求：启动不弹窗、不做自动检测）
   // 启动本地提醒检查器（每 20s 检查到点提醒并弹通知；用户隔离）
   try { startReminderChecker(); } catch (e) { console.error('startReminderChecker failed', e); }
   // 嵌入模式优先：以对话挂件形态打开，跳过登录落地页
