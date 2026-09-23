@@ -1247,6 +1247,20 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   .bot-switch-menu.bs-open,.bot-switch-menu.bs-closing{animation:none}
 }
 .field{margin-bottom:14px}
+
+/* ============ 「设置与数据」页内嵌设置区：字号整体上调一档 ============
+   这块内容来自 560px 弹窗，平移到整页后原 11.5/12px 的小字号明显偏小
+   （2026-09-23 用户实测）。统一走字阶令牌放大，行内字号用 !important 压过。 */
+#anaSettings .field label{font-size:var(--fs-md) !important}
+#anaSettings .field input,#anaSettings .field textarea,#anaSettings .field select{font-size:var(--fs-md)}
+#anaSettings .hint{font-size:var(--fs-sm) !important;line-height:1.65}
+#anaSettings .ssec-head{font-size:var(--fs-lg)}
+#anaSettings .ssec-sub{font-size:var(--fs-sm) !important}
+#anaSettings .ssec-body{padding:var(--sp-2) var(--sp-4) var(--sp-4)}
+#anaSettings .field{margin-bottom:var(--sp-6)}
+#anaSettings .btn{font-size:var(--fs-base)}
+#anaSettings #updateCheckStatus{font-size:var(--fs-sm) !important}
+#anaTabUsage,#anaTabSettings{font-size:var(--fs-md);padding:9px 16px}
 .field label{font-size:12px;color:var(--sub);display:block;margin-bottom:6px;font-weight:590}
 .field input,.field textarea,.field select{width:100%;padding:10px 13px;border-radius:var(--r-md);background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:13px;transition:var(--dur-3) var(--ease)}
 .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--brand);background:transparent;outline:none}
