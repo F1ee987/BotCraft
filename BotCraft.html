@@ -755,6 +755,9 @@ body.resizing{cursor:col-resize;user-select:none}
 .ws-side-expand:hover{color:var(--txt);border-color:var(--brand);background:var(--fill)}
 body.ws-side-collapsed .ws-side-expand{display:flex}
 body.ws-side-collapsed .ws-side{display:none}
+/* 收起时拉手必须一并隐藏：侧栏 display:none 后 6px 的 ws-resizer 夹在空档里仍可见/可拖，
+   用户实测「收起工作区时不显示工作区拉伸按键」（2026-09-23） */
+body.ws-side-collapsed .ws-resizer{display:none}
 body.ws-side-collapsed .ws-resizer{width:12px}
 body.ws-side-collapsed .ws-resizer::after{left:5px}
 .ws-head{position:relative;padding:16px;border-bottom:1px solid var(--line)}
