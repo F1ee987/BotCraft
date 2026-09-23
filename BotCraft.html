@@ -2212,7 +2212,10 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <!-- ==================== 数据分析 ==================== -->
   <main class="main" id="page-analytics" style="display:none">
     <div class="page-head"><div><h1>数据分析</h1><div class="sub">查看机器人的调用量、满意度与趋势</div></div>
-      <div class="search-bar" style="max-width:200px"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></span><input value="最近 7 天" disabled></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost" onclick="openSettings()" title="打开模型设置（Key / 模型 / 免 Key 试用）">⚙ 模型设置</button>
+        <div class="search-bar" style="max-width:200px"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></span><input value="最近 7 天" disabled></div>
+      </div>
     </div>
     <div class="stat-cards" id="statCards"></div>
 
