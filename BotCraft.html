@@ -1308,6 +1308,55 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 #anaSettings .btn{font-size:var(--fs-base)}
 #anaSettings #updateCheckStatus{font-size:var(--fs-sm) !important}
 #anaTabUsage,#anaTabSettings{font-size:var(--fs-md);padding:9px 16px}
+/* ============ 浅色模式：统一"控件可见性"（2026-09-23） ============
+   浅色主题里 --fill 是「白色 60%」，而面板本身也是浅玻璃，两者叠在一起输入框等于隐形；
+   加上原规则是 border:transparent，边界完全不可见（聊天输入框、搜索框、批量输入、
+   节点编辑框、发布输入等十余处都是这套写法）。这里按控件类型统一收口：
+     · 常态：更实的白底 + 永久可见的中性描边（用中性灰而非品牌色，避免整屏发紫）
+     · hover：描边加深，提示可交互
+     · focus：底更白、描边转品牌色
+   只作用于浅色主题；深色主题维持原样（那里 --fill 是低透提亮，本来就看得见）。 */
+html[data-theme='light'] input:not([type='checkbox']):not([type='radio']):not([type='range']),
+html[data-theme='light'] textarea,
+html[data-theme='light'] select,
+html[data-theme='light'] .batch-area,
+html[data-theme='light'] .edit-msg-ta,
+html[data-theme='light'] .pub-input,
+html[data-theme='light'] .brand-area input,
+html[data-theme='light'] .brand-area textarea{
+  background:rgba(255,255,255,.88);
+  border-color:rgba(0,0,0,.14);
+}
+html[data-theme='light'] input:not([type='checkbox']):not([type='radio']):not([type='range']):hover,
+html[data-theme='light'] textarea:hover,
+html[data-theme='light'] select:hover,
+html[data-theme='light'] .batch-area:hover,
+html[data-theme='light'] .edit-msg-ta:hover,
+html[data-theme='light'] .pub-input:hover{border-color:rgba(0,0,0,.24)}
+html[data-theme='light'] input:not([type='checkbox']):not([type='radio']):not([type='range']):focus,
+html[data-theme='light'] textarea:focus,
+html[data-theme='light'] select:focus,
+html[data-theme='light'] .batch-area:focus,
+html[data-theme='light'] .edit-msg-ta:focus,
+html[data-theme='light'] .pub-input:focus{
+  background:rgba(255,255,255,.96);
+  border-color:var(--brand);
+}
+/* 容器卡片：浅色下 1px 的 --line(.10) 边界太弱，卡片"浮不起来" */
+html[data-theme='light'] .bot-card,
+html[data-theme='light'] .usage-card,
+html[data-theme='light'] .stat-card,
+html[data-theme='light'] .brand-card,
+html[data-theme='light'] .pub-card,
+html[data-theme='light'] .chart-box{border-color:rgba(0,0,0,.14)}
+/* 图标按钮 / 附件按钮 / 文件按钮：浅色下同样是透明描边，补齐 */
+html[data-theme='light'] .chat-input .attach-btn,
+html[data-theme='light'] .icon-btn,
+html[data-theme='light'] .file-btn{border-color:rgba(0,0,0,.14)}
+html[data-theme='light'] .chat-input .attach-btn:hover,
+html[data-theme='light'] .icon-btn:hover,
+html[data-theme='light'] .file-btn:hover{border-color:rgba(0,0,0,.24)}
+
 /* 浅色模式：--fill 是白色 60%，叠在浅玻璃上输入框几乎隐形（2026-09-23 用户实测）。
    设置区输入框改用更实的白底 + 永久可见描边；深色模式维持原样不受影响。 */
 html[data-theme='light'] #anaSettings .field input,
