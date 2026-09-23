@@ -3001,6 +3001,14 @@ window.__storage = __storage;
     });
   }
 
+  // 视觉模型判定（启发式）。发图管线会把最新一条用户消息的图片以 image_url 发出，
+  // 但纯文本模型收到图只会忽略或报 400 —— 用户会以为机器人「看见了」。
+  // 命名规律覆盖：glm-4.6v-flash（智谱免费）/ gpt-4o 系列 / qwen*-vl / claude /
+  // gemini / omni / 带 vision 字样 / hunyuan-vision。宁可多提示，不能让用户误以为看图生效。
+  var VISION_MODEL_RE = /vision|(^|[^a-z])vl([^a-z]|$)|omni|gpt-4o|gpt-4\.1|gpt-4v|gpt-4-turbo|gemini|claude|glm-4\.\dv|qwen[^,]*-vl|hunyuan-vision/i;
+  function isVisionModel(name) { return VISION_MODEL_RE.test(String(name || '')); }
+  var _visionWarnAt = 0;
+
   // 构造 messages（含历史上下文 + 系统提示）
   // opts.preview=true 为纯预演：不累加记忆使用次数、不写盘，供上下文面板测算用量
   function buildMessages(bot, history, toolCtx, imagePrompt, opts) {
@@ -4342,6 +4350,18 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
       // 该机器人自己的模型/温度优先，未设置才回落全局
       // （此前一律传 cfg.model，b.model 这个字段从头到尾没被用过）
       const _gen = botGenOpts(bot);
+      // 带图提醒：图会随请求发出，但模型若是纯文本模型，图会被忽略甚至 400 ——
+      // 用户这边只觉得「机器人没看见图」。限频 60s 提示一次怎么换模型。
+      try {
+        var _lastMsg = messages[messages.length - 1];
+        var _hasImg = !!(_lastMsg && _lastMsg.role === 'user' && Array.isArray(_lastMsg.content)
+          && _lastMsg.content.some(function (p) { return p && p.type === 'image_url'; }));
+        var _vm = (_gen && _gen.model) || cfg.model;
+        if (_hasImg && !isVisionModel(_vm) && Date.now() - (_visionWarnAt || 0) > 60000) {
+          _visionWarnAt = Date.now();
+          toast('当前模型（' + _vm + '）可能不支持看图，图片会被忽略。可在设置里换视觉模型，如智谱 glm-4.6v-flash（免费）。', 'warn', 6000);
+        }
+      } catch (e) { }
       const res = await request(messages, opt.signal, opt.stream, _gen.model || cfg.model, _gen);
       if (opt.stream && res && typeof res[Symbol.asyncIterator] === 'function') return res;
       return res; // 非流式直接返回字符串
@@ -4618,7 +4638,7 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     return new Promise(resolve => setTimeout(() => resolve(reply), 400 + Math.random() * 500));
   }
 
-  window.BotCraftAI = { chat, request, canCall, isNoAuthEndpoint, getConfig, updateConfig, getProviders, composeSystemPrompt };
+  window.BotCraftAI = { chat, request, canCall, isNoAuthEndpoint, isVisionModel, getConfig, updateConfig, getProviders, composeSystemPrompt };
   // 品牌档案 / 模板导入导出：这三个函数此前只被内联事件属性调用，却没有导出。
   // 内联 on* 属性在**全局作用域**求值，而它们定义在本 IIFE 内 → 点击/输入时
   // 抛 ReferenceError，表现为「品牌信息改了不保存」「导出/导入模板点了没反应」。
