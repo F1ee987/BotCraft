@@ -9229,7 +9229,14 @@ function apiErrHint(err) {
   }
   if (st === 400) return '请求体过大（超出该模型的上下文上限）或参数不合法。可换用上下文更大的模型（如 gpt-4o / qwen-plus），或减少挂载的大知识库。';
   if (st === 404) return '接口路径或模型名不存在，请检查 baseURL 与模型名。';
-  if (st === 429) return '请求过于频繁（触发限流）或超出每分钟调用额度，请稍后重试或降低发送频率。';
+  if (st === 429) {
+    // 免 Key 公共接口容量共享，被限流是常态 —— 文案要说清「不是你配置错了」
+    try {
+      if (window.BotCraftAI && BotCraftAI.isNoAuthEndpoint && BotCraftAI.isNoAuthEndpoint(BotCraftAI.getConfig().baseURL))
+        return '免费公共接口限流中（免 Key 接口容量共享，与你的配置无关）。稍等几十秒重试通常可恢复；要稳定使用请在「设置」里改用自己的 Key。';
+    } catch (e429) { }
+    return '请求过于频繁（触发限流）或超出每分钟调用额度，请稍后重试或降低发送频率。';
+  }
   if (st >= 500) return '服务端临时错误，已自动重试仍失败，请稍后重试。';
   return '请检查「设置」中的 API Key、接口地址与模型名是否正确，或稍后重试。';
 }
@@ -16355,8 +16362,37 @@ async function emergencyReset() {
   location.reload();
 }
 // 全局兜底：任何初始化异常都不得阻塞 UI，至少保证登录入口可见、可用
+
+// ==================== 版本自更新检查 ====================
+// 构建期由 build_exe.py 把打包时的 commit sha 写进 __BC_BUILD_COMMIT__ 占位符；
+// 桌面版启动时与 GitHub main 最新 commit 比对，不同则提示一次（同版本 24h 内不重复打扰）。
+// 浏览器直开时占位符不会被替换（非 hex 即视为开发态），检查直接跳过。
+var BC_BUILD_COMMIT = '__BC_BUILD_COMMIT__';
+function checkForUpdate() {
+  try {
+    if (!(window.pywebview && window.pywebview.api)) return;      // 仅桌面版
+    if (!/^[0-9a-f]{7,40}$/i.test(BC_BUILD_COMMIT)) return;       // 开发态 / 浏览器直开
+    var K = 'botcraft.updateCheck.v1';
+    var rec = {};
+    try { rec = JSON.parse(localStorage.getItem(K) || '{}'); } catch (eR) { rec = {}; }
+    if (Date.now() - (rec.at || 0) < 24 * 3600 * 1000) return;    // 24h 提醒一次足够
+    fetch('https://api.github.com/repos/F1ee987/BotCraft/commits/main',
+      { headers: { 'Accept': 'application/vnd.github+json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.sha) return;
+        if (String(j.sha).toLowerCase().indexOf(BC_BUILD_COMMIT.toLowerCase()) === 0) return; // 已是最新
+        localStorage.setItem(K, JSON.stringify({ at: Date.now(), sha: j.sha }));
+        toast('发现新版本 BotCraft：请到 GitHub（F1ee987/BotCraft）下载最新 exe 更新。', 'ok', 10000);
+      })
+      .catch(function () { }); // 网络不通静默，更新检查绝不能成为启动负担
+  } catch (eU) { }
+}
+
 function safeStart() {
   try { initTheme(); } catch (e) { console.error('initTheme failed', e); }
+  // 启动版本自更新检查（桌面版；网络失败静默，不阻塞启动）
+  try { checkForUpdate(); } catch (e) { console.error('checkForUpdate failed', e); }
   // 启动本地提醒检查器（每 20s 检查到点提醒并弹通知；用户隔离）
   try { startReminderChecker(); } catch (e) { console.error('startReminderChecker failed', e); }
   // 嵌入模式优先：以对话挂件形态打开，跳过登录落地页
