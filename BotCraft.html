@@ -2456,6 +2456,14 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <input id="set-proxy" placeholder="https://your-domain.com/api/ai-proxy">
       <div class="hint" style="margin-top:6px;font-size:11.5px;color:var(--sub)">代理用于隐藏 API Key，后端只需把请求原样转发到服务商并补签 Authorization 即可。</div>
     </div>
+    <div class="field">
+      <label>软件更新 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（手动检查，不会自动弹窗）</span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button type="button" class="btn btn-ghost" onclick="manualCheckUpdate()" style="white-space:nowrap;flex:none">🔄 检查更新</button>
+        <span id="updateCheckStatus" style="font-size:12px;color:var(--sub)"></span>
+      </div>
+      <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">与 GitHub 仓库最新提交比对；仅桌面版可用。有新版本时请到 GitHub（F1ee987/BotCraft）下载最新 exe。</div>
+    </div>
   </div>
 </div>
 
@@ -16363,36 +16371,60 @@ async function emergencyReset() {
 }
 // 全局兜底：任何初始化异常都不得阻塞 UI，至少保证登录入口可见、可用
 
-// ==================== 版本自更新检查 ====================
+// ==================== 版本自更新检查（纯手动） ====================
+// 用户明确要求：不要启动时自动弹窗，改成设置面板里的「🔄 检查更新」按钮。
 // 构建期由 build_exe.py 把打包时的 commit sha 写进 __BC_BUILD_COMMIT__ 占位符；
-// 桌面版启动时与 GitHub main 最新 commit 比对，不同则提示一次（同版本 24h 内不重复打扰）。
+// 手动点击时与 GitHub main 最新 commit 比对，结果直接显示在按钮旁的状态栏。
 // 浏览器直开时占位符不会被替换（非 hex 即视为开发态），检查直接跳过。
 var BC_BUILD_COMMIT = '__BC_BUILD_COMMIT__';
-function checkForUpdate() {
+function setUpdateStatus(txt) {
+  var el = document.getElementById('updateCheckStatus');
+  if (el) el.textContent = txt;
+}
+function checkForUpdate(manual) {
   try {
-    if (!(window.pywebview && window.pywebview.api)) return;      // 仅桌面版
-    if (!/^[0-9a-f]{7,40}$/i.test(BC_BUILD_COMMIT)) return;       // 开发态 / 浏览器直开
-    var K = 'botcraft.updateCheck.v1';
-    var rec = {};
-    try { rec = JSON.parse(localStorage.getItem(K) || '{}'); } catch (eR) { rec = {}; }
-    if (Date.now() - (rec.at || 0) < 24 * 3600 * 1000) return;    // 24h 提醒一次足够
+    if (!(window.pywebview && window.pywebview.api)) {           // 仅桌面版
+      if (manual) setUpdateStatus('仅桌面版支持（浏览器直开无更新概念）');
+      return;
+    }
+    if (!/^[0-9a-f]{7,40}$/i.test(BC_BUILD_COMMIT)) {            // 开发态 / 浏览器直开
+      if (manual) setUpdateStatus('开发构建，未记录版本指纹，跳过检查');
+      return;
+    }
+    if (manual) setUpdateStatus('正在检查更新…');
     fetch('https://api.github.com/repos/F1ee987/BotCraft/commits/main',
       { headers: { 'Accept': 'application/vnd.github+json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
-        if (!j || !j.sha) return;
-        if (String(j.sha).toLowerCase().indexOf(BC_BUILD_COMMIT.toLowerCase()) === 0) return; // 已是最新
-        localStorage.setItem(K, JSON.stringify({ at: Date.now(), sha: j.sha }));
-        toast('发现新版本 BotCraft：请到 GitHub（F1ee987/BotCraft）下载最新 exe 更新。', 'ok', 10000);
+        if (!j || !j.sha) {
+          if (manual) setUpdateStatus('❌ 检查失败（网络不通或接口限流），稍后再试');
+          return;
+        }
+        if (String(j.sha).toLowerCase().indexOf(BC_BUILD_COMMIT.toLowerCase()) === 0) {
+          if (manual) setUpdateStatus('✅ 已是最新版本');
+          return;
+        }
+        // 有新版本：按钮场景直接显示结论；避免反复打扰，同版本指纹 24h 内只提示一次
+        var K = 'botcraft.updateCheck.v1';
+        try {
+          var rec = {};
+          try { rec = JSON.parse(localStorage.getItem(K) || '{}'); } catch (eR) { rec = {}; }
+          if (!(manual && rec.sha === j.sha)) localStorage.setItem(K, JSON.stringify({ at: Date.now(), sha: j.sha }));
+        } catch (eS) { }
+        if (manual) setUpdateStatus('🆕 有新版本！请到 GitHub（F1ee987/BotCraft）下载最新 exe');
+        else toast('发现新版本 BotCraft：请到 GitHub（F1ee987/BotCraft）下载最新 exe 更新。', 'ok', 10000);
       })
-      .catch(function () { }); // 网络不通静默，更新检查绝不能成为启动负担
+      .catch(function () {
+        if (manual) setUpdateStatus('❌ 检查失败（网络不通），稍后再试');
+      }); // 自动场景静默，更新检查绝不能成为启动负担
   } catch (eU) { }
 }
+function manualCheckUpdate() { checkForUpdate(true); }
+window.manualCheckUpdate = manualCheckUpdate;
 
 function safeStart() {
   try { initTheme(); } catch (e) { console.error('initTheme failed', e); }
-  // 启动版本自更新检查（桌面版；网络失败静默，不阻塞启动）
-  try { checkForUpdate(); } catch (e) { console.error('checkForUpdate failed', e); }
+  // 版本更新检查已改为设置面板「🔄 检查更新」按钮（用户明确要求启动不弹窗），启动时不再自动检查
   // 启动本地提醒检查器（每 20s 检查到点提醒并弹通知；用户隔离）
   try { startReminderChecker(); } catch (e) { console.error('startReminderChecker failed', e); }
   // 嵌入模式优先：以对话挂件形态打开，跳过登录落地页
