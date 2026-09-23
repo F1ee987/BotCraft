@@ -6,3 +6,7 @@ BotCraft.html.bak-*
 # 来对账 LOGO_GEOM），所以每次跑守卫都会生成字节码缓存 —— 别提交。
 __pycache__/
 *.pyc
+
+# 成品 exe（~14MB）不进 git：27 次提交曾把 .git 撑到 538MB。发版走 GitHub Releases。
+# 磁盘上的三副本同步（sync_exe_copies.py）走文件系统，不受影响。
+BotCraft.exe
