@@ -1715,7 +1715,6 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <span class="model-tag model-tag-click" id="topModelTag" title="点击切换模型" onclick="openSettings()">gpt-4o-mini</span>
   <button class="btn btn-ghost btn-sm" onclick="toggleCmdK()" title="命令面板 (Cmd/Ctrl + K)">⌘K</button>
   <button id="themeBtn" class="btn btn-ghost btn-sm" onclick="toggleTheme()" title="切换深色/浅色主题" aria-label="切换主题"><span class="orb"></span></button>
-  <button class="btn btn-ghost btn-sm" onclick="openSettings()">⚙️ 设置</button>
   <button class="btn btn-ghost btn-sm" onclick="openDataMigrate()" title="数据备份与迁移（导入 / 导出配置）">💾 备份</button>
   <button class="btn btn-primary btn-sm" onclick="if(requireLogin())openCreate()">＋ 创建</button>
   <div id="userMenuWrap"></div>
@@ -1936,7 +1935,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="side-item" data-page="styles" data-tip="文体模板"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg></span><span class="side-txt">文体模板</span></div>
     <div class="side-item" data-page="templates" data-tip="模板广场"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span class="side-txt">模板广场</span></div>
     <div class="side-item" data-page="favorites" data-tip="我的收藏"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v16l-5-4-5 4z"/></svg></span><span class="side-txt">我的收藏</span></div>
-    <div class="side-item" data-page="analytics" data-tip="数据分析"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V11M10 19V6M15 19V13M20 19V9"/></svg></span><span class="side-txt">数据分析</span></div>
+    <div class="side-item" data-page="analytics" data-tip="设置与数据"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V11M10 19V6M15 19V13M20 19V9"/></svg></span><span class="side-txt">数据分析</span></div>
     <div class="side-create" data-tip="新建机器人" onclick="openCreate()"><span class="sc-ic">＋</span><span class="sc-txt">新建机器人</span></div>
   </aside>
 
@@ -2211,12 +2210,12 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
   <!-- ==================== 数据分析 ==================== -->
   <main class="main" id="page-analytics" style="display:none">
-    <div class="page-head"><div><h1>数据分析</h1><div class="sub">查看机器人的调用量、满意度与趋势</div></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-ghost" onclick="openSettings()" title="打开模型设置（Key / 模型 / 免 Key 试用）">⚙ 模型设置</button>
-        <div class="search-bar" style="max-width:200px"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></span><input value="最近 7 天" disabled></div>
-      </div>
+    <div class="page-head"><div><h1>设置与数据</h1><div class="sub">用量统计 · 模型与插件配置</div></div></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="btn btn-primary" id="anaTabUsage" onclick="showAnaTab('usage')">用量分析</button>
+      <button class="btn btn-ghost" id="anaTabSettings" onclick="showAnaTab('settings')">模型与插件设置</button>
     </div>
+    <div id="anaUsage">
     <div class="stat-cards" id="statCards"></div>
 
     <!-- Token 用量与费用（真实采集，非估算时标注） -->
@@ -2260,137 +2259,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
       <svg class="chart-svg" id="dataChart" viewBox="0 0 600 260" preserveAspectRatio="none" style="width:100%;height:260px"></svg>
     </div>
-  </main>
-</div>
+    </div>
 
-<!-- ==================== 创建向导 ==================== -->
-<div class="modal" id="createModal">
-  <div class="mbox">
-    <h2>创建机器人</h2>
-    <div class="hint">填写基本信息，几分钟即可拥有一个智能助手</div>
-    <div class="field" id="field-name"><label>名称 <span style="color:var(--warn-text)">*</span></label><input id="f-name" placeholder="例如：我的客服助手" maxlength="30"><div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">请填写机器人名称（1-30 字）</div></div>
-    <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" data-grow data-grow-max="200" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
-    <div class="field"><label>头像</label>
-      <div class="color-pick" id="colors">
-        <div class="c on" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)" data-c=""></div>
-        <div class="c" style="background:linear-gradient(135deg,#30d158,#32ade6)" data-c="📊"></div>
-        <div class="c" style="background:linear-gradient(135deg,#ff8b6d,#ff6b9d)" data-c="🎨"></div>
-        <div class="c" style="background:linear-gradient(135deg,#f5c542,#ff8b3d)" data-c="✍️"></div>
-        <div class="c" style="background:linear-gradient(135deg,#9b7bff,#6b8bff)" data-c="🎮"></div>
-        <div class="c" style="background:linear-gradient(135deg,#4dd0e1,#7c4dff)" data-c="✈️"></div>
-      </div>
-    </div>
-    <div class="field"><label>专精 <span style="font-size:11px;color:var(--sub);font-weight:400">（可选，选定后不可更改）</span></label>
-      <div id="specPick" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-      <div id="specCustomBox" style="display:none;margin-top:8px">
-        <input id="f-spec-name" placeholder="角色名称，如：旅行规划师（最多 20 字）" maxlength="20" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;margin-bottom:8px">
-        <textarea id="f-spec-prompt" placeholder="这个角色的人设提示词，例如：你是旅行规划师，根据用户偏好定制行程与预算…" maxlength="500" style="width:100%;box-sizing:border-box;min-height:72px;resize:vertical;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;line-height:1.5"></textarea>
-        <div style="font-size:11px;color:var(--sub);margin-top:4px">这里写的人设会成为机器人的起始提示词，之后仍可自由修改。</div>
-      </div>
-      <div style="font-size:11px;color:var(--sub);margin-top:6px">绑定机器人的默认人设方向；提示词文本之后仍可自由修改，但专精本身锁定。</div>
-    </div>
-    <div class="field"><label>创建方式</label>
-      <select id="f-mode"><option value="blank">标准创建（从零搭建）</option><option value="template">从模板创建</option></select>
-    </div>
-    <div class="field" id="tplPickField" style="display:none">
-      <label>选择模板 <span style="color:var(--warn-text)">*</span></label>
-      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
-        <input type="file" id="tplFile" accept="application/json,.json" style="display:none" onchange="importTplFile(this)">
-        <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('tplFile').click()">📥 导入模板文件</button>
-        <span style="font-size:11px;color:var(--sub)">导入的模板会出现在下方「我的」中</span>
-      </div>
-      <div id="tplPick" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px"></div>
-      <div class="err" id="tplErr" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">请选择一个模板</div>
-    </div>
-    <div class="mbox-foot">
-      <button class="btn btn-ghost" onclick="closeCreate()">取消</button>
-      <button class="btn btn-primary" onclick="submitCreate()">创建并配置</button>
-    </div>
-  </div>
-</div>
-
-<!-- ==================== 文体预览 ==================== -->
-<div class="modal" id="stylePreviewModal">
-  <div class="mbox" style="width:560px">
-    <h2 id="stylePreviewTitle">风格指令</h2>
-    <div class="hint" style="margin-bottom:10px">应用后，这段指令会注入到机器人的「去AI腔」润色节点与常规对话提示词中。</div>
-    <textarea id="stylePreviewBody" readonly style="width:100%;min-height:180px;background:var(--bg);border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
-    <div class="mbox-foot" style="margin-top:12px">
-      <button class="btn btn-ghost" onclick="document.getElementById('stylePreviewModal').classList.remove('on')">关闭</button>
-      <button class="btn btn-primary" id="stylePreviewApply" onclick="stylePreviewApplyNow()">应用到当前机器人</button>
-    </div>
-  </div>
-</div>
-
-<!-- ==================== 人工审核弹窗 ==================== -->
-<div class="modal" id="humanApprovalModal">
-  <div class="mbox" style="width:640px">
-    <h2 id="humanApprovalTitle">🧑‍⚖️ 审批</h2>
-    <div class="hint" style="margin-bottom:10px">工作流已暂停在审批节点。可查看 / 修改下方草稿，确认后发出，或驳回重新执行整条工作流。</div>
-    <div id="humanApprovalNote" style="display:none;margin-bottom:10px;padding:9px 11px;border:1px dashed var(--glass-border);border-radius:9px;background:var(--glass-bg);font-size:12.5px;color:var(--txt);line-height:1.6"></div>
-    <textarea id="humanApprovalText" style="width:100%;min-height:200px;background:var(--bg);border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
-    <div id="humanApprovalPre" style="display:none;margin-top:10px">
-      <div style="font-size:12px;color:var(--sub);font-weight:600;margin-bottom:5px">预审意见（复用质检逻辑）</div>
-      <div id="humanApprovalPreBody" style="white-space:pre-wrap;min-height:48px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:9px;font-size:12.5px;color:var(--txt);line-height:1.6"></div>
-    </div>
-    <div class="mbox-foot" style="margin-top:12px;gap:10px">
-      <button class="btn btn-primary" id="humanApprovalPass" style="background:linear-gradient(135deg,#30d158,#32ade6)">✅ 通过并继续</button>
-      <button class="btn btn-ghost" id="humanApprovalReject" style="border:1px solid var(--warn);color:var(--warn-text)">🔄 驳回重跑</button>
-    </div>
-  </div>
-</div>
-
-<!-- ==================== 插件详情 ==================== -->
-<div class="modal" id="pluginDetailModal" onclick="if(event.target===this)closePluginDetail()">
-  <div class="mbox" style="width:480px">
-    <h2 id="pluginDetailTitle">插件详情</h2>
-    <div class="hint" style="margin-bottom:10px"><span class="plugin-cat" id="pluginDetailCat"></span></div>
-    <p style="color:var(--sub);margin:0 0 12px;font-size:13px" id="pluginDetailDesc"></p>
-    <div style="font-size:12px;color:var(--sub);margin-bottom:6px;font-weight:600">能力说明</div>
-    <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:13px;line-height:1.7" id="pluginDetailCap"></div>
-    <div id="pluginDetailExtra"></div>
-    <div class="mbox-foot" id="pluginDetailAct" style="margin-top:14px"></div>
-  </div>
-</div>
-
-<!-- ==================== 发布方式（弹窗填写） ==================== -->
-<div class="modal" id="publishModal" onclick="if(event.target===this)closePublishModal()">
-  <div class="mbox" style="width:480px">
-    <button class="modal-x" onclick="closePublishModal()" title="关闭" aria-label="关闭">✕</button>
-    <h2 id="pubModalTitle">发布</h2>
-    <div class="hint" id="pubModalHint"></div>
-    <div id="pubModalFields"></div>
-    <div class="mbox-foot" style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
-      <button class="btn btn-ghost" onclick="closePublishModal()">取消</button>
-      <button class="btn btn-primary" id="pubModalBtn" onclick="confirmPublish()">发布</button>
-    </div>
-  </div>
-</div>
-
-<!-- ==================== AI 编排（自然语言 → 画布） ==================== -->
-<div class="modal" id="aiPlotModal" onclick="if(event.target===this)closeAiPlot()">
-  <div class="mbox" style="width:560px">
-    <button class="modal-x" onclick="closeAiPlot()" title="关闭" aria-label="关闭">✕</button>
-    <h2>🪄 AI 编排</h2>
-    <div class="hint">描述你想要的流程，AI 生成节点与连线后套上画布；也可以让它优化现有画布。应用前可预览，应用后 Ctrl+Z 可整体撤销。</div>
-    <div style="display:flex;gap:16px;margin:10px 0">
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="aiplot-mode" value="fresh" checked> 从零生成</label>
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="aiplot-mode" value="improve"> 优化现有画布</label>
-    </div>
-    <textarea id="aiPlotAsk" placeholder="例：做一个内容审核流程——先检索知识库资料，再撰写初稿，润色质检打分；质检不通过回到撰写重写，最多 3 次；最后输出定稿。"
-      style="width:100%;box-sizing:border-box;min-height:96px;resize:vertical;border-radius:var(--r-md);border:1px solid var(--line);background:var(--fill);color:var(--txt);padding:10px 12px;font-size:13px;font-family:inherit;line-height:1.5"></textarea>
-    <div id="aiPlotOut" style="margin-top:12px"></div>
-    <div class="mbox-foot" style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
-      <button class="btn btn-ghost" onclick="closeAiPlot()">关闭</button>
-      <button class="btn btn-primary" id="aiPlotGo" onclick="aiPlotRun()">生成</button>
-    </div>
-  </div>
-</div>
-
-<!-- ==================== 设置 ==================== -->
-<div class="modal" id="settingsModal">
-  <div class="mbox" style="width:560px">
-    <h2>⚙️ 模型设置</h2>
+    <div id="anaSettings" style="display:none">
     <div class="hint">填写后，工作台的聊天将调用真实大模型。Key 仅保存在本机 localStorage，不会上传任何服务器。</div>
 
 <div class="ssec open" id="sec-core">
@@ -2572,11 +2443,139 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="set-preview">即将使用：<b id="settingsPreview"></b></div>
     <div class="mbox-foot">
       <button class="btn btn-ghost" onclick="testConnection()">🔌 测试连接</button>
-      <button class="btn btn-ghost" onclick="closeSettings()">取消</button>
       <button class="btn btn-primary" onclick="saveSettings()">保存并启用</button>
+    </div>
+  <
+    </div>
+  </main>
+</div>
+
+<!-- ==================== 创建向导 ==================== -->
+<div class="modal" id="createModal">
+  <div class="mbox">
+    <h2>创建机器人</h2>
+    <div class="hint">填写基本信息，几分钟即可拥有一个智能助手</div>
+    <div class="field" id="field-name"><label>名称 <span style="color:var(--warn-text)">*</span></label><input id="f-name" placeholder="例如：我的客服助手" maxlength="30"><div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">请填写机器人名称（1-30 字）</div></div>
+    <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" data-grow data-grow-max="200" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
+    <div class="field"><label>头像</label>
+      <div class="color-pick" id="colors">
+        <div class="c on" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)" data-c=""></div>
+        <div class="c" style="background:linear-gradient(135deg,#30d158,#32ade6)" data-c="📊"></div>
+        <div class="c" style="background:linear-gradient(135deg,#ff8b6d,#ff6b9d)" data-c="🎨"></div>
+        <div class="c" style="background:linear-gradient(135deg,#f5c542,#ff8b3d)" data-c="✍️"></div>
+        <div class="c" style="background:linear-gradient(135deg,#9b7bff,#6b8bff)" data-c="🎮"></div>
+        <div class="c" style="background:linear-gradient(135deg,#4dd0e1,#7c4dff)" data-c="✈️"></div>
+      </div>
+    </div>
+    <div class="field"><label>专精 <span style="font-size:11px;color:var(--sub);font-weight:400">（可选，选定后不可更改）</span></label>
+      <div id="specPick" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <div id="specCustomBox" style="display:none;margin-top:8px">
+        <input id="f-spec-name" placeholder="角色名称，如：旅行规划师（最多 20 字）" maxlength="20" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;margin-bottom:8px">
+        <textarea id="f-spec-prompt" placeholder="这个角色的人设提示词，例如：你是旅行规划师，根据用户偏好定制行程与预算…" maxlength="500" style="width:100%;box-sizing:border-box;min-height:72px;resize:vertical;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;line-height:1.5"></textarea>
+        <div style="font-size:11px;color:var(--sub);margin-top:4px">这里写的人设会成为机器人的起始提示词，之后仍可自由修改。</div>
+      </div>
+      <div style="font-size:11px;color:var(--sub);margin-top:6px">绑定机器人的默认人设方向；提示词文本之后仍可自由修改，但专精本身锁定。</div>
+    </div>
+    <div class="field"><label>创建方式</label>
+      <select id="f-mode"><option value="blank">标准创建（从零搭建）</option><option value="template">从模板创建</option></select>
+    </div>
+    <div class="field" id="tplPickField" style="display:none">
+      <label>选择模板 <span style="color:var(--warn-text)">*</span></label>
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+        <input type="file" id="tplFile" accept="application/json,.json" style="display:none" onchange="importTplFile(this)">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('tplFile').click()">📥 导入模板文件</button>
+        <span style="font-size:11px;color:var(--sub)">导入的模板会出现在下方「我的」中</span>
+      </div>
+      <div id="tplPick" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px"></div>
+      <div class="err" id="tplErr" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">请选择一个模板</div>
+    </div>
+    <div class="mbox-foot">
+      <button class="btn btn-ghost" onclick="closeCreate()">取消</button>
+      <button class="btn btn-primary" onclick="submitCreate()">创建并配置</button>
     </div>
   </div>
 </div>
+
+<!-- ==================== 文体预览 ==================== -->
+<div class="modal" id="stylePreviewModal">
+  <div class="mbox" style="width:560px">
+    <h2 id="stylePreviewTitle">风格指令</h2>
+    <div class="hint" style="margin-bottom:10px">应用后，这段指令会注入到机器人的「去AI腔」润色节点与常规对话提示词中。</div>
+    <textarea id="stylePreviewBody" readonly style="width:100%;min-height:180px;background:var(--bg);border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
+    <div class="mbox-foot" style="margin-top:12px">
+      <button class="btn btn-ghost" onclick="document.getElementById('stylePreviewModal').classList.remove('on')">关闭</button>
+      <button class="btn btn-primary" id="stylePreviewApply" onclick="stylePreviewApplyNow()">应用到当前机器人</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 人工审核弹窗 ==================== -->
+<div class="modal" id="humanApprovalModal">
+  <div class="mbox" style="width:640px">
+    <h2 id="humanApprovalTitle">🧑‍⚖️ 审批</h2>
+    <div class="hint" style="margin-bottom:10px">工作流已暂停在审批节点。可查看 / 修改下方草稿，确认后发出，或驳回重新执行整条工作流。</div>
+    <div id="humanApprovalNote" style="display:none;margin-bottom:10px;padding:9px 11px;border:1px dashed var(--glass-border);border-radius:9px;background:var(--glass-bg);font-size:12.5px;color:var(--txt);line-height:1.6"></div>
+    <textarea id="humanApprovalText" style="width:100%;min-height:200px;background:var(--bg);border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
+    <div id="humanApprovalPre" style="display:none;margin-top:10px">
+      <div style="font-size:12px;color:var(--sub);font-weight:600;margin-bottom:5px">预审意见（复用质检逻辑）</div>
+      <div id="humanApprovalPreBody" style="white-space:pre-wrap;min-height:48px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:9px;font-size:12.5px;color:var(--txt);line-height:1.6"></div>
+    </div>
+    <div class="mbox-foot" style="margin-top:12px;gap:10px">
+      <button class="btn btn-primary" id="humanApprovalPass" style="background:linear-gradient(135deg,#30d158,#32ade6)">✅ 通过并继续</button>
+      <button class="btn btn-ghost" id="humanApprovalReject" style="border:1px solid var(--warn);color:var(--warn-text)">🔄 驳回重跑</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 插件详情 ==================== -->
+<div class="modal" id="pluginDetailModal" onclick="if(event.target===this)closePluginDetail()">
+  <div class="mbox" style="width:480px">
+    <h2 id="pluginDetailTitle">插件详情</h2>
+    <div class="hint" style="margin-bottom:10px"><span class="plugin-cat" id="pluginDetailCat"></span></div>
+    <p style="color:var(--sub);margin:0 0 12px;font-size:13px" id="pluginDetailDesc"></p>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:6px;font-weight:600">能力说明</div>
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:13px;line-height:1.7" id="pluginDetailCap"></div>
+    <div id="pluginDetailExtra"></div>
+    <div class="mbox-foot" id="pluginDetailAct" style="margin-top:14px"></div>
+  </div>
+</div>
+
+<!-- ==================== 发布方式（弹窗填写） ==================== -->
+<div class="modal" id="publishModal" onclick="if(event.target===this)closePublishModal()">
+  <div class="mbox" style="width:480px">
+    <button class="modal-x" onclick="closePublishModal()" title="关闭" aria-label="关闭">✕</button>
+    <h2 id="pubModalTitle">发布</h2>
+    <div class="hint" id="pubModalHint"></div>
+    <div id="pubModalFields"></div>
+    <div class="mbox-foot" style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+      <button class="btn btn-ghost" onclick="closePublishModal()">取消</button>
+      <button class="btn btn-primary" id="pubModalBtn" onclick="confirmPublish()">发布</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== AI 编排（自然语言 → 画布） ==================== -->
+<div class="modal" id="aiPlotModal" onclick="if(event.target===this)closeAiPlot()">
+  <div class="mbox" style="width:560px">
+    <button class="modal-x" onclick="closeAiPlot()" title="关闭" aria-label="关闭">✕</button>
+    <h2>🪄 AI 编排</h2>
+    <div class="hint">描述你想要的流程，AI 生成节点与连线后套上画布；也可以让它优化现有画布。应用前可预览，应用后 Ctrl+Z 可整体撤销。</div>
+    <div style="display:flex;gap:16px;margin:10px 0">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="aiplot-mode" value="fresh" checked> 从零生成</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="aiplot-mode" value="improve"> 优化现有画布</label>
+    </div>
+    <textarea id="aiPlotAsk" placeholder="例：做一个内容审核流程——先检索知识库资料，再撰写初稿，润色质检打分；质检不通过回到撰写重写，最多 3 次；最后输出定稿。"
+      style="width:100%;box-sizing:border-box;min-height:96px;resize:vertical;border-radius:var(--r-md);border:1px solid var(--line);background:var(--fill);color:var(--txt);padding:10px 12px;font-size:13px;font-family:inherit;line-height:1.5"></textarea>
+    <div id="aiPlotOut" style="margin-top:12px"></div>
+    <div class="mbox-foot" style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+      <button class="btn btn-ghost" onclick="closeAiPlot()">关闭</button>
+      <button class="btn btn-primary" id="aiPlotGo" onclick="aiPlotRun()">生成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 设置 ==================== -->
+
 
 <div class="modal" id="dataMigrateModal">
   <div class="mbox" style="width:520px">
@@ -16071,6 +16070,27 @@ const PROVIDER_META = BotCraftAI.getProviders();
 let _settingsInited = false;
 let _settingsCloseTimer = null;
 function openSettings() {
+  // 设置已并入「设置与数据」页（与数据分析合并）：所有旧入口（命令面板 / 顶部模型标签等）
+  // 统一跳转到该页的设置 Tab，不再弹任何窗。
+  try { go('analytics'); } catch (e) { }
+  showAnaTab('settings');
+  setupSettingsUI();
+}
+function showAnaTab(t) {
+  var u = document.getElementById('anaUsage'), st = document.getElementById('anaSettings');
+  var bu = document.getElementById('anaTabUsage'), bs = document.getElementById('anaTabSettings');
+  if (!u || !st) return;
+  var isSet = t === 'settings';
+  u.style.display = isSet ? 'none' : '';
+  st.style.display = isSet ? '' : 'none';
+  if (bu) bu.className = isSet ? 'btn btn-ghost' : 'btn btn-primary';
+  if (bs) bs.className = isSet ? 'btn btn-primary' : 'btn btn-ghost';
+  try { localStorage.setItem('botcraft.anaTab', t); } catch (e) { }
+}
+window.showAnaTab = showAnaTab;
+// 初始化时恢复上次停留的 Tab
+try { showAnaTab(localStorage.getItem('botcraft.anaTab') || 'usage'); } catch (e) { }
+function setupSettingsUI() {
   // 只在首次打开时构建一次服务商/模型下拉框，之后直接复用（避免反复 innerHTML 重建导致卡顿）
   if (!_settingsInited) {
     const provSel = document.getElementById('set-provider');
@@ -16109,11 +16129,7 @@ function openSettings() {
   document.getElementById('set-model-custom').value =
     (cfg.model && !(PROVIDER_META[cfg.provider] || {}).models?.includes(cfg.model)) ? cfg.model : '';
   setConnStatus(''); renderSettingsPreview();
-  const sm = document.getElementById('settingsModal');
-  if (_settingsCloseTimer) { clearTimeout(_settingsCloseTimer); _settingsCloseTimer = null; }
-  sm.classList.remove('closing');
-  sm.classList.add('on');
-  setTimeout(() => document.getElementById('set-key').focus(), 50);
+  // 设置已是页面内嵌区块（无弹窗）：无需再控制 modal 显隐
 }
 function fillModelOptions(provider, currentModel) {
   const sel = document.getElementById('set-model');
@@ -16195,16 +16211,7 @@ function renderSettingsPreview() {
   } catch (e) {}
 }
 function closeSettings() {
-  const sm = document.getElementById('settingsModal');
-  if (sm) {
-    sm.classList.add('closing');
-    if (_settingsCloseTimer) clearTimeout(_settingsCloseTimer);
-    _settingsCloseTimer = setTimeout(function () {
-      sm.classList.remove('on');
-      sm.classList.remove('closing');
-      _settingsCloseTimer = null;
-    }, 320);
-  }
+  // 设置已并入「设置与数据」页（无弹窗）：保留空实现兼容旧调用点（保存成功 / Esc 等）
 }
 function saveSettings() {
   const provider = document.getElementById('set-provider').value;
@@ -16357,7 +16364,6 @@ async function testConnection() {
     toast('连接失败，请检查 Key 与地址', 'err');
   }
 }
-document.getElementById('settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') closeSettings(); });
 ['set-provider','set-model','set-model-custom','set-direct'].forEach(function (id) {
   var el = document.getElementById(id);
   if (!el) return;
