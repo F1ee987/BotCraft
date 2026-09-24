@@ -11617,36 +11617,55 @@ function renderHistory(b) {
 (function bindChatContextCopy() {
   var chat = document.getElementById('chat');
   if (!chat) return;
-  // 右键「按下」时就把选区与所在消息记录下来：Chromium 在右键过程中可能折叠/清除选区，
-  // 等 contextmenu 再取就变空 → handler 静默早退 → 桌面壳又没有默认菜单 →
-  // 用户看到的就是「完全没动静」（2026-09-24 第三轮实测）。按下时记录彻底绕开这个时序。
-  var pend = null;
+  // 第四轮实测「完全没动静」：contextmenu 事件在 WebView2 里可能根本不派发（底层吞掉）。
+  // 第五轮改为**不依赖 contextmenu**：主通道用 pointerup（最底层鼠标事件，应用里所有
+  // 按钮都靠它工作，不可能被吞）；contextmenu 仅作兜底 + 阻默认菜单。
+  var pend = null, lastCopy = 0;
   chat.addEventListener('pointerdown', function (e) {
     if (e.button !== 2) { pend = null; return; }
     var msg = e.target && e.target.closest ? e.target.closest('.msg') : null;
     if (!msg) { pend = null; return; }
     var sel = '';
     try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS) { }
-    pend = { msg: msg, sel: sel };
+    pend = { msg: msg, sel: sel };   // 按下瞬间记录，防右键过程选区被清
   }, true);
-  chat.addEventListener('contextmenu', function (e) {
+  function doCopy() {
+    var now = Date.now();
+    if (now - lastCopy < 600) { pend = null; return true; }   // 去抖：pointerup+contextmenu 双触发只复制一次
     var rec = pend; pend = null;
-    var msg = (rec && rec.msg) || (e.target && e.target.closest ? e.target.closest('.msg') : null);
-    if (!msg) return;                                                  // 不在消息气泡内 → 默认菜单
-    e.preventDefault();
-    var sel = (rec && rec.sel) || '';
+    var msg = rec && rec.msg;
+    if (!msg) return false;
+    var sel = rec.sel || '';
     if (!sel) { try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS2) { } }
     if (sel && sel.trim()) {
-      // 首选：用户手势内同步复制当前选区（execCommand 不走 clipboard 权限，WebView2 里最可靠）
+      // 首选：手势内同步复制选区（execCommand 不走 clipboard 权限，WebView2 里最可靠）
       try {
-        if (document.execCommand('copy')) { toast('已复制到剪贴板', 'ok'); return; }
+        if (document.execCommand('copy')) { lastCopy = now; toast('已复制到剪贴板', 'ok'); return true; }
       } catch (eC) { }
+      lastCopy = now;
       copyText(sel);                                                   // 兜底链：textarea exec → clipboard(超时) → 后端
-      return;
+      return true;
     }
     // 没有选中文字也绝不静默：复制整条消息的纯文本，并明确告知
     var full = (msg.innerText || msg.textContent || '').trim();
-    if (full) copyText(full, '已复制整条回复（未选中文字时默认复制全文）');
+    if (full) { lastCopy = now; copyText(full, '已复制整条回复（未选中文字时默认复制全文）'); return true; }
+    return false;
+  }
+  // 主通道：右键释放即复制
+  chat.addEventListener('pointerup', function (e) {
+    if (e.button !== 2) return;
+    if (doCopy() && e.cancelable) e.preventDefault();
+  });
+  // 兜底通道：contextmenu 若被派发（部分设备 pointerup 漏发），同样执行；并阻默认菜单
+  chat.addEventListener('contextmenu', function (e) {
+    var msg = (pend && pend.msg) || (e.target && e.target.closest ? e.target.closest('.msg') : null);
+    if (!msg) return;
+    e.preventDefault();
+    if (!pend) {
+      pend = { msg: msg, sel: '' };
+      try { pend.sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS3) { }
+    }
+    doCopy();
   });
 })();
 
