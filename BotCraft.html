@@ -14904,10 +14904,32 @@ async function kbFetchUrl() {
   }
 }
 // 粘贴导入：读剪贴板正文 → 清理冗余 → 直接建成知识库文档（无需来源网址）
+// 判断剪贴板内容是不是「一个网址」（而不是正文）：是则返回规范化后的 URL，否则返回 ''
+function _isLikelyUrl(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return '';
+  // 去掉复制链接时浏览器附加的引号 / 尖括号 / 全角括号
+  s = s.replace(/^["'<（(]/, '').replace(/[">)）]$/, '');
+  s = s.trim();
+  if (/\s/.test(s)) return '';                          // 含空白 => 不是纯链接（是正文）
+  if (/^https?:\/\//i.test(s)) return s;
+  if (/^www\./i.test(s)) return 'https://' + s;
+  return '';
+}
+// 粘贴导入：读剪贴板 → 若内容是网址则自动抓取并解析正文，否则把正文清洗后直接入库
 async function kbPasteImport() {
   var p = document.getElementById('kbUrlPaste');
   var got = '';
   try { if (navigator.clipboard && navigator.clipboard.readText) got = await navigator.clipboard.readText(); } catch (e) { got = ''; }
+  var url = _isLikelyUrl(got);
+  if (url) {
+    // 剪贴板是网址：自动抓取并解析目标网页正文，而不是把网址当文本写库
+    if (inp) inp.value = url;
+    if (p) { p.value = ''; p.style.display = 'none'; }   // 清空手动粘贴框，避免 kbFetchUrl 误把旧文本当正文导入
+    toast('检测到网址，正在抓取并解析…', 'ok', 2500);
+    await kbFetchUrl();
+    return;
+  }
   if (got && got.trim()) {
     if (p) { p.value = got; p.style.display = ''; }
     kbImportUrlText('', got, '粘贴导入', '');
@@ -14945,17 +14967,24 @@ function _normText(s) {
   s = String(s || '');
   // 清掉控制字符、零宽字符、软连字符、BOM 等无效数据（用 \u 转义，避免源码里混入裸控制字节）
   s = s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u00ad\u200b-\u200f\u2028\u2029\ufeff]/g, '');
-  // 统一空白：把全角/不间断空格等都收成普通空格，多个压成一个
+  // 统一空白：全角/不间断空格等都收成普通空格，多个压成一个（含跨行）
   s = s.replace(/[ \t\u00a0]+/g, ' ');
-  // 逐行清洗：去掉纯装饰/分隔行（一串 -—_=* 之类）
-  s = s.split('\n').map(function (l) {
-    var t = l.trim();
-    if (/^[\s\-–—_=*·•·|]+$/.test(t)) return '';
-    return t;
-  }).join('\n');
-  s = s.replace(/ *\n */g, '\n');
-  s = s.replace(/\n{3,}/g, '\n\n');
-  return s.trim();
+  // 逐行清洗：去首尾空白、丢弃纯装饰/分隔行（一串 -—_=* 之类），连续空行只留一个作段落分隔
+  var lines = s.split('\n').map(function (l) { return l.trim(); });
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    if (ln === '') {
+      if (out.length && out[out.length - 1] !== '') out.push('');   // 保留一个空行当段落分隔
+      continue;
+    }
+    if (/^[-–—_=*·•|]+$/.test(ln)) continue;   // 纯分隔线，直接丢弃
+    out.push(ln);
+  }
+  while (out.length && out[out.length - 1] === '') out.pop();   // 去尾随空行
+  s = out.join('\n');
+  s = s.replace(/\n{3,}/g, '\n\n');   // 兜底，杜绝任何残留的 3+ 连续空行
+  return s;
 }
 // 优先抽取 <main>/<article>/[role=main] 核心内容区，去掉侧栏/页脚/导航噪声
 function _pickMainContent(html) {
