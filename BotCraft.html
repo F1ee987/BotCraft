@@ -1057,6 +1057,33 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .md-img-placeholder{padding:16px;border:1px dashed var(--line);border-radius:var(--r-md);background:var(--bg);color:var(--danger-text);text-align:center;font-size:13px;line-height:1.6}
 .md-img-omitted{display:inline-block;padding:8px 12px;border:1px dashed var(--line);border-radius:var(--r-md);background:var(--bg);color:var(--sub);font-size:12.5px;margin:4px 0}
 .msg.bot img.md-img{cursor:zoom-in}
+/* ===== 知识库文档预览：复用 markdown 排版 + 元信息徽标 ===== */
+#kbPrevBody{white-space:normal;font-size:13.5px;line-height:1.8;color:var(--txt);word-break:break-word;font-family:inherit}
+#kbPrevBody>:first-child{margin-top:0}
+#kbPrevBody>:last-child{margin-bottom:0}
+#kbPrevBody h1,#kbPrevBody h2,#kbPrevBody h3,#kbPrevBody h4,#kbPrevBody h5,#kbPrevBody h6{margin:16px 0 8px;line-height:1.34;font-weight:680;letter-spacing:-.2px;color:var(--txt)}
+#kbPrevBody h1{font-size:19px}#kbPrevBody h2{font-size:17px}#kbPrevBody h3{font-size:15px}#kbPrevBody h4,#kbPrevBody h5,#kbPrevBody h6{font-size:13.5px}
+#kbPrevBody p{margin:9px 0;line-height:1.85}
+#kbPrevBody ul.md-list,#kbPrevBody ol.md-list{margin:9px 0;padding-left:22px}
+#kbPrevBody ul.md-list li,#kbPrevBody ol.md-list li{margin:5px 0;line-height:1.75}
+#kbPrevBody li.md-task{list-style:none;margin-left:-18px;line-height:1.72}
+#kbPrevBody li.md-task input[type=checkbox]{margin-right:7px;vertical-align:middle;accent-color:var(--brand)}
+#kbPrevBody blockquote.md-quote{margin:10px 0;padding:8px 14px;border-left:3px solid var(--brand);background:var(--bg);border-radius:0 var(--r-md) var(--r-md) 0;color:var(--sub)}
+#kbPrevBody table.md-table{border-collapse:collapse;margin:11px 0;font-size:12.5px;width:100%;border-radius:var(--r-md);overflow:hidden}
+#kbPrevBody table.md-table th,#kbPrevBody table.md-table td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+#kbPrevBody table.md-table th{background:var(--bg);font-weight:600;color:var(--txt)}
+#kbPrevBody hr.md-hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+#kbPrevBody a{color:var(--brand-text);text-decoration:underline;text-underline-offset:2px}
+#kbPrevBody a:hover{opacity:.82}
+#kbPrevBody code{background:var(--fill);padding:1px 6px;border-radius:6px;font-size:.92em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#kbPrevBody pre.md-code{padding:12px 14px;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-md);overflow:auto;font-size:12.5px;line-height:1.62}
+#kbPrevBody pre.md-code code{background:none;padding:0}
+#kbPrevBody pre.md-code .md-copy,#kbPrevBody pre.md-code .md-run{display:none}
+/* 元信息（来源 / 摘要）徽标块 */
+#kbPrevBody .kb-meta{margin:0 0 14px;padding:11px 14px;border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-bg);display:flex;flex-direction:column;gap:6px}
+#kbPrevBody .kb-meta-row{display:flex;gap:9px;font-size:12.5px;line-height:1.65}
+#kbPrevBody .kb-meta-k{flex:none;font-weight:600;color:var(--sub);min-width:40px}
+#kbPrevBody .kb-meta-v{color:var(--txt);word-break:break-all}
 /* ===== 设置面板：分区折叠 ===== */
 .ssec{margin:10px 0;border:1px dashed var(--glass-border);border-radius:var(--r-md);background:var(--glass-bg);overflow:hidden}
 .ssec-head{width:100%;display:flex;align-items:center;gap:var(--sp-2);padding:10px 12px;background:transparent;border:0;color:var(--txt);font-size:13px;font-weight:700;cursor:pointer;text-align:left}
@@ -2020,7 +2047,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button class="btn btn-ghost btn-sm" onclick="closeKbModal()">关闭</button>
       </div>
     </div>
-    <div id="kbPrevBody" style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--txt);max-height:60vh;overflow:auto"></div>
+    <div id="kbPrevBody" style="max-height:62vh;overflow:auto"></div>
     <div id="kbEditWrap" style="display:none">
       <div class="hint" id="kbEditHint" style="margin:0 0 8px;font-size:11.5px"></div>
       <textarea id="kbEditText" spellcheck="false" style="width:100%;height:52vh;box-sizing:border-box;padding:11px 13px;border-radius:12px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:13px;line-height:1.7;resize:vertical;font-family:inherit"></textarea>
@@ -14749,6 +14776,50 @@ function kbRename(id) {
   inp.onblur = function () { done(true); };
 }
 var _kbEditId = null;
+// 知识库文档预览渲染：抽取「来源：/摘要：」元信息行 → 徽标块；正文统一走 renderMarkdown。
+// 导入文档与现有文档走同一套渲染，风格/结构天然一致；renderMarkdown 已做转义，安全。
+function kbRenderContent(k) {
+  if (!k) return '';
+  var text = String(k.content || '');
+  if (k.type === 'json') {
+    return '<pre class="md-code" data-lang="json">' + escapeHtml(text) + '</pre>';
+  }
+  var lines = text.split('\n');
+  // 首行若是标题：首行非空，且其下方不远处出现「来源/摘要」元信息行 → 单独作为标题渲染，
+  // 既能与弹窗标题呼应、又不至于和正文首段重复；普通粘贴文档没有这种结构，不受影响。
+  var firstNonEmpty = -1;
+  for (var t = 0; t < lines.length; t++) { if (lines[t].trim()) { firstNonEmpty = t; break; } }
+  var hasMetaSoon = false;
+  if (firstNonEmpty >= 0) {
+    var lim = Math.min(lines.length, firstNonEmpty + 3);
+    for (var s = firstNonEmpty + 1; s < lim; s++) {
+      if (/^(?:来源|摘要)[:：]/.test(lines[s])) { hasMetaSoon = true; break; }
+    }
+  }
+  var titleLine = (firstNonEmpty >= 0 && hasMetaSoon) ? lines[firstNonEmpty] : '';
+  var metaRows = [];
+  var body = [];
+  for (var i = 0; i < lines.length; i++) {
+    if (i === firstNonEmpty && titleLine) continue;   // 首行标题单独渲染，不进正文
+    var m = /^((?:来源|摘要)[:：])\s*(.*)$/.exec(lines[i]);
+    if (m) {
+      var key = m[1].replace(/[:：]$/, '');
+      var val = m[2];
+      var vHtml = (key === '来源' && /^https?:\/\//i.test(val))
+        ? '<a href="' + escapeAttr(val) + '" target="_blank" rel="noopener">' + escapeHtml(val) + '</a>'
+        : escapeHtml(val);
+      metaRows.push('<div class="kb-meta-row"><span class="kb-meta-k">' + escapeHtml(key) + '</span><span class="kb-meta-v">' + vHtml + '</span></div>');
+      continue;
+    }
+    body.push(lines[i]);
+  }
+  var out = '';
+  if (titleLine) out += '<h2 class="kb-doc-title" style="margin-top:0">' + escapeHtml(titleLine) + '</h2>';
+  if (metaRows.length) out += '<div class="kb-meta">' + metaRows.join('') + '</div>';
+  var bodyHtml = renderMarkdown(body.join('\n'));
+  if (!bodyHtml || !bodyHtml.trim()) bodyHtml = '<p style="color:var(--sub);margin:0">（空文档）</p>';
+  return out + bodyHtml;
+}
 function openKbPreview(id) {
   var k = kbById(id); if (!k) return;
   _kbEditId = id;
@@ -14767,7 +14838,7 @@ function openKbPreview(id) {
       body.innerHTML = html;
     } else { body.textContent = k.content; }
   } else {
-    body.textContent = k.content;
+    body.innerHTML = kbRenderContent(k);
   }
   _kbSetEditMode(false);
   document.getElementById('kbModal').classList.add('on');
