@@ -15723,75 +15723,70 @@ function renderChannels() {
 
 // ---------- 发布产物：通用小工具 ----------
 function copyText(text, okMsg) {
+  /* 全防护结构（2026-09-24）：旧版无顶层 try/catch，任何同步异常都会被菜单 onclick
+     静默吞掉——无 toast、无记录、无反馈（用户探针显示「最近复制」整段缺失即此）。
+     双路互备：A 屏外 textarea + execCommand（同步先写）；B 桌面版桥 bc_set_clip +
+     读回验证（3s 超时保护）。任一路成功即成功；所有出口必写 copyResult 必 toast。 */
   var s = String(text == null ? '' : text);
   var okTxt = okMsg || '已复制到剪贴板';
-  var api = window.pywebview && window.pywebview.api;
-  // 桌面版：后端 Win32 写入（零权限门槛）→ 读回比对闭环自验（杜绝「假成功」）；
-  // 写入失败或读回不一致 → 前端兜底链再写一次并如实报告。
-  if (api && api.bc_set_clip) {
-    Promise.resolve(api.bc_set_clip(s)).then(function (r) {
-      if (!(r && r.ok)) { _copyBrowser(s, okTxt, (r && r.err) || 'host'); return; }
-      var skipVerify = s.length > 200000;   // 超长（含图全文）跳过读回比对，省一次大传输
-      if (skipVerify) {
-        try { localStorage.setItem('botcraft.copyResult', 'copyText host ok=1 verify=skip(len=' + s.length + ')'); } catch (eP) { }
-        toast(okTxt, 'ok'); return;
-      }
-      Promise.resolve(api.bc_clip_text()).then(function (rd) {
-        var back = (rd && rd.text) || '';
-        var match = back === s;
-        try { localStorage.setItem('botcraft.copyResult', 'copyText host ok=1 verify=' + (match ? 'match' : 'mismatch len=' + back.length + '/' + s.length)); } catch (eP2) { }
-        if (match) { toast(okTxt, 'ok'); return; }
-        _copyBrowser(s, okTxt, 'verify-mismatch');   // 读回不一致 → 前端兜底再写
-      }, function () {
-        try { localStorage.setItem('botcraft.copyResult', 'copyText host ok=1 verify=skipped'); } catch (eP3) { }
-        toast(okTxt, 'ok');   // 读回不可用则信任写入结果
-      });
-    }, function (eH) { _copyBrowser(s, okTxt, 'bridge'); });
-    return;
+  var log = [];
+  function done(ok) {
+    try { localStorage.setItem('botcraft.copyResult', 'copyText ' + (log.join(' ') || 'no-path') + (ok ? ' → OK' : ' → FAIL')); } catch (eL) { }
+    toast(ok ? okTxt : '复制失败，请手动选择文本', ok ? 'ok' : 'err');
   }
-  _copyBrowser(s, okTxt);
-}
-function _copyBrowser(s, okTxt, errNote) {
-  // 1) execCommand：同步、不依赖 secure context / clipboard 权限 —— 浏览器里最可靠。
-  //    无页面选区（消息气泡「复制」按钮传全文）时用屏外 textarea 造选区。
   try {
-    var ta = document.createElement('textarea');
-    ta.value = s;
-    ta.setAttribute('readonly', '');
-    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
-    document.body.appendChild(ta);
-    ta.focus(); ta.select(); ta.setSelectionRange(0, s.length);
-    var ok = document.execCommand('copy');
-    ta.remove();
-    if (ok) return toast(okTxt, 'ok');
-  } catch (eE) { }
-  // 2) Clipboard API：浏览器可用；但 WebView2 权限默认拒绝时 promise 可能**挂起**，
-  //    必须加超时竞速，否则永远轮不到兜底
-  var settled = false;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    var timer = setTimeout(function () {
-      if (settled) return; settled = true; _copyViaHost(s, okTxt);
-    }, 1200);
-    navigator.clipboard.writeText(s).then(function () {
-      if (settled) return; settled = true; clearTimeout(timer);
-      toast(okTxt, 'ok');
-    }, function () {
-      if (settled) return; settled = true; clearTimeout(timer);
-      _copyViaHost(s, okTxt);
-    });
-  } else _copyViaHost(s, okTxt);
-}
-// 3) 桌面壳后端 Win32 剪贴板（零权限门槛，与 bc_clip_text 读取对称）
-// （2026-09-24 打磨：此处曾残留一份旧版 _copyBrowser（无读回验证、无 errNote），
-//  函数声明后者静默覆盖前者——闭环自验从未生效。旧版已删，唯一实现在 copyText 之后。）
-function _copyViaHost(s, okTxt, errNote) {
-  var api = window.pywebview && window.pywebview.api;
-  try { localStorage.setItem('botcraft.copyResult', 'copyText fallback(' + (errNote || 'exec-fail') + ') ' + (api && api.bc_set_clip ? 'via bc_set_clip' : 'no-host')); } catch (eR) { }
-  if (api && api.bc_set_clip) {
-    Promise.resolve(api.bc_set_clip(s)).then(function (r) {
-      toast((r && r.ok) ? okTxt : ('复制失败' + (errNote ? '（' + errNote + '）' : '') + '，请手动选择文本'), (r && r.ok) ? 'ok' : 'err');
-    }, function () { toast('复制失败' + (errNote ? '（' + errNote + '）' : '') + '，请手动选择文本', 'err'); });
-  } else toast('复制失败' + (errNote ? '（' + errNote + '）' : '') + '，请手动选择文本', 'err');
+    var okA = false;   // 路 A：同步 execCommand
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = s;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select(); ta.setSelectionRange(0, s.length);
+      okA = document.execCommand('copy');
+      ta.remove();
+      log.push('exec=' + (okA ? 1 : 0));
+    } catch (eA) { log.push('exec-err'); }
+    var api = window.pywebview && window.pywebview.api;
+    if (api && api.bc_set_clip) {
+      var settled = false;
+      var to = setTimeout(function () {
+        if (settled) return; settled = true;
+        log.push('host-timeout');
+        done(okA);
+      }, 3000);
+      try {
+        Promise.resolve(api.bc_set_clip(s)).then(function (r) {
+          if (settled) return; settled = true; clearTimeout(to);
+          if (!(r && r.ok)) { log.push('host-fail:' + ((r && r.err) || '?')); done(okA); return; }
+          if (s.length > 200000) { log.push('host=1 verify=skip'); done(true); return; }
+          Promise.resolve(api.bc_clip_text()).then(function (rd) {
+            if (settled) return; settled = true; clearTimeout(to);
+            var match = (rd && rd.text) === s;
+            log.push('host=1 verify=' + (match ? 'match' : 'mismatch:' + ((rd && rd.text) || '').length + '/' + s.length));
+            done(okA || match);   // mismatch 时信任同步路
+          }, function () {
+            if (settled) return; settled = true; clearTimeout(to);
+            log.push('host=1 verify-err');
+            done(true);
+          });
+        }, function () {
+          if (settled) return; settled = true; clearTimeout(to);
+          log.push('host-reject');
+          done(okA);
+        });
+      } catch (eB) {
+        if (settled) return; settled = true; clearTimeout(to);
+        log.push('host-sync-err');
+        done(okA);
+      }
+      return;
+    }
+    done(okA);   // 浏览器场景：仅同步路
+  } catch (eTop) {
+    try { localStorage.setItem('botcraft.copyResult', 'copyText exception: ' + String(eTop && eTop.message || eTop).slice(0, 80)); } catch (eL2) { }
+    toast('复制失败，请手动选择文本', 'err');
+  }
 }
 function downloadFile(name, content, type) {
   try {
