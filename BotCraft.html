@@ -18537,12 +18537,15 @@ window.__debug = {
       var chat = document.getElementById('chat');
       return chat && msg && chat.contains(msg);
     }
+    function mark(k, v) { try { localStorage.setItem(k, v); } catch (eM) { } }
+    mark('botcraft.copyBound', '1');           // 自观测：绑定成功（设置页指纹行显示）
     function doCopy() {
       var now = Date.now();
       if (now - lastCopy < 600) { pend = null; return true; }   // 去抖：pointerup+contextmenu 双触发
       var rec = pend; pend = null;
       var msg = rec && rec.msg;
       if (!msg) return false;
+      mark('botcraft.copyLast', String(now));  // 自观测：复制逻辑确实被触发过
       var sel = rec.sel || '';
       if (!sel) { try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS2) { } }
       if (sel && sel.trim()) {
@@ -18581,7 +18584,7 @@ window.__debug = {
     });
   } catch (eBind) { try { localStorage.setItem('botcraft.jsErrors.v1', JSON.stringify([{ m: 'bindCopy: ' + eBind.message, src: 'standalone', t: Date.now() }])); } catch (eS4) { } }
 
-  /* 版本指纹 + 脚本错误展示（设置与数据页，检查更新按钮下方） */
+  /* 版本指纹 + 脚本错误 + 复制模块自观测（设置与数据页，检查更新按钮下方） */
   function fillBuildFp() {
     var fp = document.getElementById('buildFp');
     if (!fp) return;
@@ -18589,8 +18592,23 @@ window.__debug = {
     var txt = /^[0-9a-f]{7,40}$/i.test(c) ? ('当前构建: ' + c.slice(0, 7)) : '开发构建';
     var errs = [];
     try { errs = JSON.parse(localStorage.getItem('botcraft.jsErrors.v1') || '[]'); } catch (e) { }
-    if (errs.length) txt += ' · ⚠ 检测到 ' + errs.length + ' 条脚本错误，最后一条: ' + errs[errs.length - 1].m;
+    if (errs.length) txt += ' · ⚠ 脚本错误 x' + errs.length + '（最后: ' + errs[errs.length - 1].m.slice(0, 60) + '）';
+    var bound = null, last = 0;
+    try {
+      bound = localStorage.getItem('botcraft.copyBound');
+      last = parseInt(localStorage.getItem('botcraft.copyLast') || '0', 10) || 0;
+    } catch (eL) { }
+    if (bound) {
+      txt += ' · 右键复制: 已绑定';
+      txt += last ? (lastCopy_Ago(last)) : '（从未触发过——若右键后仍无 toast 请告知）';
+    } else txt += ' · 右键复制: 未绑定（本块未执行，请立即反馈）';
     fp.textContent = txt;
+  }
+  function lastCopy_Ago(ts) {
+    var d = Date.now() - ts;
+    if (d < 60000) return '（上次触发: ' + Math.max(1, Math.round(d / 1000)) + ' 秒前）';
+    if (d < 3600000) return '（上次触发: ' + Math.round(d / 60000) + ' 分钟前）';
+    return '（上次触发: ' + Math.round(d / 3600000) + ' 小时前）';
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fillBuildFp);
   else fillBuildFp();
