@@ -17338,7 +17338,84 @@ window.__debug = {
     return null;
   }
 
+  // ---------- 生图提示词增强层 ----------
+  // 用户的一句话（"南京3天行程配图"）信息不足以直接出图。这里在生成前做一次**提示词增强**：
+  //   · 忠实保留原描述的核心意图与全部关键要素（主体 / 数量 / 场景 / 需要渲染的文字），不遗漏、不篡改；
+  //   · 仅补全画面落地所需细节：主体形象与外观、动作姿态、场景环境、艺术风格、构图与视角、光线氛围、色调、画质；
+  //   · 补全只做合理延展，严禁引入用户未提及的元素。
+  // 通道：已配置对话模型 → 用它增强（质量最高）；免 Key → pollinations 免费文本接口（顺带翻成英文，flux 对英文理解最好）。
+  // 任何失败（超时 / 网络 / 结果不可用）都降级用原提示词，绝不阻断生成。
+  function enhanceImagePrompt(prompt) {
+    prompt = String(prompt || '').trim();
+    if (!prompt) return Promise.resolve(prompt);
+    var cfg = (window.BotCraftAI && BotCraftAI.getConfig) ? BotCraftAI.getConfig() : {};
+    var imgKey = (cfg.imageAPIKey || '').trim();
+    var imgBase = (cfg.imageBaseURL || '').trim();
+    var toEnglish = !(imgKey && imgBase);   // pollinations 的模型对英文理解最好；CogView 中文即可
+    var rules = toEnglish
+      ? 'Rewrite the following image description into ONE render-ready text-to-image prompt. Rules: '
+        + '(1) Faithfully keep the core intent and EVERY key element the user described (subjects, counts, scene, any text to render); do not omit or alter them. '
+        + '(2) Add only rendering details: subject appearance, pose, environment, art style, composition and camera angle, lighting, color palette, image quality. '
+        + '(3) Additions must stay consistent with the original; never invent new subjects, people or text. '
+        + '(4) Output ONLY the final prompt, no explanation, no quotes. Write it in English.'
+      : '把这条画面描述改写为一条可直接渲染的文生图提示词。规则：'
+        + '①忠实保留用户描述的核心意图与全部关键要素（主体、数量、场景、需要渲染的文字内容），不遗漏、不篡改；'
+        + '②仅补全画面落地所需的关键细节：主体形象与外观特征、动作姿态、场景环境、艺术风格、构图与视角、光线氛围、色调、画质表现；'
+        + '③补充细节须与原描述协调统一，严禁引入用户未提及的无关元素、人物或文字；'
+        + '④直接输出最终提示词本身，不要解释、不要引号。';
+    var timer;
+    var withTimeout = function (p, ms) {
+      return Promise.race([p, new Promise(function (_, rj) {
+        timer = setTimeout(function () { rj(new Error('提示词增强超时')); }, ms);
+      })]);
+    };
+    var fallback = function () { if (timer) clearTimeout(timer); return Promise.resolve(prompt); };
+    var useChat = !!(cfg.apiKey || '').trim() && !!(cfg.baseURL || '').trim();
+    try {
+      if (useChat) {
+        // 已配置对话模型：走同一套直连 / 代理配置做增强（不经过 request，失败时明确降级而非静默演示回复）
+        var url = (cfg.proxyURL && !cfg.directCall) ? cfg.proxyURL : cfg.baseURL.replace(/\/$/, '') + '/chat/completions';
+        var req = fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (cfg.apiKey || '') },
+          body: JSON.stringify({
+            model: cfg.model, stream: false, temperature: 0.3, max_tokens: 900,
+            messages: [{ role: 'system', content: rules }, { role: 'user', content: prompt }]
+          })
+        }).then(function (r) {
+          return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status));
+        }).then(function (d) {
+          var out = String((d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '').trim();
+          if (!out || out.length < 10 || out.length > 1500) throw new Error('增强结果不可用');
+          return out;
+        });
+        return withTimeout(req, 45000).then(function (out) { if (timer) clearTimeout(timer); return out; }, fallback);
+      }
+      // 免 Key：pollinations 免费文本接口（英文增强 + 翻译一步到位）
+      var ask = rules + '\n\n' + prompt;
+      var free = fetch('https://text.pollinations.ai/' + encodeURIComponent(ask)).then(function (r) {
+        return r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status));
+      }).then(function (t) {
+        var out = String(t || '').trim();
+        if (!out || out.length < 10 || out.length > 1500 || /^(error|invalid)/i.test(out.slice(0, 40))) {
+          throw new Error('增强结果不可用');
+        }
+        return out;
+      });
+      return withTimeout(free, 20000).then(function (out) { if (timer) clearTimeout(timer); return out; }, fallback);
+    } catch (e) {
+      return fallback();
+    }
+  }
+
+  // 对外入口：先增强、再生成。增强失败自动降级用原提示词。
   function generateImage(prompt) {
+    var raw = String(prompt || '').trim();
+    return enhanceImagePrompt(raw).catch(function () { return raw; })
+      .then(function (p) { return generateImageCore(p || raw); });
+  }
+
+  function generateImageCore(prompt) {
     return new Promise(function (resolve, reject) {
       try {
         prompt = String(prompt || '').trim();
