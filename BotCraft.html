@@ -18605,6 +18605,70 @@ window.__debug = {
       if (pend && pend.sel) return pend.sel;   // 按下瞬间记录的选区（防右键过程被清）
       try { return String(window.getSelection ? window.getSelection() : ''); } catch (eS) { return ''; }
     }
+    /* 自包含复制实现（2026-09-24）：不再调用主块的 copyText——主块 56 万字符且有中断史，
+       跨块依赖是「菜单能弹但复制无反应」的结构性风险。本函数与主块 copyText 同逻辑
+       （双路互备 + 读回验证 + 顶层防护），但完全在本块内闭环。 */
+    function copyMsgText(text, okMsg) {
+      var s = String(text == null ? '' : text);
+      var log = [];
+      function done(ok) {
+        try { localStorage.setItem('botcraft.copyResult', 'copyMsgText ' + (log.join(' ') || 'no-path') + (ok ? ' → OK' : ' → FAIL')); } catch (eL) { }
+        toast(ok ? okMsg : '复制失败，请手动选择文本', ok ? 'ok' : 'err');
+      }
+      try {
+        var okA = false;   // 路 A：屏外 textarea + execCommand（同步，点击手势内立即完成）
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = s;
+          ta.setAttribute('readonly', '');
+          ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+          document.body.appendChild(ta);
+          ta.focus(); ta.select(); ta.setSelectionRange(0, s.length);
+          okA = document.execCommand('copy');
+          ta.remove();
+          log.push('exec=' + (okA ? 1 : 0));
+        } catch (eA) { log.push('exec-err'); }
+        var api = window.pywebview && window.pywebview.api;
+        if (api && api.bc_set_clip) {
+          var settled = false;
+          var to = setTimeout(function () {
+            if (settled) return; settled = true;
+            log.push('host-timeout');
+            done(okA);
+          }, 3000);
+          try {
+            Promise.resolve(api.bc_set_clip(s)).then(function (r) {
+              if (settled) return; settled = true; clearTimeout(to);
+              if (!(r && r.ok)) { log.push('host-fail:' + String((r && r.err) || '?').slice(0, 50)); done(okA); return; }
+              if (s.length > 200000) { log.push('host=1 verify=skip'); done(true); return; }
+              Promise.resolve(api.bc_clip_text()).then(function (rd) {
+                if (settled) return; settled = true; clearTimeout(to);
+                var match = (rd && rd.text) === s;
+                log.push('host=1 verify=' + (match ? 'match' : 'mismatch:' + String((rd && rd.text) || '').length + '/' + s.length));
+                done(okA || match);
+              }, function () {
+                if (settled) return; settled = true; clearTimeout(to);
+                log.push('host=1 verify-err');
+                done(true);
+              });
+            }, function () {
+              if (settled) return; settled = true; clearTimeout(to);
+              log.push('host-reject');
+              done(okA);
+            });
+          } catch (eB) {
+            if (settled) return; settled = true; clearTimeout(to);
+            log.push('host-sync-err');
+            done(okA);
+          }
+          return;
+        }
+        done(okA);
+      } catch (eTop) {
+        try { localStorage.setItem('botcraft.copyResult', 'copyMsgText exception: ' + String(eTop && eTop.message || eTop).slice(0, 80)); } catch (eL2) { }
+        toast('复制失败，请手动选择文本', 'err');
+      }
+    }
     function openMsgMenu(x, y, msg) {
       closeMenu();
       mark('botcraft.copyLast', String(Date.now()));   // 自观测：菜单确实弹出过
@@ -18613,9 +18677,9 @@ window.__debug = {
       menu = document.createElement('div');
       menu.className = 'ctx-edit-menu';
       var items = [];
-      if (sel && sel.trim()) items.push(['复制选中', function () { copyText(sel, '已复制选中内容'); }]);
+      if (sel && sel.trim())       items.push(['复制选中', function () { copyMsgText(sel, '已复制选中内容'); }]);
       var full = (msg.innerText || msg.textContent || '').trim();
-      items.push([isBot ? '复制整条回复' : '复制这条消息', function () { if (full) copyText(full, '已复制整条消息'); }]);
+      items.push([isBot ? '复制整条回复' : '复制这条消息', function () { if (full) copyMsgText(full, '已复制整条消息'); }]);
       items.forEach(function (it) {
         var b = document.createElement('button');
         b.type = 'button'; b.textContent = it[0];
