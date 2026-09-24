@@ -366,7 +366,8 @@ body .topbar, body .sidebar, body .ws-side, body .mbox, body .toast, body .cmd-p
 body .pop-menu, body .ws-more-menu, body .bot-switch-menu, body .ch-more-menu, body .modal, body .modal-box,
 body .ctxp-box,
 body .stat-card, body .chart-box, body .brand-card,
-body .pub-card, body .batch-bar, body .main.scrolled > .page-head{
+body .pub-card, body .batch-bar, body .main.scrolled > .page-head,
+body .cw-tools, body .cw-mini{
   backdrop-filter: var(--glass-filter) !important;
   -webkit-backdrop-filter: var(--glass-filter) !important;
 }
@@ -15780,37 +15781,9 @@ function _copyBrowser(s, okTxt, errNote) {
     });
   } else _copyViaHost(s, okTxt);
 }
-function _copyBrowser(s, okTxt) {
-  // 1) execCommand：同步、不依赖 secure context / clipboard 权限 —— 浏览器里最可靠。
-  //    无页面选区（消息气泡「复制」按钮传全文）时用屏外 textarea 造选区。
-  try {
-    var ta = document.createElement('textarea');
-    ta.value = s;
-    ta.setAttribute('readonly', '');
-    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
-    document.body.appendChild(ta);
-    ta.focus(); ta.select(); ta.setSelectionRange(0, s.length);
-    var ok = document.execCommand('copy');
-    ta.remove();
-    if (ok) return toast(okTxt, 'ok');
-  } catch (eE) { }
-  // 2) Clipboard API：浏览器可用；但 WebView2 权限默认拒绝时 promise 可能**挂起**，
-  //    必须加超时竞速，否则永远轮不到兜底
-  var settled = false;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    var timer = setTimeout(function () {
-      if (settled) return; settled = true; _copyViaHost(s, okTxt);
-    }, 1200);
-    navigator.clipboard.writeText(s).then(function () {
-      if (settled) return; settled = true; clearTimeout(timer);
-      toast(okTxt, 'ok');
-    }, function () {
-      if (settled) return; settled = true; clearTimeout(timer);
-      _copyViaHost(s, okTxt);
-    });
-  } else _copyViaHost(s, okTxt);
-}
 // 3) 桌面壳后端 Win32 剪贴板（零权限门槛，与 bc_clip_text 读取对称）
+// （2026-09-24 打磨：此处曾残留一份旧版 _copyBrowser（无读回验证、无 errNote），
+//  函数声明后者静默覆盖前者——闭环自验从未生效。旧版已删，唯一实现在 copyText 之后。）
 function _copyViaHost(s, okTxt, errNote) {
   var api = window.pywebview && window.pywebview.api;
   try { localStorage.setItem('botcraft.copyResult', 'copyText fallback(' + (errNote || 'exec-fail') + ') ' + (api && api.bc_set_clip ? 'via bc_set_clip' : 'no-host')); } catch (eR) { }
@@ -18624,7 +18597,6 @@ window.__debug = {
         arr.push(new Date().toTimeString().slice(0, 8) + ' ' + txt);
         while (arr.length > 3) arr.shift();          // 保留最近 3 条，copyText 结果不被后续右键覆盖
         localStorage.setItem('botcraft.probeLog', JSON.stringify(arr));
-        localStorage.setItem('botcraft.probe', arr[arr.length - 1]);
       } catch (eP) { }
     }
     function probe(ev, el) {
