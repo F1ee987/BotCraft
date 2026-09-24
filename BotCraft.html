@@ -14879,9 +14879,11 @@ async function kbFetchUrl() {
   var btn = document.getElementById('kbUrlBtn');
   if (btn) { btn.disabled = true; btn.textContent = '抓取中…'; }
   try {
-    var res = await fetch(url, { method: 'GET' });
-    if (!res || !res.ok) throw new Error('HTTP ' + ((res && res.status) || '?'));
-    var html = await res.text();
+    // 桌面 exe 走 bc_http 后端代理（urllib 不受浏览器同源限制，任意公网域名可抓）；
+    // 浏览器直开没有 pywebview 桥，退回页面 fetch —— 跨域站点会被拦，此时仍提示粘贴正文。
+    var r = await extHttp(url, { method: 'GET' });
+    if (!r || !r.ok) throw new Error('HTTP ' + ((r && r.status) || '?'));
+    var html = r.text;
     var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
     var title = tm ? _decodeEntities(tm[1]).replace(/\s+/g, ' ').trim() : '';
     var text = _htmlToText(html);
@@ -16451,10 +16453,11 @@ async function refreshModelList() {
     if (key) headers['Authorization'] = 'Bearer ' + key;
     const ctrl = new AbortController();
     const timer = setTimeout(function () { ctrl.abort(); }, 15000);
-    const r = await fetch(url, { headers: headers, signal: ctrl.signal });
+    // 桌面 exe 走 bc_http 后端代理（自带 20s 超时），绕过 CORS；浏览器直开退回页面 fetch。
+    const r = await extHttp(url, { headers: headers });
     clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
+    const j = JSON.parse(r.text);
     const list = (j.data || []).map(function (m) { return m.id; }).filter(Boolean);
     if (!list.length) throw new Error('接口返回空列表');
     const cur = (sel.value === '__custom') ? custom.value : sel.value;
@@ -17477,7 +17480,8 @@ window.__debug = {
       if (useChat) {
         // 已配置对话模型：走同一套直连 / 代理配置做增强（不经过 request，失败时明确降级而非静默演示回复）
         var url = (cfg.proxyURL && !cfg.directCall) ? cfg.proxyURL : cfg.baseURL.replace(/\/$/, '') + '/chat/completions';
-        var req = fetch(url, {
+        // 桌面 exe 走 bc_http 后端代理，绕过 CORS；浏览器直开退回页面 fetch。
+        var req = extHttp(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (cfg.apiKey || '') },
           body: JSON.stringify({
@@ -17485,7 +17489,8 @@ window.__debug = {
             messages: [{ role: 'system', content: rules }, { role: 'user', content: prompt }]
           })
         }).then(function (r) {
-          return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status));
+          if (!r.ok) return Promise.reject(new Error('HTTP ' + r.status));
+          try { return JSON.parse(r.text); } catch (e) { return Promise.reject(new Error('增强结果解析失败')); }
         }).then(function (d) {
           var out = String((d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '').trim();
           if (!out || out.length < 10 || out.length > 1500) throw new Error('增强结果不可用');
@@ -17884,8 +17889,10 @@ window.__debug = {
       if (body) opts.body = body;
     }
     try {
-      var resp = await fetch(url, opts);
-      var text = await resp.text();
+      // 桌面 exe 走 bc_http 后端代理，公网接口不再被 CORS 拦（搜索/图片下载同一套逻辑）；
+      // 浏览器直开退回页面 fetch，跨域接口仍会失败并给出明确提示。
+      var resp = await extHttp(url, opts);
+      var text = resp.text;
       var short = text.length > 4000 ? text.slice(0, 4000) + '\n…（响应过长已截断）' : text;
       return {
         out: 'HTTP ' + resp.status + '\n' + short,
