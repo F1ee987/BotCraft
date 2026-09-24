@@ -1218,14 +1218,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .modal.on{display:flex;animation:modalMaskIn .26s ease both}
 .mbox{background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-2xl);padding:24px;width:520px;max-width:92vw;box-shadow:0 24px 60px rgba(0,0,0,.36);max-height:90vh;overflow-y:auto;transform:translateZ(0);position:relative;
   -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
-/* 设置弹窗：与其它浮层共用同一材质，避免「同层级却不同质感」 */
-#settingsModal .mbox{
-  width:560px;border-radius:var(--r-2xl);
-  background:var(--glass-bg-hover);
-  box-shadow:var(--lg-shadow);
-}
 .mbox .hint{font-size:12.5px;color:var(--sub);margin-bottom:18px}
-/* ============ Apple 风「展开」动效（账号 / 设置弹窗 + 机器人切换菜单共用） ============ */
+/* ============ Apple 风「展开」动效（账号弹窗 + 机器人切换菜单共用） ============
+   （2026-09-24 打磨：settingsModal 弹窗已删——设置并入「设置与数据」常驻页，
+   其专属 mbox 材质与展开动效规则一并移除） */
 @keyframes modalMaskIn{from{opacity:0}to{opacity:1}}
 @keyframes modalMaskOut{from{opacity:1}to{opacity:0}}
 @keyframes acctSheetIn{from{opacity:0;transform:scale(.9) translateY(14px)}to{opacity:1;transform:scale(1) translateY(0)}}
@@ -1235,15 +1231,11 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 /* 账号面板 */
 .modal.on .acct-sheet{animation:acctSheetIn .44s var(--ease-out) both}
 .modal.closing .acct-sheet{animation:acctSheetOut .3s var(--ease) both}
-/* 设置弹窗（居中卡片，复用 sheet 展开） */
-.modal.on #settingsModal .mbox{animation:acctSheetIn .44s var(--ease-out) both}
-.modal.closing #settingsModal .mbox{animation:acctSheetOut .3s var(--ease) both}
 /* 机器人切换菜单（从按钮下方展开的 dropdown） */
 .bot-switch-menu.bs-open{animation:dropdownIn .26s var(--ease-out) both;transform-origin:top right}
 .bot-switch-menu.bs-closing{animation:dropdownOut .2s var(--ease) both;transform-origin:top right}
 @media (prefers-reduced-motion: reduce){
   .modal.on,.modal.closing,.modal.on .acct-sheet,.modal.closing .acct-sheet,
-  .modal.on #settingsModal .mbox,.modal.closing #settingsModal .mbox,
   .bot-switch-menu.bs-open,.bot-switch-menu.bs-closing{animation:none}
 }
 /* ============ 图标体系与交互态补齐（2026-09-23 视觉打磨） ============
@@ -15238,8 +15230,14 @@ function startReminderChecker(){
     const now=Date.now(); const list=loadReminders(); let changed=false;
     list.forEach(r=>{ if(!r.notified && !r.done && r.time && r.time<=now){ r.notified=true; changed=true; notifyReminder(r.title); } });
     if(changed) saveReminders(list);
+    scheduleTick();   // 自适应间隔：有未完成提醒 20s 精查；空闲 120s 慢轮询（省电省 CPU）
   };
-  _reminderTimer=setInterval(tick,20000); tick();
+  function scheduleTick(){
+    if(_reminderTimer){ clearInterval(_reminderTimer); _reminderTimer=null; }
+    const hasPending=loadReminders().some(r=>!r.done && !r.notified && r.time);
+    _reminderTimer=setInterval(tick, hasPending?20000:120000);
+  }
+  tick();   // tick 末尾自会按提醒存在与否调度下一次间隔
 }
 function codeRunnerExtraHTML(){
   // 语言可选：JS 走浏览器 iframe 沙箱（两端都能用）；Python 走桌面端后端
@@ -16698,12 +16696,26 @@ async function emergencyReset() {
 // 构建期由 build_exe.py 把打包时的 commit sha 写进 __BC_BUILD_COMMIT__ 占位符；
 // 点按钮时与 GitHub main 最新 commit 比对，结果显示在按钮旁的状态栏。
 // 浏览器直开时占位符不会被替换（非 hex 即视为开发态），检查直接跳过。
-/* ===== MODULE: core/update exports:setUpdateStatus,checkForUpdate,showAnaTab,manualCheckUpdate ===== */
+/* ===== MODULE: core/update exports:setUpdateStatus,setUpdateStatusHTML,openReleasePage,checkForUpdate,showAnaTab,manualCheckUpdate ===== */
 var BC_BUILD_COMMIT = '__BC_BUILD_COMMIT__';
 function setUpdateStatus(txt) {
   var el = document.getElementById('updateCheckStatus');
   if (el) el.textContent = txt;
 }
+function setUpdateStatusHTML(html) {
+  var el = document.getElementById('updateCheckStatus');
+  if (el) el.innerHTML = html;   // 内容均为本文件拼接的固定文案 + hex 指纹，无外部输入
+}
+function openReleasePage() {
+  // releases/latest 恒指向最新发布版；桌面壳内 window.open 不可靠，走后端系统浏览器
+  var api = window.pywebview && window.pywebview.api;
+  if (api && api.bc_open_url) {
+    Promise.resolve(api.bc_open_url('https://github.com/F1ee987/BotCraft/releases/latest'))
+      .then(function (r) { if (!(r && r.ok)) toast('打开浏览器失败，请手动访问 GitHub Releases', 'err'); },
+            function () { toast('打开浏览器失败，请手动访问 GitHub Releases', 'err'); });
+  }
+}
+window.openReleasePage = openReleasePage;
 function checkForUpdate() {
   try {
     if (!(window.pywebview && window.pywebview.api)) {           // 仅桌面版
@@ -16725,8 +16737,8 @@ function checkForUpdate() {
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
         if (!j || !j.status) { setUpdateStatus('检查失败（网络不通或接口限流），稍后再试'); return; }
-        if (j.status === 'ahead') setUpdateStatus('发现新版本：请到 GitHub（F1ee987/BotCraft）下载最新 exe');
-        else if (j.status === 'diverged') setUpdateStatus('本地版本与仓库分叉，建议重新下载最新 exe');
+        if (j.status === 'ahead') setUpdateStatusHTML('发现新版本<button type="button" class="btn btn-ghost btn-sm" onclick="openReleasePage()" style="margin-left:8px;white-space:nowrap">打开下载页</button>');
+        else if (j.status === 'diverged') setUpdateStatusHTML('本地版本与仓库分叉，建议重新下载<button type="button" class="btn btn-ghost btn-sm" onclick="openReleasePage()" style="margin-left:8px;white-space:nowrap">打开下载页</button>');
         else setUpdateStatus('已是最新版本');
       })
       .catch(function () { setUpdateStatus('检查失败（网络不通），稍后再试'); });
