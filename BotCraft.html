@@ -18669,6 +18669,15 @@ window.__debug = {
         toast('复制失败，请手动选择文本', 'err');
       }
     }
+    function menuMsgText(msg) {
+      // 复制整条：只取正文，剔除操作按钮（.msg-act / .msg-copy）与说话人/参考来源条。
+      // 优先复用主块已校验的 msgPlainText（走数据源，最干净）；主块若未执行则自包含克隆兜底。
+      try { if (typeof msgPlainText === 'function') { var r = msgPlainText(msg); if (r) return r; } } catch (e) { }
+      var src = (msg.querySelector && msg.querySelector('.msg-body')) || msg;
+      var c = src.cloneNode(true);
+      c.querySelectorAll('.msg-act, .msg-copy, .who, .kb-cite').forEach(function (el) { el.remove(); });
+      return (c.textContent || src.textContent || '').trim();
+    }
     function openMsgMenu(x, y, msg) {
       closeMenu();
       mark('botcraft.copyLast', String(Date.now()));   // 自观测：菜单确实弹出过
@@ -18678,7 +18687,7 @@ window.__debug = {
       menu.className = 'ctx-edit-menu';
       var items = [];
       if (sel && sel.trim())       items.push(['复制选中', function () { copyMsgText(sel, '已复制选中内容'); }]);
-      var full = (msg.innerText || msg.textContent || '').trim();
+      var full = menuMsgText(msg);
       items.push([isBot ? '复制整条回复' : '复制这条消息', function () { if (full) copyMsgText(full, '已复制整条消息'); }]);
       items.forEach(function (it) {
         var b = document.createElement('button');
