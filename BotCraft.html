@@ -2589,6 +2589,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <button type="button" class="btn btn-ghost" onclick="manualCheckUpdate()" style="white-space:nowrap;flex:none">检查更新</button>
       <span id="updateCheckStatus" style="font-size:12px;color:var(--sub)"></span>
     </div>
+    <div id="buildFp" style="font-size:11.5px;color:var(--sub);margin:0 0 10px;line-height:1.5"></div>
     <div class="set-preview">即将使用：<b id="settingsPreview"></b></div>
     <div class="mbox-foot">
       <button class="btn btn-ghost" onclick="testConnection()">🔌 测试连接</button>
@@ -11614,60 +11615,10 @@ function renderHistory(b) {
 // 选中机器人回复的文字后，右键直接复制（2026-09-24 用户需求）。
 // 只在有选区且选区落在消息气泡内时接管右键；其余情况保留默认菜单。
 // 一次性绑定在 #chat 容器上：renderHistory 重建内部 DOM 不会丢失监听。
-(function bindChatContextCopy() {
-  var chat = document.getElementById('chat');
-  if (!chat) return;
-  // 第四轮实测「完全没动静」：contextmenu 事件在 WebView2 里可能根本不派发（底层吞掉）。
-  // 第五轮改为**不依赖 contextmenu**：主通道用 pointerup（最底层鼠标事件，应用里所有
-  // 按钮都靠它工作，不可能被吞）；contextmenu 仅作兜底 + 阻默认菜单。
-  var pend = null, lastCopy = 0;
-  chat.addEventListener('pointerdown', function (e) {
-    if (e.button !== 2) { pend = null; return; }
-    var msg = e.target && e.target.closest ? e.target.closest('.msg') : null;
-    if (!msg) { pend = null; return; }
-    var sel = '';
-    try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS) { }
-    pend = { msg: msg, sel: sel };   // 按下瞬间记录，防右键过程选区被清
-  }, true);
-  function doCopy() {
-    var now = Date.now();
-    if (now - lastCopy < 600) { pend = null; return true; }   // 去抖：pointerup+contextmenu 双触发只复制一次
-    var rec = pend; pend = null;
-    var msg = rec && rec.msg;
-    if (!msg) return false;
-    var sel = rec.sel || '';
-    if (!sel) { try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS2) { } }
-    if (sel && sel.trim()) {
-      // 首选：手势内同步复制选区（execCommand 不走 clipboard 权限，WebView2 里最可靠）
-      try {
-        if (document.execCommand('copy')) { lastCopy = now; toast('已复制到剪贴板', 'ok'); return true; }
-      } catch (eC) { }
-      lastCopy = now;
-      copyText(sel);                                                   // 兜底链：textarea exec → clipboard(超时) → 后端
-      return true;
-    }
-    // 没有选中文字也绝不静默：复制整条消息的纯文本，并明确告知
-    var full = (msg.innerText || msg.textContent || '').trim();
-    if (full) { lastCopy = now; copyText(full, '已复制整条回复（未选中文字时默认复制全文）'); return true; }
-    return false;
-  }
-  // 主通道：右键释放即复制
-  chat.addEventListener('pointerup', function (e) {
-    if (e.button !== 2) return;
-    if (doCopy() && e.cancelable) e.preventDefault();
-  });
-  // 兜底通道：contextmenu 若被派发（部分设备 pointerup 漏发），同样执行；并阻默认菜单
-  chat.addEventListener('contextmenu', function (e) {
-    var msg = (pend && pend.msg) || (e.target && e.target.closest ? e.target.closest('.msg') : null);
-    if (!msg) return;
-    e.preventDefault();
-    if (!pend) {
-      pend = { msg: msg, sel: '' };
-      try { pend.sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS3) { }
-    }
-    doCopy();
-  });
-})();
+// 【已迁移】右键复制绑定移至文件末尾的独立 <script> 块（bindChatContextCopy 独立块）：
+// 主 script 块长达 56 万字符，若中途任何顶层语句抛错，整块中断——埋在块内的 IIFE
+// （含历轮的右键绑定）从未执行，而提升的函数声明不受影响，应用其余功能照常。
+// 五轮「没动静」的真根因。独立块 + try/catch 结构性免疫此问题。
 
 var PROMPT_TEMPLATES = [
   { n: '专业客服', ic: '🎧', t: '你是「{{bot_name}}」，一名专业客服。用友好、简洁的语气回答，遇到订单/售后问题先安抚再给出步骤。' },
@@ -18553,6 +18504,96 @@ window.__debug = {
   // 启动钩子
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { injectLogPanel(); bindChatEntry(); window.syncFastToggle(); });
   else { injectLogPanel(); bindChatEntry(); window.syncFastToggle(); }
+})();
+</script>
+<script>
+/* ==================== 独立诊断 & 右键复制块 ====================
+   与 56 万字符的主 script 块隔离：主块若被任何顶层运行时错误中断，
+   这里的绑定照常执行（历轮右键复制「完全没动静」的真根因）。
+   同时捕获全局 JS 错误供「设置与数据」页显示，桌面版无控制台也能看到故障。 */
+(function () {
+  try {
+    /* 全局 JS 错误记录（最近 5 条，供设置页展示） */
+    window.addEventListener('error', function (ev) {
+      try {
+        var K = 'botcraft.jsErrors.v1', arr = [];
+        try { arr = JSON.parse(localStorage.getItem(K) || '[]'); } catch (e) { arr = []; }
+        arr.push({
+          m: String((ev && ev.message) || 'unknown').slice(0, 160),
+          src: String((ev && ev.filename) || '').split('/').pop() + ':' + ((ev && ev.lineno) || 0),
+          t: Date.now()
+        });
+        while (arr.length > 5) arr.shift();
+        localStorage.setItem(K, JSON.stringify(arr));
+      } catch (eS) { }
+    });
+  } catch (eErr) { }
+
+  /* 右键复制：document 级委托，只接管聊天消息气泡内的右键 */
+  try {
+    var lastCopy = 0, pend = null;
+    function msgOf(t) { return t && t.closest ? t.closest('.msg') : null; }
+    function inChat(msg) {
+      var chat = document.getElementById('chat');
+      return chat && msg && chat.contains(msg);
+    }
+    function doCopy() {
+      var now = Date.now();
+      if (now - lastCopy < 600) { pend = null; return true; }   // 去抖：pointerup+contextmenu 双触发
+      var rec = pend; pend = null;
+      var msg = rec && rec.msg;
+      if (!msg) return false;
+      var sel = rec.sel || '';
+      if (!sel) { try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS2) { } }
+      if (sel && sel.trim()) {
+        try {
+          if (document.execCommand('copy')) { lastCopy = now; toast('已复制到剪贴板', 'ok'); return true; }
+        } catch (eC) { }
+        lastCopy = now;
+        copyText(sel);                                          // 兜底链：textarea exec → clipboard(超时) → 后端
+        return true;
+      }
+      var full = (msg.innerText || msg.textContent || '').trim();
+      if (full) { lastCopy = now; copyText(full, '已复制整条回复（未选中文字时默认复制全文）'); return true; }
+      return false;
+    }
+    document.addEventListener('pointerdown', function (e) {
+      if (e.button !== 2) { pend = null; return; }
+      var msg = msgOf(e.target);
+      if (!inChat(msg)) { pend = null; return; }
+      var sel = '';
+      try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS) { }
+      pend = { msg: msg, sel: sel };                            // 按下瞬间记录，防右键过程选区被清
+    }, true);
+    document.addEventListener('pointerup', function (e) {       // 主通道：最底层鼠标事件，必达
+      if (e.button !== 2) return;
+      if (doCopy() && e.cancelable) e.preventDefault();
+    });
+    document.addEventListener('contextmenu', function (e) {     // 兜底 + 阻默认菜单（桌面壳本就禁了默认菜单）
+      var msg = (pend && pend.msg) || msgOf(e.target);
+      if (!inChat(msg)) return;
+      e.preventDefault();
+      if (!pend) {
+        pend = { msg: msg, sel: '' };
+        try { pend.sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS3) { }
+      }
+      doCopy();
+    });
+  } catch (eBind) { try { localStorage.setItem('botcraft.jsErrors.v1', JSON.stringify([{ m: 'bindCopy: ' + eBind.message, src: 'standalone', t: Date.now() }])); } catch (eS4) { } }
+
+  /* 版本指纹 + 脚本错误展示（设置与数据页，检查更新按钮下方） */
+  function fillBuildFp() {
+    var fp = document.getElementById('buildFp');
+    if (!fp) return;
+    var c = (typeof BC_BUILD_COMMIT === 'string') ? BC_BUILD_COMMIT : '';
+    var txt = /^[0-9a-f]{7,40}$/i.test(c) ? ('当前构建: ' + c.slice(0, 7)) : '开发构建';
+    var errs = [];
+    try { errs = JSON.parse(localStorage.getItem('botcraft.jsErrors.v1') || '[]'); } catch (e) { }
+    if (errs.length) txt += ' · ⚠ 检测到 ' + errs.length + ' 条脚本错误，最后一条: ' + errs[errs.length - 1].m;
+    fp.textContent = txt;
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fillBuildFp);
+  else fillBuildFp();
 })();
 </script>
 </body>
