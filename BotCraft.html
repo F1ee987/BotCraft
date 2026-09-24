@@ -11514,18 +11514,22 @@ function _mediaKey(src) {
   if (!s) return '';
   return s.length + ':' + s.slice(48, 96);
 }
-// 把模板里写在 data-src 上的媒体按需激活：小的直接显示，大的先给按钮
+// 把模板里写在 data-src 上的媒体按需激活：**图片一律直接显示**（1.5MB 生成图收成
+// 「▶ 查看图片」按钮 = 用户看到的就是「图没了」，且切页/重启后记忆清零又是按钮 —— 
+// 2026-09-24 用户两次实测的根因。IMG 浏览器异步解码，成本可接受）；只有音频/视频
+// （实测 268KB 音频能拖停渲染线程）超过阈值才收按钮。
 function hydrateLazyMedia(root) {
   if (!root) return;
   root.querySelectorAll('[data-src]').forEach(function (el) {
     var s = el.getAttribute('data-src') || '';
     if (!s) return;
+    if (el.tagName === 'IMG') { el.src = s; return; }   // 图片永远直显，不给按钮
     if (s.length < LAZY_MEDIA_MIN) { el.src = s; return; }
     var key = _mediaKey(s);
     if (_expandedMedia[key]) { el.src = s; return; }   // 用户点开过 → 自动恢复
     var btn = document.createElement('button');
     btn.type = 'button'; btn.className = 'msg-media-btn';
-    btn.textContent = '▶ ' + (el.tagName === 'IMG' ? '查看图片' : (el.tagName === 'AUDIO' ? '播放音频' : '播放视频'));
+    btn.textContent = '▶ ' + (el.tagName === 'AUDIO' ? '播放音频' : '播放视频');
     btn.onclick = function () { _expandedMedia[key] = 1; el.src = s; el.style.display = ''; btn.remove(); };
     el.style.display = 'none';
     el.parentNode.insertBefore(btn, el);
@@ -15728,9 +15732,30 @@ function renderChannels() {
 
 // ---------- 发布产物：通用小工具 ----------
 function copyText(text) {
+  var done = function (ok) { toast(ok ? '已复制到剪贴板' : '复制失败，请手动选择文本', ok ? 'ok' : 'err'); };
+  // 1) Clipboard API：浏览器可用；但桌面壳 NavigateToString 页面里可能不可用/被拦
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function () { toast('已复制到剪贴板', 'ok'); }, function () { toast('复制失败，请手动选择', 'err'); });
-  } else { toast('当前环境不支持复制，请手动选择文本', 'err'); }
+    navigator.clipboard.writeText(text).then(function () { done(true); }, function () { _copyFallback(text, done); });
+  } else _copyFallback(text, done);
+}
+// 兜底链：execCommand（同步、不依赖 secure context，WebView2 手势内最可靠）→ 后端 Win32 剪贴板
+function _copyFallback(text, done) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = String(text == null ? '' : text);
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
+    var ok = document.execCommand('copy');
+    ta.remove();
+    if (ok) return done(true);
+  } catch (eE) { }
+  var api = window.pywebview && window.pywebview.api;
+  if (api && api.bc_set_clip) {
+    Promise.resolve(api.bc_set_clip(String(text == null ? '' : text)))
+      .then(function (r) { done(!!(r && r.ok)); }, function () { done(false); });
+  } else done(false);
 }
 function downloadFile(name, content, type) {
   try {
