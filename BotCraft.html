@@ -11624,7 +11624,20 @@ function renderHistory(b) {
     var msg = e.target && e.target.closest ? e.target.closest('.msg') : null;
     if (!msg) return;                                                  // 不在消息气泡内 → 默认菜单
     e.preventDefault();
-    copyText(sel);                                                     // copyText 自带成功/失败 toast
+    // 首选：用户手势内同步复制当前选区（execCommand 不走 clipboard 权限，
+    // WebView2 对 clipboard-write 默认拒绝、promise 还可能挂起 —— 2026-09-24 两轮实测「没成功」的根因）
+    try {
+      if (document.execCommand('copy')) { toast('已复制到剪贴板', 'ok'); return; }
+    } catch (eC) { }
+    // 桌面版直连后端 Win32 剪贴板（pywebview 桥零权限门槛，确定可用）
+    var api = window.pywebview && window.pywebview.api;
+    if (api && api.bc_set_clip) {
+      Promise.resolve(api.bc_set_clip(sel)).then(function (r) {
+        toast((r && r.ok) ? '已复制到剪贴板' : '复制失败，请手动选择文本', (r && r.ok) ? 'ok' : 'err');
+      }, function () { toast('复制失败，请手动选择文本', 'err'); });
+      return;
+    }
+    copyText(sel);                                                     // 浏览器场景：clipboard API（自带 toast）
   });
 })();
 
@@ -15732,30 +15745,44 @@ function renderChannels() {
 
 // ---------- 发布产物：通用小工具 ----------
 function copyText(text) {
-  var done = function (ok) { toast(ok ? '已复制到剪贴板' : '复制失败，请手动选择文本', ok ? 'ok' : 'err'); };
-  // 1) Clipboard API：浏览器可用；但桌面壳 NavigateToString 页面里可能不可用/被拦
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function () { done(true); }, function () { _copyFallback(text, done); });
-  } else _copyFallback(text, done);
-}
-// 兜底链：execCommand（同步、不依赖 secure context，WebView2 手势内最可靠）→ 后端 Win32 剪贴板
-function _copyFallback(text, done) {
+  var s = String(text == null ? '' : text);
+  // 1) execCommand：同步、不依赖 secure context / clipboard 权限 —— WebView2 里最可靠。
+  //    无页面选区（消息气泡「复制」按钮传全文）时用屏外 textarea 造选区。
   try {
     var ta = document.createElement('textarea');
-    ta.value = String(text == null ? '' : text);
+    ta.value = s;
     ta.setAttribute('readonly', '');
     ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
     document.body.appendChild(ta);
-    ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
+    ta.focus(); ta.select(); ta.setSelectionRange(0, s.length);
     var ok = document.execCommand('copy');
     ta.remove();
-    if (ok) return done(true);
+    if (ok) return toast('已复制到剪贴板', 'ok');
   } catch (eE) { }
+  // 2) Clipboard API：浏览器可用；但 WebView2 权限默认拒绝时 promise 可能**挂起**，
+  //    必须加超时竞速，否则永远轮不到兜底（上一版「没成功」的第二个漏洞）
+  var settled = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    var timer = setTimeout(function () {
+      if (settled) return; settled = true; _copyViaHost(s);
+    }, 1200);
+    navigator.clipboard.writeText(s).then(function () {
+      if (settled) return; settled = true; clearTimeout(timer);
+      toast('已复制到剪贴板', 'ok');
+    }, function () {
+      if (settled) return; settled = true; clearTimeout(timer);
+      _copyViaHost(s);
+    });
+  } else _copyViaHost(s);
+}
+// 3) 桌面壳后端 Win32 剪贴板（零权限门槛，与 bc_clip_text 读取对称）
+function _copyViaHost(s) {
   var api = window.pywebview && window.pywebview.api;
   if (api && api.bc_set_clip) {
-    Promise.resolve(api.bc_set_clip(String(text == null ? '' : text)))
-      .then(function (r) { done(!!(r && r.ok)); }, function () { done(false); });
-  } else done(false);
+    Promise.resolve(api.bc_set_clip(s)).then(function (r) {
+      toast((r && r.ok) ? '已复制到剪贴板' : '复制失败，请手动选择文本', (r && r.ok) ? 'ok' : 'err');
+    }, function () { toast('复制失败，请手动选择文本', 'err'); });
+  } else toast('复制失败，请手动选择文本', 'err');
 }
 function downloadFile(name, content, type) {
   try {
