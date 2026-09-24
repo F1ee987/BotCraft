@@ -18699,7 +18699,15 @@ window.__debug = {
       return true;
     }
     document.addEventListener('pointerdown', function (e) {
-      if (e.button !== 2) { pend = null; if (menu) closeMenu(); return; }
+      if (e.button !== 2) {
+        pend = null;
+        /* 关键修复（2026-09-24）：左键点在菜单【内部】时绝不能关菜单——否则菜单在 click
+           事件前被从 DOM 移除，按钮 onclick 永远不触发（前面四轮「菜单能弹、复制无反应」
+           的真正根因，与 copyText 实现无关）。仅点菜单【外面】才关。菜单项点击走自身
+           onclick（先 closeMenu 再执行复制）。 */
+        if (menu && menu.contains && !menu.contains(e.target)) closeMenu();
+        return;
+      }
       var msg = msgOf(e.target);
       var sel = '';
       try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS) { }
