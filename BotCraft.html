@@ -15725,17 +15725,60 @@ function copyText(text, okMsg) {
   var s = String(text == null ? '' : text);
   var okTxt = okMsg || '已复制到剪贴板';
   var api = window.pywebview && window.pywebview.api;
-  // 桌面版首选后端 Win32 剪贴板：WebView2 对 file:// 页面的剪贴板权限默认拒绝，
-  // clipboard API 会挂起/被拒、execCommand 也可能静默失败（返回 true 但内容没写进去）——
-  // 后端零权限门槛，与一直在正常工作的剪贴板读取（bc_clip_text）同一机制，实测可靠。
+  // 桌面版：后端 Win32 写入（零权限门槛）→ 读回比对闭环自验（杜绝「假成功」）；
+  // 写入失败或读回不一致 → 前端兜底链再写一次并如实报告。
   if (api && api.bc_set_clip) {
     Promise.resolve(api.bc_set_clip(s)).then(function (r) {
-      try { localStorage.setItem('botcraft.probe', 'copyText bc_set_clip ok=' + !!(r && r.ok)); } catch (eP) { }
-      toast((r && r.ok) ? okTxt : '复制失败，请手动选择文本', (r && r.ok) ? 'ok' : 'err');
-    }, function () { _copyBrowser(s, okTxt); });
+      if (!(r && r.ok)) { _copyBrowser(s, okTxt, (r && r.err) || 'host'); return; }
+      var skipVerify = s.length > 200000;   // 超长（含图全文）跳过读回比对，省一次大传输
+      if (skipVerify) {
+        try { localStorage.setItem('botcraft.probe', 'copyText host ok=1 verify=skip(len=' + s.length + ')'); } catch (eP) { }
+        toast(okTxt, 'ok'); return;
+      }
+      Promise.resolve(api.bc_clip_text()).then(function (rd) {
+        var back = (rd && rd.text) || '';
+        var match = back === s;
+        try { localStorage.setItem('botcraft.probe', 'copyText host ok=1 verify=' + (match ? 'match' : 'mismatch len=' + back.length + '/' + s.length)); } catch (eP2) { }
+        if (match) { toast(okTxt, 'ok'); return; }
+        _copyBrowser(s, okTxt, 'verify-mismatch');   // 读回不一致 → 前端兜底再写
+      }, function () {
+        try { localStorage.setItem('botcraft.probe', 'copyText host ok=1 verify=skipped'); } catch (eP3) { }
+        toast(okTxt, 'ok');   // 读回不可用则信任写入结果
+      });
+    }, function (eH) { _copyBrowser(s, okTxt, 'bridge'); });
     return;
   }
-  _copyBrowser(s, okTxt);   // 浏览器场景：前端兜底链
+  _copyBrowser(s, okTxt);
+}
+function _copyBrowser(s, okTxt, errNote) {
+  // 1) execCommand：同步、不依赖 secure context / clipboard 权限 —— 浏览器里最可靠。
+  //    无页面选区（消息气泡「复制」按钮传全文）时用屏外 textarea 造选区。
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = s;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select(); ta.setSelectionRange(0, s.length);
+    var ok = document.execCommand('copy');
+    ta.remove();
+    if (ok) return toast(okTxt, 'ok');
+  } catch (eE) { }
+  // 2) Clipboard API：浏览器可用；但 WebView2 权限默认拒绝时 promise 可能**挂起**，
+  //    必须加超时竞速，否则永远轮不到兜底
+  var settled = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    var timer = setTimeout(function () {
+      if (settled) return; settled = true; _copyViaHost(s, okTxt);
+    }, 1200);
+    navigator.clipboard.writeText(s).then(function () {
+      if (settled) return; settled = true; clearTimeout(timer);
+      toast(okTxt, 'ok');
+    }, function () {
+      if (settled) return; settled = true; clearTimeout(timer);
+      _copyViaHost(s, okTxt);
+    });
+  } else _copyViaHost(s, okTxt);
 }
 function _copyBrowser(s, okTxt) {
   // 1) execCommand：同步、不依赖 secure context / clipboard 权限 —— 浏览器里最可靠。
@@ -15768,13 +15811,13 @@ function _copyBrowser(s, okTxt) {
   } else _copyViaHost(s, okTxt);
 }
 // 3) 桌面壳后端 Win32 剪贴板（零权限门槛，与 bc_clip_text 读取对称）
-function _copyViaHost(s, okTxt) {
+function _copyViaHost(s, okTxt, errNote) {
   var api = window.pywebview && window.pywebview.api;
   if (api && api.bc_set_clip) {
     Promise.resolve(api.bc_set_clip(s)).then(function (r) {
-      toast((r && r.ok) ? okTxt : '复制失败，请手动选择文本', (r && r.ok) ? 'ok' : 'err');
-    }, function () { toast('复制失败，请手动选择文本', 'err'); });
-  } else toast('复制失败，请手动选择文本', 'err');
+      toast((r && r.ok) ? okTxt : ('复制失败' + (errNote ? '（' + errNote + '）' : '') + '，请手动选择文本'), (r && r.ok) ? 'ok' : 'err');
+    }, function () { toast('复制失败' + (errNote ? '（' + errNote + '）' : '') + '，请手动选择文本', 'err'); });
+  } else toast('复制失败' + (errNote ? '（' + errNote + '）' : '') + '，请手动选择文本', 'err');
 }
 function downloadFile(name, content, type) {
   try {
