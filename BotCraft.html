@@ -18529,23 +18529,34 @@ window.__debug = {
     });
   } catch (eErr) { }
 
-  /* 右键复制：document 级委托，只接管聊天消息气泡内的右键 */
+  /* 右键复制：document 级委托，只接管聊天消息气泡内的右键。
+     观测（073c690 指纹行「已绑定但从未触发」）表明右键事件序列未按预期命中：
+     可能是触摸板双指点击不发 pointer(button=2)、或 target 被覆盖层改变。
+     本版：① 去掉 chat.contains 过滤（closest('.msg') 已足够语义，消除假阴性）；
+     ② 增加第四通道 auxclick（Chromium 右键释放的专用事件）；
+     ③ 探针记录每次 button=2 事件的 target 链——指纹行直接显示事件实况。 */
   try {
     var lastCopy = 0, pend = null;
     function msgOf(t) { return t && t.closest ? t.closest('.msg') : null; }
-    function inChat(msg) {
-      var chat = document.getElementById('chat');
-      return chat && msg && chat.contains(msg);
-    }
     function mark(k, v) { try { localStorage.setItem(k, v); } catch (eM) { } }
+    function chainOf(el) {
+      var out = [], n = 0;
+      while (el && el !== document.body && n < 4) {
+        var c = (typeof el.className === 'string' && el.className) ? '.' + el.className.trim().split(/\s+/)[0] : '';
+        out.unshift(el.tagName.toLowerCase() + c);
+        el = el.parentElement; n++;
+      }
+      return out.join('>') || '(unknown)';
+    }
     mark('botcraft.copyBound', '1');           // 自观测：绑定成功（设置页指纹行显示）
-    function doCopy() {
+    function doCopy(via) {
       var now = Date.now();
-      if (now - lastCopy < 600) { pend = null; return true; }   // 去抖：pointerup+contextmenu 双触发
+      if (now - lastCopy < 600) { pend = null; return true; }   // 去抖：多通道双触发
       var rec = pend; pend = null;
       var msg = rec && rec.msg;
       if (!msg) return false;
       mark('botcraft.copyLast', String(now));  // 自观测：复制逻辑确实被触发过
+      mark('botcraft.copyVia', String(via || ''));
       var sel = rec.sel || '';
       if (!sel) { try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS2) { } }
       if (sel && sel.trim()) {
@@ -18560,27 +18571,38 @@ window.__debug = {
       if (full) { lastCopy = now; copyText(full, '已复制整条回复（未选中文字时默认复制全文）'); return true; }
       return false;
     }
+    function probe(ev, el, btn) {
+      try { mark('botcraft.probe', ev + ' btn=' + btn + ' @ ' + chainOf(el) + ' sel=' + (String(window.getSelection ? window.getSelection() : '').length)); } catch (eP) { }
+    }
     document.addEventListener('pointerdown', function (e) {
       if (e.button !== 2) { pend = null; return; }
+      probe('pointerdown', e.target, e.button);
       var msg = msgOf(e.target);
-      if (!inChat(msg)) { pend = null; return; }
+      if (!msg) { pend = null; return; }
       var sel = '';
       try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS) { }
       pend = { msg: msg, sel: sel };                            // 按下瞬间记录，防右键过程选区被清
     }, true);
     document.addEventListener('pointerup', function (e) {       // 主通道：最底层鼠标事件，必达
       if (e.button !== 2) return;
-      if (doCopy() && e.cancelable) e.preventDefault();
+      probe('pointerup', e.target, e.button);
+      if (doCopy('pointerup') && e.cancelable) e.preventDefault();
+    });
+    document.addEventListener('auxclick', function (e) {        // 第四通道：右键释放的专用事件
+      if (e.button !== 2) return;
+      probe('auxclick', e.target, e.button);
+      if (doCopy('auxclick') && e.cancelable) e.preventDefault();
     });
     document.addEventListener('contextmenu', function (e) {     // 兜底 + 阻默认菜单（桌面壳本就禁了默认菜单）
+      probe('contextmenu', e.target, 2);
       var msg = (pend && pend.msg) || msgOf(e.target);
-      if (!inChat(msg)) return;
+      if (!msg) return;
       e.preventDefault();
       if (!pend) {
         pend = { msg: msg, sel: '' };
         try { pend.sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS3) { }
       }
-      doCopy();
+      doCopy('contextmenu');
     });
   } catch (eBind) { try { localStorage.setItem('botcraft.jsErrors.v1', JSON.stringify([{ m: 'bindCopy: ' + eBind.message, src: 'standalone', t: Date.now() }])); } catch (eS4) { } }
 
@@ -18601,6 +18623,9 @@ window.__debug = {
     if (bound) {
       txt += ' · 右键复制: 已绑定';
       txt += last ? (lastCopy_Ago(last)) : '（从未触发过——若右键后仍无 toast 请告知）';
+      var probe = '';
+      try { probe = localStorage.getItem('botcraft.probe') || ''; } catch (eP) { }
+      if (probe) txt += ' · 探针: ' + probe;
     } else txt += ' · 右键复制: 未绑定（本块未执行，请立即反馈）';
     fp.textContent = txt;
   }
