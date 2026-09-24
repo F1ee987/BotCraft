@@ -15726,7 +15726,21 @@ function renderChannels() {
 function copyText(text, okMsg) {
   var s = String(text == null ? '' : text);
   var okTxt = okMsg || '已复制到剪贴板';
-  // 1) execCommand：同步、不依赖 secure context / clipboard 权限 —— WebView2 里最可靠。
+  var api = window.pywebview && window.pywebview.api;
+  // 桌面版首选后端 Win32 剪贴板：WebView2 对 file:// 页面的剪贴板权限默认拒绝，
+  // clipboard API 会挂起/被拒、execCommand 也可能静默失败（返回 true 但内容没写进去）——
+  // 后端零权限门槛，与一直在正常工作的剪贴板读取（bc_clip_text）同一机制，实测可靠。
+  if (api && api.bc_set_clip) {
+    Promise.resolve(api.bc_set_clip(s)).then(function (r) {
+      try { localStorage.setItem('botcraft.probe', 'copyText bc_set_clip ok=' + !!(r && r.ok)); } catch (eP) { }
+      toast((r && r.ok) ? okTxt : '复制失败，请手动选择文本', (r && r.ok) ? 'ok' : 'err');
+    }, function () { _copyBrowser(s, okTxt); });
+    return;
+  }
+  _copyBrowser(s, okTxt);   // 浏览器场景：前端兜底链
+}
+function _copyBrowser(s, okTxt) {
+  // 1) execCommand：同步、不依赖 secure context / clipboard 权限 —— 浏览器里最可靠。
   //    无页面选区（消息气泡「复制」按钮传全文）时用屏外 textarea 造选区。
   try {
     var ta = document.createElement('textarea');
@@ -15740,7 +15754,7 @@ function copyText(text, okMsg) {
     if (ok) return toast(okTxt, 'ok');
   } catch (eE) { }
   // 2) Clipboard API：浏览器可用；但 WebView2 权限默认拒绝时 promise 可能**挂起**，
-  //    必须加超时竞速，否则永远轮不到兜底（上一版「没成功」的第二个漏洞）
+  //    必须加超时竞速，否则永远轮不到兜底
   var settled = false;
   if (navigator.clipboard && navigator.clipboard.writeText) {
     var timer = setTimeout(function () {
