@@ -476,13 +476,21 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
    桌面壳（WebView2）里默认右键菜单不出现，输入框此前只能靠 Ctrl+V。
    菜单本体用实底 --popover（不用玻璃）：它是纯操作浮层，压在输入框上，
    半透明会把底下文字透出来。z-index 400：浮在浮层之上，仅低于 toast。 */
-.ctx-edit-menu{position:fixed;z-index:400;min-width:132px;border-radius:var(--r-lg);padding:5px;display:flex;flex-direction:column;gap:var(--sp-1);
+.ctx-edit-menu{position:fixed;z-index:400;min-width:132px;border-radius:var(--r-lg);padding:5px;display:flex;flex-direction:column;gap:var(--sp-2);
   background:var(--popover);border:1px solid var(--glass-border);box-shadow:var(--lg-shadow);
   animation:bcMenuIn .14s var(--ease-out) backwards}
-.ctx-edit-menu button{padding:7px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;font-family:inherit;cursor:pointer;transition:background var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
+.ctx-edit-menu button{position:relative;padding:7px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;font-family:inherit;cursor:pointer;transition:background var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .ctx-edit-menu button:hover{background:var(--fill)}
 .ctx-edit-menu button:active{transform:scale(.98);background:var(--fill-strong);box-shadow:inset 0 2px 5px rgba(0,0,0,.22)}
 .ctx-edit-menu button[disabled]{opacity:.4;cursor:default;pointer-events:none}
+/* 菜单项分隔（2026-09-24）：原 gap 仅 2px、项底透明，浅色下 --popover 纯白 + --fill 也是白，
+   两项糊成一段（用户截图「分割不够明显」）。现拉开间隙 + 内缩 11px 的分隔线，
+   浅色专设更深的线与淡底，让「一项」在浅色下也一眼可辨。 */
+.ctx-edit-menu button + button::before{content:'';position:absolute;left:11px;right:11px;top:-2px;height:1px;background:var(--glass-border);pointer-events:none}
+[data-theme="light"] .ctx-edit-menu{border-color:rgba(31,41,71,.14)}
+[data-theme="light"] .ctx-edit-menu button{background:rgba(31,41,71,.045)}
+[data-theme="light"] .ctx-edit-menu button + button::before{background:rgba(31,41,71,.18)}
+[data-theme="light"] .ctx-edit-menu button:hover{background:rgba(31,41,71,.09)}
 @keyframes bcMenuIn{from{opacity:0;transform:scale(.96) translateY(-3px)}to{opacity:1;transform:none}}
 /* 账号菜单挂在 body 上（原因见 renderUserMenu 的注释），层级要「在顶栏之上、
    各种遮罩之下」：60 高于 .topbar(50)，低于 .auth-mask/.ctxp(90)、.modal(100)、
