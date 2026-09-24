@@ -3159,6 +3159,15 @@ window.__storage = __storage;
     });
   }
 
+  // 模型偶尔会把上下文里的占位符**原样学舌**进回复（「〔历史消息中有一张图片，已省略〕」），
+  // 用户看到的就是这句莫名其妙的话（2026-09-24 实测每次生图后都出现）。写入历史前剥掉。
+  function stripCtxPlaceholders(text) {
+    var s = String(text == null ? '' : text);
+    s = s.replace(/!\[[^\]]*\]\(\s*〔[^〕]*〕\s*\)/g, '');                       // 假图语法 ![配图](〔图片已省略〕)
+    s = s.replace(/〔[^〕]*(?:已省略|此前发送)[^〕]*〕\s*/g, '');                // 占位文本本体
+    return s.replace(/\n{3,}/g, '\n\n').trim();
+  }
+
   // 视觉模型判定（启发式）。发图管线会把最新一条用户消息的图片以 image_url 发出，
   // 但纯文本模型收到图只会忽略或报 400 —— 用户会以为机器人「看见了」。
   // 命名规律覆盖：glm-4.6v-flash（智谱免费）/ gpt-4o 系列 / qwen*-vl / claude /
@@ -12616,7 +12625,7 @@ async function runReply(b, opt) {
         }
         _scrollChat();
       });
-      _histRef.push({ role: 'bot', text: result.final, who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
+      _histRef.push({ role: 'bot', text: stripCtxPlaceholders(result.final), who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
       // 整段重绘：一次性替换 innerHTML，同时清掉 prog/cur/typing。
       // 不要先手动 remove 气泡（会造成「高度骤减→再恢复」的可见抽动）。
       if (_onScreen()) {
@@ -12633,7 +12642,7 @@ async function runReply(b, opt) {
           if (imgUrl) {
             if (_onScreen()) document.querySelectorAll('.img-tip').forEach(el => el.remove());
             if (!hasImageMarkdown(result.final)) {
-              _histRef.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
+              _histRef.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() }); saveBots();
               if (_onScreen()) { renderHistory(b); attachCopyBtns(); renderQuickBar(); _scrollChat(true); }
             }
           } else if (_onScreen()) { appendImageError('未返回图片地址', activeBot.n); }
@@ -12649,7 +12658,7 @@ async function runReply(b, opt) {
             const _u = await window.generateImage(_lp);
             if (_u) {
               if (_onScreen()) document.querySelectorAll('.img-tip').forEach(el => el.remove());
-              _histRef.push({ role: 'bot', text: '![配图](' + _u + ')', who: activeBot.n, t: Date.now() });
+              _histRef.push({ role: 'bot', text: '![配图](' + _u + ')', who: activeBot.n, t: Date.now() }); saveBots();
               if (_onScreen()) { renderHistory(b); attachCopyBtns(); renderQuickBar(); _scrollChat(true); }
             }
           } catch (e) { console.warn('[图片生成] 补生成失败：', e); }
@@ -12759,7 +12768,7 @@ async function runReply(b, opt) {
         if (imgUrl) {
           if (_onScreen()) document.querySelectorAll('.img-tip').forEach(el => el.remove());
           if (!hasImageMarkdown(full)) {
-            _histRef.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() });
+            _histRef.push({ role: 'bot', text: '![配图](' + imgUrl + ')', who: activeBot.n, t: Date.now() }); saveBots();
             if (_onScreen()) { renderHistory(b); attachCopyBtns(); renderQuickBar(); _scrollChat(true); }
           }
         } else if (_onScreen()) { appendImageError('未返回图片地址', activeBot.n); }
@@ -12773,7 +12782,7 @@ async function runReply(b, opt) {
           const _u2 = await window.generateImage(_lp2);
           if (_u2) {
             if (_onScreen()) document.querySelectorAll('.img-tip').forEach(el => el.remove());
-            _histRef.push({ role: 'bot', text: '![配图](' + _u2 + ')', who: activeBot.n, t: Date.now() });
+            _histRef.push({ role: 'bot', text: '![配图](' + _u2 + ')', who: activeBot.n, t: Date.now() }); saveBots();
             if (_onScreen()) { renderHistory(b); attachCopyBtns(); renderQuickBar(); _scrollChat(true); }
           }
         } catch (e) { console.warn('[图片生成] 补生成失败：', e); }
