@@ -11495,6 +11495,16 @@ function _lazyMedia(box, el, src, label) {
 function _foldHtml(i, len) {
   return '<div class="msg-fold">… 已折叠，<button type="button" class="msg-fold-btn" data-mi="' + i + '">展开全文（共 ' + len + ' 字）</button></div>';
 }
+// 用户点开过的大媒体（切页 / 重渲染后自动恢复显示）。
+// 背景：超大 base64 媒体（一条 268,884 字符的音频就能让渲染线程停摆）默认收成「▶ 查看」按钮，
+// 但用户点开看过之后，切页重渲染又回到按钮态 —— 图就像凭空消失了（2026-09-24 用户实测）。
+// 这里用会话级 Map 记住「已展开」，重渲染时自动加载，不再二次打扰。
+var _expandedMedia = {};
+function _mediaKey(src) {
+  var s = String(src || '');
+  if (!s) return '';
+  return s.length + ':' + s.slice(48, 96);
+}
 // 把模板里写在 data-src 上的媒体按需激活：小的直接显示，大的先给按钮
 function hydrateLazyMedia(root) {
   if (!root) return;
@@ -11502,10 +11512,12 @@ function hydrateLazyMedia(root) {
     var s = el.getAttribute('data-src') || '';
     if (!s) return;
     if (s.length < LAZY_MEDIA_MIN) { el.src = s; return; }
+    var key = _mediaKey(s);
+    if (_expandedMedia[key]) { el.src = s; return; }   // 用户点开过 → 自动恢复
     var btn = document.createElement('button');
     btn.type = 'button'; btn.className = 'msg-media-btn';
     btn.textContent = '▶ ' + (el.tagName === 'IMG' ? '查看图片' : (el.tagName === 'AUDIO' ? '播放音频' : '播放视频'));
-    btn.onclick = function () { el.src = s; el.style.display = ''; btn.remove(); };
+    btn.onclick = function () { _expandedMedia[key] = 1; el.src = s; el.style.display = ''; btn.remove(); };
     el.style.display = 'none';
     el.parentNode.insertBefore(btn, el);
   });
