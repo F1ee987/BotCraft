@@ -3192,6 +3192,25 @@ window.__storage = __storage;
           return;
         }
         const parts = [];
+        // 非视觉模型：图发出去也会被服务商忽略。必须把「看不见图」显式写进文本 ——
+        // 否则模型只看到「这是什么」几个字，再结合历史（比如它刚生成过一张南京行程图），
+        // 就会把问题脑补成「在问我生成的那张图」，幻觉出一段与用户图片毫无关系的描述
+        //（2026-09-24 用户实测：发植物大战僵尸截图问「这是什么」，回复却是南京行程配图说明）。
+        let _visionModel = true;
+        if ((m.images && m.images.length) || (m.frames && m.frames.length)) {
+          let _mname = '';
+          try { const _g = botGenOpts(bot); _mname = (_g && _g.model) || ''; } catch (eV1) { }
+          if (!_mname) { try { _mname = (typeof cfg !== 'undefined' && cfg && cfg.model) || ''; } catch (eV2) { } }
+          _visionModel = isVisionModel(_mname);
+          if (!_visionModel) {
+            parts.push({
+              type: 'text',
+              text: '[系统提示：用户随这条消息发送了图片，但当前模型不支持读取图片内容。'
+                + '请不要猜测、编造或引用任何图片内容；如果用户的问题依赖看图，'
+                + '请明确告知当前模型无法看图，并建议在「设置」中切换视觉模型（例如 glm-4.6v-flash，免费）。]'
+            });
+          }
+        }
         if (m.text) parts.push({ type: 'text', text: stripInlineMediaForCtx(m.text) });
         (m.images || []).forEach(function (src) { parts.push({ type: 'image_url', image_url: { url: src } }); });
         (m.frames || []).forEach(function (src) { parts.push({ type: 'image_url', image_url: { url: src } }); });
