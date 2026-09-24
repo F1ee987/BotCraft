@@ -13000,14 +13000,24 @@ function imageSpecHint(raw, usedContext) {
 function buildImagePrompt(userMsg, history) {
   var raw = String(userMsg == null ? '' : userMsg).trim();
   var core = String(extractImagePrompt(raw) || '').trim();
+  // 去动作前缀后的**完整原句**：文生图模型完全能理解长句，
+  // 而抽取只取「动作 → 图词」之间的主体（不含逗号），逗号后的风格 / 元素 / 文字标注
+  // 等要求曾被整体丢弃，生成的图与提示词完全无关（2026-09-24 用户实测）。
+  var full = raw.replace(/^(请|帮我|给我|帮我给|请帮我|请给我|给我来|我要|我想要|我想|需要|能否|能不能|可以|麻烦|顺便)\s*/i, '').trim();
   // 提取失败（原句原样返回）或抽出来只是个指代词 → 用上下文补足主体
   var referential = (core === raw) || isReferentialSubject(core);
   var subject = referential ? lastSubjectFromHistory(history) : '';
   var parts = [];
-  if (subject) parts.push(core && core !== raw ? (core + '｜' + subject) : subject);
-  else parts.push(core || raw);
-  var hint = imageSpecHint(raw, !!subject);
-  if (hint) parts.push(hint);
+  if (referential) {
+    // 纯指代（来张图 / 生成行程配图）：本体要靠上下文补
+    if (subject) parts.push(core && core !== raw ? (core + '｜' + subject) : subject);
+    else parts.push(core || raw);
+    var hint = imageSpecHint(raw, !!subject);
+    if (hint) parts.push(hint);
+  } else {
+    // 有实质描述：用完整原句，一个字都不截
+    parts.push(full || core || raw);
+  }
   return parts.filter(Boolean).join('。').slice(0, 800);   // 别堆到接口的提示词上限
 }
 function stopGenerate() {
