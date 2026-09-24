@@ -12624,7 +12624,7 @@ async function runReply(b, opt) {
           _scrollChat();
         }
         _scrollChat();
-      });
+      }, undefined, imagePromise);
       _histRef.push({ role: 'bot', text: stripCtxPlaceholders(result.final), who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
       // 整段重绘：一次性替换 innerHTML，同时清掉 prog/cur/typing。
       // 不要先手动 remove 气泡（会造成「高度骤减→再恢复」的可见抽动）。
@@ -17348,7 +17348,7 @@ window.__debug = {
   function enhanceImagePrompt(prompt) {
     prompt = String(prompt || '').trim();
     if (!prompt) return Promise.resolve(prompt);
-    var cfg = (window.BotCraftAI && BotCraftAI.getConfig) ? BotCraftAI.getConfig() : {};
+    var cfg = (window.BotCraftAI && window.BotCraftAI.getConfig) ? window.BotCraftAI.getConfig() : {};
     var imgKey = (cfg.imageAPIKey || '').trim();
     var imgBase = (cfg.imageBaseURL || '').trim();
     var toEnglish = !(imgKey && imgBase);   // pollinations 的模型对英文理解最好；CogView 中文即可
@@ -17409,10 +17409,20 @@ window.__debug = {
   }
 
   // 对外入口：先增强、再生成。增强失败自动降级用原提示词。
+  // 智谱等内容接口的 1301（contentFilter）单独翻译成人话：那是「提示词触发了内容过滤」，
+  // 不是 Key 或网络问题 —— 原始 JSON 用户看不懂（2026-09-24 实测截图）。
   function generateImage(prompt) {
     var raw = String(prompt || '').trim();
     return enhanceImagePrompt(raw).catch(function () { return raw; })
-      .then(function (p) { return generateImageCore(p || raw); });
+      .then(function (p) { return generateImageCore(p || raw); })
+      .catch(function (e) {
+        var msg = String((e && e.message) || e);
+        if (/1301|contentFilter/i.test(msg)) {
+          throw new Error('图片接口判定这段描述可能包含敏感内容（智谱 1301），与 Key 和网络无关。'
+            + '可调整措辞后重试——例如去掉「图上标注文字」「人像特写」类要求，或改用其他图片接口。');
+        }
+        throw e;
+      });
   }
 
   function generateImageCore(prompt) {
@@ -17714,7 +17724,7 @@ window.__debug = {
     return p;
   }
 
-  async function flowRunToolNode(node, vars, bot) {
+  async function flowRunToolNode(node, vars, bot, _sharedImage) {
     var F = window.BotCraftFlow;
     var tool = String(node.tool || 'kb');
     var q = F ? F.resolve(node.toolQuery || '{{input.msg}}', vars) : '';
@@ -17739,11 +17749,18 @@ window.__debug = {
       return { out: w ? String(w) : '（天气查询无结果）', value: w || '' };
     }
     if (tool === 'image') {
-      var img = await generateImage(q);
-      if (!img) return { out: '（文生图没有返回结果）', value: '' };
-      var url = (typeof img === 'string') ? img : (img.url || img.dataUrl || '');
-      // 直接给出 Markdown 图片，下游节点与最终回答都能直接显示
-      return { out: '![生成图片](' + url + ')', value: url, note: '已生成配图' };
+      // sendMsg 层已因本次生图意图启动过一次生成（_sharedImage）→ 直接复用那一次的结果，
+      // 不要再打一次接口：重复调用既浪费额度，又会在图已生成后冒出第二条失败信息
+      //（2026-09-24 用户实测：图已显示，紧接着又多一条 1301 错误）。
+      try {
+        var img = _sharedImage ? await _sharedImage : await generateImage(q);
+        if (!img) return { out: '（文生图没有返回结果）', value: '' };
+        var url = (typeof img === 'string') ? img : (img.url || img.dataUrl || '');
+        // 直接给出 Markdown 图片，下游节点与最终回答都能直接显示
+        return { out: '![生成图片](' + url + ')', value: url, note: '已生成配图' };
+      } catch (eG) {
+        return { out: '（文生图失败：' + (eG && eG.message ? eG.message : eG) + '）', value: '' };
+      }
     }
     return { out: '（未知的工具类型：' + tool + '）', value: '' };
   }
@@ -17866,7 +17883,7 @@ window.__debug = {
           if (!res.out) res.out = '（代码节点没有返回值：记得写 return）';
         }
       } else if (kind === 'tool') {
-        var tr = await flowRunToolNode(node, vars, bot);
+        var tr = await flowRunToolNode(node, vars, bot, _sharedImage);
         res = Object.assign(res, tr);
       } else if (kind === 'http') {
         var hr = await flowRunHttpNode(node, vars);
@@ -17910,7 +17927,7 @@ window.__debug = {
     return res;
   }
 
-  async function runWorkflow(bot, userMsg, imgs, auds, frms, imagePrompt, onProgress, _depth) {
+  async function runWorkflow(bot, userMsg, imgs, auds, frms, imagePrompt, onProgress, _depth, _sharedImage) {
     var logs = [];
     function flushLogs() { renderRunLogs(logs); }
     function emit(st) { if (typeof onProgress === 'function') { try { onProgress(st); } catch (e) { } } }
