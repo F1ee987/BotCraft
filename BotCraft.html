@@ -229,6 +229,8 @@
 [data-theme="light"] .btn-primary:hover{filter:brightness(1.08);box-shadow:0 5px 16px var(--brand-glow)}
 [data-theme="light"] .btn-primary:active{box-shadow:inset 0 3px 8px rgba(31,41,71,.28);transform:translateY(1px) scale(.98);filter:brightness(.9)}
 [data-theme="light"] .btn:active{transform:translateY(1px) scale(.98);box-shadow:inset 0 2px 5px rgba(31,41,71,.18);border-color:rgba(0,0,0,.2)}
+[data-theme="light"] .ctx-edit-menu button:active{transform:scale(.98);box-shadow:inset 0 2px 6px rgba(31,41,71,.3);background:rgba(31,41,71,.1)}
+[data-theme="light"] .msg-copy:active,[data-theme="light"] .msg-act:active{box-shadow:inset 0 2px 5px rgba(31,41,71,.26);border-color:rgba(0,0,0,.18)}
 [data-theme="light"] .nav a:hover,[data-theme="light"] .hamburger:hover{background:rgba(0,0,0,.055)}
 [data-theme="light"] .mem-view:hover{border-color:rgba(0,0,0,.14)}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -477,9 +479,9 @@ html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60
 .ctx-edit-menu{position:fixed;z-index:400;min-width:132px;border-radius:var(--r-lg);padding:5px;display:flex;flex-direction:column;gap:var(--sp-1);
   background:var(--popover);border:1px solid var(--glass-border);box-shadow:var(--lg-shadow);
   animation:bcMenuIn .14s var(--ease-out) backwards}
-.ctx-edit-menu button{padding:7px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;font-family:inherit;cursor:pointer;transition:background var(--dur-2) var(--ease)}
+.ctx-edit-menu button{padding:7px 11px;text-align:left;background:transparent;color:var(--txt);border:none;border-radius:var(--r-xs);font-size:13px;font-family:inherit;cursor:pointer;transition:background var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .ctx-edit-menu button:hover{background:var(--fill)}
-.ctx-edit-menu button:active{transform:scale(.97)}
+.ctx-edit-menu button:active{transform:scale(.98);background:var(--fill-strong);box-shadow:inset 0 2px 5px rgba(0,0,0,.22)}
 .ctx-edit-menu button[disabled]{opacity:.4;cursor:default;pointer-events:none}
 @keyframes bcMenuIn{from{opacity:0;transform:scale(.96) translateY(-3px)}to{opacity:1;transform:none}}
 /* 账号菜单挂在 body 上（原因见 renderUserMenu 的注释），层级要「在顶栏之上、
@@ -1103,7 +1105,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg-copy{margin-top:8px;display:inline-flex;align-items:center;gap:var(--sp-2);padding:5px 12px;border-radius:var(--r-full);font-size:11.5px;font-weight:590;cursor:pointer;
   background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease);user-select:none;-webkit-user-select:none}
 .msg-copy:hover{background:var(--fill-strong);color:var(--brand-text)}
-.msg-copy:active{transform:scale(.97)}
+.msg-copy:active{transform:scale(.98);box-shadow:inset 0 2px 5px rgba(0,0,0,.2)}
 .msg-copy.copied{color:#fff;background:var(--brand-fill);border-color:transparent}
 /* 自己的气泡是品牌紫渐变底（.msg.me，白字）—— 默认灰字按钮会陷进去，改半透明白玻璃 */
 .msg.me .msg-copy{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.28);user-select:none;-webkit-user-select:none}
@@ -1114,7 +1116,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg-act{margin-top:8px;margin-left:6px;display:inline-flex;align-items:center;gap:var(--sp-2);padding:5px 12px;border-radius:var(--r-full);font-size:11.5px;font-weight:590;cursor:pointer;
   background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease);font-family:inherit;user-select:none;-webkit-user-select:none}
 .msg-act:hover{background:var(--fill-strong);color:var(--brand-text)}
-.msg-act:active{transform:scale(.97)}
+.msg-act:active{transform:scale(.98);box-shadow:inset 0 2px 5px rgba(0,0,0,.2)}
 .msg-act[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}
 /* 回答下方的「参考来源」条：展开可看命中片段与原文 */
 .kb-cite{margin-top:9px;padding-top:8px;border-top:1px dashed var(--line)}
