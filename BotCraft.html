@@ -11583,7 +11583,11 @@ function renderHistory(b) {
           + '</div>';
       }
       var bt = m.text || '';
-      var bh = _foldBodyLen(bt) > MSG_FOLD_LEN ? renderMarkdown(_foldSlice(bt, MSG_FOLD_LEN)) + _foldHtml(i, bt.length) : renderMarkdown(bt);
+      // 含内联图片的 bot 消息（生成的配图）**永不折叠**：折叠截断会把 data URL 切掉，
+      // 重渲染后图直接消失（2026-09-24 用户实测）。折叠只用于纯长文本。
+      var bh = (_foldBodyLen(bt) > MSG_FOLD_LEN && !hasImageMarkdown(bt))
+        ? renderMarkdown(_foldSlice(bt, MSG_FOLD_LEN)) + _foldHtml(i, bt.length)
+        : renderMarkdown(bt);
       return '<div class="msg bot" data-mi="' + i + '">' + _body(escapeHtml(m.who || b.n), bh) + _kbCiteHtml(m.kbHits) + '</div>';
     }).join('');
   }
@@ -11602,6 +11606,23 @@ function renderHistory(b) {
   attachCopyBtns(); renderQuickBar();
   scrollChatToBottom(true); // 整段重绘后强制落到底部（多帧兜底，避免异步排版导致"弹回顶部"）
 }
+
+// 选中机器人回复的文字后，右键直接复制（2026-09-24 用户需求）。
+// 只在有选区且选区落在消息气泡内时接管右键；其余情况保留默认菜单。
+// 一次性绑定在 #chat 容器上：renderHistory 重建内部 DOM 不会丢失监听。
+(function bindChatContextCopy() {
+  var chat = document.getElementById('chat');
+  if (!chat) return;
+  chat.addEventListener('contextmenu', function (e) {
+    var sel = '';
+    try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS) { }
+    if (!sel || !sel.trim()) return;                                   // 没有选中文字 → 默认菜单
+    var msg = e.target && e.target.closest ? e.target.closest('.msg') : null;
+    if (!msg) return;                                                  // 不在消息气泡内 → 默认菜单
+    e.preventDefault();
+    copyText(sel);                                                     // copyText 自带成功/失败 toast
+  });
+})();
 
 var PROMPT_TEMPLATES = [
   { n: '专业客服', ic: '🎧', t: '你是「{{bot_name}}」，一名专业客服。用友好、简洁的语气回答，遇到订单/售后问题先安抚再给出步骤。' },
