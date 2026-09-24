@@ -12858,8 +12858,10 @@ function wantsImageGeneration(userMsg) {
   var s = String(userMsg);
   // 动作 + 可选数量 + 可选描述（最多20个非标点字符） + 图片/图/写真/照片等
   var action = /(生成|画|作|来|给|做|创建|绘制|产出|搞|弄|拍|弄出)(一?[张幅个组份支台])?\s*[^\n，。！？]{0,20}?(图片|图像|图|配图|海报|插画|封面|banner|宣传图|草图|写真|照片|相片)/i;
-  // 画/绘制/作 + 数量 + 描述对象（句尾无「图」字也算），例如「画一只小狗」
-  var paint = /(画|绘制|作)(一?[张幅个组份支台只条头匹])?\s*[^\n，。！？]{0,15}$/i;
+  // 画/绘制/作 + 数量 + 描述对象（句尾无「图」字也算），例如「画一只小狗」。
+  // 「作」必须排除「作为/看作」—— 否则「你作为我的助手」这类句子会被误判成生图请求
+  //（2026-09-24 用户实测：生成的图与提示词完全无关，就是这条误判抢跑了）。
+  var paint = /(画|绘制|作(?!为))(一?[张幅个组份支台只条头匹])?\s*[^\n，。！？]{0,15}$/i;
   var reverse = /(图片|图像|图|配图|海报|插画|封面|宣传图|banner)\s*(生成|绘制|创作|画|做|来)/i;
   // 口语简写：来张图 / 画个图 / 配个图 / 生图 / 文生图 / ...照片 / ...写真
   var tail = /(?:^|[\s，。！？;；])(来|画|配|生成|做|给)(一?[张幅个组份支台])?图|生图|文生图|生成.*照片|画.*照片|来.*写真|生成.*写真|画.*写真/i;
@@ -17373,15 +17375,38 @@ window.__debug = {
             _timeout(120000, '图片生成接口响应超时（120s），请检查网络或 API 状态')
           ]).then(function () { _clearTimer(); }).catch(function (e) { _clearTimer(); reject(e); });
         } else {
-          // 未配置：pollinations.ai 免费接口（无需 Key，直接返回图片）
+          // 未配置：pollinations.ai 免费接口（无需 Key，直接返回图片）。
+          // ⚠️ 它的模型对中文理解很弱：中文提示词直接发，生成的图常与内容完全无关
+          //（2026-09-24 用户实测）。所以先用同站免费文本接口把中文翻成英文再生图；
+          // 翻译失败（网络 / 超时 / 异常返回）就降级用原提示词，绝不阻断。
           var seed = Math.floor(Math.random() * 999999);
-          var safePrompt = encodeURIComponent(prompt).replace(/[!'()*]/g, function (c) { return '%' + c.charCodeAt(0).toString(16).toUpperCase(); });
-          var url = 'https://image.pollinations.ai/prompt/' + safePrompt + '?width=1024&height=1024&seed=' + seed + '&nologo=true&safe=false';
-          // 真实下载图片字节并内嵌为 data URL，确保图片直接显示在聊天中（不依赖浏览器外链二次加载）
-          _toDataUrl(url, 30000).then(function (du) { _clearTimer(); resolve(du); }, function (e) {
-            _clearTimer();
-            reject(new Error('无法从 pollinations.ai 获取图片（' + (e && e.message ? e.message : e) + '）。该免费图床在部分网络下不可达，可在「设置 → 🖼️ 文生图设置」中配置国内/稳定的 OpenAI Images 兼容接口。'));
-          });
+          var genUrl = function (p) {
+            var safePrompt = encodeURIComponent(String(p)).replace(/[!'()*]/g, function (c) { return '%' + c.charCodeAt(0).toString(16).toUpperCase(); });
+            return 'https://image.pollinations.ai/prompt/' + safePrompt + '?width=1024&height=1024&seed=' + seed + '&nologo=true&safe=false';
+          };
+          var go = function (p) {
+            // 真实下载图片字节并内嵌为 data URL，确保图片直接显示在聊天中（不依赖浏览器外链二次加载）
+            _toDataUrl(genUrl(p), 45000).then(function (du) { _clearTimer(); resolve(du); }, function (e) {
+              _clearTimer();
+              reject(new Error('无法从 pollinations.ai 获取图片（' + (e && e.message ? e.message : e) + '）。该免费图床在部分网络下不可达，可在「设置 → 🖼️ 文生图设置」中配置国内/稳定的 OpenAI Images 兼容接口。'));
+            });
+          };
+          if (/[\u4e00-\u9fff]/.test(prompt)) {
+            var trAsk = 'Translate the following into a concise English image-generation prompt. Output ONLY the translation, no explanation:\n' + prompt;
+            Promise.race([
+              fetch('https://text.pollinations.ai/' + encodeURIComponent(trAsk)).then(function (r) {
+                return r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status));
+              }),
+              _timeout(12000, '翻译超时')
+            ]).then(function (t) {
+              _clearTimer();
+              t = String(t || '').trim();
+              // 翻译结果可疑（空 / 过长 / 报错）就退回原中文提示词
+              (t && t.length <= 600 && !/^(error|invalid)/i.test(t.slice(0, 40))) ? go(t) : go(prompt);
+            }).catch(function () { _clearTimer(); go(prompt); });
+          } else {
+            go(prompt);
+          }
         }
       } catch (e) { reject(e); }
     });
