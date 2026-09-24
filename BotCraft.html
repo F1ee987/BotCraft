@@ -15732,17 +15732,17 @@ function copyText(text, okMsg) {
       if (!(r && r.ok)) { _copyBrowser(s, okTxt, (r && r.err) || 'host'); return; }
       var skipVerify = s.length > 200000;   // 超长（含图全文）跳过读回比对，省一次大传输
       if (skipVerify) {
-        try { localStorage.setItem('botcraft.probe', 'copyText host ok=1 verify=skip(len=' + s.length + ')'); } catch (eP) { }
+        try { localStorage.setItem('botcraft.copyResult', 'copyText host ok=1 verify=skip(len=' + s.length + ')'); } catch (eP) { }
         toast(okTxt, 'ok'); return;
       }
       Promise.resolve(api.bc_clip_text()).then(function (rd) {
         var back = (rd && rd.text) || '';
         var match = back === s;
-        try { localStorage.setItem('botcraft.probe', 'copyText host ok=1 verify=' + (match ? 'match' : 'mismatch len=' + back.length + '/' + s.length)); } catch (eP2) { }
+        try { localStorage.setItem('botcraft.copyResult', 'copyText host ok=1 verify=' + (match ? 'match' : 'mismatch len=' + back.length + '/' + s.length)); } catch (eP2) { }
         if (match) { toast(okTxt, 'ok'); return; }
         _copyBrowser(s, okTxt, 'verify-mismatch');   // 读回不一致 → 前端兜底再写
       }, function () {
-        try { localStorage.setItem('botcraft.probe', 'copyText host ok=1 verify=skipped'); } catch (eP3) { }
+        try { localStorage.setItem('botcraft.copyResult', 'copyText host ok=1 verify=skipped'); } catch (eP3) { }
         toast(okTxt, 'ok');   // 读回不可用则信任写入结果
       });
     }, function (eH) { _copyBrowser(s, okTxt, 'bridge'); });
@@ -15813,6 +15813,7 @@ function _copyBrowser(s, okTxt) {
 // 3) 桌面壳后端 Win32 剪贴板（零权限门槛，与 bc_clip_text 读取对称）
 function _copyViaHost(s, okTxt, errNote) {
   var api = window.pywebview && window.pywebview.api;
+  try { localStorage.setItem('botcraft.copyResult', 'copyText fallback(' + (errNote || 'exec-fail') + ') ' + (api && api.bc_set_clip ? 'via bc_set_clip' : 'no-host')); } catch (eR) { }
   if (api && api.bc_set_clip) {
     Promise.resolve(api.bc_set_clip(s)).then(function (r) {
       toast((r && r.ok) ? okTxt : ('复制失败' + (errNote ? '（' + errNote + '）' : '') + '，请手动选择文本'), (r && r.ok) ? 'ok' : 'err');
@@ -18616,10 +18617,20 @@ window.__debug = {
       }
       return out.join('>') || '(unknown)';
     }
+    function pushProbe(txt) {
+      try {
+        var arr = [];
+        try { arr = JSON.parse(localStorage.getItem('botcraft.probeLog') || '[]'); } catch (e0) { arr = []; }
+        arr.push(new Date().toTimeString().slice(0, 8) + ' ' + txt);
+        while (arr.length > 3) arr.shift();          // 保留最近 3 条，copyText 结果不被后续右键覆盖
+        localStorage.setItem('botcraft.probeLog', JSON.stringify(arr));
+        localStorage.setItem('botcraft.probe', arr[arr.length - 1]);
+      } catch (eP) { }
+    }
     function probe(ev, el) {
       var sl = 0;
       try { sl = String(window.getSelection ? window.getSelection() : '').length; } catch (eP) { }
-      try { mark('botcraft.probe', ev + ' @ ' + chainOf(el) + ' sel=' + sl); } catch (eP2) { }
+      pushProbe(ev + ' @ ' + chainOf(el) + ' sel=' + sl);
     }
     mark('botcraft.copyBound', '1');           // 自观测：绑定成功（设置页指纹行显示）
     function closeMenu() { if (menu) { menu.remove(); menu = null; } }
@@ -18701,9 +18712,11 @@ window.__debug = {
     if (bound) {
       txt += ' · 右键菜单: 已绑定';
       txt += last ? (lastCopy_Ago(last)) : '（从未打开过——右键消息气泡即应弹出）';
-      var probe = '';
-      try { probe = localStorage.getItem('botcraft.probe') || ''; } catch (eP) { }
-      if (probe) txt += ' · 探针: ' + probe;
+      var cr = '', pl = [];
+      try { cr = localStorage.getItem('botcraft.copyResult') || ''; } catch (eC2) { }
+      try { pl = JSON.parse(localStorage.getItem('botcraft.probeLog') || '[]'); } catch (eC3) { }
+      if (cr) txt += ' ‖ 最近复制: ' + cr;
+      if (pl.length) txt += ' ‖ 探针: ' + pl.join(' | ');
     } else txt += ' · 右键菜单: 未绑定（本块未执行，请立即反馈）';
     fp.textContent = txt;
   }
