@@ -11617,27 +11617,36 @@ function renderHistory(b) {
 (function bindChatContextCopy() {
   var chat = document.getElementById('chat');
   if (!chat) return;
-  chat.addEventListener('contextmenu', function (e) {
+  // 右键「按下」时就把选区与所在消息记录下来：Chromium 在右键过程中可能折叠/清除选区，
+  // 等 contextmenu 再取就变空 → handler 静默早退 → 桌面壳又没有默认菜单 →
+  // 用户看到的就是「完全没动静」（2026-09-24 第三轮实测）。按下时记录彻底绕开这个时序。
+  var pend = null;
+  chat.addEventListener('pointerdown', function (e) {
+    if (e.button !== 2) { pend = null; return; }
+    var msg = e.target && e.target.closest ? e.target.closest('.msg') : null;
+    if (!msg) { pend = null; return; }
     var sel = '';
     try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS) { }
-    if (!sel || !sel.trim()) return;                                   // 没有选中文字 → 默认菜单
-    var msg = e.target && e.target.closest ? e.target.closest('.msg') : null;
+    pend = { msg: msg, sel: sel };
+  }, true);
+  chat.addEventListener('contextmenu', function (e) {
+    var rec = pend; pend = null;
+    var msg = (rec && rec.msg) || (e.target && e.target.closest ? e.target.closest('.msg') : null);
     if (!msg) return;                                                  // 不在消息气泡内 → 默认菜单
     e.preventDefault();
-    // 首选：用户手势内同步复制当前选区（execCommand 不走 clipboard 权限，
-    // WebView2 对 clipboard-write 默认拒绝、promise 还可能挂起 —— 2026-09-24 两轮实测「没成功」的根因）
-    try {
-      if (document.execCommand('copy')) { toast('已复制到剪贴板', 'ok'); return; }
-    } catch (eC) { }
-    // 桌面版直连后端 Win32 剪贴板（pywebview 桥零权限门槛，确定可用）
-    var api = window.pywebview && window.pywebview.api;
-    if (api && api.bc_set_clip) {
-      Promise.resolve(api.bc_set_clip(sel)).then(function (r) {
-        toast((r && r.ok) ? '已复制到剪贴板' : '复制失败，请手动选择文本', (r && r.ok) ? 'ok' : 'err');
-      }, function () { toast('复制失败，请手动选择文本', 'err'); });
+    var sel = (rec && rec.sel) || '';
+    if (!sel) { try { sel = String(window.getSelection ? window.getSelection() : ''); } catch (eS2) { } }
+    if (sel && sel.trim()) {
+      // 首选：用户手势内同步复制当前选区（execCommand 不走 clipboard 权限，WebView2 里最可靠）
+      try {
+        if (document.execCommand('copy')) { toast('已复制到剪贴板', 'ok'); return; }
+      } catch (eC) { }
+      copyText(sel);                                                   // 兜底链：textarea exec → clipboard(超时) → 后端
       return;
     }
-    copyText(sel);                                                     // 浏览器场景：clipboard API（自带 toast）
+    // 没有选中文字也绝不静默：复制整条消息的纯文本，并明确告知
+    var full = (msg.innerText || msg.textContent || '').trim();
+    if (full) copyText(full, '已复制整条回复（未选中文字时默认复制全文）');
   });
 })();
 
@@ -15744,8 +15753,9 @@ function renderChannels() {
 }
 
 // ---------- 发布产物：通用小工具 ----------
-function copyText(text) {
+function copyText(text, okMsg) {
   var s = String(text == null ? '' : text);
+  var okTxt = okMsg || '已复制到剪贴板';
   // 1) execCommand：同步、不依赖 secure context / clipboard 权限 —— WebView2 里最可靠。
   //    无页面选区（消息气泡「复制」按钮传全文）时用屏外 textarea 造选区。
   try {
@@ -15757,30 +15767,30 @@ function copyText(text) {
     ta.focus(); ta.select(); ta.setSelectionRange(0, s.length);
     var ok = document.execCommand('copy');
     ta.remove();
-    if (ok) return toast('已复制到剪贴板', 'ok');
+    if (ok) return toast(okTxt, 'ok');
   } catch (eE) { }
   // 2) Clipboard API：浏览器可用；但 WebView2 权限默认拒绝时 promise 可能**挂起**，
   //    必须加超时竞速，否则永远轮不到兜底（上一版「没成功」的第二个漏洞）
   var settled = false;
   if (navigator.clipboard && navigator.clipboard.writeText) {
     var timer = setTimeout(function () {
-      if (settled) return; settled = true; _copyViaHost(s);
+      if (settled) return; settled = true; _copyViaHost(s, okTxt);
     }, 1200);
     navigator.clipboard.writeText(s).then(function () {
       if (settled) return; settled = true; clearTimeout(timer);
-      toast('已复制到剪贴板', 'ok');
+      toast(okTxt, 'ok');
     }, function () {
       if (settled) return; settled = true; clearTimeout(timer);
-      _copyViaHost(s);
+      _copyViaHost(s, okTxt);
     });
-  } else _copyViaHost(s);
+  } else _copyViaHost(s, okTxt);
 }
 // 3) 桌面壳后端 Win32 剪贴板（零权限门槛，与 bc_clip_text 读取对称）
-function _copyViaHost(s) {
+function _copyViaHost(s, okTxt) {
   var api = window.pywebview && window.pywebview.api;
   if (api && api.bc_set_clip) {
     Promise.resolve(api.bc_set_clip(s)).then(function (r) {
-      toast((r && r.ok) ? '已复制到剪贴板' : '复制失败，请手动选择文本', (r && r.ok) ? 'ok' : 'err');
+      toast((r && r.ok) ? okTxt : '复制失败，请手动选择文本', (r && r.ok) ? 'ok' : 'err');
     }, function () { toast('复制失败，请手动选择文本', 'err'); });
   } else toast('复制失败，请手动选择文本', 'err');
 }
