@@ -2043,6 +2043,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <textarea id="kbUrlPaste" spellcheck="false" placeholder="把网页正文粘贴到这里，再点「导入」" style="display:none;width:100%;box-sizing:border-box;height:200px;margin-top:9px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;line-height:1.65;resize:vertical;font-family:inherit"></textarea>
     <div style="display:flex;gap:8px;margin-top:11px;justify-content:flex-end">
       <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">取消</button>
+      <button class="btn btn-sm" id="kbUrlPasteBtn" onclick="kbPasteImport()" title="读取剪贴板里的网页正文，直接整理并导入">📋 粘贴导入</button>
       <button class="btn btn-primary btn-sm" id="kbUrlBtn" onclick="kbFetchUrl()">抓取并导入</button>
     </div>
   </div>
@@ -14886,9 +14887,10 @@ async function kbFetchUrl() {
     var html = r.text;
     var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
     var title = tm ? _decodeEntities(tm[1]).replace(/\s+/g, ' ').trim() : '';
+    var desc = _metaContent(html, 'description') || _metaContent(html, 'og:description') || '';
     var text = _htmlToText(html);
     if (!text || text.length < 60) throw new Error('未能从该页面提取到有效正文（可能整页由脚本渲染）');
-    kbImportUrlText(url, text, title);
+    kbImportUrlText(url, text, title, desc);
     closeKbUrl();
   } catch (e) {
     toast('抓取失败：' + (e && e.message ? e.message : e) + '　可展开下方输入框粘贴正文导入', 'err', 6500);
@@ -14901,6 +14903,26 @@ async function kbFetchUrl() {
     if (btn) { btn.disabled = false; btn.textContent = '抓取并导入'; }
   }
 }
+// 粘贴导入：读剪贴板正文 → 清理冗余 → 直接建成知识库文档（无需来源网址）
+async function kbPasteImport() {
+  var p = document.getElementById('kbUrlPaste');
+  var got = '';
+  try { if (navigator.clipboard && navigator.clipboard.readText) got = await navigator.clipboard.readText(); } catch (e) { got = ''; }
+  if (got && got.trim()) {
+    if (p) { p.value = got; p.style.display = ''; }
+    kbImportUrlText('', got, '粘贴导入', '');
+    closeKbUrl();
+    return;
+  }
+  // 非安全上下文（exe/本地文件）或拒绝授权：展开输入框让用户 Ctrl+V，再走抓取按钮导入
+  if (p) {
+    p.style.display = '';
+    p.value = '';
+    p.placeholder = '自动读取剪贴板失败，请在此按 Ctrl+V 粘贴，再点「抓取并导入」';
+    try { p.focus(); } catch (e2) { }
+  }
+  toast('未能自动读取剪贴板，请手动粘贴到框内', 'warn', 4000);
+}
 function _decodeEntities(s) {
   return String(s || '')
     .replace(/&nbsp;/gi, ' ').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
@@ -14908,37 +14930,97 @@ function _decodeEntities(s) {
     .replace(/&#(\d+);/g, function (m, d) { try { return String.fromCodePoint(+d); } catch (e) { return m; } })
     .replace(/&amp;/gi, '&');   // 放最后，避免把 &amp;lt; 解成 <
 }
-function _htmlToText(html) {
-  var s = String(html || '');
-  s = s.replace(/<!--[\s\S]*?-->/g, '');
-  s = s.replace(/<(script|style|noscript|svg|iframe|head|nav|footer)[^>]*>[\s\S]*?<\/\1>/gi, ' ');
-  // 块级标签先转换行，否则整页会挤成一行，分块检索会失效
-  s = s.replace(/<br\s*\/?>/gi, '\n');
-  s = s.replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote|dd|dt)[^>]*>/gi, '\n');
-  s = s.replace(/<[^>]+>/g, '');
-  s = _decodeEntities(s);
+function _metaContent(html, key) {
+  // 兼容 name= / property=，以及双引号、单引号两种写法
+  var re1 = new RegExp('<meta[^>]+(?:name|property)=["\']' + key + '["\'][^>]*content=["\']([^"\']*)["\']', 'i');
+  var m = re1.exec(html);
+  if (m) return _decodeEntities(m[1]).replace(/\s+/g, ' ').trim();
+  var re2 = new RegExp('<meta[^>]+content=["\']([^"\']*)["\'][^>]*(?:name|property)=["\']' + key + '["\']', 'i');
+  m = re2.exec(html);
+  if (m) return _decodeEntities(m[1]).replace(/\s+/g, ' ').trim();
+  return '';
+}
+// 纯文本版的冗余清理（粘贴/抓取后的正文都过一遍，幂等）
+function _normText(s) {
+  s = String(s || '');
+  // 清掉控制字符、零宽字符、软连字符、BOM 等无效数据（用 \u 转义，避免源码里混入裸控制字节）
+  s = s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u00ad\u200b-\u200f\u2028\u2029\ufeff]/g, '');
+  // 统一空白：把全角/不间断空格等都收成普通空格，多个压成一个
   s = s.replace(/[ \t\u00a0]+/g, ' ');
+  // 逐行清洗：去掉纯装饰/分隔行（一串 -—_=* 之类）
+  s = s.split('\n').map(function (l) {
+    var t = l.trim();
+    if (/^[\s\-–—_=*·•·|]+$/.test(t)) return '';
+    return t;
+  }).join('\n');
   s = s.replace(/ *\n */g, '\n');
   s = s.replace(/\n{3,}/g, '\n\n');
   return s.trim();
 }
-function kbImportUrlText(url, text, title) {
-  var body = String(text || '').trim();
+// 优先抽取 <main>/<article>/[role=main] 核心内容区，去掉侧栏/页脚/导航噪声
+function _pickMainContent(html) {
+  var blocks = [];
+  [['main', 'main'], ['article', 'article']].forEach(function (p) {
+    var mo = new RegExp('<' + p[0] + '(?=[\\s>])[^>]*>', 'i').exec(html);
+    if (mo) {
+      var co = new RegExp('</' + p[1] + '>', 'i').exec(html.slice(mo.index));
+      if (co) blocks.push(html.slice(mo.index + mo[0].length, mo.index + co.index));
+    }
+  });
+  var role = /<[^>]+role=["']?main["']?[^>]*>/i.exec(html);
+  if (role) blocks.push(html.slice(role.index + role[0].length, role.index + role[0].length + 40000));
+  if (!blocks.length) return '';
+  blocks.sort(function (a, b) { return b.length - a.length; });
+  return blocks[0];
+}
+function _htmlToText(html) {
+  var s = String(html || '');
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  // 有核心内容区就只在里面取，避免把整页侧栏/页脚噪声带进来
+  var main = _pickMainContent(s);
+  if (main) s = main;
+  // 整段删除无正文价值的标签（含自闭合/未闭合残留）
+  s = s.replace(/<(script|style|noscript|svg|iframe|head|nav|footer|header|aside|form|button|menu|dialog|template|figure|figcaption|canvas)[^>]*>[\s\S]*?<\/\1>/gi, ' ');
+  s = s.replace(/<(script|style|noscript|svg|iframe|canvas)[^>]*\/?>/gi, ' ');
+  // 块级标签先转换行，否则整页会挤成一行，分块检索会失效
+  s = s.replace(/<br\s*\/?>/gi, '\n');
+  s = s.replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote|dd|dt|main|header|footer|aside)[^>]*>/gi, '\n');
+  s = s.replace(/<[^>]+>/g, '');
+  s = _decodeEntities(s);
+  return _normText(s);
+}
+function kbImportUrlText(url, text, title, desc) {
+  // 统一冗余空格/换行/无效字符；抓取与粘贴路径都过一遍 _normText（幂等）
+  var body = _normText(text);
   if (!body) { toast('没有可导入的内容', 'err'); return; }
   var MAX = 200 * 1024;
   if (body.length > MAX) body = body.slice(0, MAX) + '\n\n…（内容过长已截断）';
   var nm = String(title || '').trim() || _kbNameFromUrl(url) || '网页导入';
   nm = nm.replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
-  if (url && body.indexOf('来源：') !== 0) body = '来源：' + url + '\n\n' + body;
+  // 字段统一、结构清晰，便于直接使用：标题 / 来源 / 摘要 / 正文
+  var head = [];
+  if (nm && nm !== '网页导入' && nm !== '粘贴导入') head.push(nm);
+  if (url) head.push('来源：' + url);
+  var d = String(desc || '').trim();
+  if (!d) {
+    // 没有 meta 描述时，用正文首段生成摘要
+    var firstPara = body.split(/\n{2,}/)[0] || body;
+    d = firstPara.replace(/\s+/g, ' ').trim().slice(0, 160);
+  }
+  if (d) head.push('摘要：' + d);
+  // 去掉正文中与标题重复的首行，避免冗余
+  var lines = body.split('\n');
+  if (lines.length && lines[0].trim() === nm) { lines.shift(); body = lines.join('\n').trim(); }
+  var finalBody = head.length ? (head.join('\n') + '\n\n' + body) : body;
   ALL_KB.push({
     id: 'kb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    name: nm, type: 'txt', size: body.length, updatedAt: Date.now(),
-    content: body, sourceUrl: url || ''
+    name: nm, type: 'txt', size: finalBody.length, updatedAt: Date.now(),
+    content: finalBody, sourceUrl: url || ''
   });
   saveKB(); flushKB();
   kbInvalidateCache();
   renderKbList();
-  toast('已从网址导入：' + nm, 'ok');
+  toast('已导入：' + nm, 'ok');
 }
 // 页面没有 title 时，用「路径尾 · 主机名」生成可读名。
 // 不能直接拿 URL 去清洗非法字符——那样会变成 "https ex.com b"，用户认不出是什么。
