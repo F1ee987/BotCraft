@@ -227,7 +227,8 @@
 [data-theme="light"] .btn:hover,[data-theme="light"] .file-btn:hover{border-color:rgba(0,0,0,.12);box-shadow:0 1px 4px rgba(31,41,71,.12)}
 [data-theme="light"] .btn-ghost:hover{background:var(--brand-tint)}
 [data-theme="light"] .btn-primary:hover{filter:brightness(1.08);box-shadow:0 5px 16px var(--brand-glow)}
-[data-theme="light"] .btn-primary:active{box-shadow:none}
+[data-theme="light"] .btn-primary:active{box-shadow:inset 0 3px 8px rgba(31,41,71,.28);transform:translateY(1px) scale(.98);filter:brightness(.9)}
+[data-theme="light"] .btn:active{transform:translateY(1px) scale(.98);box-shadow:inset 0 2px 5px rgba(31,41,71,.18);border-color:rgba(0,0,0,.2)}
 [data-theme="light"] .nav a:hover,[data-theme="light"] .hamburger:hover{background:rgba(0,0,0,.055)}
 [data-theme="light"] .mem-view:hover{border-color:rgba(0,0,0,.14)}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -426,17 +427,17 @@ select option{background:#1f1f24;color:#f2f2f7}
   padding:8px 15px;border-radius:var(--r-md);font-size:13px;font-weight:590;display:inline-flex;align-items:center;gap:var(--sp-3);
   background:var(--fill);color:var(--txt);
   border:1px solid transparent;
-  transition:background var(--dur-3) var(--ease),transform var(--dur-1) var(--ease),filter var(--dur-3) var(--ease);
+  transition:background var(--dur-3) var(--ease),transform var(--dur-1) var(--ease),filter var(--dur-3) var(--ease),box-shadow var(--dur-2) var(--ease);
 }
 .btn:hover{background:var(--fill-hover)}
-.btn:active{background:var(--fill-strong);transform:scale(.97)}
+.btn:active{background:var(--fill-strong);transform:translateY(1px) scale(.98);box-shadow:inset 0 2px 5px rgba(0,0,0,.2)}
 .btn:disabled{opacity:.5;cursor:default;pointer-events:none}
 .btn[disabled]{opacity:.5;cursor:default;pointer-events:none}  /* 属性选择器兜住 JS 里写 disabled 的情况 */
 .btn-ghost{background:transparent;color:var(--brand-text);border:1px solid transparent}
 .btn-ghost:hover{background:var(--fill)}
 .btn-primary{background:var(--brand-fill);color:#fff;border:1px solid transparent}
 .btn-primary:hover{filter:brightness(1.06)}
-.btn-primary:active{filter:brightness(.94);transform:scale(.97)}
+.btn-primary:active{filter:brightness(.92);transform:translateY(1px) scale(.98);box-shadow:inset 0 3px 8px rgba(0,0,0,.35)}
 .btn-sm{padding:6px 12px;font-size:12px;border-radius:var(--r-sm)}
 .hamburger{display:none;margin-right:2px;width:38px;height:38px;border-radius:var(--r-md);font-size:20px;line-height:1;align-items:center;justify-content:center;background:transparent;border:none;color:var(--txt);flex-shrink:0}
 .hamburger:hover{background:var(--fill)}
