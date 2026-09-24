@@ -1023,7 +1023,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg{max-width:78%;padding:11px 15px;border-radius:var(--r-xl);font-size:13.5px;line-height:1.6;word-break:break-word}
 .msg.bot{background:var(--msg-bot-bg);border:1px solid transparent;align-self:flex-start;border-bottom-left-radius:6px;max-width:78%}
 .msg.me{background:linear-gradient(180deg,var(--brand),var(--brand2));align-self:flex-end;border-bottom-right-radius:6px;color:#fff}
-.msg .who{font-size:10.5px;color:var(--sub);margin-bottom:4px;font-weight:590}
+.msg .who{font-size:10.5px;color:var(--sub);margin-bottom:4px;font-weight:590;user-select:none;-webkit-user-select:none}
 .msg pre{background:var(--bg);border-radius:var(--r-md);padding:10px;margin:8px 0;overflow-x:auto;font-size:12px;font-family:var(--font-mono)}
 .msg code{background:var(--bg);padding:1px 5px;border-radius:var(--r-2xs);font-size:12px;font-family:var(--font-mono)}
 /* markdown 富文本（renderMarkdown 输出） */
@@ -1100,18 +1100,18 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
    透下来会变成宿主的凹陷灰，用户看到的「网页效果」就不是真浏览器里的样子。 */
 .md-runout-frame{display:block;width:100%;height:300px;border:0;background:#fff}
 .msg-copy{margin-top:8px;display:inline-flex;align-items:center;gap:var(--sp-2);padding:5px 12px;border-radius:var(--r-full);font-size:11.5px;font-weight:590;cursor:pointer;
-  background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease)}
+  background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease);user-select:none;-webkit-user-select:none}
 .msg-copy:hover{background:var(--fill-strong);color:var(--brand-text)}
 .msg-copy:active{transform:scale(.97)}
 .msg-copy.copied{color:#fff;background:var(--brand-fill);border-color:transparent}
 /* 自己的气泡是品牌紫渐变底（.msg.me，白字）—— 默认灰字按钮会陷进去，改半透明白玻璃 */
-.msg.me .msg-copy{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.28)}
+.msg.me .msg-copy{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.28);user-select:none;-webkit-user-select:none}
 .msg.me .msg-copy:hover{background:rgba(255,255,255,.28);color:#fff}
-.msg.me .msg-act{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.28)}
+.msg.me .msg-act{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.28);user-select:none;-webkit-user-select:none}
 .msg.me .msg-act:hover{background:rgba(255,255,255,.28);color:#fff}
 /* 消息操作：重新生成 / 编辑重发。与「复制」同族，靠 margin-left 水平排开在气泡下方 */
 .msg-act{margin-top:8px;margin-left:6px;display:inline-flex;align-items:center;gap:var(--sp-2);padding:5px 12px;border-radius:var(--r-full);font-size:11.5px;font-weight:590;cursor:pointer;
-  background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease);font-family:inherit}
+  background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease);font-family:inherit;user-select:none;-webkit-user-select:none}
 .msg-act:hover{background:var(--fill-strong);color:var(--brand-text)}
 .msg-act:active{transform:scale(.97)}
 .msg-act[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}
