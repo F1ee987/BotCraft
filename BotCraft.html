@@ -1059,31 +1059,31 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg.bot img.md-img{cursor:zoom-in}
 /* ===== 知识库文档预览：复用 markdown 排版 + 元信息徽标 ===== */
 #kbPrevBody{white-space:normal;font-size:13.5px;line-height:1.8;color:var(--txt);word-break:break-word;font-family:inherit}
-#kbPrevBody>:first-child{margin-top:0}
-#kbPrevBody>:last-child{margin-bottom:0}
-#kbPrevBody h1,#kbPrevBody h2,#kbPrevBody h3,#kbPrevBody h4,#kbPrevBody h5,#kbPrevBody h6{margin:16px 0 8px;line-height:1.34;font-weight:680;letter-spacing:-.2px;color:var(--txt)}
-#kbPrevBody h1{font-size:19px}#kbPrevBody h2{font-size:17px}#kbPrevBody h3{font-size:15px}#kbPrevBody h4,#kbPrevBody h5,#kbPrevBody h6{font-size:13.5px}
-#kbPrevBody p{margin:9px 0;line-height:1.85}
-#kbPrevBody ul.md-list,#kbPrevBody ol.md-list{margin:9px 0;padding-left:22px}
-#kbPrevBody ul.md-list li,#kbPrevBody ol.md-list li{margin:5px 0;line-height:1.75}
-#kbPrevBody li.md-task{list-style:none;margin-left:-18px;line-height:1.72}
-#kbPrevBody li.md-task input[type=checkbox]{margin-right:7px;vertical-align:middle;accent-color:var(--brand)}
-#kbPrevBody blockquote.md-quote{margin:10px 0;padding:8px 14px;border-left:3px solid var(--brand);background:var(--bg);border-radius:0 var(--r-md) var(--r-md) 0;color:var(--sub)}
-#kbPrevBody table.md-table{border-collapse:collapse;margin:11px 0;font-size:12.5px;width:100%;border-radius:var(--r-md);overflow:hidden}
-#kbPrevBody table.md-table th,#kbPrevBody table.md-table td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
-#kbPrevBody table.md-table th{background:var(--bg);font-weight:600;color:var(--txt)}
-#kbPrevBody hr.md-hr{border:none;border-top:1px solid var(--line);margin:14px 0}
-#kbPrevBody a{color:var(--brand-text);text-decoration:underline;text-underline-offset:2px}
-#kbPrevBody a:hover{opacity:.82}
-#kbPrevBody code{background:var(--fill);padding:1px 6px;border-radius:var(--r-xs);font-size:.92em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-#kbPrevBody pre.md-code{padding:12px 14px;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-md);overflow:auto;font-size:12.5px;line-height:1.62}
-#kbPrevBody pre.md-code code{background:none;padding:0}
-#kbPrevBody pre.md-code .md-copy,#kbPrevBody pre.md-code .md-run{display:none}
+#kbPrevBody>:first-child,.kb-prev>:first-child{margin-top:0}
+#kbPrevBody>:last-child,.kb-prev>:last-child{margin-bottom:0}
+#kbPrevBody h1,#kbPrevBody h2,#kbPrevBody h3,#kbPrevBody h4,#kbPrevBody h5,#kbPrevBody h6,.kb-prev h1,.kb-prev h2,.kb-prev h3,.kb-prev h4,.kb-prev h5,.kb-prev h6{margin:16px 0 8px;line-height:1.34;font-weight:680;letter-spacing:-.2px;color:var(--txt)}
+#kbPrevBody h1,.kb-prev h1{font-size:19px}#kbPrevBody h2,.kb-prev h2{font-size:17px}#kbPrevBody h3,.kb-prev h3{font-size:15px}#kbPrevBody h4,#kbPrevBody h5,#kbPrevBody h6,.kb-prev h4,.kb-prev h5,.kb-prev h6{font-size:13.5px}
+#kbPrevBody p,.kb-prev p{margin:9px 0;line-height:1.85}
+#kbPrevBody ul.md-list,#kbPrevBody ol.md-list,.kb-prev ul.md-list,.kb-prev ol.md-list{margin:9px 0;padding-left:22px}
+#kbPrevBody ul.md-list li,#kbPrevBody ol.md-list li,.kb-prev ul.md-list li,.kb-prev ol.md-list li{margin:5px 0;line-height:1.75}
+#kbPrevBody li.md-task,.kb-prev li.md-task{list-style:none;margin-left:-18px;line-height:1.72}
+#kbPrevBody li.md-task input[type=checkbox],.kb-prev li.md-task input[type=checkbox]{margin-right:7px;vertical-align:middle;accent-color:var(--brand)}
+#kbPrevBody blockquote.md-quote,.kb-prev blockquote.md-quote{margin:10px 0;padding:8px 14px;border-left:3px solid var(--brand);background:var(--bg);border-radius:0 var(--r-md) var(--r-md) 0;color:var(--sub)}
+#kbPrevBody table.md-table,.kb-prev table.md-table{border-collapse:collapse;margin:11px 0;font-size:12.5px;width:100%;border-radius:var(--r-md);overflow:hidden}
+#kbPrevBody table.md-table th,#kbPrevBody table.md-table td,.kb-prev table.md-table th,.kb-prev table.md-table td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+#kbPrevBody table.md-table th,.kb-prev table.md-table th{background:var(--bg);font-weight:600;color:var(--txt)}
+#kbPrevBody hr.md-hr,.kb-prev hr.md-hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+#kbPrevBody a,.kb-prev a{color:var(--brand-text);text-decoration:underline;text-underline-offset:2px}
+#kbPrevBody a:hover,.kb-prev a:hover{opacity:.82}
+#kbPrevBody code,.kb-prev code{background:var(--fill);padding:1px 6px;border-radius:var(--r-xs);font-size:.92em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#kbPrevBody pre.md-code,.kb-prev pre.md-code{padding:12px 14px;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-md);overflow:auto;font-size:12.5px;line-height:1.62}
+#kbPrevBody pre.md-code code,.kb-prev pre.md-code code{background:none;padding:0}
+#kbPrevBody pre.md-code .md-copy,#kbPrevBody pre.md-code .md-run,.kb-prev pre.md-code .md-copy,.kb-prev pre.md-code .md-run{display:none}
 /* 元信息（来源 / 摘要）徽标块 */
-#kbPrevBody .kb-meta{margin:0 0 14px;padding:11px 14px;border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-bg);display:flex;flex-direction:column;gap:var(--sp-3)}
-#kbPrevBody .kb-meta-row{display:flex;gap:var(--sp-4);font-size:12.5px;line-height:1.65}
-#kbPrevBody .kb-meta-k{flex:none;font-weight:600;color:var(--sub);min-width:40px}
-#kbPrevBody .kb-meta-v{color:var(--txt);word-break:break-all}
+#kbPrevBody .kb-meta,.kb-prev .kb-meta{margin:0 0 14px;padding:11px 14px;border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-bg);display:flex;flex-direction:column;gap:var(--sp-3)}
+#kbPrevBody .kb-meta-row,.kb-prev .kb-meta-row{display:flex;gap:var(--sp-4);font-size:12.5px;line-height:1.65}
+#kbPrevBody .kb-meta-k,.kb-prev .kb-meta-k{flex:none;font-weight:600;color:var(--sub);min-width:40px}
+#kbPrevBody .kb-meta-v,.kb-prev .kb-meta-v{color:var(--txt);word-break:break-all}
 /* ===== 设置面板：分区折叠 ===== */
 .ssec{margin:10px 0;border:1px dashed var(--glass-border);border-radius:var(--r-md);background:var(--glass-bg);overflow:hidden}
 .ssec-head{width:100%;display:flex;align-items:center;gap:var(--sp-2);padding:10px 12px;background:transparent;border:0;color:var(--txt);font-size:13px;font-weight:700;cursor:pointer;text-align:left}
@@ -2070,8 +2070,39 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <textarea id="kbUrlPaste" spellcheck="false" placeholder="把网页正文粘贴到这里，再点「导入」" style="display:none;width:100%;box-sizing:border-box;height:200px;margin-top:9px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;line-height:1.65;resize:vertical;font-family:inherit"></textarea>
     <div style="display:flex;gap:8px;margin-top:11px;justify-content:flex-end">
       <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">取消</button>
-      <button class="btn btn-sm" id="kbUrlPasteBtn" onclick="kbPasteImport()" title="读取剪贴板里的网页正文，直接整理并导入">📋 粘贴导入</button>
       <button class="btn btn-primary btn-sm" id="kbUrlBtn" onclick="kbFetchUrl()">抓取并导入</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="kbPasteModal">
+  <div class="mbox" style="width:660px;max-width:94vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px">
+      <h2 style="font-size:16px">📋 粘贴导入</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeKbPaste()">关闭</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:9px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="kbReadClipboard()" title="读取系统剪贴板内容">📥 读取剪贴板</button>
+      <label style="font-size:12px;color:var(--sub);margin-left:auto;display:flex;align-items:center;gap:6px">格式
+        <select id="kbPasteFmt" onchange="kbUpdatePastePreview()" style="padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit">
+          <option value="auto">自动识别</option>
+          <option value="plain">纯文本</option>
+          <option value="md">Markdown</option>
+          <option value="html">富文本 (HTML)</option>
+        </select>
+      </label>
+    </div>
+    <textarea id="kbPasteArea" spellcheck="false" placeholder="把要导入的内容粘贴到这里（Ctrl+V），或点「读取剪贴板」" oninput="kbUpdatePastePreview()" style="width:100%;box-sizing:border-box;height:160px;margin-top:2px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;line-height:1.65;resize:vertical;font-family:inherit"></textarea>
+    <div style="display:flex;align-items:center;gap:8px;margin:9px 0 4px">
+      <span style="font-size:12px;color:var(--sub);flex:none">文档名</span>
+      <input id="kbPasteName" type="text" spellcheck="false" placeholder="留空则按首行自动命名" style="flex:1;box-sizing:border-box;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit">
+      <span id="kbPasteFmtTag" style="font-size:11px;color:var(--brand-text);flex:none"></span>
+    </div>
+    <div style="font-size:11.5px;color:var(--sub);margin:2px 0 6px">预览（导入后的解析与呈现效果，确认无误再导入）：</div>
+    <div id="kbPastePreview" class="kb-prev" style="max-height:32vh;overflow:auto;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);padding:12px 14px;font-size:13px;line-height:1.7;color:var(--txt);white-space:normal;word-break:break-word"></div>
+    <div style="display:flex;gap:8px;margin-top:11px;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" onclick="closeKbPaste()">取消</button>
+      <button class="btn btn-primary btn-sm" id="kbPasteOkBtn" onclick="kbConfirmPaste()">导入</button>
     </div>
   </div>
 </div>
@@ -2352,6 +2383,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="page-head">
       <div><h1>知识库</h1><div class="sub">为你的机器人注入专属知识</div></div>
       <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="openKbPaste()">📋 粘贴导入</button>
         <button class="btn btn-ghost btn-sm" onclick="openKbUrl()">🔗 网址导入</button>
         <button class="btn btn-primary btn-sm" onclick="document.getElementById('kbImport').click()">＋ 导入文档</button>
       </div>
@@ -14974,47 +15006,134 @@ async function kbFetchUrl() {
     if (btn) { btn.disabled = false; btn.textContent = '抓取并导入'; }
   }
 }
-// 粘贴导入：读剪贴板正文 → 清理冗余 → 直接建成知识库文档（无需来源网址）
-// 判断剪贴板内容是不是「一个网址」（而不是正文）：是则返回规范化后的 URL，否则返回 ''
+// 判断一段文本是不是「一个网址」：是则返回规范化 URL，否则返回 ''（供调用方决定是否走网址抓取）
 function _isLikelyUrl(raw) {
   var s = String(raw || '').trim();
   if (!s) return '';
-  // 去掉复制链接时浏览器附加的引号 / 尖括号 / 全角括号
   s = s.replace(/^["'<（(]/, '').replace(/[">)）]$/, '');
   s = s.trim();
-  if (/\s/.test(s)) return '';                          // 含空白 => 不是纯链接（是正文）
+  if (/\s/.test(s)) return '';
   if (/^https?:\/\//i.test(s)) return s;
   if (/^www\./i.test(s)) return 'https://' + s;
   return '';
 }
-// 粘贴导入：读剪贴板 → 若内容是网址则自动抓取并解析正文，否则把正文清洗后直接入库
-async function kbPasteImport() {
-  var p = document.getElementById('kbUrlPaste');
+
+// ---------- 粘贴导入（多格式 + 导入前预览）----------
+// 打开专用弹窗：用户粘贴/读取剪贴板内容，选择格式（自动/纯文本/Markdown/富文本），
+// 实时预览解析与呈现效果，确认后再入库。不依赖「从网址导入」弹窗，也不因非安全上下文读不到剪贴板而失败。
+function openKbPaste() {
+  var m = document.getElementById('kbPasteModal'); if (!m) return;
+  var ta = document.getElementById('kbPasteArea'); if (ta) ta.value = '';
+  var nm = document.getElementById('kbPasteName'); if (nm) nm.value = '';
+  var fmt = document.getElementById('kbPasteFmt'); if (fmt) fmt.value = 'auto';
+  var pv = document.getElementById('kbPastePreview');
+  if (pv) pv.innerHTML = '<div class="hint" style="color:var(--sub)">粘贴内容后这里会实时显示导入后的解析与呈现效果</div>';
+  var tag = document.getElementById('kbPasteFmtTag'); if (tag) tag.textContent = '';
+  var ok = document.getElementById('kbPasteOkBtn'); if (ok) ok.disabled = false;
+  m.classList.add('on');
+  setTimeout(function () { if (ta) try { ta.focus(); } catch (e) {} }, 60);
+}
+function closeKbPaste() {
+  var m = document.getElementById('kbPasteModal'); if (m) m.classList.remove('on');
+}
+// 读取系统剪贴板（非安全上下文/exe 下可能失败，失败时仅提示，用户仍可手动 Ctrl+V 粘贴）
+async function kbReadClipboard() {
+  var ta = document.getElementById('kbPasteArea');
   var got = '';
   try { if (navigator.clipboard && navigator.clipboard.readText) got = await navigator.clipboard.readText(); } catch (e) { got = ''; }
-  var url = _isLikelyUrl(got);
-  if (url) {
-    // 剪贴板是网址：自动抓取并解析目标网页正文，而不是把网址当文本写库
-    if (inp) inp.value = url;
-    if (p) { p.value = ''; p.style.display = 'none'; }   // 清空手动粘贴框，避免 kbFetchUrl 误把旧文本当正文导入
-    toast('检测到网址，正在抓取并解析…', 'ok', 2500);
-    await kbFetchUrl();
-    return;
-  }
   if (got && got.trim()) {
-    if (p) { p.value = got; p.style.display = ''; }
-    kbImportUrlText('', got, '粘贴导入', '');
-    closeKbUrl();
+    if (ta) { ta.value = got; try { ta.focus(); } catch (e2) {} }
+    kbUpdatePastePreview();
+    toast('已从剪贴板读取 ' + got.length + ' 字符', 'ok', 2000);
+  } else {
+    toast('未能读取剪贴板（非安全上下文或无权限），请直接 Ctrl+V 粘贴', 'warn', 4000);
+    if (ta) try { ta.focus(); } catch (e3) {}
+  }
+}
+// 自动识别内容格式：含 HTML 标签 → 富文本；含 Markdown 语法 → Markdown；否则纯文本
+function _kbDetectFmt(raw) {
+  var s = String(raw || '');
+  if (/<[a-z!][\s\S]*>/i.test(s)) return 'html';
+  if (/^(#{1,6}\s|>\s|[-*+]\s+\S|```|\s*\|.*\|.*\n|\[[^\]]+\]\([^)]+\)|\*\*[\s\S]+\*\*|\d+\.\s+\S)/m.test(s)) return 'md';
+  return 'plain';
+}
+// Markdown 来源用的轻量清洗：去控制字符、CRLF→LF、裁首尾空行，但保留块结构与语法
+function _kbLightNorm(s) {
+  s = String(s || '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u00ad\u200b-\u200f\u2028\u2029\ufeff]/g, '');
+  s = s.replace(/\r\n?/g, '\n');
+  while (s.length && s.slice(-1) === '\n') s = s.slice(0, -1);
+  while (s.length && s[0] === '\n') s = s.slice(1);
+  return s;
+}
+// 按所选格式解析为「入库内容」：html→清洗纯文本；md→保留 markdown；plain→去冗余空格/换行
+function _kbParsePaste(raw, fmt) {
+  raw = String(raw || '');
+  var eff = (fmt === 'auto') ? _kbDetectFmt(raw) : fmt;
+  var content;
+  if (eff === 'html') content = _htmlToText(raw);
+  else if (eff === 'md') content = _kbLightNorm(raw);
+  else content = _normText(raw);
+  return { eff: eff, content: content };
+}
+// 纯文本/富文本（已清洗）的预览：按空行分段落
+function _kbRenderPlain(text) {
+  var paras = String(text || '').split(/\n{2,}/);
+  var out = [];
+  for (var i = 0; i < paras.length; i++) {
+    var lines = paras[i].split('\n').filter(function (l) { return l.trim() !== ''; });
+    if (!lines.length) continue;
+    out.push('<p>' + lines.map(escapeHtml).join('<br>') + '</p>');
+  }
+  return out.join('');
+}
+// 实时预览：把当前内容与所选格式解析、渲染到预览区，并标注识别出的格式
+function kbUpdatePastePreview() {
+  var ta = document.getElementById('kbPasteArea');
+  var fmtSel = document.getElementById('kbPasteFmt');
+  var pv = document.getElementById('kbPastePreview');
+  var tag = document.getElementById('kbPasteFmtTag');
+  if (!ta || !pv) return;
+  var raw = ta.value;
+  var fmt = fmtSel ? fmtSel.value : 'auto';
+  if (!raw.trim()) {
+    pv.innerHTML = '<div class="hint" style="color:var(--sub)">粘贴内容后这里会实时显示导入后的解析与呈现效果</div>';
+    if (tag) tag.textContent = '';
     return;
   }
-  // 非安全上下文（exe/本地文件）或拒绝授权：展开输入框让用户 Ctrl+V，再走抓取按钮导入
-  if (p) {
-    p.style.display = '';
-    p.value = '';
-    p.placeholder = '自动读取剪贴板失败，请在此按 Ctrl+V 粘贴，再点「抓取并导入」';
-    try { p.focus(); } catch (e2) { }
+  var r = _kbParsePaste(raw, fmt);
+  if (tag) tag.textContent = '识别为：' + ({ html: '富文本', md: 'Markdown', plain: '纯文本' }[r.eff] || r.eff);
+  var html = (r.eff === 'md') ? renderMarkdown(r.content) : _kbRenderPlain(r.content);
+  if (!html || !html.trim()) html = '<div class="hint" style="color:var(--sub)">（内容为空）</div>';
+  pv.innerHTML = html;
+}
+// 确认导入：按预览所用的解析结果入库，关闭弹窗
+function kbConfirmPaste() {
+  var ta = document.getElementById('kbPasteArea');
+  var fmtSel = document.getElementById('kbPasteFmt');
+  var nmEl = document.getElementById('kbPasteName');
+  if (!ta) return;
+  var raw = ta.value;
+  if (!raw.trim()) { toast('请先粘贴内容', 'err'); return; }
+  var fmt = fmtSel ? fmtSel.value : 'auto';
+  var r = _kbParsePaste(raw, fmt);
+  var body = r.content;
+  if (!body.trim()) { toast('没有可导入的内容', 'err'); return; }
+  var MAX = 200 * 1024;
+  if (body.length > MAX) body = body.slice(0, MAX) + '\n\n…（内容过长已截断）';
+  var nm = (nmEl && nmEl.value) ? nmEl.value.trim() : '';
+  if (!nm) {
+    var firstLine = body.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l; })[0] || '粘贴导入';
+    nm = firstLine.replace(/^[#>*`\-*\s]+/, '').replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40) || '粘贴导入';
   }
-  toast('未能自动读取剪贴板，请手动粘贴到框内', 'warn', 4000);
+  nm = nm.replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  ALL_KB.push({
+    id: 'kb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: nm, type: 'txt', size: body.length, updatedAt: Date.now(),
+    content: body, sourceUrl: ''
+  });
+  saveKB(); flushKB(); kbInvalidateCache(); renderKbList();
+  closeKbPaste();
+  toast('已导入：' + nm, 'ok');
 }
 function _decodeEntities(s) {
   return String(s || '')
