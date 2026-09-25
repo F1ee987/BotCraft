@@ -137,6 +137,12 @@
   --cw-link:rgba(167,139,250,.92);
   --brand-glow:rgba(139,92,246,.42);     /* 品牌辉光投影（激活图标、主按钮） */
 
+  /* 代码块语法高亮 token 色：压在 --sunken 凹陷底上，深主题用亮一档保证对比度 */
+  --tok-kw:#ff7edb;     /* 关键字：亮粉 */
+  --tok-str:#9ff09f;    /* 字符串：浅绿 */
+  --tok-com:#9a9aa3;    /* 注释：灰（verify_contrast 门禁要求对最亮深色面 ≥4.5:1） */
+  --tok-num:#ffd479;    /* 数字：暖黄 */
+
   /* 字体分层：界面层沿用系统栈（--font-ui 见 body），展示层单独一路衬线。
      离线单文件 exe 不能外链字体，只能吃系统已装的 —— Windows 中文机几乎必有 STSong，
      再退 serif 也是宋体，不会掉进无衬线。
@@ -200,6 +206,11 @@
   --brand-line:rgba(109,40,217,.26);
   --cw-link:rgba(109,40,217,.82);
   --brand-glow:rgba(109,40,217,.30);
+  /* 代码块语法高亮 token 色（浅主题压在浅灰凹陷底上，用深一档保证对比度）*/
+  --tok-kw:#a21caf;     /* 关键字：品红紫 */
+  --tok-str:#0a5c2e;    /* 字符串：深绿（对最暗浅色面 --sunken ≥4.5:1） */
+  --tok-com:#5e5e66;    /* 注释：深灰（对最暗浅色面 --sunken ≥4.5:1） */
+  --tok-num:#92400e;    /* 数字：赭橙（同上） */
 }
 /* 浅色主题下浮层的少量定向修正（分层用实色，不再叠渐变与内发光） */
 [data-theme="light"] .topbar{background:var(--glass-bg-hover);border-color:rgba(0,0,0,.10);box-shadow:var(--lg-shadow)}
@@ -1122,6 +1133,12 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg.bot pre.md-code .md-run{position:absolute;top:7px;right:78px;z-index:2;display:inline-flex;align-items:center;gap:var(--sp-2);padding:3px 9px;border-radius:var(--r-sm);font-size:11px;font-weight:590;cursor:pointer;background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease)}
 .msg.bot pre.md-code .md-run:hover{background:var(--fill-strong);color:var(--brand-text)}
 .msg.bot pre.md-code .md-run.on{color:#fff;background:var(--brand-fill);border-color:transparent}
+/* 代码块语法高亮 token 着色（围栏 / 缩进转围栏的代码块统一着色；行内代码不高亮，保持素净）。
+   仅作用于 .md-code 内的 token span —— 行内 <code> 与正文不受影响；复制按钮取 textContent 仍是原码。 */
+.md-code .md-tok-kw{color:var(--tok-kw);font-weight:600}
+.md-code .md-tok-str{color:var(--tok-str)}
+.md-code .md-tok-com{color:var(--tok-com);font-style:italic}
+.md-code .md-tok-num{color:var(--tok-num)}
 .md-runout{margin:0 0 var(--sp-4);border:1px solid var(--line);border-radius:var(--r-lg);background:var(--sunken);overflow:hidden}
 .md-runout-hd{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--line);font-size:11px;color:var(--sub)}
 .md-runout-t{font-weight:650;color:var(--txt)}
@@ -5966,7 +5983,9 @@ function renderMarkdown(text) {
     const id = codeBlocks.length;
     // \r\n → \n：Windows 粘贴或读文件进来的内容带 \r，浏览器渲染时虽会规范化，
     // 但「复制」按钮取的是原始字符串，留着会让粘贴出去的东西带脏字符。
-    const safe = escapeHtml(code.replace(/\r\n?/g, '\n').replace(/\n$/, ''));
+    const clean = code.replace(/\r\n?/g, '\n').replace(/\n$/, '');
+    // 轻量语法高亮：每个 token 内部已 escapeHtml，注释/字符串/标签内容绝不会被当 HTML 注入（防 XSS）。
+    const safe = _kbHighlightCode(lang, clean);
     const copyBtn = '<button type="button" class="md-copy" onclick="copyCodeBlock(this)" aria-label="复制代码"><svg class="ic-btn" aria-hidden="true"><use href="#ic-copy"/></svg>复制</button>';
     // 只有能安全跑的语言才给「运行」入口：其余语言（python/bash/sql/json…）不显示按钮，
     // 而不是显示了再报错 —— 界面上不出现的东西，用户不会去点。
@@ -14798,7 +14817,7 @@ function kbRenderContent(k) {
   if (!k) return '';
   var text = String(k.content || '');
   if (k.type === 'json') {
-    return '<pre class="md-code" data-lang="json">' + escapeHtml(text) + '</pre>';
+    return '<pre class="md-code" data-lang="json">' + _kbHighlightCode('json', text) + '</pre>';
   }
   var lines = text.split('\n');
   // 首行若是标题：首行非空，且其下方不远处出现「来源/摘要」元信息行 → 单独作为标题渲染，
@@ -15030,12 +15049,153 @@ function _kbLightNorm(s) {
   return s;
 }
 // 按所选格式解析为「入库内容」：html→清洗纯文本；md→保留 markdown；plain→去冗余空格/换行
+// ---------- 代码块视觉强化 + 广告清洗（仅导入/预览路径生效）----------
+// 轻量语法高亮：不引入 highlight.js（体积/依赖受限），用自写 tokenizer 对代码块做 token 着色。
+// 安全约束：每个 token 字符串都先 escapeHtml 再包 <span>，注释/字符串/标签内容绝不会被当 HTML 注入。
+// 作用范围：所有被识别为代码的区块（围栏代码 + 缩进代码转围栏后）；行内代码与正文不高亮，保持素净。
+function _kbHighlightCode(lang, code) {
+  var c = String(code == null ? '' : code);
+  if (!c) return '';
+  // # 作行注释的语言（其余用 //）。HTML/CSS/Markdown 不用 # 作注释，排除，避免误染标题。
+  var hashLang = /^(py|python|rb|ruby|sh|bash|zsh|shell|yml|yaml|toml|ini|conf|cfg|dockerfile|makefile|pl|perl|r|jl|php|sql|go|golang|rs|rust)$/i;
+  var useHash = hashLang.test(lang || '');
+  // 关键字（跨语言通用集合；误命中标识符仅影响颜色，不影响语义）
+  var KW = /^(const|let|var|function|func|def|fn|fun|return|if|else|elif|elsif|for|while|do|switch|case|default|break|continue|new|class|struct|enum|interface|trait|impl|extends|implements|super|this|self|import|from|export|require|public|private|protected|internal|static|final|abstract|async|await|try|catch|finally|throw|throws|raise|typeof|instanceof|in|of|as|with|yield|void|null|undefined|nil|true|false|None|True|False|and|or|not|is|val|mut|pub|use|match|where|select|order|group|having|limit|print|echo|println|console)$/;
+  var out = '', i = 0, n = c.length;
+  var reNum = /^[0-9][0-9_]*(\.[0-9]+)?([eE][+-]?[0-9]+)?/;
+  while (i < n) {
+    var ch = c[i];
+    if (ch === '\n') { out += '\n'; i++; continue; }
+    // 块注释 /* */
+    if (ch === '/' && c[i + 1] === '*') {
+      var be = c.indexOf('*/', i + 2);
+      var bs = be < 0 ? n : be + 2;
+      out += '<span class="md-tok-com">' + escapeHtml(c.slice(i, bs)) + '</span>';
+      i = bs; continue;
+    }
+    // 行注释 // 或 #（按语言）
+    if ((ch === '/' && c[i + 1] === '/') || (useHash && ch === '#')) {
+      var je = i; while (je < n && c[je] !== '\n') je++;
+      out += '<span class="md-tok-com">' + escapeHtml(c.slice(i, je)) + '</span>';
+      i = je; continue;
+    }
+    // 字符串：" ' ` ；模板串 ` 允许跨行
+    if (ch === '"' || ch === "'" || ch === '`') {
+      var q = ch, p = i + 1, closed = false;
+      while (p < n) {
+        if (c[p] === '\\') { p += 2; continue; }
+        if (c[p] === q) { p++; closed = true; break; }
+        if (q !== '`' && c[p] === '\n') break;
+        p++;
+      }
+      var se = closed ? p : (c.indexOf('\n', i) < 0 ? n : c.indexOf('\n', i));
+      out += '<span class="md-tok-str">' + escapeHtml(c.slice(i, se)) + '</span>';
+      i = se; continue;
+    }
+    // 数字
+    var m = reNum.exec(c.slice(i));
+    if (m) { out += '<span class="md-tok-num">' + escapeHtml(m[0]) + '</span>'; i += m[0].length; continue; }
+    // 标识符 / 关键字
+    if (/[A-Za-z_$]/.test(ch)) {
+      var s = i; while (s < n && /[A-Za-z0-9_$]/.test(c[s])) s++;
+      var w = c.slice(i, s);
+      out += KW.test(w) ? '<span class="md-tok-kw">' + escapeHtml(w) + '</span>' : escapeHtml(w);
+      i = s; continue;
+    }
+    // 其余（标点 / 空白 / 符号）：原样转义
+    out += escapeHtml(ch);
+    i++;
+  }
+  return out;
+}
+// 把「前邻空行 + 行首 4+ 空格或制表符」的连续缩进行识别为缩进代码块，转成 ``` 围栏块。
+// 转成围栏后，renderMarkdown 会统一加边框/底色/高亮，且与后续广告清洗互不干扰（代码区被跳过）。
+function _kbFenceIndentedCode(text) {
+  var lines = String(text || '').split('\n');
+  var out = [], i = 0, n = lines.length;
+  while (i < n) {
+    var ln = lines[i];
+    var prevBlank = (i === 0) || (lines[i - 1].trim() === '');
+    var indented = /^( {4,}|\t)/.test(ln);
+    if (prevBlank && indented) {
+      var buf = [];
+      while (i < n) {
+        var cur = lines[i];
+        if (cur.trim() === '') {
+          // 块内空行：仅当下一行仍缩进才算块内；否则结束块
+          if (i + 1 < n && /^( {4,}|\t)/.test(lines[i + 1])) { buf.push(''); i++; }
+          else break;
+        } else if (/^( {4,}|\t)/.test(cur)) {
+          buf.push(cur.replace(/^\t/, '').replace(/^ {4}/, ''));   // 去首层 4 空格 / 1 制表符缩进
+          i++;
+        } else break;
+      }
+      while (buf.length && buf[buf.length - 1] === '') buf.pop();   // 去块尾空行
+      out.push('```');
+      out.push(buf.join('\n'));
+      out.push('```');
+      out.push('');
+      continue;
+    }
+    out.push(ln);
+    i++;
+  }
+  return out.join('\n');
+}
+// 识别并删除正文中混杂的广告：① 整行推广/营销/商品推荐话术直接删除；② 行内营销链接去掉超链接（保留可读文字）、裸营销 URL 直接移除；③ 跳过 ``` 围栏代码区，绝不误伤代码。
+function _kbStripAds(text) {
+  var AD_LINE = [
+    // 注意：中文不是 \w，\b 在汉字两侧永不成立 —— 行尾绝不能加 \b（此前 T 组测试实证）。
+    // 广告标签行：要求「广告/推广/赞助/营销」后有 ]/】/空白/行尾，避免「广告行业分析」被误删。
+    /^\s*(?:【|\[)?\s*(?:广告|推广|赞助|营销)(?:】|\]|\s|$)/i,
+    /^(?:限时|特惠|大促|年货节|双1[12]|618|双十二|双十一|爆款|热卖|清仓|特价|特卖|秒杀|抢购|直降|立减|满减|满[\d]+|包邮|领券|优惠券?|返利|返现|打折|减价|囤货|旗舰店|品牌直供|工厂直销|官方商城|商城)/,
+    /^(?:点击|立即|马上|赶紧|速|快)\s*(?:购买|下单|抢|抢购|入手|领券|领取|加购)/,
+    /^(buy now|shop now|order now|click here to (?:buy|shop)|limited (?:offer|time)|get (?:yours|it) (?:now|today)|free shipping|big sale|hot sale|best price|wholesale|discount (?:code|up to)|coupon|promo|sale now)\b/i
+  ];
+  var MKT = /(购买|下单|抢购|秒杀|优惠|折扣|促销|满减|领券|优惠券|返利|返现|包邮|商城|店铺|旗舰店|某东|某宝|天猫|淘宝|京东|拼多多|amazon|jd\.com|taobao|tmall|pinduoduo|promo|affiliate|coupon|折扣|utm_|spm=|ref=|track)/i;
+  var lines = String(text || '').split('\n');
+  var out = [], inCode = false;
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    if (/^\s*```/.test(ln)) { inCode = !inCode; out.push(ln); continue; }
+    if (inCode) { out.push(ln); continue; }   // 代码区不处理，避免误伤
+    var t = ln.trim();
+    if (!t) { out.push(ln); continue; }
+    var whole = false;
+    for (var r = 0; r < AD_LINE.length; r++) { if (AD_LINE[r].test(t)) { whole = true; break; } }
+    if (whole) continue;   // 整行广告删除
+    // 行内代码先掩码，避免里面的 URL 被当营销链清掉
+    var masked = ln, codes = [];
+    masked = masked.replace(/`[^`\n]+`/g, function (mp) { codes.push(mp); return '\u0000AD' + (codes.length - 1) + '\u0000'; });
+    // markdown 链接 [文字](url)：营销链接去超链、仅留文字；非营销保留
+    masked = masked.replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, function (mm, txt, url) {
+      if (MKT.test(url) || MKT.test(txt)) return txt || '';
+      return mm;
+    });
+    // 裸 URL：营销/追踪类移除，其余保留
+    masked = masked.replace(/https?:\/\/[^\s)]+/g, function (u) {
+      return MKT.test(u) ? '' : u;
+    });
+    // 还原行内代码
+    masked = masked.replace(/\u0000AD(\d+)\u0000/g, function (m, d) { return codes[+d]; });
+    // 行内容被清成只剩标点/符号 → 丢弃（避免留下空壳行）
+    var left = masked.replace(/[\s\-–—·•.。，、（）()【】\[\]"'`]/g, '');
+    if (left === '') continue;
+    out.push(masked);
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\s+$/, '');
+}
+// KB 正文美化：先把缩进代码转围栏（统一代码块处理），再清广告（代码区受保护）。
+// 仅在导入/预览路径生效；聊天历史消息不动，避免改变已有会话内容。
+function _kbBeautifyBody(text) {
+  return _kbStripAds(_kbFenceIndentedCode(String(text || '')));
+}
 function _kbParsePaste(raw, fmt) {
   raw = String(raw || '');
   var eff = (fmt === 'auto') ? _kbDetectFmt(raw) : fmt;
   var content;
-  if (eff === 'html') content = _kbStripBoiler(_htmlToText(raw), ' ');
-  else if (eff === 'md') content = _kbLightNorm(raw);
+  if (eff === 'html') content = _kbBeautifyBody(_kbStripBoiler(_htmlToText(raw), ' '));
+  else if (eff === 'md') content = _kbBeautifyBody(_kbLightNorm(raw));
   else content = _normText(raw);
   return { eff: eff, content: content };
 }
@@ -15332,6 +15492,7 @@ function _htmlToText(html) {
 function _kbComposeDoc(url, text, title, desc) {
   // 先做样板行过滤与冗余空白清理；正文已按空行分段（块级标签在 _htmlToText 里转成空行）
   var body = _kbStripBoiler(_normText(text), String(title || '').trim());
+  body = _kbBeautifyBody(body);   // 缩进代码转围栏 + 清广告（代码区受保护）
   var nm = String(title || '').trim() || _kbNameFromUrl(url) || '网页导入';
   nm = nm.replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || '网页导入';
   // 正文里已有的「来源：/摘要：」行与重复的标题行先去掉，避免和头部重复；
@@ -17108,7 +17269,7 @@ async function testConnection() {
 
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
-var APP_VERSION = '2.2';
+var APP_VERSION = '2.3';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
