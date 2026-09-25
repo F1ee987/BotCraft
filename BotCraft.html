@@ -15165,7 +15165,7 @@ function _decodeEntities(s) {
     .replace(/&hellip;/gi, '…').replace(/&[lr]dquo;/gi, '"').replace(/&[lr]squo;/gi, "'")
     .replace(/&middot;/gi, '·').replace(/&times;/gi, '×').replace(/&divide;/gi, '÷')
     .replace(/&copy;/gi, '©').replace(/&reg;/gi, '®').replace(/&trade;/gi, '™')
-    .replace(/&laquo;/gi, '«').replace(/&raquo;/gi, '»')
+    .replace(/&laquo;/gi, '\u00AB').replace(/&raquo;/gi, '\u00BB')
     .replace(/&bull;/gi, '•').replace(/&deg;/gi, '°')
     // 十六进制实体（形如 &#xff0c;）：此前只处理十进制，中文站点爱用十六进制，
     // 于是源码里原样留着 &#xff0c;，读起来一串鬼画符（用户截图实证）。
