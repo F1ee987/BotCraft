@@ -2059,28 +2059,13 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   </div>
 </div>
 
-<div class="modal" id="kbUrlModal">
-  <div class="mbox" style="width:560px;max-width:92vw">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px">
-      <h2 style="font-size:16px">🔗 从网址导入</h2>
-      <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">关闭</button>
-    </div>
-    <div class="hint" style="font-size:11.5px;margin:0 0 10px">抓取网页正文并建成知识库文档。部分站点会阻止跨域抓取，此时会提示你直接粘贴正文——粘贴同样可以导入。</div>
-    <input id="kbUrlInput" type="text" spellcheck="false" placeholder="https://example.com/article" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit">
-    <textarea id="kbUrlPaste" spellcheck="false" placeholder="把网页正文粘贴到这里，再点「导入」" style="display:none;width:100%;box-sizing:border-box;height:200px;margin-top:9px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;line-height:1.65;resize:vertical;font-family:inherit"></textarea>
-    <div style="display:flex;gap:8px;margin-top:11px;justify-content:flex-end">
-      <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">取消</button>
-      <button class="btn btn-primary btn-sm" id="kbUrlBtn" onclick="kbFetchUrl()">抓取并导入</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal" id="kbPasteModal">
   <div class="mbox" style="width:660px;max-width:94vw">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px">
-      <h2 style="font-size:16px">📋 粘贴导入</h2>
-      <button class="btn btn-ghost btn-sm" onclick="closeKbPaste()">关闭</button>
+      <h2 style="font-size:16px">🔗 导入内容</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">关闭</button>
     </div>
+    <div class="hint" style="font-size:11.5px;margin:0 0 9px">粘贴<b>网址</b>会自动抓取网页正文（过滤广告 / 导航 / 版权等无关内容，仅保留核心正文）并自动排版；粘贴<b>文字 / Markdown / 富文本</b>则直接解析排版后导入。</div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:9px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="kbReadClipboard()" title="读取系统剪贴板内容">📥 读取剪贴板</button>
       <label style="font-size:12px;color:var(--sub);margin-left:auto;display:flex;align-items:center;gap:6px">格式
@@ -2092,16 +2077,16 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         </select>
       </label>
     </div>
-    <textarea id="kbPasteArea" spellcheck="false" placeholder="把要导入的内容粘贴到这里（Ctrl+V），或点「读取剪贴板」" oninput="kbUpdatePastePreview()" style="width:100%;box-sizing:border-box;height:160px;margin-top:2px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;line-height:1.65;resize:vertical;font-family:inherit"></textarea>
+    <textarea id="kbPasteArea" spellcheck="false" placeholder="粘贴网址（自动抓取网页正文），或粘贴要导入的文字 / Markdown / 富文本（Ctrl+V）" oninput="kbUpdatePastePreview()" style="width:100%;box-sizing:border-box;height:160px;margin-top:2px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;line-height:1.65;resize:vertical;font-family:inherit"></textarea>
     <div style="display:flex;align-items:center;gap:8px;margin:9px 0 4px">
       <span style="font-size:12px;color:var(--sub);flex:none">文档名</span>
       <input id="kbPasteName" type="text" spellcheck="false" placeholder="留空则按首行自动命名" style="flex:1;box-sizing:border-box;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit">
       <span id="kbPasteFmtTag" style="font-size:11px;color:var(--brand-text);flex:none"></span>
     </div>
-    <div style="font-size:11.5px;color:var(--sub);margin:2px 0 6px">预览（导入后的解析与呈现效果，确认无误再导入）：</div>
+    <div style="font-size:11.5px;color:var(--sub);margin:2px 0 6px">预览（导入后的解析与呈现效果，确认无误再导入；网址会先抓取正文再展示）：</div>
     <div id="kbPastePreview" class="kb-prev" style="max-height:32vh;overflow:auto;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);padding:12px 14px;font-size:13px;line-height:1.7;color:var(--txt);white-space:normal;word-break:break-word"></div>
     <div style="display:flex;gap:8px;margin-top:11px;justify-content:flex-end">
-      <button class="btn btn-ghost btn-sm" onclick="closeKbPaste()">取消</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">取消</button>
       <button class="btn btn-primary btn-sm" id="kbPasteOkBtn" onclick="kbConfirmPaste()">导入</button>
     </div>
   </div>
@@ -2383,8 +2368,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="page-head">
       <div><h1>知识库</h1><div class="sub">为你的机器人注入专属知识</div></div>
       <div style="margin-left:auto;display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" onclick="openKbPaste()">📋 粘贴导入</button>
-        <button class="btn btn-ghost btn-sm" onclick="openKbUrl()">🔗 网址导入</button>
+        <button class="btn btn-ghost btn-sm" onclick="openKbUrl()" title="粘贴网址会自动抓取并排版正文；也可粘贴文字 / Markdown / 富文本">🔗 网址 / 粘贴导入</button>
         <button class="btn btn-primary btn-sm" onclick="document.getElementById('kbImport').click()">＋ 导入文档</button>
       </div>
     <input type="file" id="kbImport" accept=".txt,.md,.markdown,.csv,.json,text/*" multiple style="display:none">
@@ -14739,7 +14723,7 @@ function kbInvalidateCache() { try { if (window.kbInvalidate) window.kbInvalidat
 function renderKbList() {
   const box = document.getElementById('kbList'); if (!box) return;
   if (!ALL_KB.length) {
-    box.innerHTML = `<div class="empty-tip" style="padding:40px 10px;text-align:center;color:var(--sub)">还没有知识库文档<br>点击右上角「＋ 导入文档」上传 TXT / Markdown / CSV / JSON，或用「🔗 网址导入」抓取网页正文</div>`;
+    box.innerHTML = `<div class="empty-tip" style="padding:40px 10px;text-align:center;color:var(--sub)">还没有知识库文档<br>点击右上角「＋ 导入文档」上传 TXT / Markdown / CSV / JSON，或用「🔗 网址 / 粘贴导入」抓取网页正文或粘贴内容</div>`;
     return;
   }
   box.innerHTML = ALL_KB.map(k => `<div class="list-row" data-id="${k.id}" onclick="openKbPreview('${k.id}')" style="cursor:pointer">
@@ -14960,51 +14944,46 @@ function importKbFile(file) {
   reader.readAsArrayBuffer(file);
 }
 
-// ---------- 从网址导入 ----------
+// ---------- 网址 / 粘贴导入（统一入口）----------
+// 原来「🔗 网址导入」与「📋 粘贴导入」是两个入口，现已合并成一个：同一个弹窗里智能识别输入 ——
+// 整段就是一个网址时自动抓取网页正文（过滤广告 / 导航 / 版权等无关内容，只留核心正文）；
+// 否则按 纯文本 / Markdown / 富文本 解析。两条路径都先预览再入库，且预览与入库共用同一套组装。
+var _kbUrlCache = { url: '', title: '', desc: '', body: '' };
+var _kbUrlTimer = null;
 function openKbUrl() {
-  var m = document.getElementById('kbUrlModal'); if (!m) return;
-  var i = document.getElementById('kbUrlInput'); if (i) i.value = '';
-  var p = document.getElementById('kbUrlPaste'); if (p) { p.value = ''; p.style.display = 'none'; }
-  var b = document.getElementById('kbUrlBtn'); if (b) { b.disabled = false; b.textContent = '抓取并导入'; }
+  var m = document.getElementById('kbPasteModal'); if (!m) return;
+  var ta = document.getElementById('kbPasteArea'); if (ta) ta.value = '';
+  var nm = document.getElementById('kbPasteName'); if (nm) nm.value = '';
+  var fmt = document.getElementById('kbPasteFmt'); if (fmt) { fmt.value = 'auto'; fmt.disabled = false; }
+  var tag = document.getElementById('kbPasteFmtTag'); if (tag) tag.textContent = '';
+  var ok = document.getElementById('kbPasteOkBtn'); if (ok) { ok.disabled = false; ok.textContent = '导入'; }
+  _kbUrlCache = { url: '', title: '', desc: '', body: '' };
+  if (_kbUrlTimer) { clearTimeout(_kbUrlTimer); _kbUrlTimer = null; }
+  var pv = document.getElementById('kbPastePreview');
+  if (pv) pv.innerHTML = '<div class="hint" style="color:var(--sub)">粘贴网址会自动抓取网页正文并过滤广告 / 导航；粘贴文字 / Markdown / 富文本会直接解析。这里会实时显示导入后的效果。</div>';
   m.classList.add('on');
-  setTimeout(function () { if (i) i.focus(); }, 60);
+  setTimeout(function () { if (ta) try { ta.focus(); } catch (e) {} }, 60);
 }
+// 兼容旧调用名（工具栏曾分成两个入口，现已合并到同一个「导入内容」弹窗）
+function openKbPaste() { return openKbUrl(); }
 function closeKbUrl() {
-  var m = document.getElementById('kbUrlModal'); if (m) m.classList.remove('on');
+  if (_kbUrlTimer) { clearTimeout(_kbUrlTimer); _kbUrlTimer = null; }
+  var m = document.getElementById('kbPasteModal'); if (m) m.classList.remove('on');
 }
-async function kbFetchUrl() {
-  var inp = document.getElementById('kbUrlInput');
-  var url = ((inp && inp.value) || '').trim();
-  var paste = document.getElementById('kbUrlPaste');
-  var pasted = paste ? paste.value.trim() : '';
-  // 已经贴了正文就直接导入，省掉一次注定失败的抓取
-  if (pasted) { kbImportUrlText(url, pasted, ''); closeKbUrl(); return; }
-  if (!/^https?:\/\//i.test(url)) { toast('请填写以 http:// 或 https:// 开头的完整网址', 'err'); return; }
-  var btn = document.getElementById('kbUrlBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '抓取中…'; }
-  try {
-    // 桌面 exe 走 bc_http 后端代理（urllib 不受浏览器同源限制，任意公网域名可抓）；
-    // 浏览器直开没有 pywebview 桥，退回页面 fetch —— 跨域站点会被拦，此时仍提示粘贴正文。
-    var r = await extHttp(url, { method: 'GET' });
-    if (!r || !r.ok) throw new Error('HTTP ' + ((r && r.status) || '?'));
-    var html = r.text;
-    var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
-    var title = tm ? _decodeEntities(tm[1]).replace(/\s+/g, ' ').trim() : '';
-    var desc = _metaContent(html, 'description') || _metaContent(html, 'og:description') || '';
-    var text = _htmlToText(html);
-    if (!text || text.length < 60) throw new Error('未能从该页面提取到有效正文（可能整页由脚本渲染）');
-    kbImportUrlText(url, text, title, desc);
-    closeKbUrl();
-  } catch (e) {
-    toast('抓取失败：' + (e && e.message ? e.message : e) + '　可展开下方输入框粘贴正文导入', 'err', 6500);
-    if (paste) {
-      paste.style.display = '';
-      paste.placeholder = '把网页正文粘贴到这里，再点「抓取并导入」即可导入';
-      try { paste.focus(); } catch (e2) { }
-    }
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '抓取并导入'; }
-  }
+function closeKbPaste() { return closeKbUrl(); }
+// 抓取网页 → 标题 / 摘要 / 核心正文（已过滤广告与导航，并做过结构美化）。
+// 桌面 exe 走 bc_http 后端代理（urllib 不受浏览器同源限制，任意公网域名可抓）；
+// 浏览器直开没有 pywebview 桥，退回页面 fetch —— 跨域站点会被拦，此时提示改为粘贴正文。
+async function _kbFetchPage(url) {
+  var r = await extHttp(url, { method: 'GET' });
+  if (!r || !r.ok) throw new Error('HTTP ' + ((r && r.status) || '?'));
+  var html = r.text || '';
+  var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  var title = tm ? _decodeEntities(tm[1]).replace(/\s+/g, ' ').trim() : '';
+  var desc = _metaContent(html, 'description') || _metaContent(html, 'og:description') || '';
+  var body = _htmlToText(html);
+  if (!body || body.length < 60) throw new Error('未能从该页面提取到有效正文（可能整页由脚本渲染）');
+  return { url: url, title: title, desc: desc, body: body };
 }
 // 判断一段文本是不是「一个网址」：是则返回规范化 URL，否则返回 ''（供调用方决定是否走网址抓取）
 function _isLikelyUrl(raw) {
@@ -15018,24 +14997,9 @@ function _isLikelyUrl(raw) {
   return '';
 }
 
-// ---------- 粘贴导入（多格式 + 导入前预览）----------
-// 打开专用弹窗：用户粘贴/读取剪贴板内容，选择格式（自动/纯文本/Markdown/富文本），
-// 实时预览解析与呈现效果，确认后再入库。不依赖「从网址导入」弹窗，也不因非安全上下文读不到剪贴板而失败。
-function openKbPaste() {
-  var m = document.getElementById('kbPasteModal'); if (!m) return;
-  var ta = document.getElementById('kbPasteArea'); if (ta) ta.value = '';
-  var nm = document.getElementById('kbPasteName'); if (nm) nm.value = '';
-  var fmt = document.getElementById('kbPasteFmt'); if (fmt) fmt.value = 'auto';
-  var pv = document.getElementById('kbPastePreview');
-  if (pv) pv.innerHTML = '<div class="hint" style="color:var(--sub)">粘贴内容后这里会实时显示导入后的解析与呈现效果</div>';
-  var tag = document.getElementById('kbPasteFmtTag'); if (tag) tag.textContent = '';
-  var ok = document.getElementById('kbPasteOkBtn'); if (ok) ok.disabled = false;
-  m.classList.add('on');
-  setTimeout(function () { if (ta) try { ta.focus(); } catch (e) {} }, 60);
-}
-function closeKbPaste() {
-  var m = document.getElementById('kbPasteModal'); if (m) m.classList.remove('on');
-}
+// ---------- 导入内容：格式识别 / 解析 / 预览 / 入库 ----------
+// 与网址导入共用同一个弹窗与同一套预览。格式（自动/纯文本/Markdown/富文本）只决定
+// 「不是网址」时怎么解析；网址走抓取路径，与格式选择无关（识别为网址时格式框自动置灰）。
 // 读取系统剪贴板（非安全上下文/exe 下可能失败，失败时仅提示，用户仍可手动 Ctrl+V 粘贴）
 async function kbReadClipboard() {
   var ta = document.getElementById('kbPasteArea');
@@ -15070,7 +15034,7 @@ function _kbParsePaste(raw, fmt) {
   raw = String(raw || '');
   var eff = (fmt === 'auto') ? _kbDetectFmt(raw) : fmt;
   var content;
-  if (eff === 'html') content = _htmlToText(raw);
+  if (eff === 'html') content = _kbStripBoiler(_htmlToText(raw), ' ');
   else if (eff === 'md') content = _kbLightNorm(raw);
   else content = _normText(raw);
   return { eff: eff, content: content };
@@ -15086,7 +15050,8 @@ function _kbRenderPlain(text) {
   }
   return out.join('');
 }
-// 实时预览：把当前内容与所选格式解析、渲染到预览区，并标注识别出的格式
+// 实时预览：识别出是网址就自动抓取正文（停顿 450ms 防抖）并渲染；否则按所选格式解析渲染。
+// 预览走 _kbComposeDoc + kbRenderContent，与真正入库共用同一套组装 —— 看到的就是导入后的样子。
 function kbUpdatePastePreview() {
   var ta = document.getElementById('kbPasteArea');
   var fmtSel = document.getElementById('kbPasteFmt');
@@ -15094,33 +15059,90 @@ function kbUpdatePastePreview() {
   var tag = document.getElementById('kbPasteFmtTag');
   if (!ta || !pv) return;
   var raw = ta.value;
-  var fmt = fmtSel ? fmtSel.value : 'auto';
-  if (!raw.trim()) {
-    pv.innerHTML = '<div class="hint" style="color:var(--sub)">粘贴内容后这里会实时显示导入后的解析与呈现效果</div>';
-    if (tag) tag.textContent = '';
+  var u = _isLikelyUrl(raw);
+  if (tag) tag.textContent = '';
+  if (u) {
+    if (fmtSel) fmtSel.disabled = true;
+    if (tag) tag.textContent = '识别为：网址';
+    if (_kbUrlCache.url === u && _kbUrlCache.body) { _kbPaintFetched(); return; }
+    pv.innerHTML = '<div class="hint" style="color:var(--sub)">🔗 检测到网址，正在抓取并解析网页正文…（自动过滤广告 / 导航 / 版权等无关内容）</div>';
+    if (_kbUrlTimer) clearTimeout(_kbUrlTimer);
+    _kbUrlTimer = setTimeout(function () { _kbAutoFetch(u); }, 450);
     return;
   }
-  var r = _kbParsePaste(raw, fmt);
+  if (fmtSel) fmtSel.disabled = false;
+  if (_kbUrlTimer) { clearTimeout(_kbUrlTimer); _kbUrlTimer = null; }
+  if (!raw.trim()) {
+    pv.innerHTML = '<div class="hint" style="color:var(--sub)">粘贴网址会自动抓取正文；粘贴文字 / Markdown / 富文本会直接解析。这里会实时显示导入后的效果。</div>';
+    return;
+  }
+  var r = _kbParsePaste(raw, fmtSel ? fmtSel.value : 'auto');
   if (tag) tag.textContent = '识别为：' + ({ html: '富文本', md: 'Markdown', plain: '纯文本' }[r.eff] || r.eff);
   var html = (r.eff === 'md') ? renderMarkdown(r.content) : _kbRenderPlain(r.content);
   if (!html || !html.trim()) html = '<div class="hint" style="color:var(--sub)">（内容为空）</div>';
   pv.innerHTML = html;
 }
-// 确认导入：按预览所用的解析结果入库，关闭弹窗
-function kbConfirmPaste() {
+// 自动抓取（输入停顿后触发）。抓取期间用户可能改了输入，回来后核对一次再渲染。
+async function _kbAutoFetch(u) {
+  var ta = document.getElementById('kbPasteArea');
+  try {
+    var page = await _kbFetchPage(u);
+    if (!ta || _isLikelyUrl(ta.value) !== u) return;   // 输入已变，丢弃这次结果
+    _kbUrlCache = page;
+    _kbPaintFetched();
+  } catch (e) {
+    if (!ta || _isLikelyUrl(ta.value) !== u) return;
+    var pv = document.getElementById('kbPastePreview');
+    if (pv) pv.innerHTML = '<div class="hint" style="color:var(--sub)">抓取失败：' + escapeHtml(String((e && e.message) || e)) + '　可以改为直接粘贴正文内容。</div>';
+  }
+}
+// 把抓取结果按「入库后的样子」渲染到预览区（与关闭弹窗后在知识库里看到的完全一致）
+function _kbPaintFetched() {
+  var pv = document.getElementById('kbPastePreview');
+  var tag = document.getElementById('kbPasteFmtTag');
+  var c = _kbUrlCache;
+  if (tag) tag.textContent = '识别为：网址（已抓取正文）';
+  if (!pv) return;
+  var doc = _kbComposeDoc(c.url, c.body, c.title, c.desc);
+  var preview = { id: '_pv', type: 'txt', name: doc.name, content: doc.content };
+  try { pv.innerHTML = kbRenderContent(preview); }
+  catch (e) { pv.innerHTML = '<p>' + escapeHtml(doc.content) + '</p>'; }
+}
+// 确认导入：智能识别 —— 整段是网址就先抓取正文（过滤广告 / 导航）再入库；
+// 否则按预览所用的解析结果入库。预览与入库同源，不会出现「预览好看、进去变样」。
+async function kbConfirmPaste() {
   var ta = document.getElementById('kbPasteArea');
   var fmtSel = document.getElementById('kbPasteFmt');
   var nmEl = document.getElementById('kbPasteName');
   if (!ta) return;
   var raw = ta.value;
-  if (!raw.trim()) { toast('请先粘贴内容', 'err'); return; }
+  if (!raw.trim()) { toast('请先粘贴内容或网址', 'err'); return; }
+  var nmIn = (nmEl && nmEl.value) ? nmEl.value.trim() : '';
+  var u = _isLikelyUrl(raw);
+  var okBtn0 = document.getElementById('kbPasteOkBtn');
+  if (u) {
+    if (okBtn0) { okBtn0.disabled = true; okBtn0.textContent = '抓取中…'; }
+    try {
+      if (!(_kbUrlCache.url === u && _kbUrlCache.body)) _kbUrlCache = await _kbFetchPage(u);
+      _kbPaintFetched();
+      kbImportUrlText(u, _kbUrlCache.body, nmIn || _kbUrlCache.title, _kbUrlCache.desc);
+      closeKbUrl();
+    } catch (e) {
+      toast('抓取失败：' + ((e && e.message) || e) + '　可以改为直接粘贴正文内容', 'err', 6500);
+      var pv = document.getElementById('kbPastePreview');
+      if (pv) pv.innerHTML = '<div class="hint" style="color:var(--sub)">抓取失败：' + escapeHtml(String((e && e.message) || e)) + '　可以改为直接粘贴正文内容。</div>';
+    } finally {
+      if (okBtn0) { okBtn0.disabled = false; okBtn0.textContent = '导入'; }
+    }
+    return;
+  }
   var fmt = fmtSel ? fmtSel.value : 'auto';
   var r = _kbParsePaste(raw, fmt);
   var body = r.content;
   if (!body.trim()) { toast('没有可导入的内容', 'err'); return; }
   var MAX = 200 * 1024;
   if (body.length > MAX) body = body.slice(0, MAX) + '\n\n…（内容过长已截断）';
-  var nm = (nmEl && nmEl.value) ? nmEl.value.trim() : '';
+  var nm = nmIn;
   if (!nm) {
     var firstLine = body.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l; })[0] || '粘贴导入';
     nm = firstLine.replace(/^[#>*`\-*\s]+/, '').replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40) || '粘贴导入';
@@ -15132,13 +15154,22 @@ function kbConfirmPaste() {
     content: body, sourceUrl: ''
   });
   saveKB(); flushKB(); kbInvalidateCache(); renderKbList();
-  closeKbPaste();
+  closeKbUrl();
   toast('已导入：' + nm, 'ok');
 }
 function _decodeEntities(s) {
   return String(s || '')
     .replace(/&nbsp;/gi, ' ').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"').replace(/&#39;/g, "'").replace(/&apos;/gi, "'")
+    .replace(/&(?:mdash|horbar);/gi, '—').replace(/&ndash;/gi, '–')
+    .replace(/&hellip;/gi, '…').replace(/&[lr]dquo;/gi, '"').replace(/&[lr]squo;/gi, "'")
+    .replace(/&middot;/gi, '·').replace(/&times;/gi, '×').replace(/&divide;/gi, '÷')
+    .replace(/&copy;/gi, '©').replace(/&reg;/gi, '®').replace(/&trade;/gi, '™')
+    .replace(/&laquo;/gi, '«').replace(/&raquo;/gi, '»')
+    .replace(/&bull;/gi, '•').replace(/&deg;/gi, '°')
+    // 十六进制实体（形如 &#xff0c;）：此前只处理十进制，中文站点爱用十六进制，
+    // 于是源码里原样留着 &#xff0c;，读起来一串鬼画符（用户截图实证）。
+    .replace(/&#x([0-9a-f]+);/gi, function (m, h) { try { return String.fromCodePoint(parseInt(h, 16)); } catch (e) { return m; } })
     .replace(/&#(\d+);/g, function (m, d) { try { return String.fromCodePoint(+d); } catch (e) { return m; } })
     .replace(/&amp;/gi, '&');   // 放最后，避免把 &amp;lt; 解成 <
 }
@@ -15151,6 +15182,62 @@ function _metaContent(html, key) {
   m = re2.exec(html);
   if (m) return _decodeEntities(m[1]).replace(/\s+/g, ' ').trim();
   return '';
+}
+// 按 class/id 关键词剔除噪声块（推荐位 / 评论 / 分享 / 工具栏 / 版权 / 目录 / 广告 等）及其内容。
+// 关键词按「分隔符边界」匹配：'read' 不会被当成 'ad'，'photo' 不会被当成 'hot'。
+function _kbStripNoise(html) {
+  var s = String(html || '');
+  var KW = /(^|[-_\s])(ad|ads|advert|advertise|sponsor|promo|banner|nav|navi|navigation|menu|sidebar|aside|footer|header|comment|recommend|related|share|social|toolbar|breadcrumb|pagination|pager|subscribe|newsletter|copyright|reward|donate|rank|hot|tags?|catalog|toc|anchor|qr|follow|float)([-_\s]|$)/i;
+  var re = /<([a-z][a-z0-9]*)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+  // 多跑几轮：嵌套的噪声块要外层去掉后内层才暴露，一轮清不干净
+  for (var pass = 0; pass < 4; pass++) {
+    var changed = false;
+    s = s.replace(re, function (all, tag, attrs, inner) {
+      var am = /(?:class|id)\s*=\s*["']([^"']*)["']/i.exec(attrs);
+      if (am && KW.test(am[1])) { changed = true; return ' '; }
+      return all;
+    });
+    if (!changed) break;
+  }
+  return s;
+}
+// 网页样板行：发布时间 / 阅读量 / 版权声明 / 收录信息 / 关注引导 / 页码残留 等，逐行剔除。
+// 只在「抓取网页正文」与「富文本粘贴」两条路径生效 —— 纯文本 / Markdown 粘贴不动，
+// 免得把用户自己的正文误删（用户粘进来的正文里本来就可能有「2」「原创」这类字样）。
+var _KB_BOILER_RES = [
+  /^(?:原创|转载|翻译|首发|置顶|精选|热门|推荐|收藏|点赞|评论|分享|关注|订阅|广告|赞助|推广|打赏)$/,
+  /^\d+(?:\.\d+)?\s*[wW万]?\s*(?:阅读|浏览|观看|人气|收藏|点赞|评论|次)$/,
+  /^(?:阅读量|浏览量|点击数|字数|时长|阅读时长)\s*[:：]?\s*[\d.]+/,
+  /^(?:最新)?(?:推荐)?(?:文章)?(?:发布|更新|编辑|创建|发表|修改)(?:于|时间)?\s*[:：]?\s*\d{4}[-/年]/,
+  /^\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/,
+  /^(?:本内容|本文|版权|版权声明|免责声明|版权所有|Copyright|声明)[\s\S]{0,60}(?:协议|版权|转载|许可|署名|BY-SA|CC\s*\d)/i,
+  /^(?:CC\s*\d(?:\.\d)?|BY-SA|CC-BY)/i,
+  /^(?:收录于|专栏收录|被以下[\s\S]{0,12}收录|当前文章被以下|未经授权|转载请联系)/,
+  /^(?:GEO|SEO)(?:检测|优化|分析)?$/,
+  /^(?:扫码|扫一扫|微信扫一扫|关注公众号|关注我们|打开APP|APP内打开|下载APP|立即下载|点击下载|阅读原文|原文链接)/,
+  /^(?:↑|↓|←|→|回到顶部|返回顶部|点击查看|点此查看|展开全部|显示全部|展开|收起)$/,
+  /^[\d\s.,:;·|/\\+\-=()（）]+$/
+];
+// 逐行过滤样板行，并去掉与标题重复的行、连续重复的行
+function _kbStripBoiler(text, title) {
+  var s = String(text || '');
+  var t = String(title || '').trim();
+  var lines = s.split('\n');
+  var out = [], prev = null;
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    var key = ln.trim();
+    if (key) {
+      if (t && key === t) continue;          // 与文档标题重复
+      if (key === prev) continue;            // 连续重复行（转载站点很常见）
+      var hit = false;
+      for (var j = 0; j < _KB_BOILER_RES.length; j++) { if (_KB_BOILER_RES[j].test(key)) { hit = true; break; } }
+      if (hit) continue;
+    }
+    out.push(ln);
+    if (key) prev = key;
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\s+$/, '');
 }
 // 纯文本版的冗余清理（粘贴/抓取后的正文都过一遍，幂等）
 function _normText(s) {
@@ -15176,65 +15263,114 @@ function _normText(s) {
   s = s.replace(/\n{3,}/g, '\n\n');   // 兜底，杜绝任何残留的 3+ 连续空行
   return s;
 }
-// 优先抽取 <main>/<article>/[role=main] 核心内容区，去掉侧栏/页脚/导航噪声
+// 优先抽取核心内容区，去掉侧栏 / 页脚 / 导航 / 推荐位。
+// 只认 <main>/<article>/[role=main] 不够：CSDN 这类站点正文在 #content_views 里，
+// 于是整页（含推荐位、版权、评论）都被当成正文 —— 用户截图里的噪声就是这么来的。
+// 现在三级兜底：常见文章容器的 id/class 关键词 → 语义标签 → 整页里文字最密的 div。
 function _pickMainContent(html) {
-  var blocks = [];
+  var h = String(html || '');
+  function textLen(seg) { return seg.replace(/<[^>]+>/g, '').replace(/\s+/g, '').length; }
+  var cands = [];
+  var KW = /(content_views|article[_-]?content|post[_-]?content|entry[_-]?content|markdown[_-]?body|rich_media_content|js_content|article[_-]?body|post[_-]?body|main[_-]?content|detail[_-]?content|text[_-]?content|blog[_-]?content|article[_-]?detail)/i;
+  var re1 = /<(div|section|article|main)\b([^>]*)>/gi, m1;
+  while ((m1 = re1.exec(h))) {
+    var am = /(?:id|class)\s*=\s*["']([^"']*)["']/i.exec(m1[2]);
+    if (!am || !KW.test(am[1])) continue;
+    var ci = h.indexOf('</' + m1[1] + '>', re1.lastIndex);
+    if (ci > 0) cands.push(h.slice(re1.lastIndex, ci));
+  }
   [['main', 'main'], ['article', 'article']].forEach(function (p) {
-    var mo = new RegExp('<' + p[0] + '(?=[\\s>])[^>]*>', 'i').exec(html);
+    var mo = new RegExp('<' + p[0] + '(?=[\\s>])[^>]*>', 'i').exec(h);
     if (mo) {
-      var co = new RegExp('</' + p[1] + '>', 'i').exec(html.slice(mo.index));
-      if (co) blocks.push(html.slice(mo.index + mo[0].length, mo.index + co.index));
+      var co = new RegExp('</' + p[1] + '>', 'i').exec(h.slice(mo.index));
+      if (co) cands.push(h.slice(mo.index + mo[0].length, mo.index + co.index));
     }
   });
-  var role = /<[^>]+role=["']?main["']?[^>]*>/i.exec(html);
-  if (role) blocks.push(html.slice(role.index + role[0].length, role.index + role[0].length + 40000));
-  if (!blocks.length) return '';
-  blocks.sort(function (a, b) { return b.length - a.length; });
-  return blocks[0];
+  var role = /<[^>]+role=["']?main["']?[^>]*>/i.exec(h);
+  if (role) cands.push(h.slice(role.index + role[0].length, role.index + role[0].length + 40000));
+  // 兜底：没有任何可识别容器时，取「文字多、标签占比低」的 div（正文容器通常是它）
+  if (!cands.length) {
+    var re3 = /<div\b[^>]*>([\s\S]*?)<\/div>/gi, m3;
+    var best = '', bestScore = 0;
+    while ((m3 = re3.exec(h))) {
+      var seg = m3[1];
+      var t = textLen(seg);
+      if (t < 200) continue;
+      var score = t / (seg.length + 1);
+      if (score > bestScore && score > 0.25) { bestScore = score; best = seg; }
+    }
+    if (best) cands.push(best);
+  }
+  cands = cands.filter(function (c) { return textLen(c) >= 200; });
+  if (!cands.length) return '';
+  cands.sort(function (a, b) { return textLen(b) - textLen(a); });
+  return cands[0];
 }
 function _htmlToText(html) {
   var s = String(html || '');
   s = s.replace(/<!--[\s\S]*?-->/g, '');
-  // 有核心内容区就只在里面取，避免把整页侧栏/页脚噪声带进来
+  // 有核心内容区就只在里面取，避免把整页侧栏/页脚/推荐位噪声带进来
   var main = _pickMainContent(s);
   if (main) s = main;
+  // 再按 class/id 关键词剔除噪声块（推荐位 / 评论 / 工具栏 / 分享 / 版权 / 目录 等）及其内容
+  s = _kbStripNoise(s);
   // 整段删除无正文价值的标签（含自闭合/未闭合残留）
   s = s.replace(/<(script|style|noscript|svg|iframe|head|nav|footer|header|aside|form|button|menu|dialog|template|figure|figcaption|canvas)[^>]*>[\s\S]*?<\/\1>/gi, ' ');
   s = s.replace(/<(script|style|noscript|svg|iframe|canvas)[^>]*\/?>/gi, ' ');
-  // 块级标签先转换行，否则整页会挤成一行，分块检索会失效
+  // 块级标签转换行；顺带把标题 / 列表转成 markdown 标记，让导入后的正文按结构排版。
+  // 以前块级只转单换行，markdown 会把整段并成一个大段落，读起来就是「一坨」。
   s = s.replace(/<br\s*\/?>/gi, '\n');
-  s = s.replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote|dd|dt|main|header|footer|aside)[^>]*>/gi, '\n');
+  s = s.replace(/<h([1-6])[^>]*>/gi, function (m, d) { return '\n' + new Array(Math.min(3, +d) + 1).join('#') + ' '; });
+  s = s.replace(/<li[^>]*>/gi, '\n- ');
+  s = s.replace(/<\/(p|div|section|article|blockquote|tr|table|ul|ol|h[1-6]|dd|dt|main|header|footer|aside)[^>]*>/gi, '\n\n');
   s = s.replace(/<[^>]+>/g, '');
   s = _decodeEntities(s);
   return _normText(s);
 }
-function kbImportUrlText(url, text, title, desc) {
-  // 统一冗余空格/换行/无效字符；抓取与粘贴路径都过一遍 _normText（幂等）
-  var body = _normText(text);
-  if (!body) { toast('没有可导入的内容', 'err'); return; }
-  var MAX = 200 * 1024;
-  if (body.length > MAX) body = body.slice(0, MAX) + '\n\n…（内容过长已截断）';
+// 把「网址 / 标题 / 摘要 / 正文」组装成结构统一的入库内容：标题 + 来源 + 摘要 + 美化后的正文。
+// 预览与真正入库共用它，保证「预览看到的就是导入后的」。
+function _kbComposeDoc(url, text, title, desc) {
+  // 先做样板行过滤与冗余空白清理；正文已按空行分段（块级标签在 _htmlToText 里转成空行）
+  var body = _kbStripBoiler(_normText(text), String(title || '').trim());
   var nm = String(title || '').trim() || _kbNameFromUrl(url) || '网页导入';
-  nm = nm.replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  nm = nm.replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || '网页导入';
+  // 正文里已有的「来源：/摘要：」行与重复的标题行先去掉，避免和头部重复；
+  // 顺序很重要：必须先去重再生成摘要，否则「摘要：」会取到正文里那条「来源：」。
+  var lines = body.split('\n');
+  var kept = [];
+  for (var i = 0; i < lines.length; i++) {
+    var key = lines[i].trim();
+    if (/^(?:来源|摘要)[:：]/.test(key)) continue;
+    if (nm && key === nm) continue;
+    kept.push(lines[i]);
+  }
+  body = kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   // 字段统一、结构清晰，便于直接使用：标题 / 来源 / 摘要 / 正文
   var head = [];
   if (nm && nm !== '网页导入' && nm !== '粘贴导入') head.push(nm);
   if (url) head.push('来源：' + url);
   var d = String(desc || '').trim();
   if (!d) {
-    // 没有 meta 描述时，用正文首段生成摘要
+    // 没有 meta 描述时，用清洗后的正文首段生成摘要
     var firstPara = body.split(/\n{2,}/)[0] || body;
     d = firstPara.replace(/\s+/g, ' ').trim().slice(0, 160);
   }
   if (d) head.push('摘要：' + d);
-  // 去掉正文中与标题重复的首行，避免冗余
-  var lines = body.split('\n');
-  if (lines.length && lines[0].trim() === nm) { lines.shift(); body = lines.join('\n').trim(); }
   var finalBody = head.length ? (head.join('\n') + '\n\n' + body) : body;
+  return { name: nm, content: finalBody };
+}
+function kbImportUrlText(url, text, title, desc) {
+  // 统一冗余空格/换行/无效字符；抓取与粘贴路径都过一遍 _normText（幂等）
+  if (!_normText(text)) { toast('没有可导入的内容', 'err'); return; }
+  var doc = _kbComposeDoc(url, text, title, desc);
+  var nm = doc.name;
+  var body = doc.content;
+  var MAX = 200 * 1024;
+  if (body.length > MAX) body = body.slice(0, MAX) + '\n\n…（内容过长已截断）';
   ALL_KB.push({
     id: 'kb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    name: nm, type: 'txt', size: finalBody.length, updatedAt: Date.now(),
-    content: finalBody, sourceUrl: url || ''
+    name: nm, type: 'txt', size: body.length, updatedAt: Date.now(),
+    content: body, sourceUrl: url || ''
   });
   saveKB(); flushKB();
   kbInvalidateCache();
@@ -16972,7 +17108,7 @@ async function testConnection() {
 
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
-var APP_VERSION = '2.1';
+var APP_VERSION = '2.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
