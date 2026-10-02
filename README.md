@@ -48,14 +48,37 @@ python -m http.server 8000   # 访问 http://localhost:8000/BotCraft.html
 build_exe\build.bat                 # 产物 build_exe\dist\BotCraft.exe
 python build_exe\release_exe.py     # 发版：上传到 GitHub Releases（token 走 git credential）
 
-# 全链校验（54 项：语法 / CSS / 功能单测 / lint / 断言 / 对比度 / exe 一致性等）
+# 全链校验（59 项：语法 / CSS / 功能单测 / lint / 断言 / 对比度 / exe 一致性等）
 python build_exe\run_all_checks.py
 
 # 重生成图标
 python gen_icon.py                  # 加 --dry 只出预览
 ```
 
-主文件为单文件 `BotCraft.html`（3 个 `<script>` 块），改动请保持作用域不相互污染；测试依赖 jsdom（装在隔离的 node workspace，缺环境时对应项显式变红，不给假绿）。
+主文件为单文件 `BotCraft.html`（4 个 `<script>` 块），改动请保持作用域不相互污染；测试依赖 jsdom（装在隔离的 node workspace，缺环境时对应项显式变红，不给假绿）。
+
+### 基础工具层（改代码前必读）
+
+工具层定义在**第 1 个 `<script>` 块**、紧接安全存储层 `__storage` 之后 —— 必须早于所有使用者（第 1 块自身的后续模块也在用）。它是全局最底层的公共设施，其余模块只依赖它，不允许反向依赖。
+
+| 工具 | 用途 | 关键约定 |
+| --- | --- | --- |
+| `storeGet(key, fallback)` | 读存储 + JSON 解析 | 键不存在 / 值为 `null` / 解析失败一律返回 `fallback`，**绝不抛**。注意 `fallback` 传 `0` 或 `false` 不会被误判为空 |
+| `storeSet(key, val)` | 写存储（自动序列化） | 返回布尔值，`false` 表示配额满或存储被禁用 |
+| `storeDel(key)` | 删存储 | 返回布尔值 |
+| `storeGetRaw` / `storeSetRaw` | 裸字符串读写（长文本、UI 偏好） | **必须成对使用**。误用 `storeSet` 写、 `storeGetRaw` 读，值会带引号，表现为「配置里凭空多一对引号」，极难排查 |
+| `_deepClone(v)` | 结构化深拷贝 | 用于「改副本但不能污染原件」（快照 / 撤销 / 导入合并） |
+| `escAttrJs(s)` | **内联 `onclick` 专用**转义 | 见下方转义约定 |
+
+**转义约定（三者语义不同，不可混用）**
+
+- `escapeHtml` —— HTML **文本节点**位置。按设计**不转义引号**（`renderMarkdown` 的 URL 白名单依赖这一性质）。放进属性里等于没转义。
+- `escapeAttr` —— HTML **属性值**位置（`value=` / `title=` / `data-*` / `alt=`），会转义引号。
+- `escAttrJs` —— 内联 `onclick="fn('${x}')"` 中 `x` 所处的 **JS 单引号字符串**上下文。此前这里误用了 `escapeHtml`，导致备份导入一个 `id` 含 `'` 的数据即可闭合字符串注入任意代码。
+
+**存储**：一律走工具层，不要直接调 `localStorage.*`。直接调会绕过 `__storage` 安全层 —— 双击 `file://` 打开时部分浏览器禁用 `localStorage`，安全层会退化为内存 Map（本次会话仍可用），而裸调用会静默吞掉写入，用户表现为「保存了但关掉就没」。仅第 4 块（独立诊断/右键复制块）例外：它刻意保持独立，不能依赖主块定义的任何东西。
+
+**门禁脚本的 node 路径**：已改为自动探测（`BC_NODE` 环境变量 → 按语义化版本取最新 → PATH）。若把门禁结果当作发布依据，请留意**没有 SKIP 项** —— 脚本找不到 node 会直接判FAIL 而非跳过（静默跳过比失败危险）。
 
 ## 许可证
 
