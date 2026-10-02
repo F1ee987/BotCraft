@@ -2082,7 +2082,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <h2 style="font-size:16px">🔗 导入内容</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">关闭</button>
     </div>
-    <div class="hint" style="font-size:11.5px;margin:0 0 9px">粘贴<b>网址</b>会自动抓取网页正文（过滤广告 / 导航 / 版权等无关内容，仅保留核心正文）并自动排版；粘贴<b>文字 / Markdown / 富文本</b>则直接解析排版后导入。</div>
+    <div class="hint" style="font-size:11.5px;margin:0 0 9px">粘贴<b>网址</b>会自动抓取网页正文（过滤广告 / 导航 / 版权等无关内容，仅保留核心正文）并自动排版；粘贴<b>文字 / Markdown / 富文本</b>则直接解析排版后导入；粘贴 <b>CSDN 文章</b>（网页地址、复制的正文或导出的 Markdown）会自动识别，剥掉目录 / 评论区 / 关注栏 / 付费提示，保留标题层级、代码块、公式、表格与图片。</div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:9px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="kbReadClipboard()" title="读取系统剪贴板内容">📥 读取剪贴板</button>
       <label style="font-size:12px;color:var(--sub);margin-left:auto;display:flex;align-items:center;gap:6px">格式
@@ -15033,6 +15033,11 @@ function importKbFile(file) {
     const name = file.name || '未命名文档';
     const ext = (name.split('.').pop() || '').toLowerCase();
     const type = (ext === 'csv') ? 'csv' : (ext === 'json') ? 'json' : 'txt';
+    // CSDN 导出的 .md（含目录占位/公式/脚注）或复制的 HTML：
+    // 只有识别为 CSDN 才过专用清洗，其他来源原样入库，行为不变。
+    if (type === 'txt' && _kbIsCsdnText(content)) {
+      content = _kbBeautifyBody(/<[a-z!][\s\S]*>/i.test(content) ? _kbCsdnHtmlToMd(content) : _kbCsdnCleanMd(content));
+    }
     ALL_KB.push({ id: 'kb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, type: type, size: file.size, updatedAt: Date.now(), content: content });
     saveKB(); flushKB(); kbInvalidateCache(); renderKbList();
     toast('已导入：' + name, 'ok');
@@ -15077,6 +15082,7 @@ async function _kbFetchPage(url) {
   var html = r.text || '';
   var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
   var title = tm ? _decodeEntities(tm[1]).replace(/\s+/g, ' ').trim() : '';
+  if (_kbIsCsdnUrl(url)) title = _kbCsdnTitle(title);
   var desc = _metaContent(html, 'description') || _metaContent(html, 'og:description') || '';
   var body = _htmlToText(html);
   if (!body || body.length < 60) throw new Error('未能从该页面提取到有效正文（可能整页由脚本渲染）');
@@ -15274,6 +15280,12 @@ function _kbBeautifyBody(text) {
 function _kbParsePaste(raw, fmt) {
   raw = String(raw || '');
   var eff = (fmt === 'auto') ? _kbDetectFmt(raw) : fmt;
+  // CSDN 专用分支：识别为 CSDN 时一律转成 Markdown 走渲染层，
+  // 格式下拉框选什么都不影响（用户不该为「CSDN 粘进来长什么样」操心）。
+  if (_kbIsCsdnText(raw)) {
+    var cm = /<[a-z!][\s\S]*>/i.test(raw) ? _kbCsdnHtmlToMd(raw) : _kbCsdnCleanMd(raw);
+    return { eff: 'md', content: _kbBeautifyBody(cm), csdn: true };
+  }
   var content;
   if (eff === 'html') content = _kbBeautifyBody(_kbStripBoiler(_htmlToText(raw), ' '));
   else if (eff === 'md') content = _kbBeautifyBody(_kbLightNorm(raw));
@@ -15318,7 +15330,7 @@ function kbUpdatePastePreview() {
     return;
   }
   var r = _kbParsePaste(raw, fmtSel ? fmtSel.value : 'auto');
-  if (tag) tag.textContent = '识别为：' + ({ html: '富文本', md: 'Markdown', plain: '纯文本' }[r.eff] || r.eff);
+  if (tag) tag.textContent = '识别为：' + (r.csdn ? 'CSDN 文章（Markdown）' : ({ html: '富文本', md: 'Markdown', plain: '纯文本' }[r.eff] || r.eff));
   var html = (r.eff === 'md') ? renderMarkdown(r.content) : _kbRenderPlain(r.content);
   if (!html || !html.trim()) html = '<div class="hint" style="color:var(--sub)">（内容为空）</div>';
   pv.innerHTML = html;
@@ -15442,6 +15454,432 @@ function _kbStripNoise(html) {
   }
   return s;
 }
+// ==================== CSDN 兼容层（仅导入 / 抓取路径）====================
+// CSDN 有两套完全不同的怪癖，通用规则哪一套都覆盖不了：
+//   页面：正文在 #content_views 里；目录在 #treeSkill；付费遮挡在 .readall_content /
+//         .vip-*；互动区在 .blogVoteBox / .comment_box；代码块是 <pre><code class="language-x">；
+//         表格是真 <table>（通用路径会把它压成一坨）；图片 URL 带 #pic_center；
+//         公式已被 KaTeX/MathJax 渲染成 <span class="katex">，里面藏着一份 LaTeX 源码。
+//   复制：带 [toc]/[[toc]] 目录占位、[^1] 脚注、$$ 公式、VIP 付费提示、
+//         「关注博主 … 点赞 … 收藏」一行三连、[文字](#articleHeading3) 自锚跳转。
+// 全部处理都挂在 _kbIsCsdnText 这一个判定后面：非 CSDN 来源走原路径，行为不变。
+
+var _KB_CSDN_HOSTS = /(^|\/\/|\.)(blog|download|mp|ask|wenku|gitlab|note)\.csdn\.net/i;
+// CSDN 页面 / 正文的指纹。任意两条命中才认定 —— 单条太弱，很多站点都有 recommend/comment。
+var _KB_CSDN_MARKS = [
+  /id=["']?content_views/i,
+  /class=["'][^"']*\barticle_content\b/i,
+  /id=["']?treeSkill/i,
+  /id=["']?comment_box/i,
+  /class=["'][^"']*\bblogVoteBox\b/i,
+  /class=["'][^"']*\breadall_content\b/i,
+  /img-blog\.csdnimg\.cn/i,
+  /#pic_center/i,
+  /\barticleHeading\d+\b/i,
+  /\[\[?toc\]?\]/i,
+  /class=["'][^"']*\bkatex\b/i,
+  /csdn\.net\//i
+];
+function _kbIsCsdnUrl(u) { return _KB_CSDN_HOSTS.test(String(u || '')); }
+function _kbCsdnScore(s) {
+  var t = String(s || '');
+  if (!t) return 0;
+  var n = 0;
+  for (var i = 0; i < _KB_CSDN_MARKS.length; i++) { if (_KB_CSDN_MARKS[i].test(t)) n++; }
+  return n;
+}
+function _kbIsCsdnText(s) { return _kbCsdnScore(s) >= 2; }
+
+// CSDN 的噪声容器几乎都是自造类名，通用关键词表（_kbStripNoise）只覆盖 comment/recommend
+// 这类通用词，付费遮挡、投票区、左右侧栏这些一个都拦不住 —— 只能单列名单。
+var _KB_CSDN_NOISE_KW = [
+  'treeSkill', 'article-copyright', 'copyright', 'blogVoteBox', 'readall_content',
+  'readall', 'hide-article-box', 'hide-word-box', 'word-mark', 'vip-', 'vip_',
+  'comment_box', 'comment-box', 'comment-list', 'blog-comment', 'recommend-box',
+  'recommend-pre', 'recommend-list', 'articlelist', 'related-box', 'hot-article',
+  'left-box', 'right-box', 'left-sidebar', 'right-sidebar', 'blog-footer',
+  'blog-bar', 'blog-rank', 'blog-tags', 'article-tag', 'tag-cloud', 'blog-reward',
+  'csdn-rail', 'float-bar', 'anchor-fix', 'blog-editor', 'blog-subscribe',
+  'subscribe-box', 'pay-box', 'app-box', 'qrcode', 'ad-placement', 'read-report',
+  'prompt-', 'bottom-bar', 'view-box', 'blog-bottom'
+];
+function _kbCsdnNoiseHit(attrs) {
+  var m = /(?:class|id)\s*=\s*["']([^"']*)["']/i.exec(String(attrs || ''));
+  if (!m) return false;
+  var t = m[1].toLowerCase();
+  for (var i = 0; i < _KB_CSDN_NOISE_KW.length; i++) {
+    if (t.indexOf(_KB_CSDN_NOISE_KW[i]) >= 0) return true;
+  }
+  return false;
+}
+// 整块删除 CSDN 噪声。不能用「<div ...>…</div> 非贪婪扫一遍」的做法 ——
+// 那会先匹配到最外层容器（#content_views 之类），它不命中噪声名单就被整段保留，
+// 于是**嵌在它内部的**噪声（comment_box / vip-*）永远暴露不出来（实测评论被带进正文）。
+// 改成：逐个标签定位 → 深度配平截取 → 命中就删 → 从头再来，让外层下一轮也能命中。
+function _kbCsdnStripHtml(html) {
+  var s = String(html || '');
+  if (!s) return s;
+  // 属性组不能用 [^>]* 之外的花样，但**必须排除引号内的 '<'** ——
+  // 否则 <pre><code class="x"> 会被解析成「pre 的属性里含 class="x"」，
+  // 命中噪声词后整段代码（含 </pre></code> 之后的正文）被删掉（实测代码块整块消失）。
+  var tagRe = /<([a-z][a-z0-9]*)\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
+  var guard = 0;
+  while (guard++ < 300) {
+    tagRe.lastIndex = 0;
+    var m, removed = false;
+    while ((m = tagRe.exec(s))) {
+      if (/\/>$/.test(m[0])) continue;                 // 自闭合标签没有内容可删
+      if (!_kbCsdnNoiseHit(m[2])) continue;
+      var cut = _kbCsdnSliceTag(s, m.index + m[0].length, m[1]);
+      s = s.slice(0, m.index) + ' ' + s.slice(cut.end);
+      removed = true;
+      break;
+    }
+    if (!removed) break;
+  }
+  s = s.replace(/<(script|style|noscript|svg|iframe|canvas|form|button|input|select|textarea)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ');
+  s = s.replace(/<(script|style|noscript|svg|iframe|canvas)\b[^>]*\/?>/gi, ' ');
+  return s;
+}
+// 按标签深度配平截取容器内部。CSDN 正文里 div 套 div 是常态，用 indexOf 找第一个闭合标签
+// 只能拿到最外层几行，正文会被截断（这是通用 _pickMainContent 的已知短板）。
+// from 是**内容起点**（即起始标签之后）；返回的是这段内容，调用方据此算出结束位置。
+function _kbCsdnSliceTag(html, from, tag) {
+  var re = new RegExp('<(/?)' + tag + '\\b[^>]*>', 'gi');
+  re.lastIndex = from;
+  var depth = 1, m;
+  while ((m = re.exec(html))) {
+    if (m[1]) {
+      depth--;
+      // 返回配平闭合标签的**起点** m.index：调用方从起始标签处删到它为止，正好整块拿掉。
+      // 早前只返回内容、由调用方用「总长 - 内容长度」倒推结束位置，那是长度反推 ——
+      // 内容里出现与尾部相同的片段就算错位，实测把 <pre> 代码块连同其后正文整段删掉了。
+      if (depth === 0) return { inner: html.slice(from, m.index), end: m.index };
+    } else depth++;
+  }
+  return { inner: html.slice(from), end: html.length };
+}
+// 把 KaTeX 渲染块换回 LaTeX 源码（$…$）。壳里嵌着 span，必须深度配平取整块。
+// 多个公式按出现顺序逐个替换回原位，不追加到末尾（追加会打乱正文顺序）。
+function _kbCsdnKatexToTex(html) {
+  var s = String(html || '');
+  if (!/\bkatex\b/.test(s)) return s;
+  var openRe = /<span\b[^>]*\bclass=["'][^"']*\bkatex\b[^"']*["'][^>]*>/gi;
+  var guard = 0;
+  while (guard++ < 200) {
+    openRe.lastIndex = 0;
+    var om = openRe.exec(s);
+    if (!om) break;
+    var from = om.index + om[0].length;
+    var cut = _kbCsdnSliceTag(s, from, 'span');
+    var am = /<annotation[^>]*encoding=["']application\/x-tex["'][^>]*>([\s\S]*?)<\/annotation>/i.exec(cut.inner);
+    var tex = am ? _decodeEntities(am[1].replace(/<[^>]+>/g, '')).trim() : '';
+    s = s.slice(0, om.index) + (tex ? ' $ ' + tex + ' $ ' : ' ') + s.slice(cut.end);
+    // 替换后可能又露出下一个 katex 壳，continue 重新扫；无 tex 时删空壳再继续
+  }
+  return s;
+}
+function _kbCsdnPickContent(html) {
+  var s = String(html || '');
+  var m = /<div\b[^>]*\bid=["']?content_views["']?[^>]*>/i.exec(s);
+  if (m) return _kbCsdnSliceTag(s, m.index + m[0].length, 'div').inner;
+  m = /<div\b[^>]*\bclass=["'][^"']*\b(?:article_content|htm_content|blog-content-box)\b[^"']*["'][^>]*>/i.exec(s);
+  if (m) return _kbCsdnSliceTag(s, m.index + m[0].length, 'div').inner;
+  m = /<article\b[^>]*>/i.exec(s);
+  if (m) return _kbCsdnSliceTag(s, m.index + m[0].length, 'article').inner;
+  return '';
+}
+// CSDN 图片 URL 带展示锚点（#pic_center 之类），带上它在部分环境直接裂图
+function _kbCsdnImgUrl(u) {
+  var s = _decodeEntities(String(u || '').trim());
+  s = s.replace(/#(?:pic_center|pic_right|pic_big|pic_middle|pic_small)\b.*$/i, '');
+  return s.replace(/[()\s]/g, function (m) { return '%' + m.charCodeAt(0).toString(16).toUpperCase(); });
+}
+// 代码块语言标识：只做安全兜底，**不改写**作者写的名字。
+// 渲染层的 _KB_HASH_LANG_RE / runKindOf 本来就同时认 py 与 python、js 与 javascript，
+// 归一反而让 data-lang 与原文不一致（复制出去就变了）。
+// 真正要拦的是「语言名里带引号/尖括号」——它会被塞进 data-lang 属性。
+function _kbCsdnLang(l) {
+  var s = String(l == null ? '' : l).toLowerCase().replace(/^\./, '').replace(/^\s+|\s+$/g, '');
+  return /^[a-z0-9+#-]{1,20}$/.test(s) ? s : '';
+}
+function _kbCsdnStripTags(html) {
+  return _decodeEntities(String(html == null ? '' : html).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''))
+    .replace(/[ \t\u00a0]+/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+}
+// <table> → Markdown 管道表。通用路径没有这一步，表格会被压成一行文字。
+function _kbCsdnTableToMd(inner) {
+  var rows = [];
+  var trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi, tm;
+  while ((tm = trRe.exec(String(inner || '')))) {
+    var cells = [], cm = /<(t[dh])\b[^>]*>([\s\S]*?)<\/\1>/gi, c;
+    // 注意匹配结果要落在 c 而不是 cm —— 写成 (cm = cm.exec(...)) 会把正则本身
+    // 覆盖成上一次的结果，第二次迭代 cm.exec 就不存在了（实测 TypeError）。
+    while ((c = cm.exec(tm[1]))) {
+      cells.push(_kbCsdnStripTags(c[2]).replace(/\|/g, '\\|').replace(/\s*\n+\s*/g, ' ').trim());
+    }
+    if (cells.length) rows.push({ c: cells, head: /<th\b/i.test(tm[1]) });
+  }
+  if (!rows.length) return '';
+  var width = 0;
+  for (var i = 0; i < rows.length; i++) { if (rows[i].c.length > width) width = rows[i].c.length; }
+  if (!width) return '';
+  function line(cells) {
+    var c = cells.slice();
+    while (c.length < width) c.push('');
+    return '| ' + c.join(' | ') + ' |';
+  }
+  var sep = [];
+  for (var j = 0; j < width; j++) sep.push('---');
+  var md = [];
+  var start = (rows[0].head) ? 0 : -1;
+  if (start < 0) { md.push(line([''])); md.push('| ' + sep.join(' | ') + ' |'); md.push(line(rows[0].c)); }
+  else md.push(line(rows[0].c));
+  md.push('| ' + sep.join(' | ') + ' |');
+  for (var k = (start < 0 ? 1 : 1); k < rows.length; k++) md.push(line(rows[k].c));
+  return md.join('\n');
+}
+
+// CSDN 页面 → Markdown。通用 _htmlToText 会丢图片、压扁表格、把代码混进正文，
+// 而 CSDN 正文恰恰这三样最多，所以单走一条。
+// 顺序有讲究：代码块 / 表格先摘成占位（后面的标签清洗绝不能碰它们），
+// 公式要在 MathML 剥掉之前把 LaTeX 源码取出来，最后才是行内标签与实体。
+function _kbCsdnHtmlToMd(html) {
+  var s = String(html || '');
+  if (!s) return '';
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  // 顺序要紧：**先取正文容器，再剥噪声**。
+  // 反过来（先剥后取）会踩坑：删掉嵌套噪声块后，正文容器里会留下若干孤立的 </div>，
+  // 深度配平数到第一个孤立闭合标签就以为容器结束了，正文被截断（实测只剩前两行）。
+  var body = _kbCsdnPickContent(s) || s;
+  body = _kbCsdnStripHtml(body);
+  var store = [];
+  function put(t) { store.push(t); return '\u0000CS' + (store.length - 1) + '\u0000'; }
+
+  body = body.replace(/<pre\b[^>]*>\s*<code\b([^>]*)>([\s\S]*?)<\/code>\s*<\/pre>/gi, function (all, attrs, code) {
+    var lm = /class=["'][^"']*\blanguage-([\w+#.-]+)/i.exec(attrs) || /class=["'][^"']*\blang-([\w+#.-]+)/i.exec(attrs);
+    var lang = lm ? _kbCsdnLang(lm[1]) : '';
+    var txt = _decodeEntities(String(code).replace(/<[^>]+>/g, '')).replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+    if (!txt) return '';
+    return put('\n\x60\x60\x60' + lang + '\n' + txt + '\n\x60\x60\x60\n');
+  });
+  body = body.replace(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi, function (all, code) {
+    var txt = _decodeEntities(String(code).replace(/<[^>]+>/g, '')).replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+    return txt ? put('\n\x60\x60\x60\n' + txt + '\n\x60\x60\x60\n') : '';
+  });
+  body = body.replace(/<table\b[^>]*>([\s\S]*?)<\/table>/gi, function (all, inner) {
+    var md = _kbCsdnTableToMd(inner);
+    return md ? put('\n' + md + '\n') : '';
+  });
+  // 公式：KaTeX 把同一份内容渲染两遍 —— <span class="katex-mathml"> 里是 MathML
+  // （内含 <annotation encoding="application/x-tex"> 的 LaTeX 源码），
+  // <span class="katex-html"> 里是排版后的 HTML。两份都留就是公式重复两遍。
+  // 做法：按深度配平整块取出 katex 壳（壳里还嵌着 mathml / katex-html 两个 span，
+  // 非贪婪匹配会在第一个 </span> 就停、只删掉半个公式）→ 挖出 LaTeX 源码 → 换成 $…$。
+  // 源码取不到就原样保留，不凭空造。也不能先剥 MathML：annotation 在它内部，先删就永久丢了。
+  body = _kbCsdnKatexToTex(body);
+  body = body.replace(/<span\b[^>]*\bclass=["'][^"']*\bmathml\b[^"']*["'][\s\S]*?<\/span>/gi, '');
+  body = body.replace(/<img\b[^>]*>/gi, function (tag) {
+    function attr(nm) {
+      var m = new RegExp('\\b' + nm + '=["\']?([^"\'>]*)', 'i').exec(tag);
+      return m ? m[1] : '';
+    }
+    var u = attr('data-src') || attr('data-original') || attr('src');
+    var alt = _decodeEntities(attr('alt') || attr('title') || '').replace(/[[\]]/g, '').trim();
+    if (!u || /^(?:javascript:|data:text\/html)/i.test(u)) return alt ? '（图片：' + alt + '）' : '';
+    return '![' + alt + '](' + _kbCsdnImgUrl(u) + ')';
+  });
+  body = body.replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, function (all, code) {
+    var t = _decodeEntities(String(code).replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+    return t ? '\x60' + t + '\x60' : '';
+  });
+  body = body.replace(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi, function (all, inner) {
+    var t = _kbCsdnStripTags(inner);
+    if (!t.trim()) return '';
+    return put('\n' + t.split('\n').map(function (l) { return l.trim() ? '> ' + l : '>'; }).join('\n') + '\n');
+  });
+  body = body.replace(/<h([1-6])\b[^>]*>/gi, function (m, d) {
+    return '\n' + new Array(Math.min(6, +d) + 1).join('#') + ' ';
+  });
+  body = body.replace(/<\/(h[1-6])\b[^>]*>/gi, '\n\n');
+  body = body.replace(/<li\b[^>]*>/gi, '\n- ');
+  body = body.replace(/<\/(p|div|section|ul|ol|tr|td|th|dl|dd|dt|main|article)\b[^>]*>/gi, '\n\n');
+  body = body.replace(/<br\s*\/?>/gi, '\n');
+  body = _kbCsdnStripTags(body);
+  body = body.replace(/\u0000CS(\d+)\u0000/g, function (m, n) { return store[+n] != null ? store[+n] : ''; });
+  return _normText(_kbCsdnCleanMd(body));
+}
+
+// ---------- 乱码容错 ----------
+// 「UTF-8 字节被当 Latin-1 读过一次」是可逆的：latin1 → utf8 重解即可。
+// 「GBK 误解码」不可逆，只能识别出来（不硬改，改错比不改更糟）。
+function _kbCsdnCjkScore(s) {
+  var n = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    if ((c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3000 && c <= 0x303F) || (c >= 0xFF00 && c <= 0xFFEF)) n++;
+  }
+  return n;
+}
+// windows-1252 把 0x80-0x9F 映射成可打印字符（latin1 解码器实际走的就是它），
+// 真实乱码里就会出现 U+2013 之类。直接 charCodeAt & 0xFF 会把「–」当成字节 0x13，
+// 字节序列整个错位 —— 必须先反查回原字节。
+var _KB_CP1252_BACK = (function () {
+  var m = {};
+  var hi = '\u20AC\u0081\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152'
+    + '\u017D\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A'
+    + '\u0153\u017E\u0178';
+  for (var i = 0; i < hi.length; i++) m[hi.charAt(i)] = 0x80 + i;
+  return m;
+})();
+function _kbCsdnFixMojibake(s) {
+  var t = String(s == null ? '' : s);
+  if (!t) return t;
+  t = t.replace(/\uFFFD/g, '');           // 解不出来的字节：留着重试只会更糟
+  // latin1 高位字符（UTF-8 字节被逐字节当单字符读的特征）
+  if (!/[\u00A0-\u00FF]{2,}/.test(t)) return t;
+  try {
+    var bytes = [];
+    for (var i = 0; i < t.length; i++) {
+      var c = t.charAt(i), code = t.charCodeAt(i);
+      if (_KB_CP1252_BACK[c] !== undefined) bytes.push(_KB_CP1252_BACK[c]);
+      else if (code <= 0xFF) bytes.push(code);
+      else return t;                        // 出现真正的非 latin1 字符：不是这类乱码，别动
+    }
+    var fixed = new TextDecoder('utf-8').decode(new Uint8Array(bytes));
+    // 修完中文变多才认；否则（比如原文本来就是法语）保持原样 —— 改错比不改更糟
+    return _kbCsdnCjkScore(fixed) > _kbCsdnCjkScore(t) ? fixed : t;
+  } catch (e) { return t; }
+}
+// 未闭合围栏：CommonMark 会把「``` 到文末」整段当代码，于是后面正文全被吞进代码块，
+// 分块检索与广告清洗的口径一起失真。这里补齐收尾围栏。
+function _kbCsdnFixFences(s) {
+  var t = String(s || '');
+  if (!t) return t;
+  var lines = t.split('\n'), out = [], stack = [];
+  for (var i = 0; i < lines.length; i++) {
+    var m = /^([ \t]{0,3})(\x60{3,}|~{3,})[ \t]*([^\x60\n]*)$/.exec(lines[i]);
+    if (m) {
+      var top = stack[stack.length - 1];
+      if (top && m[2].charAt(0) === top.mark && m[2].length >= top.len && !m[3]) stack.pop();
+      else stack.push({ mark: m[2].charAt(0), len: m[2].length });
+      out.push(lines[i]);
+      continue;
+    }
+    out.push(lines[i]);
+  }
+  while (stack.length) out.push(stack.pop().mark + '\x60\x60\x60');
+  return out.join('\n');
+}
+// 图片：去展示锚点；空目标 / 失效占位降级成文字，绝不留裂图；顺手清掉裸空图语法
+function _kbCsdnFixImages(s) {
+  var t = String(s || '');
+  if (!t) return t;
+  t = t.replace(/!\[([^\]\n]*)\]\(([^)\s]*)([^)\n]*)\)/g, function (all, alt, url) {
+    var u = _kbCsdnImgUrl(url);
+    if (!u || /^(?:javascript:|data:text\/html)/i.test(u)) return '（图片' + (alt ? '：' + alt : '') + '）';
+    return '![' + alt + '](' + u + ')';
+  });
+  return t.replace(/!\[\s*\]\(\s*\)/g, '（图片）');
+}
+// 公式：正文不引 MathJax/KaTeX（体积大 + 离线渲染不了），但 LaTeX 源码对检索和模型都有用。
+// 块级 $$…$$ / \[…\] → math 围栏；行内 $…$ / \(…\) → 行内代码。
+// 行内那条要求不含首尾空格（"$5 和 $10" 是货币，不能被当公式）。
+function _kbCsdnMath(s) {
+  var t = String(s || '');
+  if (!t) return t;
+  t = t.replace(/\$\$([\s\S]*?)\$\$/g, function (m, tex) {
+    var body = String(tex).replace(/^\n+|\n+$/g, '');
+    return body.trim() ? '\n\x60\x60\x60math\n' + body + '\n\x60\x60\x60\n' : '';
+  });
+  t = t.replace(/\\\[([\s\S]*?)\\\]/g, function (m, tex) {
+    var body = String(tex).replace(/^\n+|\n+$/g, '').trim();
+    if (!body) return '';
+    return body.indexOf('\n') >= 0 ? '\n\x60\x60\x60math\n' + body + '\n\x60\x60\x60\n' : '\x60\\[' + body + '\\]\x60';
+  });
+  t = t.replace(/(^|[^\\$])\$([^$\n]{1,400}?)\$/g, function (m, pre, tex) {
+    if (!tex.trim() || /^\s/.test(tex) || /\s$/.test(tex)) return m;
+    return pre + '\x60$' + tex + '$\x60';
+  });
+  return t.replace(/\\\(([\s\S]*?)\\\)/g, function (m, tex) {
+    return tex.trim() ? '\x60\\(' + tex + '\\)\x60' : '';
+  });
+}
+// 脚注：[^1] 引用、[^1]: 定义。渲染器不认这套语法，原样留着会显示成裸的「[^1]」。
+function _kbCsdnFootnotes(s) {
+  var t = String(s || '');
+  if (!/\[\^/.test(t)) return t;
+  t = t.replace(/^\[\^([^\]\n]+)\]:[ \t]*/gm, '> 注 $1：');
+  return t.replace(/\[\^([^\]\n]+)\]/g, '（注 $1）');
+}
+// 目录与自锚跳转：[toc] 占位删；纯目录行（整行只有几个锚点链接）删；
+// 行内自锚跳转只留文字（目标锚点已随目录一起删了）。
+function _kbCsdnToc(s) {
+  var t = String(s || '');
+  if (!t) return t;
+  t = t.replace(/^[ \t]*(?:\[\[?toc\]?\]|@\[toc\]|\[目录\]|<a[^>]*id=["']?toc["']?[^>]*>[\s\S]*?<\/a>)[ \t]*$/gim, '');
+  t = t.replace(/<a[^>]*(?:id|name)=["']?articleHeading\d+["']?[^>]*>\s*<\/a>/gi, '');
+  // 「## 目录」这类小节标题本身也要删 —— 只删 [toc] 占位的话，标题会变成孤零零一行
+  t = t.replace(/^[ \t]{0,3}#{1,6}[ \t]*(?:本文|文章|页面)?[ \t]*(?:目录|导航|大纲|大纲导航)[ \t]*[:：]?[ \t]*$/gm, '');
+  var lines = t.split('\n'), out = [];
+  for (var i = 0; i < lines.length; i++) {
+    if (/^[ \t]*(?:[-*+]|\d+[.)])?[ \t]*\[[^\]\n]*\]\(#[^)\n]*\)[ \t]*(?:[-*+]|\d+[.)])?[ \t]*$/.test(lines[i])) continue;
+    out.push(lines[i]);
+  }
+  return out.join('\n').replace(/\[([^\]\n]*)\]\(\s*#[^)\n]*\)/g, '$1');
+}
+// 复制出来的正文尾部总跟着这几行：付费提示、关注/点赞/收藏、版权、阅读量、相关推荐
+var _KB_CSDN_BOILER = [
+  /^【?付费专栏】?[:：]?\s*$/,
+  /^(?:本文(?:为|系)?)?(?:VIP|付费)(?:会员)?(?:专享|内容|文章|阅读)/,
+  /^(?:开通|订阅|升级|续费)(?:VIP|会员|专栏)/,
+  /^本文(?:首发|发布|转载)于/,
+  /^版权(?:声明|归属|所有)/,
+  /^(?:关注博主|关注作者|关注专栏|扫码关注|微信搜索|微信扫码|QQ群|交流群|加入粉丝|订阅专栏|领取资料|加群)/,
+  // 「点赞 3.4万 收藏 1.1万」这种一行三连：可重复的「动作 + 数值」序列
+  /^(?:(?:点赞|收藏|投币|在看|分享|评论|人气|阅读|打赏)\s*[\d.]+\s*[wW万]?\s*)+$/,
+  /^阅读量[:：]?\s*[\d.万亿wW+]+\s*$/,
+  /^(?:推荐阅读|猜你喜欢|相关阅读|热门推荐|延伸阅读|订阅专栏|广告|原力计划)[:：]?$/,
+  /^(?:未经授权|转载请注明|转载请注明出处)/,
+  /^\s*>\s*(?:订阅专栏|开通会员|解锁全文|阅读全文需?付费)/
+];
+function _kbCsdnBoilerHit(t) {
+  for (var i = 0; i < _KB_CSDN_BOILER.length; i++) { if (_KB_CSDN_BOILER[i].test(t)) return true; }
+  return false;
+}
+function _kbCsdnStripBoilerLines(text) {
+  var lines = String(text || '').split('\n');
+  var out = [], inCode = false;
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    if (/^[ \t]{0,3}(?:\x60{3,}|~{3,})/.test(ln)) { inCode = !inCode; out.push(ln); continue; }
+    if (inCode) { out.push(ln); continue; }
+    if (ln.trim() && _kbCsdnBoilerHit(ln.trim())) continue;
+    out.push(ln);
+  }
+  return out.join('\n');
+}
+// Markdown 侧的清洗总管。幂等，可重复调用。
+function _kbCsdnCleanMd(text) {
+  var t = String(text == null ? '' : text);
+  if (!t.trim()) return '';
+  t = _kbCsdnFixMojibake(t);
+  t = t.replace(/\r\n?/g, '\n');
+  t = _kbCsdnToc(t);
+  t = _kbCsdnMath(t);
+  t = _kbCsdnFootnotes(t);
+  t = _kbCsdnFixImages(t);
+  t = _kbCsdnStripBoilerLines(t);
+  t = _kbCsdnFixFences(t);
+  return t.replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\s+$/, '');
+}
+// CSDN 的 <title> 是「标题-CSDN博客」，尾巴要去掉否则文档名带一截噪音
+function _kbCsdnTitle(t) {
+  return String(t || '')
+    .replace(/\s*[-_|]\s*(?:CSDN\s*博客|博主的博客|CSDN)\s*$/i, '')
+    .replace(/^_+|_+$/g, '').trim();
+}
+
 // 网页样板行：发布时间 / 阅读量 / 版权声明 / 收录信息 / 关注引导 / 页码残留 等，逐行剔除。
 // 只在「抓取网页正文」与「富文本粘贴」两条路径生效 —— 纯文本 / Markdown 粘贴不动，
 // 免得把用户自己的正文误删（用户粘进来的正文里本来就可能有「2」「原创」这类字样）。
@@ -15550,6 +15988,8 @@ function _pickMainContent(html) {
 function _htmlToText(html) {
   var s = String(html || '');
   s = s.replace(/<!--[\s\S]*?-->/g, '');
+  // CSDN 页面走专用转换：通用路径会丢图片、把表格压成一行、把代码混进正文。
+  if (_kbIsCsdnText(s)) return _kbCsdnHtmlToMd(s);
   // 有核心内容区就只在里面取，避免把整页侧栏/页脚/推荐位噪声带进来
   var main = _pickMainContent(s);
   if (main) s = main;
@@ -17351,7 +17791,7 @@ async function testConnection() {
 
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
-var APP_VERSION = '2.4';
+var APP_VERSION = '2.5';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
