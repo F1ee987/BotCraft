@@ -3152,6 +3152,77 @@ var __storage = (function () {
 // 暴露给后续主 script 块复用（同一安全层，避免 AI 配置读写也抛错）
 window.__storage = __storage;
 
+/* ==================== 基础工具层 ====================
+   全局最底层的公共设施，四个 script 块共用。放在这里（而非主逻辑块）是因为
+   块 1 自身的后续模块（如用户模板 getUserTpls）也要用 —— 工具层必须早于所有使用者。
+   其余模块只依赖本层，不允许反向依赖。
+
+   抽出这几个工具的原因（都是真实踩过的坑，不是为抽象而抽象）：
+
+   1) storeGet / storeSet / storeDel / storeGetRaw —— 统一存储入口。
+      此前散落 25 处直接调 localStorage.*，绕过了上面的 __storage 安全层。
+      __storage 的存在理由是「双击 file:// 打开时部分浏览器禁用 localStorage，
+      所有读写抛 SecurityError，导致初始化中断、登录点了没反应」。绕过它的那些
+      位置虽然各自包了 try/catch 不会崩，但**行为不一致**：__storage 在不可用时
+      退化内存 Map（本次会话仍可用），裸 localStorage 则直接吞掉写入 →
+      用户「保存了但关掉就没」。统一后两种场景表现一致。
+
+   2) _deepClone —— 结构化深拷贝。
+      此前散落 24 处 JSON.parse(JSON.stringify(x))，分布在画布 / 机器人 / 快照 /
+      提醒等多条链路，无法统一 review；且写错一个括号就会静默共享引用
+      （改了副本却污染原件）。
+
+   3) escAttrJs —— **内联 onclick 专用**转义，与 escapeAttr 语义不同，不可混用。
+      escapeAttr 会把 ' 转成 &#39;，用在 HTML 属性值里是对的；但
+      onclick="fn('${x}')" 里 x 处于 **JS 单引号字符串**上下文，需要的是
+      「不能出现单引号、反斜杠、换行」。此前这些位置用的是 escapeHtml ——
+      而 escapeHtml 按设计**不转义引号**（见其上方注释：它要配合 renderMarkdown
+      的 URL 白名单过滤）。于是备份导入一个 id 含 ' 的数据，就能闭合 JS 字符串
+      注入任意代码。escAttrJs 修的正是这个洞。 */
+
+/** 读存储并 JSON 解析。解析失败 / 键不存在 / 值为 null 一律返回 fallback（绝不抛）。 */
+function storeGet(key, fallback) {
+  try {
+    var raw = __storage.getItem(key);
+    if (raw == null || raw === '') return fallback;
+    var v = JSON.parse(raw);
+    return v === null || v === undefined ? fallback : v;
+  } catch (e) { return fallback; }
+}
+/** 写存储（自动 JSON 序列化）。返回 true=成功，false=失败（配额满 / 存储被禁用）。 */
+function storeSet(key, val) {
+  try { __storage.setItem(key, JSON.stringify(val)); return true; }
+  catch (e) { return false; }
+}
+/** 删存储。返回 true=成功。 */
+function storeDel(key) {
+  try { __storage.removeItem(key); return true; } catch (e) { return false; }
+}
+/** 读原始字符串（非 JSON），与 storeSetRaw 成对使用。 */
+function storeGetRaw(key, fallback) {
+  try { var v = __storage.getItem(key); return v == null ? fallback : v; }
+  catch (e) { return fallback; }
+}
+/** 写原始字符串（非 JSON）。**必须与 storeGetRaw 成对使用**——
+    若误用 storeSet 写入，值会被 JSON.stringify 加引号，而 storeGetRaw
+    读出来就带引号，表现为「配置里多出一对引号」这类极难查的偏差。 */
+function storeSetRaw(key, val) {
+  try { __storage.setItem(key, String(val)); return true; } catch (e) { return false; }
+}
+/** 结构化深拷贝。用于「改副本但不能污染原件」的场景（快照 / 撤销 / 导入合并）。 */
+function _deepClone(v) { return v === undefined ? v : JSON.parse(JSON.stringify(v)); }
+
+/** 内联 onclick 的 JS 单引号字符串上下文专用转义。
+    顺序关键：必须先转义反斜杠，否则后面引入的 \ 会把已处理的字符二次转义。 */
+function escAttrJs(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+    .replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+}
+
 (function () {
   const LS_CFG = 'botcraft.ai.config.v1';
   const PROVIDERS = {
@@ -4531,8 +4602,8 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
   function brandField(label, key, val) {
     return '<label class="brand-area"><span>' + label + '</span><input class="mem-add" style="flex:none;width:100%" value="' + escapeAttr(val || '') + '" oninput="setBrand(\'' + key + '\',this.value)"></label>';
   }
-  function getUserTpls() { try { return JSON.parse(localStorage.getItem('botcraft_user_tpls') || '[]') || []; } catch (e) { return []; } }
-  function saveUserTpls(a) { try { localStorage.setItem('botcraft_user_tpls', JSON.stringify(a)); } catch (e) {} }
+  function getUserTpls() { return storeGet('botcraft_user_tpls', []); }
+  function saveUserTpls(a) { storeSet('botcraft_user_tpls', a); }
   function stripNode(n) { return { lbl: n.lbl, h: n.h, p: n.p, role: n.role, bot: n.bot, note: n.note, autoReview: n.autoReview }; }
   function exportTemplate(bot) {
     bot = bot || getBot(currentId); if (!bot) return;
@@ -4919,6 +4990,8 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
 <!-- ==================== 应用主逻辑 ==================== -->
 <script>
 'use strict';
+// 基础工具层（storeGet / storeSet / _deepClone / escAttrJs 等）定义在脚本块 1、
+// 紧接 __storage 之后 —— 块 1 自身的后续模块也要用它们，故不能放在这里。
 const storage = window.__storage; // 复用 AI 层已初始化的安全存储层
 const LS_KEY = 'botcraft.bots.v2';
 const LS_FAV = 'botcraft.favorites.v1';
@@ -5098,12 +5171,11 @@ const BUILTIN_PLUGIN_NAMES = plugins.map(function (p) { return p.n; });
 let installedPlugins = new Set();
 function loadInstalledPlugins() {
   const key = userScopedKey('botcraft.plugins.installed.v1');
-  try { const a = JSON.parse(localStorage.getItem(key) || '[]'); installedPlugins = new Set(Array.isArray(a) ? a : []); }
-  catch (e) { installedPlugins = new Set(); }
+  const a = storeGet(key, []);
+  installedPlugins = new Set(Array.isArray(a) ? a : []);
 }
 function saveInstalledPlugins() {
-  const key = userScopedKey('botcraft.plugins.installed.v1');
-  try { localStorage.setItem(key, JSON.stringify([...installedPlugins])); } catch (e) { }
+  storeSet(userScopedKey('botcraft.plugins.installed.v1'), [...installedPlugins]);
 }
 function installPlugin(n) { installedPlugins.add(n); saveInstalledPlugins(); }
 // 哪些机器人正在启用这个插件。卸载要按它做级联 —— 只查当前机器人会漏掉别的机器人，
@@ -5173,14 +5245,14 @@ const extRuntimes = Object.create(null); // id -> 运行时（iframe + 待应答
 function _extKey() { return userScopedKey(EXT_STORE_KEY); }
 function _extSrcKey() { return userScopedKey(EXT_SRC_KEY); }
 function loadExtPlugins() {
-  try {
-    const o = JSON.parse(localStorage.getItem(_extKey()) || '{}');
-    extPlugins = (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
-  } catch (e) { extPlugins = {}; }
+  const o = storeGet(_extKey(), {});
+  extPlugins = (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
 }
-function saveExtPlugins() { try { localStorage.setItem(_extKey(), JSON.stringify(extPlugins)); } catch (e) { } }
-function getExtSrc() { try { return localStorage.getItem(_extSrcKey()) || ''; } catch (e) { return ''; } }
-function setExtSrc(u) { try { localStorage.setItem(_extSrcKey(), String(u || '')); } catch (e) { } }
+function saveExtPlugins() { storeSet(_extKey(), extPlugins); }
+function getExtSrc() { return storeGetRaw(_extSrcKey(), ''); }
+// 扩展插件源码是长文本（可能几十 KB），按裸字符串存取，不走 JSON 序列化。
+// 历史上就是裸存 —— 改成 JSON 会让已存的旧数据读出来带引号，故保持原格式。
+function setExtSrc(u) { storeSetRaw(_extSrcKey(), String(u || '')); }
 
 // ---------- 清单校验 ----------
 // 外部输入，逐项卡死：id 决定存储键与沙箱标识，必须是有限字符集；
@@ -5349,6 +5421,14 @@ window.addEventListener('message', function (e) {
   const rt = extRuntimes[d.__bcPlugin];
   const pkg = extPlugins[d.__bcPlugin];
   if (!rt || !pkg) return;
+  // 来源校验：消息必须确实来自本插件自己的那个沙箱帧。
+  // 此前只按 d.__bcPlugin 取运行时，页面上任何 window（含用户粘贴进来的 iframe、
+  // 被导航过的 opener）都能伪造 __bcPlugin 消息，借宿主之手把 fetch 请求发出去。
+  // 沙箱 iframe 用 srcdoc + sandbox=allow-scripts，origin 是 'null'，
+  // 因此不能用 origin 比对，只能比对 contentWindow 对象身份。
+  try {
+    if (!rt.frame || !rt.frame.contentWindow || e.source !== rt.frame.contentWindow) return;
+  } catch (err) { return; }   // 跨域取 contentWindow 抛错 = 不是我们的帧
   if (d.type === 'ready') {
     rt.ready = true; rt.tools = Array.isArray(d.tools) ? d.tools : [];
     rt.onReady.forEach(function (f) { try { f(); } catch (err) { } }); rt.onReady = [];
@@ -5650,7 +5730,8 @@ RAG,检索增强生成，让模型先检索资料再作答的技术`
 ];
 let ALL_KB = []; // [{ id, name, type, size, updatedAt, content, builtin? }]
 function loadKB() {
-  try { ALL_KB = JSON.parse(localStorage.getItem(userScopedKey('kb')) || '[]'); if (!Array.isArray(ALL_KB)) ALL_KB = []; } catch (e) { ALL_KB = []; }
+  const _kb = storeGet(userScopedKey('kb'), []);
+  ALL_KB = Array.isArray(_kb) ? _kb : [];
   var exist = {}; ALL_KB.forEach(function (x) { exist[x.id] = 1; });
   BUILTIN_KB.forEach(function (b) { if (!exist[b.id]) ALL_KB.unshift(b); });
   // 迁移：老数据里 knowledges 曾误存「文档名」而非 id（挂载按 id 匹配，永远落空）。
@@ -5671,7 +5752,7 @@ function loadKB() {
   }
 }
 let _saveKBTimer = null;
-function _writeKB() { try { localStorage.setItem(userScopedKey('kb'), JSON.stringify(ALL_KB)); } catch (e) { toast('知识库保存失败（存储已满？）', 'err'); } }
+function _writeKB() { if (!storeSet(userScopedKey('kb'), ALL_KB)) toast('知识库保存失败（存储已满？）', 'err'); }
 // 防抖 + 空闲写入：导入 / 删除知识库时不再同步阻塞界面
 function saveKB() {
   if (_saveKBTimer) return;
@@ -5701,16 +5782,13 @@ var SNIPPETS = [];
 var _slashIdx = 0, _slashList = [], _slashMuteVal = '';
 
 function loadSnippets() {
-  try {
-    SNIPPETS = JSON.parse(localStorage.getItem(userScopedKey('snippets')) || '[]');
-    if (!Array.isArray(SNIPPETS)) SNIPPETS = [];
-  } catch (e) { SNIPPETS = []; }
+  const _sn = storeGet(userScopedKey('snippets'), []);
+  SNIPPETS = Array.isArray(_sn) ? _sn : [];
   var exist = {}; SNIPPETS.forEach(function (x) { if (x && x.id) exist[x.id] = 1; });
-  SNIPPET_SEED.forEach(function (s) { if (!exist[s.id]) SNIPPETS.unshift(JSON.parse(JSON.stringify(s))); });
+  SNIPPET_SEED.forEach(function (s) { if (!exist[s.id]) SNIPPETS.unshift(_deepClone(s)); });
 }
 function saveSnippets() {
-  try { localStorage.setItem(userScopedKey('snippets'), JSON.stringify(SNIPPETS)); }
-  catch (e) { toast('提示词保存失败（存储已满？）', 'err'); }
+  if (!storeSet(userScopedKey('snippets'), SNIPPETS)) toast('提示词保存失败（存储已满？）', 'err');
 }
 function snippetById(id) { return SNIPPETS.find(function (x) { return x.id === id; }); }
 function snippetNewId() { return 'sp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
@@ -6512,7 +6590,7 @@ function flowNewId(b) {
 function flowEnsure(b) {
   if (!b || !b.nodes || !b.nodes.length) return b;
   if (b.flowV === FLOW_V2) return b;
-  try { if (!b._v1nodes) b._v1nodes = JSON.parse(JSON.stringify(b.nodes)); } catch (e) { }
+  try { if (!b._v1nodes) b._v1nodes = _deepClone(b.nodes); } catch (e) { }
   var used = {};
   b.nodes.forEach(function (nd) {
     if (!nd || typeof nd !== 'object') return;
@@ -7538,16 +7616,16 @@ function snapshotBot(b) {
   if (!b) return null;
   return {
     n: b.n, d: b.d, prompt: b.prompt,
-    nodes: JSON.parse(JSON.stringify(b.nodes || [])),
+    nodes: _deepClone(b.nodes || []),
     // 边必须一起进快照：分支 / 循环的图结构是「工作流」的一部分，
     // 只快照节点会让「回滚到 v3」把分支图悄悄退化成一条链。
-    edges: JSON.parse(JSON.stringify(b.edges || [])),
+    edges: _deepClone(b.edges || []),
     flowV: b.flowV || 0,
-    plugins: JSON.parse(JSON.stringify(b.plugins || [])),
-    knowledges: JSON.parse(JSON.stringify(b.knowledges || [])),
-    brand: JSON.parse(JSON.stringify(b.brand || {})),
+    plugins: _deepClone(b.plugins || []),
+    knowledges: _deepClone(b.knowledges || []),
+    brand: _deepClone(b.brand || {}),
     styleText: b.styleText || '', styleId: b.styleId || '',
-    channels: JSON.parse(JSON.stringify(b.channels || [])),
+    channels: _deepClone(b.channels || []),
     expertise: normExpertise(b.expertise),
     model: b.model || '', temperature: normBotTemp(b.temperature),
   };
@@ -7569,20 +7647,20 @@ function applyRestore(b, v) {
   pushVersion(b, '回滚前自动备份 (v' + v + ')'); // 先备份当前状态，便于撤销回滚
   const s = ver.snap;
   b.n = s.n; b.d = s.d; b.prompt = s.prompt;
-  b.nodes = JSON.parse(JSON.stringify(s.nodes || []));
+  b.nodes = _deepClone(s.nodes || []);
   // 快照里带边就原样恢复（分支图必须原样回来）；老版本快照没有 edges 字段，
   // 此时旧边挂的是**另一批 id**，留着就是一整片悬空边 —— 交给 flowEnsure 按数组顺序重建
   if (Array.isArray(s.edges)) {
-    b.edges = JSON.parse(JSON.stringify(s.edges));
+    b.edges = _deepClone(s.edges);
     b.flowV = s.flowV || FLOW_V2;
   } else {
     flowDropEdges(b);
   }
-  b.plugins = JSON.parse(JSON.stringify(s.plugins || []));
-  b.knowledges = JSON.parse(JSON.stringify(s.knowledges || []));
-  b.brand = JSON.parse(JSON.stringify(s.brand || {}));
+  b.plugins = _deepClone(s.plugins || []);
+  b.knowledges = _deepClone(s.knowledges || []);
+  b.brand = _deepClone(s.brand || {});
   b.styleText = s.styleText || ''; b.styleId = s.styleId || '';
-  b.channels = JSON.parse(JSON.stringify(s.channels || []));
+  b.channels = _deepClone(s.channels || []);
   b.expertise = normExpertise(s.expertise);
   b.model = s.model || '';
   b.temperature = normBotTemp(s.temperature);
@@ -8553,7 +8631,7 @@ function renderAcctSwatches() {
   if (!box) return;
   const cur = (acctDraft || AVATAR_DEFAULT).bg;
   box.innerHTML = AVATAR_BGS.map(function (b) {
-    return `<button class="swatch${b.id === cur ? ' on' : ''}" style="background:${b.css}" title="${escapeAttr(b.id)}" onclick="pickAvatarBg('${b.id}')"></button>`;
+    return `<button class="swatch${b.id === cur ? ' on' : ''}" style="background:${b.css}" title="${escapeAttr(b.id)}" onclick="pickAvatarBg('${escAttrJs(b.id)}')"></button>`;
   }).join('');
 }
 function renderAcctEmojis() {
@@ -8563,7 +8641,7 @@ function renderAcctEmojis() {
   const html = [`<button class="${cur.kind === 'letter' ? 'on' : ''}" title="用昵称首字" onclick="pickAvatarLetter()">Aa</button>`]
     .concat(AVATAR_EMOJIS.map(function (e) {
       const on = (cur.kind === 'emoji' && cur.value === e) ? ' on' : '';
-      return `<button class="${on.trim()}" onclick="pickAvatarEmoji('${e}')">${e}</button>`;
+      return `<button class="${on.trim()}" onclick="pickAvatarEmoji('${escAttrJs(e)}')">${e}</button>`;
     })).join('');
   box.innerHTML = html;
 }
@@ -8735,7 +8813,7 @@ function renderUserMenu() {
   const accountsHtml = others.length
     ? others.map(s => {
         const row = findUser(s.username) || { username: s.username };
-        return `<button class="acct-row" onclick="switchToUser('${escapeHtml(s.username)}')">
+        return `<button class="acct-row" onclick="switchToUser('${escAttrJs(s.username)}')">
         ${avatarHtml(row, 'avatar sm')}
         <span class="acct-name">${escapeHtml(displayNameOf(row))}</span>
         <span class="acct-go">切换 →</span>
@@ -8855,8 +8933,8 @@ function card(b) {
     <div class="bot-avatar" style="background:${b.c}">${botGlyph(b)}</div>
     <h3>${escapeHtml(b.n)}</h3><p>${escapeHtml(b.d)}</p>
     <div class="bot-meta"><span>👥 ${b.u || '—'}</span><span>⭐ ${b.t || '—'}</span>
-      <span class="card-menu" onclick="cardMenu(event,'${b.id}')">⋯</span></div>
-    <div style="position:absolute;top:16px;left:16px;cursor:pointer;font-size:14px;z-index:2" onclick="toggleFavorite('${b.id}')" title="收藏">${fav}</div>
+      <span class="card-menu" onclick="cardMenu(event,'${escAttrJs(b.id)}')">⋯</span></div>
+    <div style="position:absolute;top:16px;left:16px;cursor:pointer;font-size:14px;z-index:2" onclick="toggleFavorite('${escAttrJs(b.id)}')" title="收藏">${fav}</div>
   </div>`;
 }
 function applyFilter(list) {
@@ -8960,7 +9038,7 @@ function cardMenu(e, id) {
       });
     }
     if (act === 'copy' && b) {
-      const nb = JSON.parse(JSON.stringify(b));
+      const nb = _deepClone(b);
       delete nb.id; nb.n = (b.n + '(副本)').slice(0, 30); nb.tag = '草稿'; nb.u = 0; nb.history = []; nb.createdAt = Date.now(); nb.updatedAt = Date.now(); nb.sessions = []; nb.activeSession = ''; _initSessions(nb);  // 副本只继承配置，不带原机器人的会话
       bots.unshift(normalize(nb)); saveBots(); renderGrid(); updateStats(); toast('已复制为副本', 'ok');
     }
@@ -9272,7 +9350,7 @@ function batchCopy() {
   if (!n) return;
   let c = 0;
   bots.filter(x => selectedBotIds.has(x.id)).forEach(b => {
-    const nb = JSON.parse(JSON.stringify(b));
+    const nb = _deepClone(b);
     delete nb.id; nb.n = (b.n + '(副本)').slice(0, 30); nb.tag = '草稿'; nb.u = 0; nb.history = []; nb.createdAt = Date.now(); nb.updatedAt = Date.now(); nb.sessions = []; nb.activeSession = ''; _initSessions(nb);  // 副本只继承配置，不带原机器人的会话
     bots.unshift(normalize(nb)); c++;
   });
@@ -10258,7 +10336,7 @@ function addNode() {
   if (!b.nodes) b.nodes = [];
   // 节点类型按顺序轮换，避免连点「添加」出来的全是同一种
   // 深拷贝模板：branches / code 是对象，浅拷贝会让同类型节点共享一份数据
-  const nd = JSON.parse(JSON.stringify(NODE_TYPES[b.nodes.length % NODE_TYPES.length]));
+  const nd = _deepClone(NODE_TYPES[b.nodes.length % NODE_TYPES.length]);
   const lastI = b.nodes.length - 1;
   const lx = lastI >= 0 ? cwNum(b.nodes[lastI].x, lastI * CW_LAYOUT_X) : -CW_LAYOUT_X;
   const ly = lastI >= 0 ? cwNum(b.nodes[lastI].y, 0) : 0;
@@ -10674,7 +10752,7 @@ function cwAddAt(b, t, wx, wy) {
   const F = window.BotCraftFlow;
   cwPushUndo(b);
   if (F) { F.ensure(b); F.edges(b); }
-  const nd = JSON.parse(JSON.stringify(t));
+  const nd = _deepClone(t);
   nd.id = F ? F.newId(b) : ('n' + (b.nodes.length + 1));
   if (!nd.kind) nd.kind = 'llm';
   if (!nd.out) nd.out = F ? F.outOf(nd) : 'text';
@@ -10748,7 +10826,7 @@ function cwInsertBetween(b, k) {
   const F = window.BotCraftFlow;
   // 深拷贝模板：NODE_TYPES 里的 branches / code 是对象，
   // 直接赋值会让所有同类型节点共享同一份数据，改一个动一片
-  const t = JSON.parse(JSON.stringify(NODE_TYPES[(b.nodes.length) % NODE_TYPES.length]));
+  const t = _deepClone(NODE_TYPES[(b.nodes.length) % NODE_TYPES.length]);
   cwPushUndo(b);
   if (F) { F.ensure(b); F.edges(b); }
   const e = (b.edges || [])[k];
@@ -10784,7 +10862,7 @@ function cwCopy(b) {
   if (!cwSt.sel.length) { toast('先选中要复制的节点', 'warn'); return; }
   const picked = cwSt.sel.slice().sort(function (a, c) { return a - c; })
     .map(function (i) { return b.nodes[i]; }).filter(Boolean);
-  cwSt.clip = JSON.parse(JSON.stringify(picked));
+  cwSt.clip = _deepClone(picked);
   toast('已复制 ' + picked.length + ' 个节点', 'ok');
 }
 function cwPaste(b) {
@@ -10798,7 +10876,7 @@ function cwPaste(b) {
   const made = cwSt.clip.map(function (n) {
     // 深拷贝：branches / in 是数组，浅拷贝会让「连粘两次」出来的副本共享同一份数据，
     // 改一个分支两处一起变 —— 与画布添加节点处的深拷贝是同一个理由。
-    const c = JSON.parse(JSON.stringify(n));
+    const c = _deepClone(n);
     c.x = cwNum(c.x, 0) + CW_GRID * 2;
     c.y = cwNum(c.y, 0) + CW_GRID * 2;
     // id 一定要重新发，而且必须**发一个就看得见一个**：
@@ -11043,8 +11121,8 @@ function aiPlotApply(how) {
   const v = window.__aiPlotResult;
   if (!b || !F || !v || !v.ok) return;
   cwPushUndo(b);   // 一步撤销：Ctrl+Z 回到应用前（快照含边）
-  const nodes = JSON.parse(JSON.stringify(v.nodes));
-  let edges = JSON.parse(JSON.stringify(v.edges));
+  const nodes = _deepClone(v.nodes);
+  let edges = _deepClone(v.edges);
   if (how === 'append') {
     F.aiPlotMakeUnique(nodes, edges, (b.nodes || []).reduce(function (m, n) { m[n.id] = 1; return m; }, {}));
     // 「追加」必须真的接上：旧图尾（无出边）→ 新图头（新图内无入边）。
@@ -13778,7 +13856,7 @@ function _sessionSize(s) {
   if (!s || typeof s !== 'object') return { chars: 0, media: 0 };
   try { chars = JSON.stringify(s).length; } catch (e) { chars = 0; }
   try {
-    var copy = JSON.parse(JSON.stringify(s));
+    var copy = _deepClone(s);
     var before = JSON.stringify(copy).length;
     stripSessionMedia(copy);
     media = Math.max(0, before - JSON.stringify(copy).length);
@@ -14011,12 +14089,12 @@ function toggleSidebar() {
   var tx = document.querySelector('.side-toggle .tt-txt');
   if (ic) ic.classList.toggle('flip', collapsed);   // 图标 180° 翻转（Apple 式），不再换字
   if (tx) tx.textContent = collapsed ? '展开侧栏' : '收起侧栏';
-  try { localStorage.setItem('botcraft.sidebar.collapsed', collapsed ? '1' : '0'); } catch (e) {}
+  storeSetRaw('botcraft.sidebar.collapsed', collapsed ? '1' : '0');
 }
 // 启动时恢复侧边栏折叠状态
 (function () {
   try {
-    if (localStorage.getItem('botcraft.sidebar.collapsed') === '1') {
+    if (storeGetRaw('botcraft.sidebar.collapsed', '') === '1') {
       var sb = document.querySelector('.sidebar');
       if (sb) sb.classList.add('collapsed');
       var ic = document.querySelector('.side-toggle .tt-ic');
@@ -14446,7 +14524,7 @@ function renderTplGrid() {
     html += pub.map((t, i) => `<div class="bot-card" data-pub="${i}">
       <div class="bot-avatar" style="background:${t.c || 'var(--brand)'}">${botGlyph(t)}</div>
       <h3>${escapeHtml(t.n)}</h3><p>${escapeHtml(t.d)}</p>
-      <div class="bot-meta"><span>从模板创建</span><button class="mini-x" title="取消发布" onclick="event.stopPropagation();unpublishPub('${t.id}')">✕</button></div>
+      <div class="bot-meta"><span>从模板创建</span><button class="mini-x" title="取消发布" onclick="event.stopPropagation();unpublishPub('${escAttrJs(t.id)}')">✕</button></div>
     </div>`).join('');
   }
 
@@ -14526,7 +14604,7 @@ function renderStyleGrid() {
       <h3>${escapeHtml(s.n)}</h3><p>${escapeHtml(s.d)}</p>
       <div class="bot-meta">
         <span>${applied ? '✅ 已应用·再点取消' : '应用到机器人'}</span>
-        <button class="style-view-btn" title="查看风格指令" onclick="event.stopPropagation();previewStyle('${s.id}')">👁 查看</button>
+        <button class="style-view-btn" title="查看风格指令" onclick="event.stopPropagation();previewStyle('${escAttrJs(s.id)}')">👁 查看</button>
       </div>
     </div>`;
   }).join('');
@@ -14579,8 +14657,8 @@ function renderStyleWorkspacePanel(b) {
       <div class="bot-avatar" style="background:${s.c}">${s.ic}</div>
       <h3>${escapeHtml(s.n)}</h3><p>${escapeHtml(s.d)}</p>
       <div class="bot-meta" style="gap:8px">
-        <button class="btn ${applied ? 'btn-ghost' : 'btn-primary'} btn-sm" style="flex:1" onclick="toggleWorkspaceStyle('${s.id}')">${applied ? '取消应用' : '应用'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();previewStyle('${s.id}')">查看</button>
+        <button class="btn ${applied ? 'btn-ghost' : 'btn-primary'} btn-sm" style="flex:1" onclick="toggleWorkspaceStyle('${escAttrJs(s.id)}')">${applied ? '取消应用' : '应用'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();previewStyle('${escAttrJs(s.id)}')">查看</button>
       </div>
     </div>`;
   }).join('');
@@ -14745,7 +14823,7 @@ function renderKbList() {
     box.innerHTML = `<div class="empty-tip" style="padding:40px 10px;text-align:center;color:var(--sub)">还没有知识库文档<br>点击右上角「＋ 导入文档」上传 TXT / Markdown / CSV / JSON，或用「🔗 网址 / 粘贴导入」抓取网页正文或粘贴内容</div>`;
     return;
   }
-  box.innerHTML = ALL_KB.map(k => `<div class="list-row" data-id="${k.id}" onclick="openKbPreview('${k.id}')" style="cursor:pointer">
+  box.innerHTML = ALL_KB.map(k => `<div class="list-row" data-id="${k.id}" onclick="openKbPreview('${escAttrJs(k.id)}')" style="cursor:pointer">
     <div class="ic">${k.type === 'csv' ? '📊' : k.type === 'json' ? '🧩' : '📄'}</div>
     <div class="info"><h4>${escapeHtml(k.name)}</h4><p>${k.builtin ? '内置 · 系统预设' : (k.type.toUpperCase() + ' · ' + fmtSize(k.size) + ' · ' + (k.updatedAt ? new Date(k.updatedAt).toLocaleDateString() : ''))}</p></div>
     <span class="st" style="color:var(--ok-text)">可用</span>
@@ -15053,16 +15131,19 @@ function _kbLightNorm(s) {
 // 轻量语法高亮：不引入 highlight.js（体积/依赖受限），用自写 tokenizer 对代码块做 token 着色。
 // 安全约束：每个 token 字符串都先 escapeHtml 再包 <span>，注释/字符串/标签内容绝不会被当 HTML 注入。
 // 作用范围：所有被识别为代码的区块（围栏代码 + 缩进代码转围栏后）；行内代码与正文不高亮，保持素净。
+// 正则提到模块级：此前三个字面量写在函数体内，每渲染一个代码块就重建一次 RegExp 对象。
+// 一次导入可能有几十个代码块，且 renderMarkdown 对每块都调一次 —— 属于纯浪费。
+var _KB_HASH_LANG_RE = /^(py|python|rb|ruby|sh|bash|zsh|shell|yml|yaml|toml|ini|conf|cfg|dockerfile|makefile|pl|perl|r|jl|php|sql|go|golang|rs|rust)$/i;
+// 关键字（跨语言通用集合；误命中标识符仅影响颜色，不影响语义）
+var _KB_KW_RE = /^(const|let|var|function|func|def|fn|fun|return|if|else|elif|elsif|for|while|do|switch|case|default|break|continue|new|class|struct|enum|interface|trait|impl|extends|implements|super|this|self|import|from|export|require|public|private|protected|internal|static|final|abstract|async|await|try|catch|finally|throw|throws|raise|typeof|instanceof|in|of|as|with|yield|void|null|undefined|nil|true|false|None|True|False|and|or|not|is|val|mut|pub|use|match|where|select|order|group|having|limit|print|echo|println|console)$/;
+var _KB_NUM_RE = /^[0-9][0-9_]*(\.[0-9]+)?([eE][+-]?[0-9]+)?/;
+
 function _kbHighlightCode(lang, code) {
   var c = String(code == null ? '' : code);
   if (!c) return '';
   // # 作行注释的语言（其余用 //）。HTML/CSS/Markdown 不用 # 作注释，排除，避免误染标题。
-  var hashLang = /^(py|python|rb|ruby|sh|bash|zsh|shell|yml|yaml|toml|ini|conf|cfg|dockerfile|makefile|pl|perl|r|jl|php|sql|go|golang|rs|rust)$/i;
-  var useHash = hashLang.test(lang || '');
-  // 关键字（跨语言通用集合；误命中标识符仅影响颜色，不影响语义）
-  var KW = /^(const|let|var|function|func|def|fn|fun|return|if|else|elif|elsif|for|while|do|switch|case|default|break|continue|new|class|struct|enum|interface|trait|impl|extends|implements|super|this|self|import|from|export|require|public|private|protected|internal|static|final|abstract|async|await|try|catch|finally|throw|throws|raise|typeof|instanceof|in|of|as|with|yield|void|null|undefined|nil|true|false|None|True|False|and|or|not|is|val|mut|pub|use|match|where|select|order|group|having|limit|print|echo|println|console)$/;
+  var useHash = _KB_HASH_LANG_RE.test(lang || '');
   var out = '', i = 0, n = c.length;
-  var reNum = /^[0-9][0-9_]*(\.[0-9]+)?([eE][+-]?[0-9]+)?/;
   while (i < n) {
     var ch = c[i];
     if (ch === '\n') { out += '\n'; i++; continue; }
@@ -15093,13 +15174,13 @@ function _kbHighlightCode(lang, code) {
       i = se; continue;
     }
     // 数字
-    var m = reNum.exec(c.slice(i));
+    var m = _KB_NUM_RE.exec(c.slice(i));
     if (m) { out += '<span class="md-tok-num">' + escapeHtml(m[0]) + '</span>'; i += m[0].length; continue; }
     // 标识符 / 关键字
     if (/[A-Za-z_$]/.test(ch)) {
       var s = i; while (s < n && /[A-Za-z0-9_$]/.test(c[s])) s++;
       var w = c.slice(i, s);
-      out += KW.test(w) ? '<span class="md-tok-kw">' + escapeHtml(w) + '</span>' : escapeHtml(w);
+      out += _KB_KW_RE.test(w) ? '<span class="md-tok-kw">' + escapeHtml(w) + '</span>' : escapeHtml(w);
       i = s; continue;
     }
     // 其余（标点 / 空白 / 符号）：原样转义
@@ -15572,15 +15653,15 @@ function renderPluginGrid() {
     // JS 字符串（单引号包围），而 escapeHtml 只转义 & < >、不碰任何引号。眼下安全
     // 只是因为插件名都是内置常量、不含引号；若将来要支持自定义插件名，必须换成
     // data-* + 事件委托，别再往内联 onclick 里拼字符串。
-    const unBtn = `<button class="style-view-btn" onclick="event.stopPropagation();uninstallPluginAsk('${escapeHtml(p.n)}')">卸载</button>`;
-    if (enabled) { badge = '🟢 已启用'; action = `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${escapeHtml(p.n)}')">取消启用</button>` + unBtn; }
-    else if (installed) { badge = '✅ 已安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();enablePluginToBot('${escapeHtml(p.n)}')">启用到机器人</button>` + unBtn; }
-    else { badge = '未安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();installAndEnable('${escapeHtml(p.n)}')">📦 安装并启用</button>`; }
+    const unBtn = `<button class="style-view-btn" onclick="event.stopPropagation();uninstallPluginAsk('${escAttrJs(p.n)}')">卸载</button>`;
+    if (enabled) { badge = '🟢 已启用'; action = `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${escAttrJs(p.n)}')">取消启用</button>` + unBtn; }
+    else if (installed) { badge = '✅ 已安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();enablePluginToBot('${escAttrJs(p.n)}')">启用到机器人</button>` + unBtn; }
+    else { badge = '未安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();installAndEnable('${escAttrJs(p.n)}')">📦 安装并启用</button>`; }
     return `<div class="bot-card plugin-card" data-plug="${escapeAttr(p.n)}">
       <div class="bot-avatar" style="background:${p.c}">${p.ic}</div>
       <h3>${escapeHtml(p.n)}</h3><p>${escapeHtml(p.d)}</p>
       <div class="bot-meta"><span class="plugin-cat">${escapeHtml(p.cat)}</span><span class="plugin-badge ${enabled ? 'on' : ''}">${badge}</span></div>
-      <div class="plugin-actions">${action}<button class="mini-x" title="查看详情" onclick="event.stopPropagation();openPluginDetail('${escapeHtml(p.n)}')">详情</button></div>
+      <div class="plugin-actions">${action}<button class="mini-x" title="查看详情" onclick="event.stopPropagation();openPluginDetail('${escAttrJs(p.n)}')">详情</button></div>
     </div>`;
   }).join('');
   const extCards = extAll.filter(p => _pluginFilter === '全部' || p.category === _pluginFilter).map(p => {
@@ -15593,9 +15674,9 @@ function renderPluginGrid() {
       <div class="bot-meta"><span class="plugin-cat">${escapeHtml(p.category || '第三方')}</span><span class="plugin-badge ${enabled ? 'on' : ''}">${enabled ? '🟢 已启用' : '已安装'}</span></div>
       <div class="plugin-actions">
         ${enabled
-          ? `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${key}')">取消启用</button>`
-          : `<button class="style-view-btn" onclick="event.stopPropagation();enablePluginToBot('${key}')">启用到机器人</button>`}
-        <button class="mini-x" title="查看详情" onclick="event.stopPropagation();openExtDetail('${id}')">详情</button>
+          ? `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${escAttrJs(key)}')">取消启用</button>`
+          : `<button class="style-view-btn" onclick="event.stopPropagation();enablePluginToBot('${escAttrJs(key)}')">启用到机器人</button>`}
+        <button class="mini-x" title="查看详情" onclick="event.stopPropagation();openExtDetail('${escAttrJs(id)}')">详情</button>
       </div>
     </div>`;
   }).join('');
@@ -15659,10 +15740,10 @@ async function openPluginDetail(n) {
   if (extra) extra.innerHTML = pluginDetailExtraHTML(n);
   if (n === '日历/提醒') renderRemindersInModal();
   const act = document.getElementById('pluginDetailAct');
-  const unBtn2 = `<button class="btn btn-ghost" style="margin-left:8px" onclick="uninstallPluginAsk('${escapeHtml(n)}');closePluginDetail()">卸载</button>`;
-  if (enabled) act.innerHTML = `<button class="btn btn-ghost" onclick="closePluginDetail();disablePluginFromBot('${escapeHtml(n)}')">取消启用</button>` + unBtn2;
-  else if (installed) act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();enablePluginToBot('${escapeHtml(n)}')">启用到当前机器人</button>` + unBtn2;
-  else act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();installAndEnable('${escapeHtml(n)}')">📦 安装并启用</button>`;
+  const unBtn2 = `<button class="btn btn-ghost" style="margin-left:8px" onclick="uninstallPluginAsk('${escAttrJs(n)}');closePluginDetail()">卸载</button>`;
+  if (enabled) act.innerHTML = `<button class="btn btn-ghost" onclick="closePluginDetail();disablePluginFromBot('${escAttrJs(n)}')">取消启用</button>` + unBtn2;
+  else if (installed) act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();enablePluginToBot('${escAttrJs(n)}')">启用到当前机器人</button>` + unBtn2;
+  else act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();installAndEnable('${escAttrJs(n)}')">📦 安装并启用</button>`;
   modal.classList.add('on');
 }
 function closePluginDetail() { const m = document.getElementById('pluginDetailModal'); if (m) m.classList.remove('on'); }
@@ -15670,9 +15751,9 @@ function closePluginDetail() { const m = document.getElementById('pluginDetailMo
 // ==================== 真实可用插件：日历/提醒、代码执行器 ====================
 // 这些插件此前仅为「能力提示」，现已落地为本地真实功能。
 function _remKey(){ return userScopedKey('botcraft.reminders.v1'); }
-function loadReminders(){ try{ return JSON.parse(localStorage.getItem(_remKey())||'[]'); }catch(e){ return []; } }
+function loadReminders(){ const r = storeGet(_remKey(), []); return Array.isArray(r) ? r : []; }
 window.loadReminders = loadReminders;
-function saveReminders(a){ try{ localStorage.setItem(_remKey(), JSON.stringify(a)); }catch(e){} }
+function saveReminders(a){ storeSet(_remKey(), a); }
 function addReminder(title, timeMs){
   title = (title||'').toString().trim();
   if(!title || !timeMs || isNaN(timeMs)) return null;
@@ -15708,7 +15789,7 @@ function renderRemindersInModal(){
         <div style="font-weight:600;font-size:13px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.title)}</div>
         <div style="font-size:11.5px;color:var(--sub)">${fmtRemindTime(r.time)} ${past?'· 已到':'· 待触发'}</div>
       </div>
-      <button class="mini-x" onclick="removeReminder('${r.id}')" title="删除">✕</button>
+      <button class="mini-x" onclick="removeReminder('${escAttrJs(r.id)}')" title="删除">✕</button>
     </div>`;
   }).join('');
 }
@@ -16239,15 +16320,14 @@ document.addEventListener('click', function (e) {
   // 会话 / 日志 / ⋯ / 发布）。拖拽时用它反推工作区上限，见下面 mousemove。
   const MIN_MAIN = 400;
   const isColumn = function () { return window.matchMedia && window.matchMedia('(max-width:760px)').matches; };
-  let savedW = parseInt((function(){ try { return localStorage.getItem(WKEY); } catch (e) { return null; } })(), 10);
+  let savedW = parseInt(storeGetRaw(WKEY, ''), 10);
   if (!(savedW >= MIN_W && savedW <= MAX_W)) savedW = DEF_W;
   side.style.width = savedW + 'px';
   const collapsedNow = function () { return document.body.classList.contains('ws-side-collapsed'); };
   const applyCollapsed = function (c) {
     document.body.classList.toggle('ws-side-collapsed', c);
   };
-  let initC = false;
-  try { initC = localStorage.getItem(CKEY) === '1'; } catch (e) {}
+  let initC = storeGetRaw(CKEY, '') === '1';
   applyCollapsed(initC);
   let dragging = false;
   rz.addEventListener('mousedown', function (e) {
@@ -16269,22 +16349,22 @@ document.addEventListener('click', function (e) {
   window.addEventListener('mouseup', function () {
     if (!dragging) return;
     dragging = false; document.body.classList.remove('resizing');
-    try { localStorage.setItem(WKEY, String(parseInt(side.style.width, 10) || DEF_W)); } catch (e) {}
+    storeSetRaw(WKEY, String(parseInt(side.style.width, 10) || DEF_W));
   });
   rz.addEventListener('dblclick', function () {
     if (collapsedNow() || isColumn()) return;
     side.style.width = DEF_W + 'px';
-    try { localStorage.setItem(WKEY, String(DEF_W)); } catch (e) {}
+    storeSetRaw(WKEY, String(DEF_W));
   });
   if (tg) tg.addEventListener('click', function () {
     applyCollapsed(false);
-    try { localStorage.setItem(CKEY, '0'); } catch (e) {}
+    storeSetRaw(CKEY, '0');
   });
   // 「收起」入口在工作区标题栏右上角（与拉手分离）；拉手上的按钮只在收起态当「展开」用
   const cb = document.getElementById('wsSideCollapse');
   if (cb) cb.addEventListener('click', function () {
     applyCollapsed(true);
-    try { localStorage.setItem(CKEY, '1'); } catch (e) {}
+    storeSetRaw(CKEY, '1');
   });
 })();
 
@@ -16342,6 +16422,8 @@ function copyText(text, okMsg) {
   var okTxt = okMsg || '已复制到剪贴板';
   var log = [];
   function done(ok) {
+    // 刻意用裸 localStorage 而非 storeSetRaw：这是自观测探针，记录动作本身
+    // 绝不能影响复制主流程（storeSetRaw 在极端情况下会走 JSON 路径）。
     try { localStorage.setItem('botcraft.copyResult', 'copyText ' + (log.join(' ') || 'no-path') + (ok ? ' → OK' : ' → FAIL')); } catch (eL) { }
     toast(ok ? okTxt : '复制失败，请手动选择文本', ok ? 'ok' : 'err');
   }
@@ -16952,10 +17034,10 @@ if (document.getElementById('dataX')) document.getElementById('dataX').addEventL
 if (document.getElementById('dataY')) document.getElementById('dataY').addEventListener('change', drawDataChart);
 
 // ==================== 串行输入开关（UI 行为，独立于模型配置持久化） ====================
-let SERIAL_INPUT = (function () { try { return localStorage.getItem('botcraft.serialInput.v1') !== '0'; } catch (e) { return true; } })();
+let SERIAL_INPUT = storeGetRaw('botcraft.serialInput.v1', '1') !== '0';
 let pendingQueue = [];
 function getSerialInput() { return SERIAL_INPUT; }
-function setSerialInput(v) { SERIAL_INPUT = !!v; try { localStorage.setItem('botcraft.serialInput.v1', SERIAL_INPUT ? '1' : '0'); } catch (e) {} }
+function setSerialInput(v) { SERIAL_INPUT = !!v; storeSetRaw('botcraft.serialInput.v1', SERIAL_INPUT ? '1' : '0'); }
 // ==================== 设置面板 ====================
 const PROVIDER_META = BotCraftAI.getProviders();
 let _settingsInited = false;
@@ -16976,11 +17058,11 @@ function showAnaTab(t) {
   st.style.display = isSet ? '' : 'none';
   if (bu) bu.className = isSet ? 'btn btn-ghost' : 'btn btn-primary';
   if (bs) bs.className = isSet ? 'btn btn-primary' : 'btn btn-ghost';
-  try { localStorage.setItem('botcraft.anaTab', t); } catch (e) { }
+  storeSetRaw('botcraft.anaTab', t);
 }
 window.showAnaTab = showAnaTab;
 // 初始化时恢复上次停留的 Tab
-try { showAnaTab(localStorage.getItem('botcraft.anaTab') || 'usage'); } catch (e) { }
+try { showAnaTab(storeGetRaw('botcraft.anaTab', '') || 'usage'); } catch (e) { }
 // 首次进入应用就要把服务商下拉与各字段回填好 —— 以前这些在 openSettings 里做，
 // 弹窗时代天然每次打开都执行；合并成常驻页后没人调它，服务商下拉就是空的，
 // 要点一下顶栏模型标签才刷新（2026-09-23 用户实测）。
@@ -17269,7 +17351,7 @@ async function testConnection() {
 
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
-var APP_VERSION = '2.3';
+var APP_VERSION = '2.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -17858,12 +17940,8 @@ window.__debug = {
       image: !!String(cfg.imageAPIKey || '').trim()
     };
   }
-  function loadSecOpenState() {
-    try { return JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') || {}; } catch (e) { return {}; }
-  }
-  function saveSecOpenState(st) {
-    try { localStorage.setItem(SEC_OPEN_KEY, JSON.stringify(st || {})); } catch (e) { }
-  }
+  function loadSecOpenState() { return storeGet(SEC_OPEN_KEY, {}); }
+  function saveSecOpenState(st) { storeSet(SEC_OPEN_KEY, st || {}); }
   function toggleSettingsSec(id) {
     var sec = document.getElementById('sec-' + id);
     var body = document.getElementById('sec-' + id + '-body');
@@ -18940,10 +19018,10 @@ window.__debug = {
     // ---- 折叠 / 展开（拖到左/右边界自动收成小条，点击小条再展开） ----
     function savePos() {
       try {
-        localStorage.setItem('botcraft.logpanel.pos', JSON.stringify({
+        storeSet('botcraft.logpanel.pos', {
           left: panel.style.left, top: panel.style.top,
           collapsed: !!panel._collapsed, side: panel._side || 'right'
-        }));
+        });
       } catch (e) {}
     }
     function setCollapsed(on, side) {
@@ -19075,7 +19153,7 @@ window.__debug = {
       panel.addEventListener('touchstart', onDown, { passive: false });
       // 恢复上次位置
       try {
-        var saved = JSON.parse(localStorage.getItem('botcraft.logpanel.pos') || 'null');
+        var saved = storeGet('botcraft.logpanel.pos', null);
         if (saved && saved.collapsed) {
           collapseToEdge(saved.side === 'left' ? 'left' : 'right');
         } else if (saved && saved.left && saved.top) {
