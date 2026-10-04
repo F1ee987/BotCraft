@@ -54,9 +54,9 @@ build_exe\build.bat                  # 等价的裸 PyInstaller 命令（路径�
 # 改了 HTML 之后必须做的三步，否则 verify_exe_html 会判内嵌副本过期
 python build_exe\pack_exe.py
 python build_exe\sync_exe_copies.py --sync   # 同步 Downloads / 仓库根 / dist 三处副本
-python build_exe\verify_exe_html.py          # 924 条形态断言
+python build_exe\verify_exe_html.py          # 941 条形态断言
 
-# 全链校验（63 项：语法 / CSS / 功能单测 / lint / 断言 / 对比度 / exe 一致性等）
+# 全链校验（65 项：语法 / CSS / 功能单测 / lint / 断言 / 对比度 / exe 一致性等）
 python build_exe\run_all_checks.py
 
 # 发版：上传到 GitHub Releases（token 走 git credential）
@@ -114,6 +114,31 @@ python gen_icon.py                  # 加 --dry 只出预览
 | 复制流程自观测（`17223` / `17276`） | 写 `botcraft.copyResult` 记录复制走通哪条路 | 探针不能影响被观测的主流程 |
 | 第 4 块（`20106-20361`） | 独立诊断 / 右键复制块 | 刻意与主块零依赖，不能引用主块定义 |
 
+## 约定：界面图标用线性 SVG，不用 emoji
+
+侧边栏图标一直手写内联 SVG（24×24 线性描边）。**新增界面图标一律走 `ICONS` 表**，不要再写 emoji：
+
+```js
+ICONS.foo = '<path d="M4 12h16"/>';          // 只写图形片段，fill/stroke 由 .i svg 统一给
+svgIcon('foo')                                 // → <span class="i"><svg viewBox="0 0 24 24">…</svg></span>
+svgIcon('warn', 'warn')                        // 修饰类：solo / box / ok / warn / danger / brand
+```
+
+规格与侧边栏同源：`viewBox="0 0 24 24"`、`fill:none`、`stroke:currentColor`、`stroke-width:1.7`、round cap/join。尺寸用 `.i` 的 `1.15em` 跟随字号，**不要写固定 px** —— 否则同一个图标在按钮（13px）和标题（16px）里会大小不一。
+
+**为什么不用 emoji**：跨平台字形不一致（Windows 上 `⚙️` `🗜️` 常渲染成彩色字形，Linux 上是单色），与项目的线性体系割裂；emoji 有自带字形边距，按钮里基线对不齐；尺寸随字号跳变，无法统一。
+
+**两类例外，不要「顺手修正」**：
+
+| 位置 | 为什么保留 emoji |
+| --- | --- |
+| 内置模板的机器人头像（`ic:` 字段，52 处） | **内容标识**。用户靠 emoji 区分机器人，是刻意设计 |
+| 节点类型标签（`lbl:`，76 处）、`toast` 语气前缀、`👋 欢迎回来` | 文案语气，不是图标 |
+
+判断标准：**这个 emoji 换掉会不会丢信息？** 头像和节点标签会，装饰不会。
+
+静态 HTML 里注入图标必须写**完整**的 `<svg viewBox>…</svg>` —— 只吐 `<path>` 的话浏览器会当成未知元素，页面照常渲染但图标一个都不显示，且语法检查、lint 全绿（`test_icons.js` 有专门断言守这条）。
+
 前 3 类都是**只写探针**，不承载业务数据；第 4 类是块独立性约定（见第 5 批第 35 项）。
 
 **门禁脚本的 node 路径**：已改为自动探测（`BC_NODE` 环境变量 → 按语义化版本取最新 → PATH）。若把门禁结果当作发布依据，请留意**没有 SKIP 项** —— 脚本找不到 node 会直接判 FAIL 而非跳过（静默跳过比失败危险）。
@@ -140,7 +165,8 @@ python gen_icon.py                  # 加 --dry 只出预览
 | `test_secfix.js` | 67 | 转义 / 导出字段 / 前缀清理 / 写盘失败上报 |
 | `test_robust.js` | 74 | 超时取消、竞态守卫、幂等性、资源释放 |
 | `test_perf.js` | 92 | 量化判据（尺寸缓存、rAF 合帧、查表、流式截断、LRU） |
-| `verify_exe_html.py` | 924 条形态断言 | 守住 exe 内嵌副本不回退 |
+| `test_icons.js` | 33 | ICONS 表完整性、svgIcon 契约、界面图标位无 emoji 回流 |
+| `verify_exe_html.py` | 941 条形态断言 | 守住 exe 内嵌副本不回退 |
 
 规模数字随功能增长，**以实跑输出为准**，README 里的数字是快照而非契约。
 
