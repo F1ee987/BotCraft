@@ -48,7 +48,7 @@ python -m http.server 8000   # 访问 http://localhost:8000/BotCraft.html
 build_exe\build.bat                 # 产物 build_exe\dist\BotCraft.exe
 python build_exe\release_exe.py     # 发版：上传到 GitHub Releases（token 走 git credential）
 
-# 全链校验（60 项：语法 / CSS / 功能单测 / lint / 断言 / 对比度 / exe 一致性等）
+# 全链校验（61 项：语法 / CSS / 功能单测 / lint / 断言 / 对比度 / exe 一致性等）
 python build_exe\run_all_checks.py
 
 # 重生成图标
@@ -75,6 +75,14 @@ python gen_icon.py                  # 加 --dry 只出预览
 - `escapeHtml` —— HTML **文本节点**位置。按设计**不转义引号**（`renderMarkdown` 的 URL 白名单依赖这一性质）。放进属性里等于没转义。
 - `escapeAttr` —— HTML **属性值**位置（`value=` / `title=` / `data-*` / `alt=`），会转义引号。
 - `escAttrJs` —— 内联 `onclick="fn('${x}')"` 中 `x` 所处的 **JS 单引号字符串**上下文。此前这里误用了 `escapeHtml`，导致备份导入一个 `id` 含 `'` 的数据即可闭合字符串注入任意代码。
+
+**为什么 `escapeAttr` 在 `onclick` 里同样不安全**：浏览器解析标签属性时会**先做 HTML 实体解码，再把结果交给 JS 引擎**。所以 `escapeAttr` 转出的 `&#39;` 会在解码时变回裸的 `'`，照样闭合字符串。`escapeAttr` 只在「属性值最终不再进入 JS 上下文」时才是对的（例如 `title=` / `data-*=`）。2026-10-04 已把 7 处内联实参（机器人切换、会话行/重命名/删除、历史搜索跳转、备份回滚/删除）全部改为 `escAttrJs`；新增内联事件时照此办理。
+
+**验证方式**：`build_exe\test_secfix.js` 的判据不是「源码里有没有某个词」，而是**把转义结果嵌进 JS 单引号字面量里 `new Function` 求值**，看解析器会不会被骗过 —— 修复前 31 项红、修复后 66 项绿。`verify_exe_html.py` 另有 19 条形态断言守住 exe 内嵌副本不回退。
+
+### 数据清理口径（改前必读）
+
+「应急恢复」按 **`botcraft.` 前缀通配**删除，与「导出全部配置」的筛选口径完全一致（所见即所删）。早前它维护一份手写键名清单，结果和真实键名全面对不上：清单写 `botcraft.bots` 而真值是 `botcraft.bots.v2`，且窄正则漏掉 `botcraft.kb.*` / `snippets` / `reminders` / `usage` 等按用户隔离的键 —— 号称「清空全部数据」却把知识库正文留在原地。**新增存储键不需要再登记到任何清单里**，前缀通配会自动覆盖。
 
 **存储**：一律走工具层，不要直接调 `localStorage.*`。直接调会绕过 `__storage` 安全层 —— 双击 `file://` 打开时部分浏览器禁用 `localStorage`，安全层会退化为内存 Map（本次会话仍可用），而裸调用会静默吞掉写入，用户表现为「保存了但关掉就没」。仅第 4 块（独立诊断/右键复制块）例外：它刻意保持独立，不能依赖主块定义的任何东西。
 

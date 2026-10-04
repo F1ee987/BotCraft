@@ -3674,7 +3674,9 @@ function escAttrJs(s) {
       })());
     }
     try { await Promise.all(workers); } catch (e) { console.warn('[ctx] 压缩任务异常：', e); }
-    if (results.length) { try { saveBots(); } catch (e) { } }
+    // saveBots() 内部已自己处理写盘失败（_writeBots → _botsWriteFailed，带节流与提示），
+    // 它自己不抛错。外层再包一层 try/catch 只会把那条失败上报一起吞掉 —— 净负面，删掉。
+    if (results.length) saveBots();
     return { ok: true, done: results.length, cached: cachedN, items: results };
   }
 
@@ -4603,7 +4605,9 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     return '<label class="brand-area"><span>' + label + '</span><input class="mem-add" style="flex:none;width:100%" value="' + escapeAttr(val || '') + '" oninput="setBrand(\'' + key + '\',this.value)"></label>';
   }
   function getUserTpls() { return storeGet('botcraft_user_tpls', []); }
-  function saveUserTpls(a) { storeSet('botcraft_user_tpls', a); }
+  // 模板存的是数组；storeSet 返回 false = 配额满 / 存储被禁用。原先不看返回值，
+  // 用户刷新后模板全丢却毫无提示。加提示（范式同 _writeKB@5757）。
+  function saveUserTpls(a) { if (!storeSet('botcraft_user_tpls', a)) toast('模板保存失败（存储已满？）', 'err'); }
   function stripNode(n) { return { lbl: n.lbl, h: n.h, p: n.p, role: n.role, bot: n.bot, note: n.note, autoReview: n.autoReview }; }
   function exportTemplate(bot) {
     bot = bot || getBot(currentId); if (!bot) return;
@@ -5175,7 +5179,7 @@ function loadInstalledPlugins() {
   installedPlugins = new Set(Array.isArray(a) ? a : []);
 }
 function saveInstalledPlugins() {
-  storeSet(userScopedKey('botcraft.plugins.installed.v1'), [...installedPlugins]);
+  if (!storeSet(userScopedKey('botcraft.plugins.installed.v1'), [...installedPlugins])) toast('插件清单保存失败（存储已满？）', 'err');
 }
 function installPlugin(n) { installedPlugins.add(n); saveInstalledPlugins(); }
 // 哪些机器人正在启用这个插件。卸载要按它做级联 —— 只查当前机器人会漏掉别的机器人，
@@ -5248,7 +5252,7 @@ function loadExtPlugins() {
   const o = storeGet(_extKey(), {});
   extPlugins = (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
 }
-function saveExtPlugins() { storeSet(_extKey(), extPlugins); }
+function saveExtPlugins() { if (!storeSet(_extKey(), extPlugins)) toast('插件保存失败（存储已满？）', 'err'); }
 function getExtSrc() { return storeGetRaw(_extSrcKey(), ''); }
 // 扩展插件源码是长文本（可能几十 KB），按裸字符串存取，不走 JSON 序列化。
 // 历史上就是裸存 —— 改成 JSON 会让已存的旧数据读出来带引号，故保持原格式。
@@ -7902,7 +7906,9 @@ window.copyBatchOut = function (idx) {
 window.exportBatch = function (fmt) {
   if (!batchResults.length) { toast('没有可导出的结果', 'warn'); return; }
   const bot = getBot(currentId) || {};
-  const safe = String(bot.name || 'bot').replace(/[^\w一-龥-]/g, '') || 'bot';
+  // 机器人的姓名字段是 .n（normBot 只产出 n，全文无 res.name）；原先写 bot.name，
+  // 恒为 undefined → 导出文件名永远是「批量结果_bot_…」，Markdown 报告里机器人一栏恒为「-」。
+  const safe = String(bot.n || 'bot').replace(/[^\w一-龥-]/g, '') || 'bot';
   const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
   if (fmt === 'json') {
     const data = batchResults.map(function (r) { return { idx: r.idx, input: r.input, output: r.output, status: r.status, degraded: !!r.degraded, error: r.err || '' }; });
@@ -7913,7 +7919,7 @@ window.exportBatch = function (fmt) {
     const rows = batchResults.map(function (r) { return [r.idx, batchStText(r.status), r.input, r.output].map(esc).join(','); });
     downloadFile('批量结果_' + safe + '_' + ts + '.csv', '﻿' + head + '\n' + rows.join('\n'), 'text/csv;charset=utf-8');
   } else {
-    const lines = ['# 批量运行结果：' + (bot.name || '机器人'), '', '> 机器人：' + (bot.name || '-') + ' · 模型：' + (BotCraftAI.getConfig().model || '-') + ' · 时间：' + new Date().toLocaleString('zh-CN'), ''];
+    const lines = ['# 批量运行结果：' + (bot.n || '机器人'), '', '> 机器人：' + (bot.n || '-') + ' · 模型：' + (BotCraftAI.getConfig().model || '-') + ' · 时间：' + new Date().toLocaleString('zh-CN'), ''];
     batchResults.forEach(function (r) {
       lines.push('## #' + r.idx + ' · ' + batchStText(r.status) + (r.degraded ? '（演示回复，非模型输出）' : ''));
       lines.push('**输入：** ' + r.input); lines.push(''); lines.push(r.output || (r.err || '(无输出)')); lines.push('');
@@ -9626,7 +9632,7 @@ function buildBotSwitchList(kw) {
     const active = b.id === cur ? ' active' : '';
     const pub = b.tag === '已发布' ? '<span class="bs-pub">✓ 已发布</span>' : '';
     const check = b.id === cur ? '<span class="bs-check">●</span>' : '';
-    return '<div class="bs-item' + active + '" data-id="' + escapeHtml(b.id) + '" onclick="selectBotFromSwitch(\'' + escapeHtml(b.id) + '\')">'
+    return '<div class="bs-item' + active + '" data-id="' + escapeAttr(b.id) + '" onclick="selectBotFromSwitch(\'' + escAttrJs(b.id) + '\')">'
       + '<span class="bs-ava" style="background:' + escapeHtml(b.c || '') + '">' + escapeHtml(botGlyph(b)) + '</span>'
       + '<div class="bs-meta"><div class="nm">' + escapeHtml(b.n) + '</div><div class="ds">' + escapeHtml(b.d || (b.tag || '')) + '</div></div>'
       + pub + check + '</div>';
@@ -11942,7 +11948,7 @@ function autoMatchSpec(b) {
     autoMatchSpec(b);
     if ((b.spec || '') !== before) changed = true;
   });
-  if (changed) { try { saveBots(); } catch (e) {} }
+  if (changed) saveBots();   // 同上：saveBots 内部已有失败上报，别用空 catch 吞掉
 })();
 // 创建对话框里的专精选择：单选，默认「不使用」。每次打开重置 —— 上一次的选择
 // 不该悄悄留给下一个机器人。
@@ -13320,12 +13326,12 @@ function renderSessPanel() {
   if (!list.length) { box.innerHTML = '<div class="sess-empty">还没有会话</div>'; return; }
   box.innerHTML = list.map(function (s) {
     var on = s.id === b.activeSession ? ' on' : '';
-    return '<div class="sess-row' + on + '" data-sid="' + escapeAttr(s.id) + '" onclick="switchSession(\'' + escapeAttr(s.id) + '\')">'
+    return '<div class="sess-row' + on + '" data-sid="' + escapeAttr(s.id) + '" onclick="switchSession(\'' + escAttrJs(s.id) + '\')">'
       + '<span class="sess-main"><span class="sess-title">' + escapeHtml(sessionTitle(s)) + '</span>'
       + '<span class="sess-sub">' + sessionMsgCount(s) + ' 条消息 · ' + escapeHtml(fmtSessTime(s.updatedAt || s.createdAt)) + '</span></span>'
       + '<span class="sess-acts">'
-      + '<em onclick="event.stopPropagation();renameSession(\'' + escapeAttr(s.id) + '\')">重命名</em>'
-      + (b.sessions.length > 1 ? '<em onclick="event.stopPropagation();deleteSession(\'' + escapeAttr(s.id) + '\')">删除</em>' : '')
+      + '<em onclick="event.stopPropagation();renameSession(\'' + escAttrJs(s.id) + '\')">重命名</em>'
+      + (b.sessions.length > 1 ? '<em onclick="event.stopPropagation();deleteSession(\'' + escAttrJs(s.id) + '\')">删除</em>' : '')
       + '</span></div>';
   }).join('');
 }
@@ -13352,7 +13358,7 @@ function renderSessHits(b, q) {
       var before = (st > 0 ? '…' : '') + h.text.slice(st, h.pos);
       var mid = h.text.slice(h.pos, h.pos + q.length);
       var after = h.text.slice(h.pos + q.length, en) + (en < h.text.length ? '…' : '');
-      return '<div class="sess-hit" onclick="jumpToHit(\'' + escapeAttr(h.sid) + '\',' + h.mi + ')">'
+      return '<div class="sess-hit" onclick="jumpToHit(\'' + escAttrJs(h.sid) + '\',' + h.mi + ')">'
         + '<span class="sess-hit-top">' + escapeHtml(h.title) + ' · ' + escapeHtml(h.who) + '</span>'
         + '<span class="sess-hit-txt">' + escapeHtml(before) + '<mark>' + escapeHtml(mid) + '</mark>' + escapeHtml(after) + '</span></div>';
     }).join('');
@@ -13693,8 +13699,8 @@ function _bkRender(payload) {
     return '<div class="bk-row">'
       + '<span class="bk-name">' + escapeHtml(it.at || it.name || '') + (i === 0 ? ' · 最新' : '') + '</span>'
       + '<span class="bk-size">' + fmtBkSize(it.size) + '</span>'
-      + '<button class="bk-mini" onclick="bkRestore(\'' + escapeAttr(it.name || '') + '\')">回滚</button>'
-      + '<button class="bk-mini danger" onclick="bkDelete(\'' + escapeAttr(it.name || '') + '\')">删除</button>'
+      + '<button class="bk-mini" onclick="bkRestore(\'' + escAttrJs(it.name || '') + '\')">回滚</button>'
+      + '<button class="bk-mini danger" onclick="bkDelete(\'' + escAttrJs(it.name || '') + '\')">删除</button>'
       + '</div>';
   }).join('');
 }
@@ -14056,7 +14062,7 @@ document.addEventListener('input', e => {
     updatePromptCount();                    // 字数统计：纯内存，极轻
     renderCtxBar(b);                        // 上下文条实时跟随提示词状态
     clearTimeout(_promptTimer);
-    _promptTimer = setTimeout(() => { try { saveBots(); } catch (e) {} }, 400);
+    _promptTimer = setTimeout(() => saveBots(), 400);   // 失败提示由 saveBots 内部负责
   }
 });
 // 专精字段：打字只更新内存 + 防抖落盘；只改末尾那行提示文案，不重绘面板
@@ -14076,7 +14082,7 @@ document.addEventListener('input', e => {
   const hint = document.getElementById('expHint');
   if (hint) hint.textContent = expHintText(b);
   clearTimeout(_expTimer);
-  _expTimer = setTimeout(() => { try { saveBots(); } catch (e) {} }, 400);
+  _expTimer = setTimeout(() => saveBots(), 400);   // 同上：别用空 catch 吞掉写盘失败上报
 });
 
 // ==================== 创建向导 ====================
@@ -16193,7 +16199,9 @@ function closePluginDetail() { const m = document.getElementById('pluginDetailMo
 function _remKey(){ return userScopedKey('botcraft.reminders.v1'); }
 function loadReminders(){ const r = storeGet(_remKey(), []); return Array.isArray(r) ? r : []; }
 window.loadReminders = loadReminders;
-function saveReminders(a){ storeSet(_remKey(), a); }
+// 返回是否真的落盘。提醒是「带时间承诺」的功能，存不进去却让调用方 toast
+// 「已添加提醒」，用户会以为成功、到点却没响 —— 所以失败必须传回调用方。
+function saveReminders(a){ return storeSet(_remKey(), a); }
 function addReminder(title, timeMs){
   title = (title||'').toString().trim();
   if(!title || !timeMs || isNaN(timeMs)) return null;
@@ -16201,7 +16209,9 @@ function addReminder(title, timeMs){
   // 去重：同标题 + 同时间（±2 分钟）不重复添加
   if(list.some(r=>r.title===title && Math.abs((r.time||0)-timeMs)<=120000)) return null;
   const item = { id:'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), title:title, time:timeMs, createdAt:Date.now(), notified:false, done:false };
-  list.push(item); saveReminders(list); renderRemindersInModal(); return item;
+  list.push(item);
+  if (!saveReminders(list)) { toast('提醒保存失败（存储已满？）本次未添加', 'err'); return null; }
+  renderRemindersInModal(); return item;
 }
 function removeReminder(id){ const list = loadReminders().filter(r=>r.id!==id); saveReminders(list); renderRemindersInModal(); }
 function fmtRemindTime(t){ const d = new Date(t); const p = n=>('0'+n).slice(-2); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
@@ -17578,10 +17588,14 @@ async function refreshModelList() {
     clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const j = JSON.parse(r.text);
-    const list = (j.data || []).map(function (m) { return m.id; }).filter(Boolean);
+    // 模型 id 来自「用户自己填的兼容网关」，属外部可控输入：未转义直接进 <option> 会被
+    // `</option></select><img src=x onerror=...>` 之类的载荷逃出下拉框，且 sel.value 随后
+    // 被持久化进配置 → 每次进设置面板都触发。所以这里必须转义 + 长度钳制。
+    const list = (j.data || []).map(function (m) { return String(m && m.id != null ? m.id : '').slice(0, 120); })
+      .filter(Boolean);
     if (!list.length) throw new Error('接口返回空列表');
     const cur = (sel.value === '__custom') ? custom.value : sel.value;
-    sel.innerHTML = list.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('')
+    sel.innerHTML = list.map(function (m) { return '<option value="' + escapeAttr(m) + '">' + escapeHtml(m) + '</option>'; }).join('')
       + '<option value="__custom">— 手动输入 —</option>';
     sel.value = list.indexOf(cur) >= 0 ? cur : '__custom';
     custom.style.display = (sel.value === '__custom') ? '' : 'none';
@@ -17791,7 +17805,7 @@ async function testConnection() {
 
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
-var APP_VERSION = '2.5';
+var APP_VERSION = '2.6';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -17819,19 +17833,19 @@ async function emergencyReset() {
   // 浏览器直开（localStorage 就是真存储）：清掉再 reload 即可
   if (!(await confirmDialog('⚠️ 应急恢复\n\n将清空本浏览器里全部 BotCraft 数据并刷新界面。\n\n确定继续？', { danger: true, title: '应急恢复', okText: '清空全部数据' }))) return;
   try {
-    ['botcraft.version','botcraft.users','botcraft.session','botcraft.bots','botcraft.favorites',
-     'botcraft.ai.config.v1','botcraft.published'].forEach(function (k) { __storage.removeItem(k); });
-    // 清除所有按用户隔离的 key。
-    // 这里必须用 __storage.keys()：__storage 是本文件自定义的包装层，只暴露
-    // getItem/setItem/removeItem/clear/keys，**没有**原生 Storage 的 length 与 key(i)。
-    // 原先拿 length 减一往上找、再 key(i) 取名字的写法会得到 NaN，循环体一次都不执行
-    // —— 而且不抛错，被外层 catch 静默吞掉，看着像「跑过了」，其实一个隔离 key 都没清。
-    try {
-      var ks = __storage.keys();
-      for (var i = 0; i < ks.length; i++) {
-        if (/^botcraft\.(bots|favorites|sessions|plugins)\./.test(ks[i])) __storage.removeItem(ks[i]);
-      }
-    } catch (e) {}
+    // 应急恢复的口径必须与 exportAllConfig(13563) 的导出筛选完全一致 —— 都是「以
+    // botcraft. 开头的所有键」。原先这里维护了一份手写键名清单，结果和真实键名全面对不上：
+    //   · 清单写的是 'botcraft.bots'，真值却是 'botcraft.bots.v2'（LS_KEY@4996）
+    //   · 正则只覆盖 bots|favorites|sessions|plugins 四类前缀，漏掉按用户隔离的高价值键：
+    //     botcraft.kb.<user>（知识库正文）、snippets（提示词）、reminders（提醒）、
+    //     usage（用量）、pubTpls（公共模板）—— 号称「清空全部数据」却把这些留在原地
+    //   · 裸键 'botcraft.bots.v2'（无用户名后缀）不匹配正则尾部那个 `\.`，永久残留
+    // 改成前缀通配：所见即所删，新增键也不会再漏。
+    var ks = [];
+    try { ks = __storage.keys() || []; } catch (e) { ks = []; }
+    for (var i = 0; i < ks.length; i++) {
+      if (String(ks[i]).indexOf('botcraft.') === 0) __storage.removeItem(ks[i]);
+    }
   } catch (e) {}
   location.reload();
 }
