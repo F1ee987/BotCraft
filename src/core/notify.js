@@ -57,7 +57,13 @@ function notifyReminder(title) {
     try {
       var hostApi = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
       if (hostApi && typeof hostApi.bc_notify === 'function') {
-        Promise.resolve(hostApi.bc_notify('⏰ BotCraft 提醒', text)).catch(function () { });
+        // 原来这里是 `.catch(function () {})` 空块：Windows toast 投不出去时
+        // 提醒**既不响也不显示任何东西** —— 提醒是带时间承诺的功能，
+        // 静默失效能让用户以为「提醒坏了」，实际是这条通道失败。
+        // 失败时退到应用内 toast，保证「到点至少有反应」。
+        Promise.resolve(hostApi.bc_notify('⏰ BotCraft 提醒', text)).catch(function (e) {
+          try { toast('⏰ 提醒（系统通知发送失败）：' + text, 'warn', 8000); } catch (eT) { }
+        });
         return 'system';
       }
     } catch (eD) { }
@@ -76,6 +82,8 @@ function notifyReminder(title) {
         var r = N.requestPermission();
         if (r && r.then) {
           r.then(function (st) {
+            // 授权拿到了但构造通知失败（部分 WebView 下 Notification 存在却不可用）：
+            // 原来空 catch 吞掉，此时应用内 toast 已经发过了，不算静默失效，保持原样。
             if (st === 'granted') { try { new Notification('⏰ BotCraft 提醒', { body: text, tag: 'bc-remind' }); } catch (e) { } }
           }).catch(function () { });
         }

@@ -5351,11 +5351,41 @@ async function extHttp(url, opts) {
   if (body != null && typeof body !== 'string') body = JSON.stringify(body);
   const api = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
   if (api && typeof api.bc_http === 'function') {
-    const r = await api.bc_http(String(url), method, headers, body == null ? '' : body);
+    // 桌面代理走的是 pywebview 的 Python 侧 urllib，它不认 AbortSignal。
+    // 若不 raced，调用方的超时/取消在 exe 下就完全失效（浏览器直开却正常）——
+    // 同一个按钮两种壳表现不同，这类不一致最难排查。用 Promise.race 把取消
+    // 语义补齐到代理通道上：signal 触发即让本次 await 以 AbortError 结束，
+    // Python 侧请求仍会跑完，但**结果被丢弃**，不会再污染 UI 或写回配置。
+    const call = api.bc_http(String(url), method, headers, body == null ? '' : body);
+    if (opts.signal) {
+      return await new Promise(function (resolve, reject) {
+        let settled = false;
+        const onAbort = function () {
+          if (settled) return;
+          settled = true;
+          const e = new Error('请求已取消'); e.name = 'AbortError'; reject(e);
+        };
+        if (opts.signal.aborted) { onAbort(); return; }
+        opts.signal.addEventListener('abort', onAbort, { once: true });
+        Promise.resolve(call).then(function (v) {
+          if (settled) return;
+          settled = true;
+          opts.signal.removeEventListener('abort', onAbort);
+          if (v && typeof v === 'object' && ('ok' in v)) resolve(v);
+          else reject(new Error('桌面版网络代理返回异常'));
+        }, function (e) {
+          if (settled) return;
+          settled = true;
+          opts.signal.removeEventListener('abort', onAbort);
+          reject(e);
+        });
+      });
+    }
+    const r = await call;
     if (r && typeof r === 'object' && ('ok' in r)) return r;
     throw new Error('桌面版网络代理返回异常');
   }
-  const resp = await fetch(String(url), { method: method, headers: headers, body: body });
+  const resp = await fetch(String(url), { method: method, headers: headers, body: body, signal: opts.signal || undefined });
   const text = await resp.text();
   return { ok: resp.ok, status: resp.status, text: text };
 }
@@ -6174,12 +6204,20 @@ function renderMarkdown(text) {
 // 聊天中 markdown 图片加载失败时的占位提示（从 HTML 字符串调用，必须挂 window）
 function onImageError(img, url) {
   try {
+    // 先把坏图本体标记掉：即使后续建占位节点失败，用户至少能看到
+    // 「这里有张图坏了」，而不是一个破图图标 / 空白，且能点开原图地址。
     img.classList.add('img-err');
+    img.title = '图片加载失败：' + String(url || '');
     var wrap = document.createElement('div');
     wrap.className = 'md-img-placeholder';
     wrap.innerHTML = '<div>⚠️ 图片加载失败</div><small>' + escapeHtml(url) + '<br>可在设置 → 🖼️ 文生图设置中配置稳定的图片接口。</small>';
     if (img.parentNode) img.parentNode.replaceChild(wrap, img);
-  } catch (e) { /* noop */ }
+  } catch (e) {
+    // 原实现整个函数包在一个 try 里、catch 体是空的：一旦 escapeHtml 或
+    // createElement 抛错（比如图片节点已被卸载），图片就彻底无声消失 ——
+    // 用户既不知道有过这张图，也没有任何补救线索。这里至少把提示挂到节点上。
+    try { img.classList.add('img-err'); img.title = '图片加载失败'; } catch (e2) { }
+  }
 }
 window.onImageError = onImageError;
 // 代码块「单独复制」：复制该块原文，兼容 file://（clipboard API 可能不可用 → execCommand 回退）
@@ -7723,6 +7761,7 @@ window.restoreVersion = async function (v) {
 // 单机器人批量跑输入：每条输入独立调用（不共享上下文），顺序执行、实时进度、可导出。
 let batchResults = [];      // [{ idx, input, output, status:'queued|running|ok|err', err }]
 let batchRunning = false;
+let _batchStarting = false;   // 确认框挂起期间的重入锁（batchRunning 此刻还是 false）
 let batchAC = null;
 
 function getBatchInputs() {
@@ -7845,7 +7884,14 @@ window.startBatch = async function () {
   const b = getBot(currentId); if (!b) return;
   const inputs = getBatchInputs();
   if (!inputs.length) { toast('请先输入要批量处理的问题', 'warn'); return; }
-  if (batchRunning) return;
+  // 守卫必须**在第一个 await 之前**置位。原来 `if (batchRunning) return` 在
+  // confirmDialog 之前，而 batchRunning 直到确认通过后才设 true ——
+  // 用户在确认框挂起期间再点一次「开始批量」，两个确认框同时挂着，
+  // 都通过就会创建两个 AbortController、跑两轮循环，
+  // 结果按 idx 互相覆盖写进同一个 batchResults：重复扣费 + 记录错乱。
+  if (batchRunning || _batchStarting) return;
+  _batchStarting = true;
+  try {
   // 没配 Key 时每条都会走 runFallback（演示回复），跑完一屏「成功」却没一句真话。
   // 与其让人跑完才发现，不如现在拦一下；确认后仍可继续（用于试跑导入 / 导出链路）。
   if (!BotCraftAI.canCall() && !(await confirmDialog('当前未配置 API Key。\n批量的每一条输入都会返回「演示回复」，而不是模型输出。\n\n仍要继续吗？', { title: '未配置 API Key', okText: '仍要继续' }))) return;
@@ -7887,10 +7933,19 @@ window.startBatch = async function () {
   const tail = (degc ? ' / ' + degc + ' 降级' : '') + (errc ? ' / ' + errc + ' 失败' : '') + (stopc ? ' / ' + stopc + ' 未执行' : '');
   if (!degc && !errc && !stopc) toast('批量完成：' + okc + ' / ' + total + ' 条成功', 'ok');
   else toast('批量结束：' + okc + ' 成功' + tail, 'warn');
+  } finally {
+    // 无论走完循环、提前 return（取消/未配 Key）还是抛错，起始标记都必须复位，
+    // 否则用户再也点不动「开始批量」。
+    _batchStarting = false;
+    batchAC = null;
+  }
 };
 window.stopBatch = function () {
   if (!batchRunning) return;
-  batchRunning = false; if (batchAC) batchAC.abort();
+  batchRunning = false;
+  // 与 startBatch 的清理对称：置 null，否则停掉后仍持着一个已 abort 的
+  // AbortController，下次启动前若有任何路径读到它，会误判成「已取消」。
+  if (batchAC) { batchAC.abort(); batchAC = null; }
   setBatchRunningUI(false); toast('已停止批量任务', 'warn');
 };
 window.copyBatchOut = function (idx) {
@@ -8194,6 +8249,32 @@ function _botsWriteFailed(e) {
     toast('⚠️ 保存失败：' + ((e && e.message) || e) + '。浏览器存储空间可能已满，'
       + '本次改动没有写入磁盘 —— 请到「设置 → 数据」导出备份并清理后再试。', 'err', 15000);
   } catch (e2) { }
+}
+
+// 自动保存闩锁的解除路径。_botsWriteBlocked 一旦为 true，全代码原本**没有任何位置**
+// 设回 false：用户随后清理出空间（或换了浏览器/清了缓存）也不会恢复自动保存，
+// 只能整页刷新，而文案只说「已暂停」不说怎么恢复。
+// 这里在「用户主动瘦身成功」之后探试一次真实写盘：写得下才解除闩锁，
+// 写不下就保持原状并如实告知 —— 绝不因为一次侥幸就解锁、再去覆盖用户原数据。
+function tryUnblockBotsWrite() {
+  if (!_botsWriteBlocked) return false;
+  const probe = 'botcraft.__writeProbe.v1';
+  try {
+    storage.setItem(probe, '1');
+    storage.removeItem(probe);
+  } catch (e) {
+    try {
+      toast('⚠️ 存储空间仍写不进去，自动保存保持暂停。请到「设置 → 数据」导出备份，'
+        + '清理空间或换用浏览隐私窗口后再试。', 'err', 12000);
+    } catch (e2) { }
+    return false;
+  }
+  _botsWriteBlocked = false;
+  try {
+    toast('存储空间已可写入，自动保存已恢复', 'ok', 6000);
+  } catch (e) { }
+  flushBots();   // 立刻把内存里这段时间攒下的改动落盘，别让用户以为还在丢
+  return true;
 }
 
 function loadBots() {
@@ -9671,6 +9752,9 @@ window.selectBotFromSwitch = function (id) {
   closeBotSwitch();
   if (id && id !== currentId) openBot(id);
   else renderBotSwitcher();
+  // 队列曾因「队首属于别的机器人」而暂停消费：切回它所属的机器人时恢复。
+  // 必须等 openBot 把 currentId 改完再判，否则比较的是旧 id。
+  try { resumePendingQueue(); } catch (e) { }
 };
 // 键盘上下选择 + 回车确认（搜索框内）
 window.bsKeyNav = function (e) {
@@ -12640,12 +12724,17 @@ function appendImageError(msg, botName) {
   scrollChatToBottom(true);
 }
 async function sendMsg() {
+  // 发送锁：sending 要到 runReply 内部才置位，而本函数在推入历史之前有 await
+  // （视频抽帧 sampleVideoFrames）。这段窗口里 sending 仍是 false，
+  // 连按 Enter / 队列自动发送都会重入 → 同一批附件被发两次、历史里出现两条相同提问。
+  // 用独立的重入标记把「取输入 → 抽帧 → 交给 runReply」整段包成临界区。
+  if (_sendLock) return;
   if (sending) {
     // 非串行模式：AI 回复期间允许预输入，把当前输入框文本加入待发队列，回复完成后自动依次发送
     if (!getSerialInput()) {
       const inp = document.getElementById('msgInput');
       const v = (inp && (inp.value || '').trim()) || '';
-      if (v) { pendingQueue.push(v); inp.value = ''; toast('已加入发送队列（' + pendingQueue.length + ' 条待发）', ''); }
+      if (v) { pendingQueue.push({ text: v, botId: currentId }); inp.value = ''; toast('已加入发送队列（' + pendingQueue.length + ' 条待发）', ''); }
     }
     return;
   }
@@ -12658,6 +12747,7 @@ async function sendMsg() {
   const vids = pendingVideos.slice();
   if (!v && !imgs.length && !auds.length && !vids.length) return;
   inp.value = ''; autoGrowInput();
+  _sendLock = true;   // 临界区开始：从这里到 runReply 接管为止，不再接受第二次发送
   if (!Array.isArray(b.history)) b.history = [];
   const entry = { role: 'me', text: v, t: Date.now() };
   if (imgs.length) entry.images = imgs;
@@ -12683,6 +12773,9 @@ async function sendMsg() {
   pendingAudios = []; renderAudioPreview();
   pendingVideos = []; renderVideoPreview();
   renderQuickBar(); saveBots();
+  // 交接给 runReply（它内部会把 sending 置位），锁即可释放；
+  // 抽帧等耗时操作已结束，重入窗口关闭。
+  _sendLock = false;
   await runReply(b, { text: v, entry: entry });
 }
 // 这个机器人当前是否还显示在屏幕上。生成是后台异步的，用户随时可能切走，
@@ -12971,13 +13064,24 @@ async function runReply(b, opt) {
   } finally {
     sending = false; abortCtrl = null; _generatingBotId = null; setSendingUI(false);
     if (_onScreen()) _maybeNameSession(b);   // 首条用户消息自动成为会话名（只在没名字时写一次）；切走后再来命名，命中的是别人的会话
-    // 非串行模式：自动发送排队的消息，保持顺序处理
+    // 非串行模式：自动发送排队的消息，保持顺序处理。
+    // 只消费**属于本机器人**的队首项：生成期间用户可能切到别的机器人，
+    // 那时 sendMsg() 无参取的是 currentId，会把这条投给别人的机器人。
+    // 遇到异属项就停下（不丢弃），用户切回去后再由下一次收尾或手动发送消费。
     if (!getSerialInput() && pendingQueue.length) {
-      const next = pendingQueue.shift();
-      const inp = document.getElementById('msgInput');
-      if (inp) { inp.value = next; autoGrowInput(); }
-      toast('正在发送排队的消息（剩 ' + pendingQueue.length + ' 条）', '');
-      setTimeout(function () { sendMsg(); }, 80);
+      const head = pendingQueue[0];
+      const headId = (head && typeof head === 'object') ? head.botId : null;
+      if (headId == null || headId === b.id) {
+        pendingQueue.shift();
+        const next = (head && typeof head === 'object') ? head.text : head;
+        const inp = document.getElementById('msgInput');
+        if (inp) { inp.value = next; autoGrowInput(); }
+        toast('正在发送排队的消息（剩 ' + pendingQueue.length + ' 条）', '');
+        setTimeout(function () { sendMsg(); }, 80);
+      } else {
+        pendingQueuePaused = true;
+        toast('有 ' + pendingQueue.length + ' 条排队消息属于其他机器人，已保留；切回该机器人后自动继续', 'warn', 5000);
+      }
     }
   }
 }
@@ -13190,7 +13294,10 @@ function buildImagePrompt(userMsg, history) {
 }
 function stopGenerate() {
   if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
-  sending = false; setSendingUI(false);
+  // _generatingBotId 必须一起清：runReply 的 finally 会清它，但队列自动发送期间
+  // （setTimeout 80ms 那段）用户按停止，此时 finally 还没执行，
+  // 留着会让 refreshWorkspace 继续按「正在生成」跳过重绘。
+  sending = false; _generatingBotId = null; _sendLock = false; setSendingUI(false);
   const chat = document.getElementById('chat');
   if (chat) chat.querySelectorAll('.typing').forEach(t => t.remove());
 }
@@ -13375,7 +13482,19 @@ function jumpToHit(sid, mi) {
     setTimeout(function () { el.classList.remove('hit'); }, 2000);
   }, 60);
 }
+// 生成期间禁止会话增删改：runReply 全程持有 _histRef（本次生成所属的会话数组）。
+// 此时删除/切换会话会把 b.history 重指向另一个数组，finally 里 _histRef.push(...)
+// 就把这条回答推进一个已不在 b.sessions 里的数组 —— 用户看到提问没有回答，
+// 该条回复永久丢失，既无 toast 也无日志。三处统一按 regenLastReply 的既有写法拦截。
+function sessionOpGuard() {
+  if (!sending) return false;
+  toast('正在生成中，请稍候再操作会话', 'warn');
+  return true;
+}
 function switchSession(sid, silent) {
+  // silent=true 来自 jumpToHit（会话内搜索跳转），那是一次定位动作而非用户主动切换，
+  // 拦下会让搜索结果点不动；但它同样会改 b.history 指向，所以只在非静默时拦截。
+  if (!silent && sessionOpGuard()) return;
   const b = getBot(currentId);
   if (!b || !Array.isArray(b.sessions)) return;
   var cur = _activeSessionOf(b);
@@ -13392,6 +13511,7 @@ function switchSession(sid, silent) {
   renderSessPanel();
 }
 function newSession() {
+  if (sessionOpGuard()) return;
   const b = getBot(currentId); if (!b) return;
   if (!Array.isArray(b.sessions)) b.sessions = [];
   var cur = _activeSessionOf(b);
@@ -13406,6 +13526,7 @@ function newSession() {
   toast('已新建会话', 'ok');
 }
 async function deleteSession(sid) {
+  if (sessionOpGuard()) return;
   const b = getBot(currentId);
   if (!b || !Array.isArray(b.sessions)) return;
   if (b.sessions.length <= 1) { toast('至少保留一条会话', 'warn'); return; }
@@ -13427,6 +13548,7 @@ async function deleteSession(sid) {
 }
 // 行内重命名：不用 window.prompt —— 桌面端 WebView 里它是 no-op
 function renameSession(sid) {
+  if (sessionOpGuard()) return;
   const b = getBot(currentId); if (!b) return;
   var s = (b.sessions || []).filter(function (x) { return x && x.id === sid; })[0];
   if (!s) return;
@@ -13619,10 +13741,28 @@ async function importAllConfig(file) {
     try {
       const payload = JSON.parse(decodeTextBytes(reader.result).text);
       const data = (payload && payload.data && typeof payload.data === 'object') ? payload.data : payload;
-      let count = 0;
+      let count = 0, failed = [];
       Object.keys(data).forEach(function (k) {
-        if (k.indexOf('botcraft.') === 0) { storage.setItem(k, String(data[k])); count++; }
+        if (k.indexOf('botcraft.') !== 0) return;
+        const v = data[k];
+        // **不能无差别 String(v)**：备份里的值多数已经是 JSON 字符串（导出时序列化过），
+        // 但也可能是对象/数组/数字。一律 String() 会把对象写成字面量 "[object Object]" ——
+        // 字符串能原样写回盘、用户看不出异常，直到刷新后 loadBots 解析出垃圾才炸，
+        // 且原值已不可逆。判据：本身就是 string 就原样写，其余按 JSON 序列化。
+        let out;
+        try {
+          out = (typeof v === 'string') ? v : JSON.stringify(v);
+        } catch (e) {
+          failed.push(k + '（无法序列化）'); return;
+        }
+        if (out === undefined) { failed.push(k + '（值为 undefined）'); return; }
+        try { storage.setItem(k, out); count++; }
+        catch (e) { failed.push(k + '（写入失败）'); }
       });
+      if (!count) {
+        toast('导入失败：备份里没有任何可识别的 botcraft.* 配置项', 'err', 8000);
+        return;
+      }
       if (currentUser && currentUser.username) {
         _mergeUserKey('botcraft.bots.v2.', currentUser.username);
         _mergeUserKey('botcraft.kb.', currentUser.username);
@@ -13631,11 +13771,24 @@ async function importAllConfig(file) {
       loadBots(); renderGrid(); updateStats(); renderBotSwitcher(); syncEmptyHome();
       const botNow = bots.length;
       const who = currentUser ? currentUser.username : '';
-      toast('已导入 ' + count + ' 项配置，已合并到账号「' + who + '」，共 ' + botNow + ' 个机器人，即将刷新…', 'ok');
+      // 有失败项时**必须说出来**：静默部分成功会让用户以为全量导入完成，
+      // 实际缺的键会在刷新后表现为「我的机器人/知识库怎么少了一批」。
+      if (failed.length) {
+        toast('已导入 ' + count + ' 项，但 ' + failed.length + ' 项失败（' + failed.slice(0, 3).join('、')
+          + (failed.length > 3 ? ' 等' : '') + '），请检查备份文件是否损坏', 'err', 12000);
+      } else {
+        toast('已导入 ' + count + ' 项配置，已合并到账号「' + who + '」，共 ' + botNow + ' 个机器人，即将刷新…', 'ok');
+      }
       _reloadAfterImport();
     } catch (e) { toast('解析失败：' + e.message, 'err'); }
   };
-  reader.readAsArrayBuffer(file);
+  // FileReader 也可能失败（文件被占用/权限/读取中途磁盘错误）：onerror 不接的话
+  // 界面就停在「导入中」永不返回，用户既看不到原因也点不动。
+  reader.onerror = function () {
+    toast('读取文件失败：' + ((reader.error && reader.error.message) || '未知错误'), 'err', 8000);
+  };
+  try { reader.readAsArrayBuffer(file); }
+  catch (e) { toast('读取文件失败：' + ((e && e.message) || e), 'err'); }
 }
 // 导入后要刷新页面，但桌面版的注入数据是 main() 启动时写死在 HTML 里的 ——
 // 直接 location.reload() 会读回「导入前」的旧快照，于是导入看起来没生效，
@@ -13947,6 +14100,7 @@ async function trimOneAsk(i) {
   var freed = stripSessionMedia(x.s);
   x.bot.updatedAt = Date.now();
   saveBots();
+  tryUnblockBotsWrite();
   renderStorageUsage(); renderStorageTrim();
   toast('已清理，释放约 ' + fmtAccountBytes(freed * 2), 'ok');
 }
@@ -13959,6 +14113,7 @@ async function trimAllMediaAsk() {
   var freed = 0;
   list.forEach(function (x) { freed += stripSessionMedia(x.s); x.bot.updatedAt = Date.now(); });
   saveBots();
+  tryUnblockBotsWrite();
   renderStorageUsage(); renderStorageTrim();
   toast('已清理 ' + list.length + ' 个会话，释放约 ' + fmtAccountBytes(freed * 2), 'ok');
 }
@@ -16336,7 +16491,13 @@ function notifyReminder(title) {
     try {
       var hostApi = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
       if (hostApi && typeof hostApi.bc_notify === 'function') {
-        Promise.resolve(hostApi.bc_notify('⏰ BotCraft 提醒', text)).catch(function () { });
+        // 原来这里是 `.catch(function () {})` 空块：Windows toast 投不出去时
+        // 提醒**既不响也不显示任何东西** —— 提醒是带时间承诺的功能，
+        // 静默失效能让用户以为「提醒坏了」，实际是这条通道失败。
+        // 失败时退到应用内 toast，保证「到点至少有反应」。
+        Promise.resolve(hostApi.bc_notify('⏰ BotCraft 提醒', text)).catch(function (e) {
+          try { toast('⏰ 提醒（系统通知发送失败）：' + text, 'warn', 8000); } catch (eT) { }
+        });
         return 'system';
       }
     } catch (eD) { }
@@ -16355,6 +16516,8 @@ function notifyReminder(title) {
         var r = N.requestPermission();
         if (r && r.then) {
           r.then(function (st) {
+            // 授权拿到了但构造通知失败（部分 WebView 下 Notification 存在却不可用）：
+            // 原来空 catch 吞掉，此时应用内 toast 已经发过了，不算静默失效，保持原样。
             if (st === 'granted') { try { new Notification('⏰ BotCraft 提醒', { body: text, tag: 'bc-remind' }); } catch (e) { } }
           }).catch(function () { });
         }
@@ -17485,7 +17648,28 @@ if (document.getElementById('dataY')) document.getElementById('dataY').addEventL
 
 // ==================== 串行输入开关（UI 行为，独立于模型配置持久化） ====================
 let SERIAL_INPUT = storeGetRaw('botcraft.serialInput.v1', '1') !== '0';
+// 队列项带 botId：pendingQueue 是模块级全局，而生成是异步的 —— 生成 A 期间用户切到机器人 B，
+// 若队列只存文本，收尾时的自动发送会把 A 的问题投给 B（界面被 _onScreen 挡住了，数据却没有）。
+// 存 {text, botId} 后，收尾只自动发送**属于本次生成机器人**的项，其余原样留存等切回去。
 let pendingQueue = [];
+let pendingQueuePaused = false;   // 因队首异属而暂停消费；切回该机器人时恢复
+let _sendLock = false;           // sendMsg 临界区（取输入→抽帧→交给 runReply），防重复提交
+// 暂停的队列在切回其所属机器人时继续消费。只在「空闲 + 非串行 + 队首属于当前机器人」
+// 三个条件同时满足时恢复，避免与正在进行的生成抢。
+function resumePendingQueue() {
+  if (!pendingQueuePaused || !pendingQueue.length) return;
+  if (sending || _sendLock || getSerialInput()) return;
+  const head = pendingQueue[0];
+  const headId = (head && typeof head === 'object') ? head.botId : null;
+  if (headId != null && headId !== currentId) return;   // 还是不属于当前机器人，继续等
+  pendingQueuePaused = false;
+  pendingQueue.shift();
+  const next = (head && typeof head === 'object') ? head.text : head;
+  const inp = document.getElementById('msgInput');
+  if (inp) { inp.value = next; autoGrowInput(); }
+  toast('继续发送排队的消息（剩 ' + pendingQueue.length + ' 条）', '');
+  setTimeout(function () { sendMsg(); }, 80);
+}
 function getSerialInput() { return SERIAL_INPUT; }
 function setSerialInput(v) { SERIAL_INPUT = !!v; storeSetRaw('botcraft.serialInput.v1', SERIAL_INPUT ? '1' : '0'); }
 // ==================== 设置面板 ====================
@@ -17568,6 +17752,9 @@ function fillModelOptions(provider, currentModel) {
   document.getElementById('set-model-custom').style.display = (sel.value === '__custom') ? '' : 'none';
 }
 // 手动刷新：从 OpenAI 兼容的 /models 接口拉取真实模型列表（点「刷新列表」按钮触发）
+let _modelListBusy = false;   // 在途请求标记：连点「刷新列表」时，第二次直接忽略，
+                              // 否则会并发发起 N 个请求、最后返回的那个覆盖前面的结果，
+                              // 且每个请求各自挂一个 15s 定时器。
 async function refreshModelList() {
   const baseEl = document.getElementById('set-base');
   const keyEl = document.getElementById('set-key');
@@ -17575,17 +17762,20 @@ async function refreshModelList() {
   const custom = document.getElementById('set-model-custom');
   const base = (baseEl && baseEl.value) ? baseEl.value.trim() : '';
   if (!base) return; // 没有接口地址则不拉取，沿用内置列表
+  if (_modelListBusy) { setConnStatus('正在获取模型列表…（已在请求中）'); return; }
+  _modelListBusy = true;
   setConnStatus('正在获取模型列表…');
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, 15000);
   try {
     const url = base.replace(/\/+$/, '') + '/models';
     const headers = {};
     const key = (keyEl && keyEl.value) ? keyEl.value.trim() : '';
     if (key) headers['Authorization'] = 'Bearer ' + key;
-    const ctrl = new AbortController();
-    const timer = setTimeout(function () { ctrl.abort(); }, 15000);
     // 桌面 exe 走 bc_http 后端代理（自带 20s 超时），绕过 CORS；浏览器直开退回页面 fetch。
-    const r = await extHttp(url, { headers: headers });
-    clearTimeout(timer);
+    // signal 必须真传下去：15 秒后 ctrl.abort() 才能真正中断，
+    // 否则这个定时器只是空转，超时分支（e.name === 'AbortError'）永远不可达。
+    const r = await extHttp(url, { headers: headers, signal: ctrl.signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const j = JSON.parse(r.text);
     // 模型 id 来自「用户自己填的兼容网关」，属外部可控输入：未转义直接进 <option> 会被
@@ -17603,6 +17793,12 @@ async function refreshModelList() {
   } catch (e) {
     const msg = (e && e.name === 'AbortError') ? '拉取超时' : ('沿用内置列表：' + (e.message || e));
     setConnStatus(msg, 'err');
+  } finally {
+    // 定时器与 busy 标记都必须在 finally 释放：放在 await 之后的话，
+    // 抛错（超时 / HTTP 错误 / JSON 解析失败）路径根本走不到，
+    // 定时器一直挂到自然到期，且按钮永久停在「已在请求中」。
+    clearTimeout(timer);
+    _modelListBusy = false;
   }
 }
 document.addEventListener('change', e => {
@@ -19699,19 +19895,41 @@ window.__debug = {
    同时捕获全局 JS 错误供「设置与数据」页显示，桌面版无控制台也能看到故障。 */
 (function () {
   try {
-    /* 全局 JS 错误记录（最近 5 条，供设置页展示） */
-    window.addEventListener('error', function (ev) {
+    /* 全局故障记录（最近 5 条，供设置页展示）
+       存储必须走 window.__storage：处理器所在的这个 script 块与主块之间没有
+       词法作用域共享，但 __storage 是挂在 window 上的。直接用 localStorage 时，
+       在 file:// 禁用存储的场景（正是「启动了却什么都点不动」那类），
+       连记录故障的处理器自己都会抛 SecurityError —— 故障发生时唯一能指望的
+       观测手段反而失效。 */
+    var K = 'botcraft.jsErrors.v1';
+    var record = function (m, src) {
       try {
-        var K = 'botcraft.jsErrors.v1', arr = [];
-        try { arr = JSON.parse(localStorage.getItem(K) || '[]'); } catch (e) { arr = []; }
-        arr.push({
-          m: String((ev && ev.message) || 'unknown').slice(0, 160),
-          src: String((ev && ev.filename) || '').split('/').pop() + ':' + ((ev && ev.lineno) || 0),
-          t: Date.now()
-        });
+        var arr = JSON.parse(window.__storage.getItem(K) || '[]');
+        if (!Array.isArray(arr)) arr = [];
+        arr.push({ m: String(m || 'unknown').slice(0, 160), src: String(src || '').slice(0, 80), t: Date.now() });
         while (arr.length > 5) arr.shift();
-        localStorage.setItem(K, JSON.stringify(arr));
+        window.__storage.setItem(K, JSON.stringify(arr));
       } catch (eS) { }
+    };
+    window.__bcRecordFault = record;   // 供后续块复用，避免两份实现漂移
+
+    window.addEventListener('error', function (ev) {
+      record((ev && ev.message) || 'unknown',
+        String((ev && ev.filename) || '').split('/').pop() + ':' + ((ev && ev.lineno) || 0));
+    });
+
+    // 原来只有 error 监听：Promise 的 rejection 在没有 catch 时**不触发 error**，
+    // 而是走 unhandledrejection。于是所有 async 回调链上的失败（发消息、导入、
+    // 抓取、批量任务）全都静默消失 —— 没有 toast、没有日志、界面像卡住了。
+    // 这里只记录不弹窗：rejection 里相当一部分是已被就地 catch 处理的分支
+    // （如主动取消的 AbortError），弹窗会变成误报骚扰。
+    window.addEventListener('unhandledrejection', function (ev) {
+      var r = (ev && ev.reason) || null;
+      var m = (r && (r.message || r.reason)) ? (r.message || r.reason) : String(r);
+      // 主动取消不算故障：用户点停止产生的 AbortError 属预期行为，
+      // 混进故障列表只会让真正的问题被噪声淹没。
+      if (r && r.name === 'AbortError') return;
+      record('未捕获的 Promise 异常：' + m, 'unhandledrejection');
     });
   } catch (eErr) { }
 
