@@ -18356,7 +18356,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '2.9';
+var APP_VERSION = '3.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
