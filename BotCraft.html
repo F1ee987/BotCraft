@@ -2150,7 +2150,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="side-item" data-page="plugins" data-tip="插件中心"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/><path d="M11 7.5h2a2 2 0 0 1 2 2V13M7.5 11v2a2 2 0 0 0 2 2H13"/></svg></span><span class="side-txt">插件中心</span></div>
     <div class="side-section">资源</div>
     <div class="side-item" data-page="styles" data-tip="文体模板"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg></span><span class="side-txt">文体模板</span></div>
-    <div class="side-item" data-page="templates" data-tip="模板广场"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span class="side-txt">模板广场</span></div>
+    <div class="side-item" data-page="templates" data-tip="模板库"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span class="side-txt">模板库</span></div>
     <div class="side-item" data-page="favorites" data-tip="我的收藏"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v16l-5-4-5 4z"/></svg></span><span class="side-txt">我的收藏</span></div>
     <div class="side-item" data-page="analytics" data-tip="设置与数据"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V11M10 19V6M15 19V13M20 19V9"/></svg></span><span class="side-txt">数据分析</span></div>
     <div class="side-create" data-tip="新建机器人" onclick="openCreate()"><span class="sc-ic">＋</span><span class="sc-txt">新建机器人</span></div>
@@ -2193,7 +2193,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <p>选择模板快速开始，或从头搭建一个专属助手</p>
       <div class="empty-home-actions">
         <button class="btn btn-primary" onclick="openCreate()">＋ 创建机器人</button>
-        <button class="btn btn-ghost" onclick="go('templates')">浏览模板广场</button>
+        <button class="btn btn-ghost" onclick="go('templates')">浏览模板库</button>
       </div>
     </div>
   </main>
@@ -2364,12 +2364,12 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
   </main>
 
-  <!-- ==================== 模板广场 ==================== -->
+  <!-- ==================== 模板库 ==================== -->
   <main class="main" id="page-templates" style="display:none">
-    <div class="page-head"><div><h1>模板广场</h1><div class="sub">一键复制，快速创建你的机器人</div></div>
+    <div class="page-head"><div><h1>模板库</h1><div class="sub">把机器人存为模板后一键复制创建。模板仅存于本机当前账号，不跨机共享</div></div>
       <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn btn-ghost btn-sm" onclick="publishTemplateBots()">📋 把从模板创建的机器人存为内置模板</button>
-        <button class="btn btn-ghost btn-sm" onclick="publishAllBots()">📤 发布我的全部机器人（去重）</button>
+        <button class="btn btn-ghost btn-sm" onclick="publishAllBots()">📤 存入我的全部机器人（按名称去重）</button>
       </div>
     </div>
     <div class="grid" id="tplGrid"></div>
@@ -2808,7 +2808,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
     <div class="bk-sec" id="bkSec" style="display:none">
       <div class="bk-title">🛡️ 本机自动备份<span class="bk-sub" id="bkMeta"></span></div>
-      <div class="hint" style="font-size:11.5px;margin:2px 0 8px">每次写盘前自动快照一份，保留最近 <b id="bkKeep">12</b> 份。这是防 <b style="color:var(--txt)">data.json 写坏 / 误删</b>的本地兜底，与上面的「导出文件」互补。</div>
+      <div class="hint" style="font-size:11.5px;margin:2px 0 8px">每次写盘前自动快照一份，保留最近 <b id="bkKeep">7</b> 份（与后端 BACKUP_KEEP 一致；桌面版显示时由后端回填）。这是防 <b style="color:var(--txt)">data.json 写坏 / 误删</b>的本地兜底，与上面的「导出文件」互补。</div>
       <div class="bk-list" id="bkList"></div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" onclick="bkNow()">🛡️ 立即备份</button>
@@ -9119,7 +9119,7 @@ function cardMenu(e, id) {
     <button data-act="copy">⧉ 复制副本</button>
     <button data-act="fav">${favorites.has(id) ? '☆ 取消收藏' : '⭐ 收藏'}</button>
     <button data-act="dup"><svg class="ic-btn" aria-hidden="true"><use href="#ic-copy"/></svg>存为内置模板</button>
-    <button data-act="pub">📤 发布到模板广场</button>
+    <button data-act="pub">📤 存为模板</button>
     <button data-act="del" class="danger">🗑️ 删除</button>`;
   document.body.appendChild(pop);
   const r = el.getBoundingClientRect();
@@ -14664,7 +14664,7 @@ const CMDK_COMMANDS = [
   { ic: '🚪', label: '退出登录', hint: '', act: 'logout' },
   { ic: '🏠', label: '回到首页', hint: '', act: 'home' },
   { ic: '📊', label: '数据分析', hint: '', act: 'analytics' },
-  { ic: '🎨', label: '模板广场', hint: '', act: 'templates' },
+  { ic: '🎨', label: '模板库', hint: '', act: 'templates' },
   { ic: '📚', label: '知识库', hint: '', act: 'knowledge' },
   { ic: '🔌', label: '插件中心', hint: '', act: 'plugins' },
   { ic: '⭐', label: '我的收藏', hint: '', act: 'favorites' },
@@ -15039,7 +15039,7 @@ document.getElementById('stylePreviewModal').addEventListener('click', e => { if
 // 人工审核弹窗：点击遮罩视为「通过并继续」，避免工作流挂起
 document.getElementById('humanApprovalModal').addEventListener('click', e => { if (e.target.id === 'humanApprovalModal') { var p = document.getElementById('humanApprovalPass'); if (p) p.click(); } });
 
-// ==================== 发布到模板广场（按名称去重） ====================
+// ==================== 存为模板（按名称去重） ====================
 const PUB_TPL_KEY = 'botcraft.pubTpls.v1';
 function getPubTpls() {
   try {
@@ -15049,7 +15049,7 @@ function getPubTpls() {
 }
 function savePubTpls(arr) { try { storage.setItem(PUB_TPL_KEY, JSON.stringify(dedupePubTplsByName(arr))); } catch (e) { } }
 function lowerName(x) { return ((x && x.n) || '').trim().toLowerCase(); }
-// 模板广场按名称去重：同名只保留最新发布的一份，避免列表里出现多个"代码助手"
+// 模板库按名称去重：同名只保留最新存入的一份，避免列表里出现多个"代码助手"
 function dedupePubTplsByName(arr) {
   const map = new Map();
   (arr || []).forEach(t => {
@@ -15074,10 +15074,10 @@ function publishToPlaza(b, silent) {
   if (!b) return false;
   const list = getPubTpls();
   const name = lowerName(b);
-  if (list.some(t => lowerName(t) === name)) { if (!silent) toast('「' + b.n + '」已在模板广场存在，已跳过（同名去重）', ''); return false; }
+  if (list.some(t => lowerName(t) === name)) { if (!silent) toast('「' + b.n + '」已在模板库中，已跳过（同名去重）', ''); return false; }
   if (tpls.some(t => (t.n || '').trim().toLowerCase() === name)) { if (!silent) toast('「' + b.n + '」与内置模板同名，已跳过', ''); return false; }
   list.push(botToPubTpl(b)); savePubTpls(list); renderTplGrid();
-  if (!silent) toast('已发布「' + b.n + '」到模板广场', 'ok'); return true;
+  if (!silent) toast('已把「' + b.n + '」存入模板库', 'ok'); return true;
 }
 function unpublishPub(id) { savePubTpls(getPubTpls().filter(t => t.id !== id)); renderTplGrid(); toast('已取消发布', ''); }
 function publishAllBots() {
@@ -15093,7 +15093,7 @@ function publishAllBots() {
     list.push(botToPubTpl(b)); existingNames.add(name); added++;
   });
   savePubTpls(list); renderTplGrid();
-  toast('已发布 ' + added + ' 个机器人到模板广场，跳过 ' + skipped + ' 个重复/同名', 'ok');
+  toast('已把' + added + ' 个机器人存入模板库，跳过 ' + skipped + ' 个重复/同名', 'ok');
 }
 function isTemplateLikeName(b) {
   const name = lowerName(b);
@@ -17180,15 +17180,15 @@ var PUB_CHANNELS = [
     fields: []
   },
   {
-    id: '飞书', icon: '📮', desc: '接入飞书机器人（需你的服务端转发）',
+    id: '飞书', icon: '📮', desc: '记录飞书机器人的回调地址（接入需你自己的服务端转发，本程序不生成可执行产物）',
     fields: [{ key: 'webhook', label: 'Webhook / 回调地址', placeholder: 'https://your-server.com/bot/{id}', optional: false, prefix: '{id}→' + encodeURIComponent((getBot(currentId) || {}).id || '') }]
   },
   {
-    id: '微信公众号', icon: '💬', desc: '接入微信公众号（被动 / 客服消息）',
+    id: '微信公众号', icon: '💬', desc: '记录公众号客服消息的服务器地址（接入需你自己的服务端，本程序不生成可执行产物）',
     fields: [{ key: 'webhook', label: '服务器地址 URL', placeholder: 'https://your-server.com/wx', optional: false }]
   },
   {
-    id: '企业微信', icon: '🏢', desc: '接入企业微信自建应用',
+    id: '企业微信', icon: '🏢', desc: '记录企业微信自建应用的回调地址（接入需你自己的服务端，本程序不生成可执行产物）',
     fields: [{ key: 'webhook', label: '回调 URL', placeholder: 'https://your-server.com/wxwork', optional: false }]
   }
 ];
@@ -18185,7 +18185,8 @@ async function testConnection() {
 
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
-var APP_VERSION = '2.6';
+// 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
+var APP_VERSION = '2.9';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');

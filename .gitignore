@@ -10,3 +10,7 @@ __pycache__/
 # 成品 exe（~14MB）不进 git：27 次提交曾把 .git 撑到 538MB。发版走 GitHub Releases。
 # 磁盘上的三副本同步（sync_exe_copies.py）走文件系统，不受影响。
 BotCraft.exe
+
+# 打包时写入的 HEAD 指纹，只服务本机 verify_commit_fresh.py。
+# 提交它会让「谁在什么时候打的包」变成需要 merge 协调的东西，而它本就该跟着构建走。
+_build_commit.txt
