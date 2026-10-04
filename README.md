@@ -68,7 +68,11 @@ python gen_icon.py                  # 加 --dry 只出预览
 
 **注意**：真正打包的是 `pack_exe.py` → `build_run.py`。同目录的 `build_exe.py` 是**桌面版运行时入口**（pywebview 主程序，被 PyInstaller 打包的对象），不是构建脚本 —— 直接跑它只会启动应用。
 
-**版本号有两处，必须同步**：`BotCraft.html` 的 `APP_VERSION`（控制存储迁移）与 `release_exe.py` 的 `TAG`（决定 Release tag 与标题）。二者目前靠手工保持一致，改版本时一并改。`build_exe/_build_commit.txt` 记录打包时的 commit，「检查更新」会比对它 —— 改了 HTML 未重打包会导致对所有用户误报有新版。
+**版本号只有一处**：`BotCraft.html` 的 `APP_VERSION`。`release_exe.py` 从它推导 Release tag，`build_exe.py` 从它注入 exe 内的 `BC_BUILD_VERSION` —— 三端同源，改版本只改这一行。
+
+**「检查更新」的判据是「有没有新 Release」，不是「仓库有没有新提交」**。早前用 `compare(本地...main)` 判 ahead/behind，那是另一个问题：它问提交关系，用户问的是「有没有新版 exe 可下」。中间夹着「提交了但没发 Release」的窗口，一次只改 README 的提交就会让所有最新用户被反复告知「发现新版本」，下载到的还是同一份文件。现在改为读 `releases/latest` 的 tag 并逐段比较版本号（`2.10 > 2.9`，字符串比较会判反）。状态栏会同时标出远端与本地版本号。
+
+`build_exe/_build_commit.txt` 记录打包时的 commit，只用于 `verify_commit_fresh.py` 门禁（改了 HTML 忘重打包会判红），不参与更新检查。
 
 主文件为单文件 `BotCraft.html`（4 个 `<script>` 块），改动请保持作用域不相互污染；测试依赖 jsdom（装在隔离的 node workspace，缺环境时对应项显式变红，不给假绿）。
 
