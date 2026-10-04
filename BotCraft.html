@@ -9212,7 +9212,7 @@ function card(b) {
     <span class="tag ${cls}">${escapeHtml(b.tag)}</span>
     <div class="bot-avatar" style="background:${b.c}">${botGlyph(b)}</div>
     <h3>${escapeHtml(b.n)}</h3><p>${escapeHtml(b.d)}</p>
-    <div class="bot-meta"><span>' + svgIcon('users') + ' ${b.u || '—'}</span><span>' + svgIcon('star') + ' ${b.t || '—'}</span>
+    <div class="bot-meta"><span>${svgIcon('users')} ${b.u || '—'}</span><span>${svgIcon('star')} ${b.t || '—'}</span>
       <span class="card-menu" onclick="cardMenu(event,'${escAttrJs(b.id)}')">⋯</span></div>
     <div style="position:absolute;top:16px;left:16px;cursor:pointer;font-size:14px;z-index:2" onclick="toggleFavorite('${escAttrJs(b.id)}')" title="收藏">${fav}</div>
   </div>`;
@@ -9282,13 +9282,13 @@ function cardMenu(e, id) {
   pop.id = 'cardMenuPop';
   pop.className = 'pop-menu';
   pop.innerHTML = `
-    <button data-act="chat">' + svgIcon('chat') + ' 立即对话</button>
-    <button data-act="edit">' + svgIcon('pencil') + ' 重命名</button>
+    <button data-act="chat">${svgIcon('chat')} 立即对话</button>
+    <button data-act="edit">${svgIcon('pencil')} 重命名</button>
     <button data-act="copy">⧉ 复制副本</button>
     <button data-act="fav">${favorites.has(id) ? '☆ 取消收藏' : '⭐ 收藏'}</button>
     <button data-act="dup"><svg class="ic-btn" aria-hidden="true"><use href="#ic-copy"/></svg>存为内置模板</button>
-    <button data-act="pub">' + svgIcon('upload') + ' 存为模板</button>
-    <button data-act="del" class="danger">' + svgIcon('trash') + ' 删除</button>`;
+    <button data-act="pub">${svgIcon('upload')} 存为模板</button>
+    <button data-act="del" class="danger">${svgIcon('trash')} 删除</button>`;
   document.body.appendChild(pop);
   const r = el.getBoundingClientRect();
   let left = Math.min(r.right - 130, window.innerWidth - 150);
@@ -14493,7 +14493,7 @@ function renderKbPanel(b) {
     if (ALL_KB.length === 0) kbBody.innerHTML = `<div class="empty-tip">暂无可用知识库，可前往「知识库」页面导入</div>`;
     else kbBody.innerHTML = ALL_KB.map((k) => `<label class="kb-row" data-kb="${k.id}">
         <input type="checkbox" ${b.knowledges.includes(k.id) ? 'checked' : ''}>
-        <span>' + svgIcon('file') + ' ${escapeHtml(k.name)}</span>
+        <span>${svgIcon('file')} ${escapeHtml(k.name)}</span>
         <span class="kb-toggle">${b.knowledges.includes(k.id) ? '已挂载' : '点击挂载'}</span>
       </label>`).join('');
   }
@@ -15120,7 +15120,7 @@ function renderStyleGrid() {
       <h3>${escapeHtml(s.n)}</h3><p>${escapeHtml(s.d)}</p>
       <div class="bot-meta">
         <span>${applied ? '✅ 已应用·再点取消' : '应用到机器人'}</span>
-        <button class="style-view-btn" title="查看风格指令" onclick="event.stopPropagation();previewStyle('${escAttrJs(s.id)}')">' + svgIcon('eye') + ' 查看</button>
+        <button class="style-view-btn" title="查看风格指令" onclick="event.stopPropagation();previewStyle('${escAttrJs(s.id)}')">${svgIcon('eye')} 查看</button>
       </div>
     </div>`;
   }).join('');
@@ -15161,7 +15161,7 @@ function renderStyleWorkspacePanel(b) {
   let html = '';
   if (curName) {
     html += `<div style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:var(--glass-bg);border:1px solid var(--glass-border);font-size:12px;color:var(--txt);display:flex;align-items:center;gap:10px">
-      <span style="font-size:18px">' + svgIcon('checkCircle','solo') + '</span>
+      <span style="font-size:18px">${svgIcon('checkCircle','solo')}</span>
       <span>当前已应用：<b>${escapeHtml(curName)}</b>，发送消息时会按此风格输出</span>
       <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="clearStyle()">清除</button>
     </div>`;
@@ -15344,7 +15344,7 @@ function renderKbList() {
     <div class="info"><h4>${escapeHtml(k.name)}</h4><p>${k.builtin ? '内置 · 系统预设' : (k.type.toUpperCase() + ' · ' + fmtSize(k.size) + ' · ' + (k.updatedAt ? new Date(k.updatedAt).toLocaleDateString() : ''))}</p></div>
     <span class="st" style="color:var(--ok-text)">可用</span>
     ${k.builtin ? '<span class="st" style="color:var(--sub)">内置</span>' : ''}
-    <span class="act" data-ren="${k.id}" title="重命名">' + svgIcon('pencil','solo') + '</span>
+    <span class="act" data-ren="${k.id}" title="重命名">${svgIcon('pencil','solo')}</span>
     ${k.builtin ? '' : '<span class="act" data-del="' + k.id + '" title="删除">' + svgIcon('trash','solo') + '</span>'}
   </div>`).join('');
   box.querySelectorAll('[data-ren]').forEach(el => {
@@ -16612,7 +16612,7 @@ function renderPluginGrid() {
     const unBtn = `<button class="style-view-btn" onclick="event.stopPropagation();uninstallPluginAsk('${escAttrJs(p.n)}')">卸载</button>`;
     if (enabled) { badge = '🟢 已启用'; action = `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${escAttrJs(p.n)}')">取消启用</button>` + unBtn; }
     else if (installed) { badge = '✅ 已安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();enablePluginToBot('${escAttrJs(p.n)}')">启用到机器人</button>` + unBtn; }
-    else { badge = '未安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();installAndEnable('${escAttrJs(p.n)}')">' + svgIcon('package') + ' 安装并启用</button>`; }
+    else { badge = '未安装'; action = `<button class="style-view-btn" onclick="event.stopPropagation();installAndEnable('${escAttrJs(p.n)}')">${svgIcon('package')} 安装并启用</button>`; }
     return `<div class="bot-card plugin-card" data-plug="${escapeAttr(p.n)}">
       <div class="bot-avatar" style="background:${p.c}">${p.ic}</div>
       <h3>${escapeHtml(p.n)}</h3><p>${escapeHtml(p.d)}</p>
@@ -16699,7 +16699,7 @@ async function openPluginDetail(n) {
   const unBtn2 = `<button class="btn btn-ghost" style="margin-left:8px" onclick="uninstallPluginAsk('${escAttrJs(n)}');closePluginDetail()">卸载</button>`;
   if (enabled) act.innerHTML = `<button class="btn btn-ghost" onclick="closePluginDetail();disablePluginFromBot('${escAttrJs(n)}')">取消启用</button>` + unBtn2;
   else if (installed) act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();enablePluginToBot('${escAttrJs(n)}')">启用到当前机器人</button>` + unBtn2;
-  else act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();installAndEnable('${escAttrJs(n)}')">' + svgIcon('package') + ' 安装并启用</button>`;
+  else act.innerHTML = `<button class="btn btn-primary" onclick="closePluginDetail();installAndEnable('${escAttrJs(n)}')">${svgIcon('package')} 安装并启用</button>`;
   modal.classList.add('on');
 }
 function closePluginDetail() { const m = document.getElementById('pluginDetailModal'); if (m) m.classList.remove('on'); }
@@ -16760,7 +16760,7 @@ function remindersExtraHTML(){
   var needAsk = desk || !N || N.permission !== 'granted';
   var askBtnText = desk ? '发送测试通知' : '开启系统通知';
   return `<div style="margin-top:14px">
-    <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">' + svgIcon('calendar') + ' 我的提醒（本地存储，到点弹出通知）</div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">${svgIcon('calendar')} 我的提醒（本地存储，到点弹出通知）</div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--glass-bg)">
       <div id="notifyState" style="flex:1;min-width:0;font-size:11.5px;color:var(--sub);line-height:1.5">${escapeHtml(notifyStateText())}</div>
       ${needAsk ? '<button class="btn btn-ghost btn-sm" onclick="askNotificationPermission()">'+askBtnText+'</button>' : ''}
@@ -16907,7 +16907,7 @@ function codeRunnerExtraHTML(){
   var api = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
   var canPy = !!(api && typeof api.bc_py_run === 'function');
   return `<div style="margin-top:14px">
-    <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">' + svgIcon('gear') + ' 试运行（隔离环境内运行·不会上传）</div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">${svgIcon('gear')} 试运行（隔离环境内运行·不会上传）</div>
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" id="codeLangJs" onclick="setCodeRunnerLang('js')">JavaScript</button>
       <button class="btn btn-ghost btn-sm" id="codeLangPy" onclick="setCodeRunnerLang('py')"${canPy ? '' : ' disabled title="Python 运行需要桌面版"'} style="${canPy ? '' : 'opacity:.5;cursor:not-allowed'}">Python${canPy ? '' : '（需桌面版）'}</button>
