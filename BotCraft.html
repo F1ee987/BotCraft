@@ -1372,6 +1372,12 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 .set-preview-label{font-size:var(--fs-sm);flex:none}
 .set-final-actions{display:flex;justify-content:flex-end;gap:var(--sp-5);margin-top:var(--sp-5)}
 #anaTabUsage,#anaTabSettings{font-size:var(--fs-md);padding:9px 16px}
+/* 设置页两个 Tab 随标题栏吸顶（2026-10-11 用户要求：下滑时 Tab 始终可见，不被滚走）。
+   top 走 --ph-h（bindStickyHeads 把标题栏高度写进 .main 行内样式），从标题栏下沿开始吸住，
+   与 .batch-bar 同一机制、同一 z-index 层（5 < 标题栏 6）；玻璃底防止滚过的内容从缝隙透出。 */
+.ana-tabs{display:inline-flex;gap:var(--sp-4);margin-bottom:var(--sp-7);padding:var(--sp-3);
+  position:sticky;top:var(--ph-h,0px);z-index:5;
+  background:var(--glass-bg-hover);border:1px solid var(--line);border-radius:var(--r-md)}
 /* ============ 浅色模式：统一"控件可见性"（2026-09-23） ============
    浅色主题里 --fill 是「白色 60%」，而面板本身也是浅玻璃，两者叠在一起输入框等于隐形；
    加上原规则是 border:transparent，边界完全不可见（聊天输入框、搜索框、批量输入、
@@ -2469,7 +2475,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <!-- ==================== 数据分析 ==================== -->
   <main class="main" id="page-analytics" style="display:none">
     <div class="page-head"><div><h1>设置与数据</h1><div class="sub">用量统计 · 模型与插件配置</div></div></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px">
+    <div class="ana-tabs">
       <button class="btn btn-primary" id="anaTabUsage" onclick="showAnaTab('usage')">用量分析</button>
       <button class="btn btn-ghost" id="anaTabSettings" onclick="showAnaTab('settings')">模型与插件设置</button>
     </div>
@@ -18362,7 +18368,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.1';
+var APP_VERSION = '3.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
