@@ -1103,14 +1103,11 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 #kbPrevBody .kb-meta-k,.kb-prev .kb-meta-k{flex:none;font-weight:600;color:var(--sub);min-width:40px}
 #kbPrevBody .kb-meta-v,.kb-prev .kb-meta-v{color:var(--txt);word-break:break-all}
 /* ===== 设置面板：分区折叠 ===== */
-.ssec{margin:10px 0;border:1px dashed var(--glass-border);border-radius:var(--r-md);background:var(--glass-bg);overflow:hidden}
-.ssec-head{width:100%;display:flex;align-items:center;gap:var(--sp-2);padding:10px 12px;background:transparent;border:0;color:var(--txt);font-size:13px;font-weight:700;cursor:pointer;text-align:left}
-.ssec-head:hover{background:rgba(255,255,255,.05)}
-.ssec-caret{color:var(--sub);font-size:11px;flex:none}
+.ssec{margin:10px 0;border:1px solid var(--line);border-radius:var(--r-md);background:var(--glass-bg);overflow:hidden}
+.ssec-head{display:flex;align-items:center;gap:var(--sp-2);padding:12px 14px;background:var(--fill);border-bottom:1px solid var(--line);color:var(--txt);font-size:13px;font-weight:700;text-align:left}
 .ssec-sub,.ssec-badge{margin-left:auto;font-weight:400;font-size:11.5px;color:var(--sub);flex:none}
 .ssec-badge{padding:1px 7px;border-radius:var(--r-full);background:var(--ok-bg);color:var(--ok-text)}
-.ssec-body{padding:0 12px 12px}
-.ssec-body[hidden]{display:none}
+.ssec-body{padding:var(--sp-3) var(--sp-4) var(--sp-4)}
 /* ===== 图片查看器（点击聊天图片放大）===== */
 #imgViewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:600;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none}
 #imgViewer.on{display:flex}
@@ -1320,7 +1317,6 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 /* 焦点可见性：键盘用户必须看得见焦点环（此前只有边框变色，对比不足） */
 .btn:focus-visible,.file-btn:focus-visible,.chip:focus-visible{
   outline:2px solid var(--brand);outline-offset:2px}
-.ssec-head:focus-visible{outline:2px solid var(--brand);outline-offset:1px;border-radius:var(--r-md)}
 
 /* 加载态：按钮内嵌旋转指示器，期间禁用点击，避免重复提交 */
 .btn.is-loading{pointer-events:none;opacity:.75}
@@ -1363,13 +1359,16 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 /* 设置页左右展开布局：左分类导航 + 右内容面板 */
 .set-layout{display:flex;align-items:flex-start;gap:var(--sp-5);margin:var(--sp-4) 0}
 .set-nav{flex:none;width:190px;display:flex;flex-direction:column;gap:var(--sp-2);position:sticky;top:calc(var(--ph-h,64px) + 12px)}
-.set-nav-item{display:flex;align-items:center;gap:var(--sp-3);width:100%;padding:10px 12px;border:1px solid transparent;border-radius:var(--r-md);background:transparent;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;text-align:left}
+.set-nav-item{display:flex;align-items:center;gap:var(--sp-3);width:100%;padding:10px 12px;border:1px solid transparent;border-radius:var(--r-md);background:transparent;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;text-align:left;transition:background .15s ease,color .15s ease,border-color .15s ease}
 .set-nav-item:hover{background:rgba(255,255,255,.05);color:var(--txt)}
-.set-nav-item.active{background:var(--fill);color:var(--txt);border-color:var(--line)}
+.set-nav-item.active{background:var(--fill);color:var(--brand-text);border-color:var(--line)}
 .set-nav-item:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
 .set-nav-item .i{width:16px;height:16px;flex:none}
 .set-nav-item .i svg{width:100%;height:100%}
 .set-panels{flex:1;min-width:0}
+.set-panels>.ssec{animation:setPanelIn .22s ease}
+@keyframes setPanelIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.set-panels>.ssec{animation:none}}
 @media (max-width:720px){
   .set-layout{display:block}
   .set-nav{position:static;width:auto;flex-direction:row;overflow-x:auto;gap:var(--sp-2);margin-bottom:var(--sp-3)}
@@ -2557,9 +2556,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="set-panels">
 
 <div class="ssec open" id="sec-core">
-  <button type="button" class="ssec-head" onclick="toggleSettingsSec('core')" aria-expanded="true" aria-controls="sec-core-body">
-    <span class="ssec-caret" id="caret-core">▾</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/></svg></span> 模型接入</span><span class="ssec-sub">服务商 / Key / 接口 / 模型</span>
-  </button>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/></svg></span> 模型接入</span><span class="ssec-sub">服务商 / Key / 接口 / 模型</span>
+  </div>
   <div class="ssec-body" id="sec-core-body">
     <div class="field">
       <label>服务商</label>
@@ -2595,10 +2593,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 </div>
 
 <div class="ssec" id="sec-adv" hidden>
-  <button type="button" class="ssec-head" onclick="toggleSettingsSec('adv')" aria-expanded="false" aria-controls="sec-adv-body">
-    <span class="ssec-caret" id="caret-adv">▸</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span> 高级参数</span><span class="ssec-sub">温度 / 长度 / 代理 / 发送方式</span>
-  </button>
-  <div class="ssec-body" id="sec-adv-body" hidden>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span> 高级参数</span><span class="ssec-sub">温度 / 长度 / 代理 / 发送方式</span>
+  </div>
+  <div class="ssec-body" id="sec-adv-body">
     <div class="field">
       <label>温度（创造性）<span id="set-temp-val" style="float:right;color:var(--brand-text)">0.7</span></label>
       <input id="set-temp" type="range" min="0" max="2" step="0.1" value="0.7" style="width:100%">
@@ -2630,10 +2627,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
 
 <div class="ssec" id="sec-search" hidden>
-  <button type="button" class="ssec-head" onclick="toggleSettingsSec('search')" aria-expanded="false" aria-controls="sec-search-body">
-    <span class="ssec-caret" id="caret-search">▸</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg></span> 联网检索（网页搜索插件生效）</span><span class="ssec-badge" id="badge-search" style="display:none">已配置</span>
-  </button>
-  <div class="ssec-body" id="sec-search-body" hidden>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg></span> 联网检索（网页搜索插件生效）</span><span class="ssec-badge" id="badge-search" style="display:none">已配置</span>
+  </div>
+  <div class="ssec-body" id="sec-search-body">
       <!-- 2026-09-22：默认源从 DuckDuckGo 换成国产。桌面版统一走宿主 bc_http 转发：
            不受同源限制、对不给跨域头的服务（自定义接口常见）也一视同仁，还自带
            内网地址拒绝与 20s 超时。实测博查给 CORS 头、智谱回显 origin，
@@ -2660,10 +2656,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 </div>
 
 <div class="ssec" id="sec-stt" hidden>
-  <button type="button" class="ssec-head" onclick="toggleSettingsSec('stt')" aria-expanded="false" aria-controls="sec-stt-body">
-    <span class="ssec-caret" id="caret-stt">▸</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span> 语音识别（录音自动转文字）</span><span class="ssec-badge" id="badge-stt" style="display:none">已配置</span>
-  </button>
-  <div class="ssec-body" id="sec-stt-body" hidden>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span> 语音识别（录音自动转文字）</span><span class="ssec-badge" id="badge-stt" style="display:none">已配置</span>
+  </div>
+  <div class="ssec-body" id="sec-stt-body">
       <!-- 默认硅基流动：OpenAI Whisper 兼容 multipart 接口，免费额度、中文效果好。
            2026-09-22 实测 Allow-Origin:* ，浏览器可直接调，无需宿主转发。
            转写结果填进输入框可修改后再发送；录音本身仍作为音频附件一并发送。 -->
@@ -2684,10 +2679,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 </div>
 
 <div class="ssec" id="sec-image" hidden>
-  <button type="button" class="ssec-head" onclick="toggleSettingsSec('image')" aria-expanded="false" aria-controls="sec-image-body">
-    <span class="ssec-caret" id="caret-image">▸</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span> 文生图（可选）</span><span class="ssec-badge" id="badge-image" style="display:none">已配置</span>
-  </button>
-  <div class="ssec-body" id="sec-image-body" hidden>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span> 文生图（可选）</span><span class="ssec-badge" id="badge-image" style="display:none">已配置</span>
+  </div>
+  <div class="ssec-body" id="sec-image-body">
       <!-- 国内可直连的免费生图一键预设：省得用户去查端点、模型名与参数差异
            （智谱是 /api/paas/v4 路径，硅基流动的尺寸字段名与返回结构与 OpenAI 不同，
            这些差异由代码适配，用户只需点一下 + 填自己的 Key） -->
@@ -18143,8 +18137,7 @@ function setupSettingsUI() {
   document.getElementById('set-stt-model').value = cfg.sttModel || '';
   document.getElementById('set-stt-key').value = cfg.sttAPIKey || '';
   loadSearchSettings(cfg);
-  // 分区折叠：恢复上次的展开状态 + 刷新「已配置」徽标（已配置的会自动展开一次）
-  if (window.applySecOpenState) applySecOpenState();
+  // 刷新「已配置」徽标（平铺布局：无需恢复折叠状态）
   if (window.refreshSettingsSecBadges) refreshSettingsSecBadges(cfg);
   fillModelOptions(cfg.provider, cfg.model);
   document.getElementById('set-model-custom').value =
@@ -19041,9 +19034,8 @@ function _kbIndexFor(bot) {
   }
 
   // 设置面板：检索源的加载 / 切换 / 提示
-  // 设置面板分区折叠：一次只展开常用的「模型接入」，其余收起；标题右侧显示「已配置」徽标。
-  // 折叠只是 CSS 隐藏（DOM 与字段仍在），所以 saveSettings 照常能读到所有字段。
-  var SEC_OPEN_KEY = 'botcraft.settings.openSecs';
+  // 设置面板平铺（2026-10-11）：分区标题为静态卡片头、不可折叠；左侧导航只切换面板。
+  // 字段始终在 DOM 里，saveSettings 照常能读到所有字段。
   function settingsSecConfigured(cfg) {
     cfg = cfg || {};
     return {
@@ -19052,58 +19044,14 @@ function _kbIndexFor(bot) {
       image: !!String(cfg.imageAPIKey || '').trim()
     };
   }
-  function loadSecOpenState() { return storeGet(SEC_OPEN_KEY, {}); }
-  function saveSecOpenState(st) { storeSet(SEC_OPEN_KEY, st || {}); }
-  function toggleSettingsSec(id) {
-    var sec = document.getElementById('sec-' + id);
-    var body = document.getElementById('sec-' + id + '-body');
-    var head = sec && sec.querySelector && sec.querySelector('.ssec-head');
-    var caret = document.getElementById('caret-' + id);
-    if (!sec || !body) return;
-    var open = body.hidden;
-    body.hidden = !open;
-    if (sec.classList) sec.classList.toggle('open', open);
-    if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (caret) caret.textContent = open ? '▾' : '▸';
-    var st = loadSecOpenState();
-    st[id] = !!open;
-    saveSecOpenState(st);
-  }
-  function applySecOpenState() {
-    var st = loadSecOpenState();
-    ['core', 'adv', 'search', 'stt', 'image'].forEach(function (id) {
-      var want = (id === 'core') ? (st.core !== false) : (st[id] === true);
-      var sec = document.getElementById('sec-' + id);
-      var body = document.getElementById('sec-' + id + '-body');
-      var head = sec && sec.querySelector && sec.querySelector('.ssec-head');
-      var caret = document.getElementById('caret-' + id);
-      if (!body) return;
-      body.hidden = !want;
-      if (sec && sec.classList) sec.classList.toggle('open', want);
-      if (head) head.setAttribute('aria-expanded', want ? 'true' : 'false');
-      if (caret) caret.textContent = want ? '▾' : '▸';
-    });
-  }
-  // 已配置的能力自动展开一次（第一次进来别让用户以为丢了功能）；用户手动收起后以手动为准
   function refreshSettingsSecBadges(cfg) {
     var st = settingsSecConfigured(cfg);
     ['search', 'stt', 'image'].forEach(function (id) {
       var b = document.getElementById('badge-' + id);
       if (b) b.style.display = st[id] ? '' : 'none';
     });
-    var st2 = loadSecOpenState();
-    ['search', 'stt', 'image'].forEach(function (id) {
-      if (st[id] && st2[id] === undefined) {
-        var sec = document.getElementById('sec-' + id);
-        var body = document.getElementById('sec-' + id + '-body');
-        var caret = document.getElementById('caret-' + id);
-        if (body) body.hidden = false;
-        if (sec && sec.classList) sec.classList.add('open');
-        if (caret) caret.textContent = '▾';
-      }
-    });
   }
-  // 左右布局：左侧分类导航切换右侧面板；面板内标题行仍可折叠（toggleSettingsSec 不变）
+  // 左右布局：左侧分类导航切换右侧面板（切走的面板 hidden，切换带淡入动画）
   function showSettingsPanel(id) {
     var IDS = ['core', 'adv', 'search', 'stt', 'image'];
     for (var i = 0; i < IDS.length; i++) {
@@ -19116,13 +19064,8 @@ function _kbIndexFor(bot) {
       items[j].classList.toggle('active', on);
       items[j].setAttribute('aria-selected', on ? 'true' : 'false');
     }
-    // 点导航即展开该分类内容；收起状态仍由面板内标题行控制
-    var body = document.getElementById('sec-' + id + '-body');
-    if (body && body.hidden) toggleSettingsSec(id);
   }
-  window.toggleSettingsSec = toggleSettingsSec;
   window.showSettingsPanel = showSettingsPanel;
-  window.applySecOpenState = applySecOpenState;
   window.refreshSettingsSecBadges = refreshSettingsSecBadges;
   window.settingsSecConfigured = settingsSecConfigured;
   function loadSearchSettings(c) {
