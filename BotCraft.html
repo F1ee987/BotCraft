@@ -2689,7 +2689,6 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <button type="button" class="btn btn-ghost" onclick="manualCheckUpdate()" style="white-space:nowrap;flex:none">检查更新</button>
       <span id="updateCheckStatus" style="font-size:12px;color:var(--sub)"></span>
     </div>
-    <div id="buildFp" style="font-size:11.5px;color:var(--sub);margin:0 0 10px;line-height:1.5"></div>
     <div class="set-preview">即将使用：<b id="settingsPreview"></b></div>
     <div class="mbox-foot">
       <button class="btn btn-ghost" onclick="testConnection()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/></svg></span> 测试连接</button>
@@ -20364,7 +20363,7 @@ function _kbIndexFor(bot) {
       try { sl = String(window.getSelection ? window.getSelection() : '').length; } catch (eP) { }
       pushProbe(ev + ' @ ' + chainOf(el) + ' sel=' + sl);
     }
-    mark('botcraft.copyBound', '1');           // 自观测：绑定成功（设置页指纹行显示）
+    mark('botcraft.copyBound', '1');           // 自观测：绑定成功（localStorage 取证，界面已无展示位）
     function closeMenu() { if (menu) { menu.remove(); menu = null; } }
     function pendSel() {
       if (pend && pend.sel) return pend.sel;   // 按下瞬间记录的选区（防右键过程被清）
@@ -20508,39 +20507,8 @@ function _kbIndexFor(bot) {
     });
   } catch (eBind) { try { localStorage.setItem('botcraft.jsErrors.v1', JSON.stringify([{ m: 'bindCopy: ' + eBind.message, src: 'standalone', t: Date.now() }])); } catch (eS4) { } }
 
-  /* 版本指纹 + 脚本错误 + 复制模块自观测（设置与数据页，检查更新按钮下方） */
-  function fillBuildFp() {
-    var fp = document.getElementById('buildFp');
-    if (!fp) return;
-    var c = (typeof BC_BUILD_COMMIT === 'string') ? BC_BUILD_COMMIT : '';
-    var txt = /^[0-9a-f]{7,40}$/i.test(c) ? ('当前构建: ' + c.slice(0, 7)) : '开发构建';
-    var errs = [];
-    try { errs = JSON.parse(localStorage.getItem('botcraft.jsErrors.v1') || '[]'); } catch (e) { }
-    if (errs.length) txt += ' · ⚠ 脚本错误 x' + errs.length + '（最后: ' + errs[errs.length - 1].m.slice(0, 60) + '）';
-    var bound = null, last = 0;
-    try {
-      bound = localStorage.getItem('botcraft.copyBound');
-      last = parseInt(localStorage.getItem('botcraft.copyLast') || '0', 10) || 0;
-    } catch (eL) { }
-    if (bound) {
-      txt += ' · 右键菜单: 已绑定';
-      txt += last ? (lastCopy_Ago(last)) : '（从未打开过——右键消息气泡即应弹出）';
-      var cr = '', pl = [];
-      try { cr = localStorage.getItem('botcraft.copyResult') || ''; } catch (eC2) { }
-      try { pl = JSON.parse(localStorage.getItem('botcraft.probeLog') || '[]'); } catch (eC3) { }
-      if (cr) txt += ' ‖ 最近复制: ' + cr;
-      if (pl.length) txt += ' ‖ 探针: ' + pl.join(' | ');
-    } else txt += ' · 右键菜单: 未绑定（本块未执行，请立即反馈）';
-    fp.textContent = txt;
-  }
-  function lastCopy_Ago(ts) {
-    var d = Date.now() - ts;
-    if (d < 60000) return '（上次触发: ' + Math.max(1, Math.round(d / 1000)) + ' 秒前）';
-    if (d < 3600000) return '（上次触发: ' + Math.round(d / 60000) + ' 分钟前）';
-    return '（上次触发: ' + Math.round(d / 3600000) + ' 小时前）';
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fillBuildFp);
-  else fillBuildFp();
+  // 指纹行（当前构建/右键菜单/探针显示）已于 2026-10-11 按用户要求移除；
+  // 自观测数据仍照常写 localStorage（copyBound/probeLog/copyResult），供诊断取证。
 })();
 </script>
 </body>
