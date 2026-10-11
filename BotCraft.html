@@ -18036,7 +18036,19 @@ try { showAnaTab(storeGetRaw('botcraft.anaTab', '') || 'usage'); } catch (e) { }
 // 首次进入应用就要把服务商下拉与各字段回填好 —— 以前这些在 openSettings 里做，
 // 弹窗时代天然每次打开都执行；合并成常驻页后没人调它，服务商下拉就是空的，
 // 要点一下顶栏模型标签才刷新（2026-09-23 用户实测）。
-try { setupSettingsUI(); } catch (e) { }
+// 启动调用必须推迟到本轮解析结束：setupSettingsUI 会跨块调 block3 的 loadSearchSettings，
+// 同步调用时 block3 还没执行（函数未定义）→ ReferenceError 被这里的 catch 静默吞掉，
+// 模型下拉与「即将使用」整段不回填（2026-10-11 用户实测）。setTimeout(0) 时各块已全部跑完。
+// 回填失败也不再静默：记进 botcraft.jsErrors 供诊断取证（与独立块的 bindCopy 记录同格式）。
+try {
+  setTimeout(function () {
+    try { setupSettingsUI(); }
+    catch (e2) {
+      try { localStorage.setItem('botcraft.jsErrors.v1',
+        JSON.stringify([{ m: 'setupSettingsUI: ' + ((e2 && e2.message) || e2), src: 'block2', t: Date.now() }])); } catch (e3) { }
+    }
+  }, 0);
+} catch (e) { }
 function setupSettingsUI() {
   // 只在首次打开时构建一次服务商/模型下拉框，之后直接复用（避免反复 innerHTML 重建导致卡顿）
   if (!_settingsInited) {
