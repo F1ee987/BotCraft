@@ -1372,12 +1372,13 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 .set-preview-label{font-size:var(--fs-sm);flex:none}
 .set-final-actions{display:flex;justify-content:flex-end;gap:var(--sp-5);margin-top:var(--sp-5)}
 #anaTabUsage,#anaTabSettings{font-size:var(--fs-md);padding:9px 16px}
-/* 设置页两个 Tab 随标题栏吸顶（2026-10-11 用户要求：下滑时 Tab 始终可见，不被滚走）。
-   top 走 --ph-h（bindStickyHeads 把标题栏高度写进 .main 行内样式），从标题栏下沿开始吸住，
-   与 .batch-bar 同一机制、同一 z-index 层（5 < 标题栏 6）；玻璃底防止滚过的内容从缝隙透出。 */
-.ana-tabs{display:inline-flex;gap:var(--sp-4);margin-bottom:var(--sp-7);padding:var(--sp-3);
-  position:sticky;top:var(--ph-h,0px);z-index:5;
-  background:var(--glass-bg-hover);border:1px solid var(--line);border-radius:var(--r-md)}
+/* 设置页 Tab 组：住在标题长条框右侧（2026-10-11 用户要求整合进长框、长框尺寸不变）。
+   随标题栏天然吸顶（page-head 本身 sticky），不再需要独立的 --ph-h 吸顶行。
+   注意：showAnaTab 会整体重写两个按钮的 className，按钮尺寸样式必须挂在
+   .ana-tabs 容器选择器上，不能加 btn-sm 之类的按钮级类（会被覆写掉）。 */
+.ana-tabs{margin-left:auto;flex:none;display:flex;gap:var(--sp-3);padding:var(--sp-2);
+  background:var(--fill);border-radius:var(--r-full)}
+.ana-tabs .btn{padding:6px 14px;font-size:var(--fs-sm);border-radius:var(--r-full)}
 /* ============ 浅色模式：统一"控件可见性"（2026-09-23） ============
    浅色主题里 --fill 是「白色 60%」，而面板本身也是浅玻璃，两者叠在一起输入框等于隐形；
    加上原规则是 border:transparent，边界完全不可见（聊天输入框、搜索框、批量输入、
@@ -2475,10 +2476,12 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
   <!-- ==================== 数据分析 ==================== -->
   <main class="main" id="page-analytics" style="display:none">
-    <div class="page-head"><div><h1>设置与数据</h1><div class="sub">用量统计 · 模型与插件配置</div></div></div>
-    <div class="ana-tabs">
-      <button class="btn btn-primary" id="anaTabUsage" onclick="showAnaTab('usage')">用量分析</button>
-      <button class="btn btn-ghost" id="anaTabSettings" onclick="showAnaTab('settings')">模型与插件设置</button>
+    <div class="page-head">
+      <div><h1>设置与数据</h1><div class="sub">用量统计 · 模型与插件配置</div></div>
+      <div class="ana-tabs" role="tablist">
+        <button class="btn btn-primary" id="anaTabUsage" onclick="showAnaTab('usage')">用量分析</button>
+        <button class="btn btn-ghost" id="anaTabSettings" onclick="showAnaTab('settings')">模型与插件设置</button>
+      </div>
     </div>
     <div id="anaUsage">
     <div class="stat-cards" id="statCards"></div>
