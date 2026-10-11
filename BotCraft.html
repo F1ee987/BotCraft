@@ -1377,8 +1377,13 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 #anaSettings .btn{font-size:var(--fs-base)}
 #anaSettings #updateCheckStatus{font-size:var(--fs-sm) !important}
 /* 设置页收尾区（2026-10-11）：状态 / 检查更新 / 当前生效预览 / 主操作收进同一张卡片 */
+/* 收尾卡固定悬浮：#anaSettings 撑满剩余高度 + margin-top:auto 沉底，
+   短内容面板卡片也在窗口底部；长内容滚动时 sticky 钉在视口底部不随页面移动 */
+#page-analytics{display:flex;flex-direction:column}
+#anaSettings{flex:1;display:flex;flex-direction:column}
+#anaSettings .set-layout{margin-bottom:var(--sp-7)}
 /* 收尾卡固定悬浮：滚动设置内容时钉在视口底部，始终可保存/测连接 */
-.set-final{position:sticky;bottom:var(--sp-3);z-index:50;margin-top:var(--sp-7);padding:var(--sp-5) var(--sp-6);background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);backdrop-filter:var(--glass-filter);box-shadow:0 -6px 20px rgba(0,0,0,.18)}
+.set-final{position:sticky;bottom:var(--sp-3);z-index:50;margin-top:auto;padding:var(--sp-5) var(--sp-6);background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);backdrop-filter:var(--glass-filter);box-shadow:0 -6px 20px rgba(0,0,0,.18)}
 .set-conn{font-size:var(--fs-sm);color:var(--sub);min-height:18px;margin:0 0 var(--sp-3)}
 .set-update-row{display:flex;gap:var(--sp-4);align-items:center;margin:0 0 var(--sp-5)}
 .set-update-row .btn{white-space:nowrap;flex:none}
@@ -18408,7 +18413,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.5';
+var APP_VERSION = '3.6';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
