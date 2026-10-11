@@ -1691,7 +1691,20 @@ html[data-theme='light'] #anaSettings .field select:focus{
 .chart-box{background:var(--card);border:1px solid var(--line);border-radius:var(--r-xl);padding:18px}
 .chart-box h3{font-size:15px;font-weight:600;margin-bottom:14px}
 .chart-svg{width:100%;height:180px}
-.bar-chart{display:flex;align-items:flex-end;gap:var(--sp-5);height:160px;padding:10px 4px 0;border-bottom:1px solid var(--line)}
+.bar-chart{display:flex;align-items:flex-end;gap:var(--sp-5);height:160px;padding:10px 4px 0;border-bottom:1px solid var(--line);position:relative}
+/* 累计好评率基线（P2）：与柱条同区算出像素位置，虚线 + 右侧标注 */
+.bar-base{position:absolute;left:0;right:0;height:0;border-top:1px dashed var(--brand);opacity:.85}
+.bar-base span{position:absolute;right:var(--sp-2);top:-15px;font-size:10px;color:var(--brand-text);white-space:nowrap}
+/* 满意度明细（按机器人） */
+.sat-list{display:flex;flex-direction:column;gap:var(--sp-3)}
+.sat-row{display:flex;align-items:center;gap:var(--sp-4);font-size:12px;color:var(--sub)}
+.sat-name{flex:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt)}
+.sat-bar{flex:1;height:6px;min-width:40px;background:var(--fill);border-radius:var(--r-full);overflow:hidden}
+.sat-bar i{display:block;height:100%;background:var(--brand);border-radius:var(--r-full)}
+.sat-pct{flex:none;width:42px;text-align:right;color:var(--txt);font-weight:600}
+.sat-cnt{flex:none;color:var(--sub);font-size:11px}
+.sat-empty{padding:var(--sp-4) 0;color:var(--sub);font-size:12px}
+.sat-ops{display:flex;gap:var(--sp-4);margin-top:var(--sp-5)}
 .bar-item{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;align-items:center;gap:var(--sp-3)}
 .bar-track{flex:1;width:100%;max-width:36px;display:flex;align-items:flex-end}
 .bar{width:100%;max-width:36px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--brand-fill);min-height:4px;transition:var(--dur-6) var(--ease);position:relative}
@@ -2537,6 +2550,14 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="chart-box" style="margin-top:16px">
       <h3><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4l2.5 5.3 5.5.8-4 4 1 5.7-5-2.7-5 2.7 1-5.7-4-4 5.5-.8L12 4z"/></svg></span> 满意度趋势</h3>
       <div class="bar-chart" id="barChart"></div>
+    </div>
+    <div class="chart-box" style="margin-top:16px">
+      <h3><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span> 满意度明细（按机器人）</h3>
+      <div class="sat-list" id="satList"></div>
+      <div class="sat-ops">
+        <button type="button" class="btn btn-ghost" onclick="exportFeedback()">导出评价数据</button>
+        <button type="button" class="btn btn-ghost" onclick="resetFeedback()">重置评价数据</button>
+      </div>
     </div>
     <div class="chart-box" style="margin-top:16px">
       <h3><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.4" height="6"/><rect x="10.3" y="7" width="3.4" height="10"/><rect x="15.1" y="13" width="3.4" height="4"/></svg></span> 上传数据做自定义分析</h3>
@@ -5306,14 +5327,14 @@ const ORCH_BY_NAME = {
 };
 
 const SEED_BOTS = [
-  { n: '智能客服助手', d: '3C 家电的订单、售后与产品咨询应答，可转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', u: 1284, t: '92%', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['builtin_manual_v3', 'builtin_aftersale'], temperature: 0.3, expertise: { field: '订单状态、物流异常、退换货政策、产品参数咨询（3C 与家用电器为主）', method: '先确认身份与订单号，再判断问题类型；能查的按知识库原文答复，查不到的明说需要人工核实。一次只问一个必要信息，不要连珠炮追问', output: '先给结论或可执行动作（如「7 天内可以退」），再给依据；每段不超过 3 行；不堆敬语与客套', avoid: '不编造订单状态、物流单号、赔付金额与政策条款；不替客户承诺时限；不确定就转人工，不要猜' } },
-  { n: '产品文案生成器', d: '根据卖点生成小红书图文种草文案与标题', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', u: 562, t: '88%', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], temperature: 0.9, expertise: { field: '小红书等图文平台的种草文案、标题与卖点提炼', method: '先问清平台、人群、核心卖点、篇幅再动笔；用具体场景与具体感受代替形容词堆砌；标题给 3 个不同方向的备选', output: '标题候选 3 条 + 正文（短句分行，可用 emoji）+ 3-5 个话题标签；正文按平台常见长度控制（小红书 200-500 字）', avoid: '不写「最好」「第一」等绝对化用语与任何功效承诺；不虚构使用体验与他人评价；不写平台明令禁止的诱导话术' } },
-  { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#30d158,#32ade6)', tag: '已发布', u: 320, t: '95%', prompt: '你是数据分析师，能解读数据并给出关键结论。', nodes: ORCH_BY_NAME['数据报表分析师'], plugins: ['代码执行器'], knowledges: [], temperature: 0.2, expertise: { field: '经营与表格数据的口径核对、指标计算、异常发现与结论提炼', method: '先确认字段口径与时间范围，再算指标，再找异常，最后给结论；严格区分「数据说了什么」与「我推测什么」', output: '结论先行（3 条以内）→ 关键指标表格 → 异常点与可能原因 → 下一步可执行动作', avoid: '不在口径不明时下结论；不把相关性说成因果；不编造未提供的数据；不为了结论好看而调整口径' } },
-  { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与用词', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', u: 0, t: '—', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], temperature: 0.7, expertise: { field: '日常与职场情景英语口语（A1-B2 水平）', method: '用英语推进情景对话，保持角色与场景连贯；每轮只纠 1-2 个最重要的问题，避免打断表达流畅度', output: '① 用英语回应并延续情景 ② 用中文简短说明哪里不对、为什么 ③ 给一个更地道的替代表达', avoid: '不用中文代替英语对话；不一次纠正全部错误；不点评口音（纯文本场景无从判断）；不假装自己是真人老师' } },
-  { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', tag: '已发布', u: 2105, t: '97%', prompt: '你是资深工程师，擅长解释、调试、重构代码。', nodes: ORCH_BY_NAME['代码助手'], plugins: ['代码执行器', '网页搜索'], knowledges: [], temperature: 0.2, expertise: { field: 'Python / JavaScript / 前端与脚本类问题的解释、调试、重构', method: '先明确输入输出与完整报错信息，再定位最小复现，最后给可运行的完整片段；每处改动说明改在哪、为什么', output: '先给修复后的可运行代码，再解释原因；代码用代码块并标明语言；指出边界情况与潜在坑', avoid: '不臆测未提供的库版本与运行环境（需要时先问或明写假设）；不拿伪代码冒充可运行成品；不确定就说不确定' } },
-  { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#4dd0e1,#7c4dff)', tag: '草稿', u: 0, t: '—', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', nodes: ORCH_BY_NAME['旅行规划师'], plugins: ['天气查询', '网页搜索'], knowledges: [], temperature: 0.6, expertise: { field: '国内外自由行的行程编排、预算估算、交通与季节权衡', method: '先收齐目的地、天数、预算、同行人、节奏偏好；按地理邻近排天，避免来回穿越；每天留 1-2 小时机动时间', output: '行程表（按天：上午/下午/晚上 + 交通方式 + 预计耗时）+ 预算拆分（交通/住宿/餐饮/门票）+ 3 条注意事项', avoid: '不编造具体票价、班次与营业时间（未联网核实的一律标注「需核实」）；不推荐明显超出预算的方案；不隐瞒签证与季节风险' } },
-  { n: '会议纪要整理', d: '粘贴会议文字稿，自动提炼结论与待办', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', u: 88, t: '85%', prompt: '你负责整理会议纪要，提炼结论与待办事项。', nodes: ORCH_BY_NAME['会议纪要整理'], plugins: [], knowledges: [], temperature: 0.2, expertise: { field: '会议记录转写稿的整理、决议与待办提炼', method: '先分清「讨论过程」与「结论」；每条待办必须绑到责任人与时间，识别不出就标「待确认」而不替人补', output: '① 结论与决议（编号）② 待办表（事项 / 责任人 / 时间）③ 待确认事项 ④ 风险与分歧意见', avoid: '不把讨论中的观点写成已定决议；不臆测责任人；不遗漏反对意见；不美化发言内容' } },
-  { n: '求职简历优化', d: '基于 JD 智能改写简历，提升通过率', ic: '💼', c: 'linear-gradient(135deg,#a1887f,#795548)', tag: '已发布', u: 410, t: '90%', prompt: '你帮用户基于 JD 优化简历，突出匹配亮点。', nodes: ORCH_BY_NAME['求职简历优化'], plugins: ['网页搜索'], knowledges: [], temperature: 0.4, expertise: { field: '简历与目标岗位 JD 的匹配度诊断、亮点提炼与经历改写', method: '先提取 JD 的硬性要求与关键词，对照简历找缺失与冗余，再用「动作 + 量化结果」重写相关经历', output: '① 匹配度诊断（符合 / 缺失 / 可强化）② 逐条改写建议（原文 → 改写后 → 改动依据）③ 需要用户补充的信息', avoid: '不编造经历、学历、数据与项目成果；不做美化到失真的改写；不替用户决定是否隐瞒某段经历' } },
+  { n: '智能客服助手', d: '3C 家电的订单、售后与产品咨询应答，可转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['builtin_manual_v3', 'builtin_aftersale'], temperature: 0.3, expertise: { field: '订单状态、物流异常、退换货政策、产品参数咨询（3C 与家用电器为主）', method: '先确认身份与订单号，再判断问题类型；能查的按知识库原文答复，查不到的明说需要人工核实。一次只问一个必要信息，不要连珠炮追问', output: '先给结论或可执行动作（如「7 天内可以退」），再给依据；每段不超过 3 行；不堆敬语与客套', avoid: '不编造订单状态、物流单号、赔付金额与政策条款；不替客户承诺时限；不确定就转人工，不要猜' } },
+  { n: '产品文案生成器', d: '根据卖点生成小红书图文种草文案与标题', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], temperature: 0.9, expertise: { field: '小红书等图文平台的种草文案、标题与卖点提炼', method: '先问清平台、人群、核心卖点、篇幅再动笔；用具体场景与具体感受代替形容词堆砌；标题给 3 个不同方向的备选', output: '标题候选 3 条 + 正文（短句分行，可用 emoji）+ 3-5 个话题标签；正文按平台常见长度控制（小红书 200-500 字）', avoid: '不写「最好」「第一」等绝对化用语与任何功效承诺；不虚构使用体验与他人评价；不写平台明令禁止的诱导话术' } },
+  { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#30d158,#32ade6)', tag: '已发布', prompt: '你是数据分析师，能解读数据并给出关键结论。', nodes: ORCH_BY_NAME['数据报表分析师'], plugins: ['代码执行器'], knowledges: [], temperature: 0.2, expertise: { field: '经营与表格数据的口径核对、指标计算、异常发现与结论提炼', method: '先确认字段口径与时间范围，再算指标，再找异常，最后给结论；严格区分「数据说了什么」与「我推测什么」', output: '结论先行（3 条以内）→ 关键指标表格 → 异常点与可能原因 → 下一步可执行动作', avoid: '不在口径不明时下结论；不把相关性说成因果；不编造未提供的数据；不为了结论好看而调整口径' } },
+  { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与用词', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], temperature: 0.7, expertise: { field: '日常与职场情景英语口语（A1-B2 水平）', method: '用英语推进情景对话，保持角色与场景连贯；每轮只纠 1-2 个最重要的问题，避免打断表达流畅度', output: '① 用英语回应并延续情景 ② 用中文简短说明哪里不对、为什么 ③ 给一个更地道的替代表达', avoid: '不用中文代替英语对话；不一次纠正全部错误；不点评口音（纯文本场景无从判断）；不假装自己是真人老师' } },
+  { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', tag: '已发布', prompt: '你是资深工程师，擅长解释、调试、重构代码。', nodes: ORCH_BY_NAME['代码助手'], plugins: ['代码执行器', '网页搜索'], knowledges: [], temperature: 0.2, expertise: { field: 'Python / JavaScript / 前端与脚本类问题的解释、调试、重构', method: '先明确输入输出与完整报错信息，再定位最小复现，最后给可运行的完整片段；每处改动说明改在哪、为什么', output: '先给修复后的可运行代码，再解释原因；代码用代码块并标明语言；指出边界情况与潜在坑', avoid: '不臆测未提供的库版本与运行环境（需要时先问或明写假设）；不拿伪代码冒充可运行成品；不确定就说不确定' } },
+  { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#4dd0e1,#7c4dff)', tag: '草稿', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', nodes: ORCH_BY_NAME['旅行规划师'], plugins: ['天气查询', '网页搜索'], knowledges: [], temperature: 0.6, expertise: { field: '国内外自由行的行程编排、预算估算、交通与季节权衡', method: '先收齐目的地、天数、预算、同行人、节奏偏好；按地理邻近排天，避免来回穿越；每天留 1-2 小时机动时间', output: '行程表（按天：上午/下午/晚上 + 交通方式 + 预计耗时）+ 预算拆分（交通/住宿/餐饮/门票）+ 3 条注意事项', avoid: '不编造具体票价、班次与营业时间（未联网核实的一律标注「需核实」）；不推荐明显超出预算的方案；不隐瞒签证与季节风险' } },
+  { n: '会议纪要整理', d: '粘贴会议文字稿，自动提炼结论与待办', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', prompt: '你负责整理会议纪要，提炼结论与待办事项。', nodes: ORCH_BY_NAME['会议纪要整理'], plugins: [], knowledges: [], temperature: 0.2, expertise: { field: '会议记录转写稿的整理、决议与待办提炼', method: '先分清「讨论过程」与「结论」；每条待办必须绑到责任人与时间，识别不出就标「待确认」而不替人补', output: '① 结论与决议（编号）② 待办表（事项 / 责任人 / 时间）③ 待确认事项 ④ 风险与分歧意见', avoid: '不把讨论中的观点写成已定决议；不臆测责任人；不遗漏反对意见；不美化发言内容' } },
+  { n: '求职简历优化', d: '基于 JD 智能改写简历，提升通过率', ic: '💼', c: 'linear-gradient(135deg,#a1887f,#795548)', tag: '已发布', prompt: '你帮用户基于 JD 优化简历，突出匹配亮点。', nodes: ORCH_BY_NAME['求职简历优化'], plugins: ['网页搜索'], knowledges: [], temperature: 0.4, expertise: { field: '简历与目标岗位 JD 的匹配度诊断、亮点提炼与经历改写', method: '先提取 JD 的硬性要求与关键词，对照简历找缺失与冗余，再用「动作 + 量化结果」重写相关经历', output: '① 匹配度诊断（符合 / 缺失 / 可强化）② 逐条改写建议（原文 → 改写后 → 改动依据）③ 需要用户补充的信息', avoid: '不编造经历、学历、数据与项目成果；不做美化到失真的改写；不替用户决定是否隐瞒某段经历' } },
 ];
 
 const tpls = [
@@ -9194,9 +9215,54 @@ function toast(msg, type = '') {
 }
 
 // ==================== 渲染：卡片 ====================
-function card(b) {
+/* ===== 满意度：全应用唯一汇总入口（2026-10-11 P0） =====
+   数据来源只有一个：每条 bot 回复的 history[i].fb（'up'|'down'）。
+   卡片星级、分析页平均满意度、满意度趋势、机器人明细、导出全部走 collectFeedback()，
+   口径唯一 —— 不会再出现「卡片显示 92%（种子写死）、分析页显示 33%（真实）」两套数字打架。 */
+function _curModel() {
+  try { return BotCraftAI.getConfig().model || ''; } catch (e) { return ''; }
+}
+function collectFeedback() {
+  var out = { up: 0, down: 0, byBot: {}, byDay: {}, byModel: {} };
+  try {
+    var list = (typeof bots !== 'undefined' && Array.isArray(bots)) ? bots : [];
+    list.forEach(function (b) {
+      var nm = b && b.n ? String(b.n) : '';
+      (b.history || []).forEach(function (m) {
+        if (!m || m.role !== 'bot' || !m.fb) return;
+        var k = (m.fb === 'up') ? 'up' : (m.fb === 'down') ? 'down' : null;
+        if (!k) return;
+        out[k]++;
+        var bump = function (o) { o[k]++; };
+        if (nm) bump(out.byBot[nm] || (out.byBot[nm] = { up: 0, down: 0 }));
+        if (m.t && typeof usageDayKey === 'function') bump(out.byDay[usageDayKey(m.t)] || (out.byDay[usageDayKey(m.t)] = { up: 0, down: 0 }));
+        if (m.model) bump(out.byModel[m.model] || (out.byModel[m.model] = { up: 0, down: 0 }));
+      });
+    });
+  } catch (e) { }
+  return out;
+}
+/* 好评率：有评价返回整数百分比，无评价返回 null（文案由调用方决定） */
+function satPct(o) {
+  var n = (o && ((o.up || 0) + (o.down || 0))) || 0;
+  return n ? Math.round((o.up || 0) / n * 100) : null;
+}
+/* 使用次数：真实 API 调用数，来自 usage 表按机器人名的聚合（P1）。
+   旧的 bot.u 是种子里写死的示例值，已废弃；无记录返回 null（卡片显示 —）。 */
+function usageCalls(name) {
+  try {
+    var d = getUsage(), o = d && d.bots && d.bots[name];
+    return (o && typeof o.calls === 'number') ? o.calls : null;
+  } catch (e) { return null; }
+}
+function card(b, fb) {
   const cls = b.tag === 'Pro' ? 'pro' : '';
   const favOn = favorites.has(b.id);
+  if (!fb) fb = collectFeedback();
+  // 卡片两个数字全部来自真实数据（P0/P1）：使用次数 = usage 真实调用数；
+  // 星级 = 该机器人历史评价的好评率；无评价显示「暂无评价」而不是占位横线。
+  const satP = satPct(fb.byBot[b.n] || null);
+  const calls = usageCalls(b.n);
   if (multiSelect) {
     const sel = selectedBotIds.has(b.id);
     return `<div class="bot-card${sel ? ' sel' : ''}" data-id="${b.id}">
@@ -9212,7 +9278,7 @@ function card(b) {
     <span class="tag ${cls}">${escapeHtml(b.tag)}</span>
     <div class="bot-avatar" style="background:${b.c}">${botGlyph(b)}</div>
     <h3>${escapeHtml(b.n)}</h3><p>${escapeHtml(b.d)}</p>
-    <div class="bot-meta"><span>${svgIcon('user')} ${b.u || '—'}</span><span>${svgIcon('star')} ${b.t || '—'}</span>
+    <div class="bot-meta"><span>${svgIcon('user')} ${calls === null ? '—' : calls}</span><span>${svgIcon('star')} ${satP === null ? '暂无评价' : (satP + '%')}</span>
       <span class="card-menu" onclick="cardMenu(event,'${escAttrJs(b.id)}')">⋯</span></div>
     <div style="position:absolute;top:16px;left:16px;cursor:pointer;z-index:2" onclick="toggleFavorite('${escAttrJs(b.id)}')" title="收藏">${svgIcon('heart', favOn ? 'fav-on' : 'fav-off')}</div>
   </div>`;
@@ -9233,7 +9299,8 @@ function renderGrid() {
   if (list.length === 0) {
     grid.innerHTML = `<div class="empty-tip">${currentFilter === 'favorite' ? '还没有收藏内容，去首页点爱心收藏一个吧' : '还没有机器人，点击右上角「＋ 创建」开始吧'}</div>`;
   } else {
-    grid.innerHTML = list.map(b => card(b)).join('');
+    var _fbSnap = collectFeedback();
+  grid.innerHTML = list.map(b => card(b, _fbSnap)).join('');
   }
   grid.querySelectorAll('.bot-card').forEach(el => {
     if (multiSelect) {
@@ -12555,21 +12622,26 @@ function attachCopyBtns() {
       msg.appendChild(rg);
     }
     if (msg.hasAttribute('data-mi')) {
-      // 满意度评价：👍 有用 / 👎 没用（再点一次取消；改评覆盖；存消息 fb 字段随历史持久化）
+      // 满意度评价：👍 有用 / 👎 没用（再点一次取消；改评覆盖；存消息 fb 字段随历史持久化）。
+      // 配图气泡（![配图](...)）与错误提示气泡（img-tip）不挂评价——与「重新生成」的排除规则对齐。
       var fmi = +msg.getAttribute('data-mi');
-      var bu = document.createElement('button');
-      bu.type = 'button'; bu.className = 'msg-act fb-btn'; bu.textContent = '\uD83D\uDC4D 有用';
-      bu.title = '这条回复有帮助';
-      bu.onclick = function () { setMsgFeedback(fmi, 'up'); };
-      var bd = document.createElement('button');
-      bd.type = 'button'; bd.className = 'msg-act fb-btn'; bd.textContent = '\uD83D\uDC4E 没用';
-      bd.title = '这条回复没帮助';
-      bd.onclick = function () { setMsgFeedback(fmi, 'down'); };
-      var _fbv = null;
-      try { _fbv = (getBot(currentId).history[fmi] || {}).fb || null; } catch (e) { }
-      if (_fbv === 'up') bu.classList.add('fb-on');
-      if (_fbv === 'down') bd.classList.add('fb-on');
-      msg.appendChild(bu); msg.appendChild(bd);
+      var _hmsg = null;
+      try { _hmsg = (getBot(currentId).history[fmi] || {}); } catch (e) { }
+      var _noFb = msg.classList.contains('img-tip') || /^!\[[^\]]*\]\([^)]*\)\s*$/.test(String((_hmsg && _hmsg.text) || ''));
+      if (!_noFb) {
+        var bu = document.createElement('button');
+        bu.type = 'button'; bu.className = 'msg-act fb-btn'; bu.textContent = '\uD83D\uDC4D 有用';
+        bu.title = '这条回复有帮助';
+        bu.onclick = function () { setMsgFeedback(fmi, 'up'); };
+        var bd = document.createElement('button');
+        bd.type = 'button'; bd.className = 'msg-act fb-btn'; bd.textContent = '\uD83D\uDC4E 没用';
+        bd.title = '这条回复没帮助';
+        bd.onclick = function () { setMsgFeedback(fmi, 'down'); };
+        var _fbv = (_hmsg && _hmsg.fb) || null;
+        if (_fbv === 'up') bu.classList.add('fb-on');
+        if (_fbv === 'down') bd.classList.add('fb-on');
+        msg.appendChild(bu); msg.appendChild(bd);
+      }
       var db = document.createElement('button');
       db.type = 'button'; db.className = 'msg-act'; db.textContent = '\uD83D\uDDD1 删除';
       db.title = '删除这条回复';
@@ -13249,7 +13321,7 @@ async function runReply(b, opt) {
         }
         _scrollChat();
       }, undefined, imagePromise);
-      _histRef.push({ role: 'bot', text: stripCtxPlaceholders(result.final), who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
+      _histRef.push({ role: 'bot', text: stripCtxPlaceholders(result.final), who: activeBot.n, t: Date.now(), kbHits: _kbSnap(), model: _curModel() });
       // 增量收尾：清掉 prog/cur（gen-tmp）并只补画新增的消息。
       // 不再整段重绘 —— 那会把全部历史重跑一遍 renderMarkdown，会话越长收尾越贵
       // （每条回答收尾一次，累计 O(N²)）。且流式气泡刚渲染过同一段文本。
@@ -13378,7 +13450,7 @@ async function runReply(b, opt) {
       } catch (e) { console.warn('[画布工具] 执行失败：', e); }
     }
     span.innerHTML = renderMarkdown(full);
-    _histRef.push({ role: 'bot', text: full, who: activeBot.n, t: Date.now(), kbHits: _kbSnap() });
+    _histRef.push({ role: 'bot', text: full, who: activeBot.n, t: Date.now(), kbHits: _kbSnap(), model: _curModel() });
     // 流式气泡要补上 data-mi：它不走 appendMsg，之后若走增量收尾（如补图追加），
     // _finishGenAppend 靠 data-mi 判断「已画到第几条」，缺了会把这条回答重复画一遍。
     bubble.setAttribute('data-mi', Math.max(0, _histRef.length - 1));
@@ -15086,7 +15158,7 @@ function submitCreate() {
   }
   const base = {
     n: finalName.slice(0, 30), d: desc || '一个全新的机器人', ic: icon, c: bg,
-    tag: '草稿', u: 0, t: '—', prompt: prompt, history: [], plugins: [], knowledges: [],
+    tag: '草稿', prompt: prompt, history: [], plugins: [], knowledges: [],
     // 留空 = 跟随全局默认。创建时快照一个模型名，会在用户日后换服务商时变成 404
     model: '', fromTemplate: !!tpl, spec: spec,
   };
@@ -15145,7 +15217,7 @@ function renderTplGrid() {
       if (!requireLogin()) return;
       const i = +card.dataset.tpl; const t = tpls[i]; if (!t) return;
       const nb = normalize({
-        n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿', u: 0, t: '—',
+        n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿',
         prompt: t.prompt, nodes: (t.nodes && t.nodes.length ? t.nodes : DEFAULT_NODES.slice()), history: [], plugins: [], knowledges: [],
         model: t.model || '', modelExplicit: !!t.model,
         expertise: normExpertise(t.expertise), temperature: normBotTemp(t.temperature),
@@ -15162,7 +15234,7 @@ function renderTplGrid() {
       if (!requireLogin()) return;
       const i = +card.dataset.bot; const src = bots[i]; if (!src) return;
       const nb = normalize({
-        n: (src.n + ' 副本').slice(0, 30), d: src.d, ic: src.ic || '', c: src.c || 'var(--brand)', tag: '草稿', u: 0, t: '—',
+        n: (src.n + ' 副本').slice(0, 30), d: src.d, ic: src.ic || '', c: src.c || 'var(--brand)', tag: '草稿',
         prompt: src.prompt, nodes: (src.nodes || []).slice(), history: [], plugins: (src.plugins || []).slice(), knowledges: (src.knowledges || []).slice(),
         model: src.model || '', modelExplicit: !!src.model,
         expertise: normExpertise(src.expertise), temperature: normBotTemp(src.temperature),
@@ -15178,7 +15250,7 @@ function renderTplGrid() {
       if (!requireLogin()) return;
       const i = +card.dataset.pub; const t = getPubTpls()[i]; if (!t) return;
       const nb = normalize({
-        n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿', u: 0, t: '—',
+        n: t.n, d: t.d, ic: t.ic, c: t.c, tag: '草稿',
         prompt: t.prompt, nodes: (t.nodes || []).slice(), history: [], plugins: (t.plugins || []).slice(), knowledges: (t.knowledges || []).slice(),
         model: t.model || '', modelExplicit: !!t.model,
         expertise: normExpertise(t.expertise), temperature: normBotTemp(t.temperature),
@@ -17299,7 +17371,8 @@ function updateFavPage() {
   const grid = document.getElementById('favGrid'); if (!grid) return;
   const list = bots.filter(b => favorites.has(b.id));
   if (list.length === 0) { grid.innerHTML = `<div class="empty-tip">还没有收藏内容，去首页点爱心收藏一个吧</div>`; return; }
-  grid.innerHTML = list.map(b => card(b)).join('');
+  var _fbSnap = collectFeedback();
+  grid.innerHTML = list.map(b => card(b, _fbSnap)).join('');
   grid.querySelectorAll('.bot-card').forEach(el => el.onclick = e => { if (e.target.closest('.card-menu, [onclick], .card-menu-btn')) return; openBot(el.dataset.id); });
 }
 
@@ -17885,14 +17958,11 @@ async function resetUsage() {
 
 function renderAnalytics() {
   // 统计卡片（基于真实 bots 数据）
-  const totalCalls = bots.reduce((s, b) => s + (b.u || 0), 0);
+  // 累计调用：真实 usage 统计（旧写法 Σ bot.u 是种子写死的示例值，与同页 Token 面板口径冲突）
+  const totalCalls = (function () { try { return getUsage().totals.calls || 0; } catch (e) { return 0; } })();
   const published = bots.filter(b => b.tag === '已发布').length;
-  // 满意度（真实评价）：好评率 = 有用 / (有用 + 没用)，评价存在每条 bot 回复的 fb 字段
-  var fbUp = 0, fbDown = 0;
-  bots.forEach(function (b) { (b.history || []).forEach(function (m) {
-    if (!m || m.role !== 'bot') return;
-    if (m.fb === 'up') fbUp++; else if (m.fb === 'down') fbDown++;
-  }); });
+  // 满意度（真实评价）：与卡片星级、趋势图同源，走 collectFeedback() 唯一入口
+  var fbUp = collectFeedback().up, fbDown = collectFeedback().down;
   var avgSat = (fbUp + fbDown) ? ((fbUp / (fbUp + fbDown)) * 100).toFixed(1) + '%' : '—';
   var totalChats = bots.reduce(function (s, b) { return s + (b.history || []).length; }, 0);
   const cards = [
@@ -17910,8 +17980,9 @@ function renderAnalytics() {
   renderLineChart();
   // 占比分布
   renderDistList();
-  // 满意度柱状
+  // 满意度柱状 + 按机器人明细
   renderBarChart();
+  renderSatList();
 }
 function renderLineChart() {
   const svg = document.getElementById('lineChart'); if (!svg) return;
@@ -17957,26 +18028,24 @@ function renderLineChart() {
 }
 function renderDistList() {
   const box = document.getElementById('distList'); if (!box) return;
-  const list = bots.filter(b => (b.u || 0) > 0).slice(0, 5);
-  if (!list.length) { box.innerHTML = `<div class="empty-tip" style="padding:30px 10px">暂无调用数据，发布机器人后这里会显示占比</div>`; return; }
-  const max = Math.max(...list.map(b => b.u));
-  box.innerHTML = list.map(b => `<div class="dist-item">
-    <span class="name">${escapeHtml(b.n)}</span>
-    <div class="dist-bar"><i style="width:${((b.u / max) * 100).toFixed(0)}%"></i></div>
-    <span class="pct">${((b.u / list.reduce((s, x) => s + x.u, 0)) * 100).toFixed(0)}%</span>
+  // 与卡片「使用次数」同源：读 usage 表按机器人名的真实调用数（P1）。
+  // 旧的 bot.u 是种子写死的示例值，已随种子一并删除，这里再读会永久空态。
+  const list = bots.map(b => ({ n: b.n, u: usageCalls(b.n) || 0 }))
+    .filter(x => x.u > 0).sort((x, y) => y.u - x.u).slice(0, 5);
+  if (!list.length) { box.innerHTML = `<div class="empty-tip" style="padding:30px 10px">暂无调用数据，发布机器人并开始对话后这里会显示占比</div>`; return; }
+  const max = Math.max(...list.map(x => x.u));
+  const total = list.reduce((s, x) => s + x.u, 0);
+  box.innerHTML = list.map(x => `<div class="dist-item">
+    <span class="name">${escapeHtml(x.n)}</span>
+    <div class="dist-bar"><i style="width:${((x.u / max) * 100).toFixed(0)}%"></i></div>
+    <span class="pct">${((x.u / total) * 100).toFixed(0)}%</span>
   </div>`).join('');
 }
 function renderBarChart() {
   var box = document.getElementById('barChart'); if (!box) return;
   // 满意度趋势 = 最近 7 天每日好评率（好评率 = 有用 / (有用+没用)）。
   // 旧版这里画的是对话条数（假满意度）；现在从消息 fb 字段实时汇总。
-  var byDay = {};
-  bots.forEach(function (b) { (b.history || []).forEach(function (m) {
-    if (!m || m.role !== 'bot' || !m.fb || !m.t) return;
-    var k = usageDayKey(m.t);
-    if (!byDay[k]) byDay[k] = { up: 0, down: 0 };
-    if (m.fb === 'up') byDay[k].up++; else byDay[k].down++;
-  }); });
+  var byDay = collectFeedback().byDay;
   var days = [];
   for (var i = 6; i >= 0; i--) {
     var dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() - i);
@@ -17995,8 +18064,75 @@ function renderBarChart() {
     if (!r.n) return `<div class="bar-item"><div class="bar-track"><div class="bar" style="height:0%"></div></div><div class="bar-val">—</div><div class="bar-lbl">${r.k.slice(5)}</div></div>`;
     return `<div class="bar-item"><div class="bar-track"><div class="bar" style="height:${r.pct}%" title="${r.k}：好评率 ${r.pct}%（${r.up} 赞 / ${r.down} 踩）"></div></div><div class="bar-val">${r.pct}%</div><div class="bar-lbl">${r.k.slice(5)}</div></div>`;
   }).join('');
+  // 累计好评率基线（P2）：虚线画在柱条区域，供「某天是否低于常态」对比。
+  // 位置用真实 track 像素换算，避免与柱高基准错位。
+  var allPct = satPct(collectFeedback());
+  if (allPct !== null) {
+    var base = document.createElement('div');
+    base.className = 'bar-base';
+    base.title = '累计好评率 ' + allPct + '%（全部评价，不限 7 天）';
+    base.innerHTML = '<span>' + allPct + '% 累计</span>';
+    box.appendChild(base);
+    var tr = box.querySelector('.bar-item .bar-track');
+    if (tr) base.style.bottom = Math.round(box.offsetHeight - tr.offsetTop - tr.offsetHeight + tr.offsetHeight * allPct / 100) + 'px';
+  }
 }
 
+/* 满意度明细：按机器人列出好评率与赞/踩数（P2）。模型维度需要消息上带 model 字段，
+   新回复已记录（见 runReply 写入），旧历史没有 → 在明细里归入「未记录模型」。 */
+function renderSatList() {
+  var box = document.getElementById('satList'); if (!box) return;
+  var fb = collectFeedback();
+  var names = Object.keys(fb.byBot).filter(function (n) { return (fb.byBot[n].up + fb.byBot[n].down) > 0; });
+  if (!names.length) { box.innerHTML = '<div class="sat-empty">还没有评价数据——聊天时对 AI 回复点「👍 有用 / 👎 没用」即可开始统计</div>'; return; }
+  names.sort(function (a, b) { return (fb.byBot[b].up + fb.byBot[b].down) - (fb.byBot[a].up + fb.byBot[a].down); });
+  box.innerHTML = names.map(function (n) {
+    var o = fb.byBot[n], p = satPct(o), tot = o.up + o.down;
+    return '<div class="sat-row"><span class="sat-name">' + escapeHtml(n) + '</span>' +
+      '<span class="sat-bar"><i style="width:' + p + '%"></i></span>' +
+      '<span class="sat-pct">' + p + '%</span>' +
+      '<span class="sat-cnt">' + tot + ' 次（' + o.up + ' 赞 / ' + o.down + ' 踩）</span></div>';
+  }).join('');
+}
+/* 导出评价数据（P3）：按天 / 按机器人 / 逐条，JSON 落盘 */
+async function exportFeedback() {
+  var fb = collectFeedback();
+  var items = [];
+  try {
+    (Array.isArray(bots) ? bots : []).forEach(function (b) {
+      (b.history || []).forEach(function (m) {
+        if (!m || m.role !== 'bot' || !m.fb) return;
+        items.push({ bot: b.n || '', at: new Date(m.t || Date.now()).toISOString(), fb: m.fb, model: m.model || '', text: String(m.text || '').slice(0, 60) });
+      });
+    });
+  } catch (e) { }
+  var data = { schema: 'botcraft.feedback/1', exportedAt: new Date().toISOString(), totals: { up: fb.up, down: fb.down, rate: satPct(fb) }, byDay: fb.byDay, byBot: fb.byBot, byModel: fb.byModel, items: items };
+  try {
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'botcraft-feedback-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+    toast('已导出 ' + items.length + ' 条评价数据', 'ok');
+  } catch (e) { toast('导出失败：' + (e && e.message || e), 'warn'); }
+}
+/* 重置评价数据（P3）：清空所有机器人的 fb 标记（对话本身保留） */
+async function resetFeedback() {
+  var fb = collectFeedback();
+  if (!fb.up && !fb.down) { toast('当前没有评价数据', 'warn'); return; }
+  if (!(await confirmDialog('清空全部 ' + (fb.up + fb.down) + ' 条评价记录？\n对话内容会保留，只是评价标记被清除，且不可恢复。', { danger: true, okText: '清空评价' }))) return;
+  var n = 0;
+  try {
+    (Array.isArray(bots) ? bots : []).forEach(function (b) {
+      (b.history || []).forEach(function (m) { if (m && m.role === 'bot' && m.fb) { delete m.fb; n++; } });
+    });
+    saveBots();
+  } catch (e) { toast('重置失败：' + (e && e.message || e), 'warn'); return; }
+  try { renderAnalytics(); } catch (e) { }
+  toast('已清空 ' + n + ' 条评价', 'ok');
+}
+window.exportFeedback = exportFeedback; window.resetFeedback = resetFeedback;
 // 窗口宽度变化时按新宽度重画两张 SVG 图（viewBox 跟随实际像素，保持 1:1 不拉伸）
 var _chartRt = null;
 window.addEventListener('resize', function () {
@@ -18493,7 +18629,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.7';
+var APP_VERSION = '3.8';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
