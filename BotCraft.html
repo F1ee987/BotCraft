@@ -1377,13 +1377,14 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 #anaSettings .btn{font-size:var(--fs-base)}
 #anaSettings #updateCheckStatus{font-size:var(--fs-sm) !important}
 /* 设置页收尾区（2026-10-11）：状态 / 检查更新 / 当前生效预览 / 主操作收进同一张卡片 */
-/* 收尾卡固定悬浮：#anaSettings 撑满剩余高度 + margin-top:auto 沉底，
-   短内容面板卡片也在窗口底部；长内容滚动时 sticky 钉在视口底部不随页面移动 */
+/* 收尾栏常驻底部（三次迭代定稿）：showAnaTab('settings') 时主容器为 flex 列，
 #page-analytics{display:flex;flex-direction:column}
-#anaSettings{flex:1;display:flex;flex-direction:column}
-#anaSettings .set-layout{margin-bottom:var(--sp-7)}
-/* 收尾卡固定悬浮：滚动设置内容时钉在视口底部，始终可保存/测连接 */
-.set-final{position:sticky;bottom:var(--sp-3);z-index:50;margin-top:auto;padding:var(--sp-5) var(--sp-6);background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);backdrop-filter:var(--glass-filter);box-shadow:0 -6px 20px rgba(0,0,0,.18)}
+/* 收尾栏常驻底部（2026-10-11 二次修复）：#anaSettings 占满 .main 剩余高度并封顶
+   （min-height:0 防止内容撑破），设置内容在 .set-layout 内部滚动，
+   .set-final 走普通文档流沉底——滚动时不动、也永不覆盖任何内容 */
+#anaSettings{flex:1;min-height:0;display:flex;flex-direction:column}
+#anaSettings .set-layout{flex:1;min-height:0;overflow-y:auto;margin-bottom:var(--sp-4)}
+.set-final{position:static;margin-top:0;padding:var(--sp-5) var(--sp-6);background:var(--card);border:1px solid var(--line);border-radius:var(--r-md)}
 .set-conn{font-size:var(--fs-sm);color:var(--sub);min-height:18px;margin:0 0 var(--sp-3)}
 .set-update-row{display:flex;gap:var(--sp-4);align-items:center;margin:0 0 var(--sp-5)}
 .set-update-row .btn{white-space:nowrap;flex:none}
@@ -9699,7 +9700,10 @@ function applyPage(p, keep) {
     el.style.left = el.style.top = el.style.width = el.style.height = '';
     el.style.display = (pg === p ? (pg === 'workspace' ? 'flex' : 'block') : 'none');
   });
-  if (p === 'analytics') renderAnalytics();
+  if (p === 'analytics') { renderAnalytics();
+    /* 重放停留的 Tab：applyPage 上面写了内联 display:block，设置 Tab 需要 flex 布局 */
+    if (typeof showAnaTab === 'function') { try { showAnaTab(storeGetRaw('botcraft.anaTab', '') || 'usage'); } catch (e) { } }
+  }
   if (p === 'favorites') updateFavPage();
   if (p === 'knowledge') renderKbList();
   if (p === 'plugins') renderPluginGrid();
@@ -18088,6 +18092,10 @@ function showAnaTab(t) {
   var isSet = t === 'settings';
   u.style.display = isSet ? 'none' : '';
   st.style.display = isSet ? '' : 'none';
+  /* 设置 Tab 下主容器必须Flex列：#anaSettings 才能被限高、内容内部滚动、收尾栏常驻底部
+     （applyPage 会写内联 display:block，这里要覆写回来） */
+  var pg = document.getElementById('page-analytics');
+  if (pg) pg.style.display = isSet ? 'flex' : 'block';
   if (bu) bu.className = isSet ? 'btn btn-ghost' : 'btn btn-primary';
   if (bs) bs.className = isSet ? 'btn btn-primary' : 'btn btn-ghost';
   storeSetRaw('botcraft.anaTab', t);
