@@ -18094,9 +18094,11 @@ function showAnaTab(t) {
   u.style.display = isSet ? 'none' : '';
   st.style.display = isSet ? '' : 'none';
   /* 设置 Tab 下主容器必须Flex列：#anaSettings 才能被限高、内容内部滚动、收尾栏常驻底部
-     （applyPage 会写内联 display:block，这里要覆写回来） */
+     （applyPage 会写内联 display:block，这里要覆写回来）。
+     守卫：仅当分析页已经可见时才写 display——boot 恢复 Tab 时页面尚隐藏（HTML 初始 none），
+     无条件写会把分析页提前点亮，造成首页+设置页并排（2026-10-11 用户截图实测） */
   var pg = document.getElementById('page-analytics');
-  if (pg) pg.style.display = isSet ? 'flex' : 'block';
+  if (pg && pg.style.display !== 'none') pg.style.display = isSet ? 'flex' : 'block';
   if (bu) bu.className = isSet ? 'btn btn-ghost' : 'btn btn-primary';
   if (bs) bs.className = isSet ? 'btn btn-primary' : 'btn btn-ghost';
   storeSetRaw('botcraft.anaTab', t);
