@@ -33,7 +33,7 @@ function askNotificationPermission() {
     Promise.resolve(hostApi.bc_notify('⏰ BotCraft', '通知通道已打通：日程到点会这样弹出系统提醒'))
       .then(function (r) {
         setNotifyState((r && r.ok) ? '桌面壳通知已可用（刚才那条就是到点时的效果）' : '桌面壳通知发送失败，到点将在应用内提示');
-        try { renderRemindersInModal(); } catch (eM) { } // 面板未打开时该函数不存在，别让它毁了结果反馈
+        try { renderRemindersInModal(); } catch (eM) { console.warn('提醒列表渲染失败：', (eM && eM.message) || eM); } // 面板未打开时函数 early return，走到这里就是真实渲染错误，不能静默吞
       })
       .catch(function () { setNotifyState('桌面壳通知发送失败，到点将在应用内提示'); });
     return;
