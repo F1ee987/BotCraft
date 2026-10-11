@@ -1662,7 +1662,8 @@ html[data-theme='light'] #anaSettings .field select:focus{
 .chart-box h3{font-size:15px;font-weight:600;margin-bottom:14px}
 .chart-svg{width:100%;height:180px}
 .bar-chart{display:flex;align-items:flex-end;gap:var(--sp-5);height:160px;padding:10px 4px 0;border-bottom:1px solid var(--line)}
-.bar-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:var(--sp-3)}
+.bar-item{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;align-items:center;gap:var(--sp-3)}
+.bar-track{flex:1;width:100%;max-width:36px;display:flex;align-items:flex-end}
 .bar{width:100%;max-width:36px;border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--brand-fill);min-height:4px;transition:var(--dur-6) var(--ease);position:relative}
 .bar:hover{opacity:.85}
 .bar-val{font-size:10px;color:var(--sub);font-variant-numeric:tabular-nums}
@@ -2495,7 +2496,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="charts">
       <div class="chart-box">
         <h3><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 16.5l5-5 3.5 3.5L20 7.5"/><path d="M15.5 7.5H20V12"/></svg></span> 调用量趋势（次/天）</h3>
-        <svg class="chart-svg line-chart" id="lineChart" viewBox="0 0 400 180" preserveAspectRatio="none"></svg>
+        <svg class="chart-svg line-chart" id="lineChart" viewBox="0 0 400 180"></svg>
       </div>
       <div class="chart-box">
         <h3>各机器人调用占比</h3>
@@ -2521,7 +2522,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <span style="font-size:12px;color:var(--sub);margin-left:10px">数值(Y)：</span>
         <select id="dataY" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:4px 8px"></select>
       </div>
-      <svg class="chart-svg" id="dataChart" viewBox="0 0 600 260" preserveAspectRatio="none" style="width:100%;height:260px"></svg>
+      <svg class="chart-svg" id="dataChart" viewBox="0 0 600 260" style="width:100%;height:260px"></svg>
     </div>
     </div>
 
@@ -17831,7 +17832,9 @@ function renderAnalytics() {
 }
 function renderLineChart() {
   const svg = document.getElementById('lineChart'); if (!svg) return;
-  const W = 400, H = 180, pad = { l: 32, r: 12, t: 14, b: 24 };
+  // 宽度按容器实际像素取：旧写法固定 400 + 非等比缩放，SVG 被横向拉伸
+  // （圆点变椭圆、日期文字拉胖、线条粗细不均）。viewBox 与显示尺寸 1:1 后不变形。
+  const W = Math.max(320, Math.round(svg.clientWidth || 400)), H = 180, pad = { l: 32, r: 12, t: 14, b: 24 };
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const N = 7;
   const counts = new Array(N).fill(0);
@@ -17866,6 +17869,7 @@ function renderLineChart() {
     const val = Math.round(max * (1 - g / 3));
     html += `<text x="${pad.l - 6}" y="${y + 3}" font-size="9" fill="var(--sub)" text-anchor="end">${val}</text>`;
   });
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
   svg.innerHTML = html;
 }
 function renderDistList() {
@@ -17885,9 +17889,19 @@ function renderBarChart() {
   if (!list.length) { box.innerHTML = `<div class="empty-tip" style="padding:20px 10px">暂无对话数据，先去和机器人聊几句</div>`; return; }
   var max = Math.max.apply(null, list.map(function (b) { return (b.history || []).length; }));
   box.innerHTML = list.map(function (b) {
-    return `<div class="bar-item"><div class="bar" style="height:${((b.history.length / max) * 100).toFixed(0)}%" title="${b.history.length} 条"></div><div class="bar-val">${b.history.length}</div><div class="bar-lbl">${escapeHtml((b.n || '').slice( 0, 4))}</div></div>`;
+    return `<div class="bar-item"><div class="bar-track"><div class="bar" style="height:${((b.history.length / max) * 100).toFixed(0)}%" title="${b.history.length} 条"></div></div><div class="bar-val">${b.history.length}</div><div class="bar-lbl">${escapeHtml((b.n || '').slice( 0, 4))}</div></div>`;
   }).join('');
 }
+
+// 窗口宽度变化时按新宽度重画两张 SVG 图（viewBox 跟随实际像素，保持 1:1 不拉伸）
+var _chartRt = null;
+window.addEventListener('resize', function () {
+  clearTimeout(_chartRt);
+  _chartRt = setTimeout(function () {
+    try { renderLineChart(); } catch (e) { }
+    try { if (typeof drawDataChart === 'function' && DATASET) drawDataChart(); } catch (e2) { }
+  }, 150);
+});
 
 // ==================== 通用数据导入分析 ====================
 function isCellNumeric(v) {
@@ -17956,7 +17970,8 @@ function drawDataChart() {
   const rows = DATASET.rows;
   const xName = document.getElementById('dataX').value;
   const yName = document.getElementById('dataY').value;
-  const W = 600, H = 260, pad = { l: 48, r: 16, t: 16, b: 60 };
+  // 同 renderLineChart：宽度按容器实际像素取，viewBox 1:1，避免非等比拉伸
+  const W = Math.max(320, Math.round(svg.clientWidth || 600)), H = 260, pad = { l: 48, r: 16, t: 16, b: 60 };
   const groups = {};
   rows.forEach(function (r) { const x = String(r[xName] || '空'); const y = Number(String(r[yName] || '').replace(/[, ]/g, '')); if (!isFinite(y)) return; groups[x] = (groups[x] || 0) + y; });
   const keys = Object.keys(groups);
@@ -17973,6 +17988,7 @@ function drawDataChart() {
     html += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (H - 42) + '" font-size="10" fill="var(--sub)" text-anchor="middle">' + escapeHtml(String(k).slice(0, 8)) + '</text>';
   });
   [0, 1, 2, 3].forEach(function (g) { const y = pad.t + (ih / 3) * g; const val = Math.round(max * (1 - g / 3)); html += '<text x="' + (pad.l - 6) + '" y="' + (y + 3) + '" font-size="9" fill="var(--sub)" text-anchor="end">' + val + '</text>'; });
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
   svg.innerHTML = html;
 }
 function exportDataStats() {
