@@ -1172,6 +1172,8 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg-act{margin-top:8px;margin-left:6px;display:inline-flex;align-items:center;gap:var(--sp-2);padding:5px 12px;border-radius:var(--r-full);font-size:11.5px;font-weight:590;cursor:pointer;
   background:var(--fill);color:var(--sub);border:1px solid transparent;transition:var(--dur-2) var(--ease);font-family:inherit;user-select:none;-webkit-user-select:none}
 .msg-act:hover{background:var(--fill-strong);color:var(--brand-text)}
+/* 满意度评价选中态：与 msg-act 同族（2026-10-11 满意度功能） */
+.msg-act.fb-on{background:var(--fill-strong);color:var(--brand-text);border-color:var(--line)}
 .msg-act:active{transform:scale(.98);box-shadow:inset 0 2px 5px rgba(0,0,0,.2)}
 .msg-act[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}
 /* 回答下方的「参考来源」条：展开可看命中片段与原文 */
@@ -12545,6 +12547,21 @@ function attachCopyBtns() {
       msg.appendChild(rg);
     }
     if (msg.hasAttribute('data-mi')) {
+      // 满意度评价：👍 有用 / 👎 没用（再点一次取消；改评覆盖；存消息 fb 字段随历史持久化）
+      var fmi = +msg.getAttribute('data-mi');
+      var bu = document.createElement('button');
+      bu.type = 'button'; bu.className = 'msg-act fb-btn'; bu.textContent = '\uD83D\uDC4D 有用';
+      bu.title = '这条回复有帮助';
+      bu.onclick = function () { setMsgFeedback(fmi, 'up'); };
+      var bd = document.createElement('button');
+      bd.type = 'button'; bd.className = 'msg-act fb-btn'; bd.textContent = '\uD83D\uDC4E 没用';
+      bd.title = '这条回复没帮助';
+      bd.onclick = function () { setMsgFeedback(fmi, 'down'); };
+      var _fbv = null;
+      try { _fbv = (getBot(currentId).history[fmi] || {}).fb || null; } catch (e) { }
+      if (_fbv === 'up') bu.classList.add('fb-on');
+      if (_fbv === 'down') bd.classList.add('fb-on');
+      msg.appendChild(bu); msg.appendChild(bd);
       var db = document.createElement('button');
       db.type = 'button'; db.className = 'msg-act'; db.textContent = '\uD83D\uDDD1 删除';
       db.title = '删除这条回复';
@@ -12580,6 +12597,32 @@ async function deleteMsg(i) {
   toast(n > 1 ? ('已删除这轮对话（' + n + ' 条）') : '已删除这条消息', 'ok');
 }
 window.deleteMsg = deleteMsg;
+// ==================== 满意度评价 ====================
+/* 评价存在消息对象上（history[mi].fb = 'up'|'down'），随 saveBots 持久化；
+   统计侧（renderAnalytics/renderBarChart）实时遍历汇总——单一数据源，
+   删除消息自动一致，不需要第二份聚合存储。再点同一按钮取消，改评直接覆盖。 */
+function setMsgFeedback(mi, val) {
+  var b = getBot(currentId); if (!b || !b.history) return;
+  var m = b.history[mi];
+  if (!m || m.role !== 'bot') return;
+  if (m.fb === val) delete m.fb; else m.fb = val;
+  b.updatedAt = Date.now(); saveBots();
+  updateFbBtns(mi);
+  toast(m.fb === 'up' ? '已标记「有用」' : (m.fb === 'down' ? '已标记「没用」' : '已取消评价'), 'ok');
+  var an = document.getElementById('page-analytics');
+  if (an && an.style.display !== 'none' && typeof renderAnalytics === 'function') {
+    try { renderAnalytics(); } catch (e) { }   // 分析页正看着就实时刷新
+  }
+}
+function updateFbBtns(mi) {
+  var b = getBot(currentId); if (!b || !b.history) return;
+  var fb = (b.history[mi] && b.history[mi].fb) || null;
+  document.querySelectorAll('.msg.bot[data-mi="' + mi + '"] .fb-btn').forEach(function (btn) {
+    var isUp = btn.textContent.indexOf('\uD83D\uDC4D') === 0;
+    btn.classList.toggle('fb-on', (fb === 'up' && isUp) || (fb === 'down' && !isUp));
+  });
+}
+window.setMsgFeedback = setMsgFeedback;
 // ==================== 输入框自适应高度 ====================
 // 高度跟着内容走：写完变高、删掉变矮，到 data-grow-max 才停住并转为内部滚动。
 // 三个反直觉、但必须守住的点：
@@ -17836,21 +17879,18 @@ function renderAnalytics() {
   // 统计卡片（基于真实 bots 数据）
   const totalCalls = bots.reduce((s, b) => s + (b.u || 0), 0);
   const published = bots.filter(b => b.tag === '已发布').length;
-  var realSat = bots.map(function (b) {
-    if (b.t && /\d/.test(b.t)) return parseFloat(b.t);
-    var ch = (b.history || []).length;
-    if (ch === 0) return null;
-    return Math.min(97, 82 + Math.round(Math.log10(ch + 1) * 8 * 10) / 10);
-  }).filter(function (v) { return v !== null && !isNaN(v); });
-  var avgSat = (function () {
-    if (!realSat.length) return '—';
-    return (realSat.reduce(function (a, c) { return a + c; }, 0) / realSat.length).toFixed(1) + '%';
-  })();
+  // 满意度（真实评价）：好评率 = 有用 / (有用 + 没用)，评价存在每条 bot 回复的 fb 字段
+  var fbUp = 0, fbDown = 0;
+  bots.forEach(function (b) { (b.history || []).forEach(function (m) {
+    if (!m || m.role !== 'bot') return;
+    if (m.fb === 'up') fbUp++; else if (m.fb === 'down') fbDown++;
+  }); });
+  var avgSat = (fbUp + fbDown) ? ((fbUp / (fbUp + fbDown)) * 100).toFixed(1) + '%' : '—';
   var totalChats = bots.reduce(function (s, b) { return s + (b.history || []).length; }, 0);
   const cards = [
     { val: bots.length, lbl: '机器人总数', trend: `${published} 个已发布` },
     { val: totalCalls.toLocaleString(), lbl: '累计调用（次）', trend: '汇总所有机器人' },
-    { val: avgSat, lbl: '平均满意度', trend: '基于评分数据' },
+    { val: avgSat, lbl: '平均满意度', trend: (fbUp + fbDown) ? (fbUp + ' 赞 · ' + fbDown + ' 踩') : '聊天后点「有用/没用」评价' },
     { val: totalChats, lbl: '本地对话（条）', trend: '本机记录' },
   ];
   document.getElementById('statCards').innerHTML = cards.map(c => `<div class="stat-card">
@@ -17920,11 +17960,32 @@ function renderDistList() {
 }
 function renderBarChart() {
   var box = document.getElementById('barChart'); if (!box) return;
-  var list = bots.filter(function (b) { return (b.history || []).length > 0; }).slice(0, 6);
-  if (!list.length) { box.innerHTML = `<div class="empty-tip" style="padding:20px 10px">暂无对话数据，先去和机器人聊几句</div>`; return; }
-  var max = Math.max.apply(null, list.map(function (b) { return (b.history || []).length; }));
-  box.innerHTML = list.map(function (b) {
-    return `<div class="bar-item"><div class="bar-track"><div class="bar" style="height:${((b.history.length / max) * 100).toFixed(0)}%" title="${b.history.length} 条"></div></div><div class="bar-val">${b.history.length}</div><div class="bar-lbl">${escapeHtml((b.n || '').slice( 0, 4))}</div></div>`;
+  // 满意度趋势 = 最近 7 天每日好评率（好评率 = 有用 / (有用+没用)）。
+  // 旧版这里画的是对话条数（假满意度）；现在从消息 fb 字段实时汇总。
+  var byDay = {};
+  bots.forEach(function (b) { (b.history || []).forEach(function (m) {
+    if (!m || m.role !== 'bot' || !m.fb || !m.t) return;
+    var k = usageDayKey(m.t);
+    if (!byDay[k]) byDay[k] = { up: 0, down: 0 };
+    if (m.fb === 'up') byDay[k].up++; else byDay[k].down++;
+  }); });
+  var days = [];
+  for (var i = 6; i >= 0; i--) {
+    var dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() - i);
+    days.push(usageDayKey(dt.getTime()));
+  }
+  var rows = days.map(function (k) {
+    var o = byDay[k] || { up: 0, down: 0 };
+    var n = o.up + o.down;
+    return { k: k, n: n, pct: n ? Math.round(o.up / n * 100) : 0, up: o.up, down: o.down };
+  });
+  if (!rows.some(function (r) { return r.n > 0; })) {
+    box.innerHTML = `<div class="empty-tip" style="padding:20px 10px">暂无评价数据，聊天后点「有用 / 没用」即可评价</div>`;
+    return;
+  }
+  box.innerHTML = rows.map(function (r) {
+    if (!r.n) return `<div class="bar-item"><div class="bar-track"><div class="bar" style="height:0%"></div></div><div class="bar-val">—</div><div class="bar-lbl">${r.k.slice(5)}</div></div>`;
+    return `<div class="bar-item"><div class="bar-track"><div class="bar" style="height:${r.pct}%" title="${r.k}：好评率 ${r.pct}%（${r.up} 赞 / ${r.down} 踩）"></div></div><div class="bar-val">${r.pct}%</div><div class="bar-lbl">${r.k.slice(5)}</div></div>`;
   }).join('');
 }
 
@@ -18424,7 +18485,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.6';
+var APP_VERSION = '3.7';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
