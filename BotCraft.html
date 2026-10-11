@@ -1360,6 +1360,21 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 #anaSettings .ssec-sub{font-size:var(--fs-sm) !important}
 #anaSettings .ssec-body{padding:var(--sp-2) var(--sp-4) var(--sp-4)}
 #anaSettings .field{margin-bottom:var(--sp-6)}
+/* 设置页左右展开布局：左分类导航 + 右内容面板 */
+.set-layout{display:flex;align-items:flex-start;gap:var(--sp-5);margin:var(--sp-4) 0}
+.set-nav{flex:none;width:190px;display:flex;flex-direction:column;gap:var(--sp-2);position:sticky;top:calc(var(--ph-h,64px) + 12px)}
+.set-nav-item{display:flex;align-items:center;gap:var(--sp-3);width:100%;padding:10px 12px;border:1px solid transparent;border-radius:var(--r-md);background:transparent;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;text-align:left}
+.set-nav-item:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+.set-nav-item.active{background:var(--fill);color:var(--txt);border-color:var(--line)}
+.set-nav-item:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.set-nav-item .i{width:16px;height:16px;flex:none}
+.set-nav-item .i svg{width:100%;height:100%}
+.set-panels{flex:1;min-width:0}
+@media (max-width:720px){
+  .set-layout{display:block}
+  .set-nav{position:static;width:auto;flex-direction:row;overflow-x:auto;gap:var(--sp-2);margin-bottom:var(--sp-3)}
+  .set-nav-item{flex:none;width:auto;padding:8px 14px;border-radius:var(--r-full)}
+}
 #anaSettings .btn{font-size:var(--fs-base)}
 #anaSettings #updateCheckStatus{font-size:var(--fs-sm) !important}
 /* 设置页收尾区（2026-10-11）：状态 / 检查更新 / 当前生效预览 / 主操作收进同一张卡片 */
@@ -2531,6 +2546,16 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div id="anaSettings" style="display:none">
     <div class="hint">填写后，工作台的聊天将调用真实大模型。Key 仅保存在本机 localStorage，不会上传任何服务器。</div>
 
+    <div class="set-layout">
+    <nav class="set-nav" role="tablist" aria-label="设置分类">
+      <button type="button" class="set-nav-item active" data-setsec="core" role="tab" aria-selected="true" aria-controls="sec-core-body" onclick="showSettingsPanel('core')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/></svg></span>模型接入</button>
+      <button type="button" class="set-nav-item" data-setsec="adv" role="tab" aria-selected="false" aria-controls="sec-adv-body" onclick="showSettingsPanel('adv')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span>高级参数</button>
+      <button type="button" class="set-nav-item" data-setsec="search" role="tab" aria-selected="false" aria-controls="sec-search-body" onclick="showSettingsPanel('search')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg></span>联网检索</button>
+      <button type="button" class="set-nav-item" data-setsec="stt" role="tab" aria-selected="false" aria-controls="sec-stt-body" onclick="showSettingsPanel('stt')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span>语音识别</button>
+      <button type="button" class="set-nav-item" data-setsec="image" role="tab" aria-selected="false" aria-controls="sec-image-body" onclick="showSettingsPanel('image')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span>文生图</button>
+    </nav>
+    <div class="set-panels">
+
 <div class="ssec open" id="sec-core">
   <button type="button" class="ssec-head" onclick="toggleSettingsSec('core')" aria-expanded="true" aria-controls="sec-core-body">
     <span class="ssec-caret" id="caret-core">▾</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/></svg></span> 模型接入</span><span class="ssec-sub">服务商 / Key / 接口 / 模型</span>
@@ -2569,7 +2594,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   </div>
 </div>
 
-<div class="ssec" id="sec-adv">
+<div class="ssec" id="sec-adv" hidden>
   <button type="button" class="ssec-head" onclick="toggleSettingsSec('adv')" aria-expanded="false" aria-controls="sec-adv-body">
     <span class="ssec-caret" id="caret-adv">▸</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span> 高级参数</span><span class="ssec-sub">温度 / 长度 / 代理 / 发送方式</span>
   </button>
@@ -2604,7 +2629,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 </div>
 
 
-<div class="ssec" id="sec-search">
+<div class="ssec" id="sec-search" hidden>
   <button type="button" class="ssec-head" onclick="toggleSettingsSec('search')" aria-expanded="false" aria-controls="sec-search-body">
     <span class="ssec-caret" id="caret-search">▸</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg></span> 联网检索（网页搜索插件生效）</span><span class="ssec-badge" id="badge-search" style="display:none">已配置</span>
   </button>
@@ -2634,7 +2659,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   </div>
 </div>
 
-<div class="ssec" id="sec-stt">
+<div class="ssec" id="sec-stt" hidden>
   <button type="button" class="ssec-head" onclick="toggleSettingsSec('stt')" aria-expanded="false" aria-controls="sec-stt-body">
     <span class="ssec-caret" id="caret-stt">▸</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span> 语音识别（录音自动转文字）</span><span class="ssec-badge" id="badge-stt" style="display:none">已配置</span>
   </button>
@@ -2658,7 +2683,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   </div>
 </div>
 
-<div class="ssec" id="sec-image">
+<div class="ssec" id="sec-image" hidden>
   <button type="button" class="ssec-head" onclick="toggleSettingsSec('image')" aria-expanded="false" aria-controls="sec-image-body">
     <span class="ssec-caret" id="caret-image">▸</span><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span> 文生图（可选）</span><span class="ssec-badge" id="badge-image" style="display:none">已配置</span>
   </button>
@@ -2701,6 +2726,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
   </div>
 </div>
+
+    </div>
+    </div>
 
     <div class="set-final">
       <div id="connStatus" class="set-conn" role="status" aria-live="polite"></div>
@@ -18386,7 +18414,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.3';
+var APP_VERSION = '3.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -19075,7 +19103,25 @@ function _kbIndexFor(bot) {
       }
     });
   }
+  // 左右布局：左侧分类导航切换右侧面板；面板内标题行仍可折叠（toggleSettingsSec 不变）
+  function showSettingsPanel(id) {
+    var IDS = ['core', 'adv', 'search', 'stt', 'image'];
+    for (var i = 0; i < IDS.length; i++) {
+      var sec = document.getElementById('sec-' + IDS[i]);
+      if (sec) sec.hidden = (IDS[i] !== id);
+    }
+    var items = document.querySelectorAll('.set-nav-item');
+    for (var j = 0; j < items.length; j++) {
+      var on = items[j].getAttribute('data-setsec') === id;
+      items[j].classList.toggle('active', on);
+      items[j].setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    // 点导航即展开该分类内容；收起状态仍由面板内标题行控制
+    var body = document.getElementById('sec-' + id + '-body');
+    if (body && body.hidden) toggleSettingsSec(id);
+  }
   window.toggleSettingsSec = toggleSettingsSec;
+  window.showSettingsPanel = showSettingsPanel;
   window.applySecOpenState = applySecOpenState;
   window.refreshSettingsSecBadges = refreshSettingsSecBadges;
   window.settingsSecConfigured = settingsSecConfigured;
