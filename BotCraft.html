@@ -3175,20 +3175,10 @@ function brandBlock(b) {
 const ICONS = {
   // —— 导航 / 分区 ——
   plus:      '<path d="M12 5v14M5 12h14"/>',
-  minus:     '<path d="M5 12h14"/>',
-  close:     '<path d="M6 6l12 12M18 6L6 18"/>',
-  check:     '<path d="M4 12.5l5 5L20 6.5"/>',
-  menu:      '<path d="M4 7h16M4 12h16M4 17h16"/>',
-  chevR:     '<path d="M9 6l6 6-6 6"/>',
-  chevD:     '<path d="M6 9l6 6 6-6"/>',
   arrowR:    '<path d="M5 12h14M13 6l6 6-6 6"/>',
-  arrowD:    '<path d="M12 5v14M6 13l6 6 6-6"/>',
   arrowU:    '<path d="M12 19V5M6 11l6-6 6 6"/>',
-  external:  '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   // —— 通用动作 ——
-  search:    '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>',
   gear:      '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/>',
-  edit:      '<path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 6.5l3 3"/>',
   pencil:    '<path d="M4 20l1-4L16 5a2 2 0 0 1 3 3L8 19l-4 1z"/>',
   trash:     '<path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/>',
   copy:      '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5A1.5 1.5 0 0 0 13.5 4h-8A1.5 1.5 0 0 0 4 5.5v8A1.5 1.5 0 0 0 5.5 15"/>',
@@ -3197,91 +3187,41 @@ const ICONS = {
   upload:    '<path d="M12 20V9M7 13l5-5 5 5M5 4h14"/>',
   refresh:   '<path d="M20 11a8 8 0 1 0-1.2 5.2"/><path d="M20 5v6h-6"/>',
   link:      '<path d="M10 13.5a4 4 0 0 0 5.7 0l2.6-2.6a4 4 0 0 0-5.7-5.7l-1.3 1.3"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.6 2.6a4 4 0 0 0 5.7 5.7l1.3-1.3"/>',
-  filter:    '<path d="M4 5h16l-6 7v6l-4 2v-8L4 5z"/>',
-  folder:    '<path d="M3 7a1 1 0 0 1 1-1h5l2 2.5h8a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/>',
   file:      '<path d="M6 3h8l4 4v14H6V3z"/><path d="M14 3v4h4"/>',
   clipboard: '<rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1H9z"/>',
-  paperclip: '<path d="M20 11.5l-8 8a4.5 4.5 0 0 1-6.4-6.4l8.5-8.5a3 3 0 0 1 4.3 4.3l-8.4 8.4a1.5 1.5 0 0 1-2.2-2.1l7.8-7.8"/>',
   // —— 状态 / 语义 ——
   checkCircle:'<circle cx="12" cy="12" r="8.5"/><path d="M8.2 12.2l2.6 2.6 5-5.2"/>',
   warn:      '<path d="M12 4.5l8.5 15h-17L12 4.5z"/><path d="M12 10v4.2M12 17.2v.2"/>',
-  info:      '<circle cx="12" cy="12" r="8.5"/><path d="M12 11.5v5M12 8v.2"/>',
-  error:     '<circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6M15 9l-6 6"/>',
-  help:      '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2-2.4 3.6M12 17.2v.2"/>',
-  lock:      '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
-  shield:    '<path d="M12 3.5l7 2.6v5.6c0 4.3-3 7.5-7 8.8-4-1.3-7-4.5-7-8.8V6.1l7-2.6z"/>',
   zap:       '<path d="M13 3L5.5 13.5H11l-1 7.5 8-11H12l1-7z"/>',
   pin:       '<path d="M9 4h6l-.8 5.2 3.3 3.3H6.5l3.3-3.3L9 4z"/><path d="M12 12.5V20"/>',
   // —— 对象 / 功能域 ——
-  bot:       '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M8.5 13v1.5M15.5 13v1.5"/><path d="M2.5 12.5v3M21.5 12.5v3"/>',
   chat:      '<path d="M20.5 12.5c0 3.9-3.8 7-8.5 7-1.2 0-2.4-.2-3.4-.6L4 20.5l1.7-3.9A6.6 6.6 0 0 1 3.5 12.5c0-3.9 3.8-7 8.5-7s8.5 3.1 8.5 7z"/>',
   brain:     '<path d="M9.5 5.5A2.5 2.5 0 0 0 7 8v.6A2.6 2.6 0 0 0 5.5 13 2.5 2.5 0 0 0 7 18.4V19a1 1 0 0 0 2 0v-2h1"/><path d="M14.5 5.5A2.5 2.5 0 0 1 17 8v.6A2.6 2.6 0 0 1 18.5 13 2.5 2.5 0 0 1 17 18.4V19a1 1 0 0 1-2 0v-2h-1"/><path d="M10 9.5h4M10 14h4"/>',
-  book:      '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5v-13z"/>',
   library:   '<rect x="4" y="5" width="4" height="14" rx="1"/><rect x="10" y="5" width="4" height="14" rx="1"/><path d="M16.5 6l3.2 12.6"/>',
   puzzle:    '<path d="M9.5 4.5A1.8 1.8 0 0 1 13 4.5c0 .7-.4 1.2-.9 1.5h4.4a1 1 0 0 1 1 1v3.6c.5-.3 1-.4 1.5-.4a1.8 1.8 0 0 1 0 3.6c-.6 0-1.1-.2-1.5-.5V18a1 1 0 0 1-1 1h-4.2c.4-.4.6-.9.6-1.5a1.8 1.8 0 0 0-3.6 0c0 .6.3 1.1.6 1.5H5a1 1 0 0 1-1-1v-4.3c.4.3.9.5 1.5.5a1.8 1.8 0 0 0 0-3.6c-.6 0-1.1.2-1.5.5V7a1 1 0 0 1 1-1h4.5z"/>',
-  grid:      '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
   image:     '<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/>',
-  camera:    '<path d="M3.5 8.5h3.2l1.4-2.2h7.8l1.4 2.2h3.2v10.5h-17V8.5z"/><circle cx="12" cy="13" r="3.4"/>',
-  mic:       '<rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/>',
-  video:     '<rect x="3" y="6" width="12" height="12" rx="2"/><path d="M15 10.5l5-3v9l-5-3"/>',
   package:   '<path d="M12 3.5l8 4v9l-8 4-8-4v-9l8-4z"/><path d="M4 7.5l8 4 8-4M12 11.5v9"/>',
-  boxOpen:   '<path d="M4 9.5l8-4 8 4-8 4-8-4z"/><path d="M4 9.5V19l8 4 8-4V9.5M12 13.5V23"/>',
   chart:     '<path d="M4 20h16"/><rect x="5.5" y="11" width="3.4" height="6"/><rect x="10.3" y="7" width="3.4" height="10"/><rect x="15.1" y="13" width="3.4" height="4"/>',
   trendUp:   '<path d="M4 16.5l5-5 3.5 3.5L20 7.5"/><path d="M15.5 7.5H20V12"/>',
-  trendDown: '<path d="M4 7.5l5 5 3.5-3.5L20 16.5"/><path d="M15.5 16.5H20V12"/>',
-  hash:      '<path d="M7 4l-1.5 16M17 4l-1.5 16M4.5 9h15M3.5 15h15"/>',
   target:    '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
-  flag:      '<path d="M6 21V4M6 4.5h11l-2 3.5 2 3.5H6"/>',
   tag:       '<path d="M4 4h7.5l8.5 8.5-7.5 7.5L4 11.5V4z"/><circle cx="8.2" cy="8.2" r="1.3"/>',
   calendar:  '<rect x="4" y="5.5" width="16" height="15" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
-  clock:     '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.3l3.4 2"/>',
-  bulb:      '<path d="M9 17.5h6M10 20.5h4"/><path d="M12 3.5a5.5 5.5 0 0 1 3.3 9.9c-.5.4-.8 1-.8 1.6H9.5c0-.6-.3-1.2-.8-1.6A5.5 5.5 0 0 1 12 3.5z"/>',
   wand:      '<path d="M4 20l10-10M14.5 4.2l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1 1-2.3z"/><path d="M19 12.5l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7.7-1.6z"/>',
   palette:   '<path d="M12 3.5a8.5 8.5 0 0 0 0 17c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.7-1.7h1.4A4.2 4.2 0 0 0 20 10.5c0-3.9-3.6-7-8-7z"/><circle cx="8" cy="10" r="1.1"/><circle cx="12" cy="7.5" r="1.1"/><circle cx="16" cy="10" r="1.1"/>',
-  brush:     '<path d="M4 20s1-4 4-4 3 2 6 2 4-1.5 4-1.5"/><path d="M14.5 3.5l6 6-7 7-6-6 7-7z"/>',
   broom:     '<path d="M15.5 3.5l5 5-7.5 7.5-5-5L15.5 3.5z"/><path d="M8 11L4 20h7l3.5-6"/>',
   home:      '<path d="M4 10.5L12 4l8 6.5V20H4v-9.5z"/><path d="M9.5 20v-6h5v6"/>',
-  door:      '<path d="M6 20V4.5h9.5V20M6 20h12"/><circle cx="13" cy="12" r="1"/>',
   logout:    '<path d="M14 4.5H6.5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1H14"/><path d="M17 8.5l3.5 3.5-3.5 3.5M20 12H10"/>',
   user:      '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20a7.5 7.5 0 0 1 14.4 0"/>',
   // —— 工作流 / 画布 ——
   compress:  '<path d="M4 9.5V4.5h5M20 9.5V4.5h-5M4 14.5v5h5M20 14.5v5h-5"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/>',
-  flow:      '<rect x="3.5" y="4" width="6" height="5" rx="1.5"/><rect x="14.5" y="4" width="6" height="5" rx="1.5"/><rect x="9" y="15" width="6" height="5" rx="1.5"/><path d="M6.5 9v3h11V9M12 12v3"/>',
-  branch:    '<circle cx="6.5" cy="6" r="2.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="12" r="2.5"/><path d="M6.5 8.5v7M9 6h3.5a2 2 0 0 1 2 2v1.5M9 18h3.5a2 2 0 0 0 2-2v-1.5"/>',
-  play:      '<path d="M7.5 5.2v13.6L19 12 7.5 5.2z"/>',
-  code:      '<path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/>',
   // —— 其他 ——
-  paletteDot:'<circle cx="12" cy="12" r="8.5"/><path d="M12 8v4l2.5 2"/>',
-  scissors:  '<circle cx="6.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/><path d="M8.4 15.6L18 4M15.6 15.6L6 4"/>',
   archive:   '<rect x="3.5" y="4.5" width="17" height="4.5" rx="1.5"/><path d="M5 9v9.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>',
-  restore:   '<path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4.5V10h5.5"/>',
   expand:    '<path d="M4 9V4.5h5M15 4.5h5V9M20 15v4.5h-5M9 19.5H4V15"/>',
   empty:     '<path d="M5 8.5h14v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-11z"/><path d="M3.5 8.5L5 5h14l1.5 3.5M9 12h6"/>',
   // —— 第二批补充（本批替换时按语义新增） ——
-  sparkle:   '<path d="M12 3.5l1.9 4.6 4.6 1.9-4.6 1.9L12 16.5l-1.9-4.6L5.5 10l4.6-1.9L12 3.5z"/>',
   plug:      '<path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/>',
-  office:    '<path d="M4 20.5V6l8-3v17.5M12 9.5h8v11M4 20.5h16"/><path d="M7 9v.2M7 12.5v.2M7 16v.2M16 13v.2M16 16.5v.2"/>',
   moon:      '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>',
-  coffee:    '<path d="M4 8.5h13v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-6z"/><path d="M17 10h1.8a2.2 2.2 0 0 1 0 4.4H17M6.5 4.5v1.5M10 4v2M13.5 4.5v1.5"/>',
-  cart:      '<path d="M3 4.5h2.5l2.2 10.5h9.8"/><path d="M7.5 8.5h12l-1.6 6.5"/><circle cx="9.5" cy="19" r="1.4"/><circle cx="16.5" cy="19" r="1.4"/>',
-  mail:      '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7l8 5.5L20 7"/>',
-  scales:    '<path d="M12 4.5v15M6 8.5l-3 6.5h6l-3-6.5zM18 8.5l-3 6.5h6l-3-6.5z"/><path d="M6 8.5h12M8 19.5h8"/>',
-  plane:     '<path d="M10.5 20.5l1.5-5-7-4 1-1.5 8 2 3-6.5c.4-.8 1.3-1.2 2-.8.7.4 1 1.3.6 2.1l-3 6.5 2 8-1.5 1-4-7-5 1z"/>',
-  cap:       '<path d="M12 4.5L22 9l-10 4.5L2 9l10-4.5z"/><path d="M6.5 11v5c0 1.7 2.5 3 5.5 3s5.5-1.3 5.5-3v-5M20 10v6"/>',
-  news:      '<rect x="3.5" y="5.5" width="17" height="14" rx="2"/><path d="M6.5 9.5h6M6.5 13h6M6.5 16h4M15 9.5h3M15 13h3"/>',
   heart:     '<path d="M12 20s-7.5-4.6-7.5-9.6A4.2 4.2 0 0 1 12 7.4a4.2 4.2 0 0 1 7.5 3c0 5-7.5 9.6-7.5 9.6z"/>',
-  rocket:    '<path d="M12 3.5c3 2.4 4.5 5.6 4.5 9.5l-2 3.5h-5l-2-3.5c0-3.9 1.5-7.1 4.5-9.5z"/><circle cx="12" cy="10" r="1.6"/><path d="M9.5 16.5l-2 4 2.5-1 2 1 .5-4M14.5 16.5l2 4-2.5-1"/>',
-  sprout:    '<path d="M12 20.5v-7M12 13.5C12 10 9.5 7.5 6 7.5c0 3.5 2.5 6 6 6zM12 12.5c0-3 2.2-5.2 5.5-5.2 0 3.2-2.4 5.2-5.5 5.2z"/>',
-  briefcase: '<rect x="3.5" y="7.5" width="17" height="12" rx="2"/><path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5M3.5 12.5h17"/>',
-  cook:      '<path d="M4 10.5h16a8 8 0 0 1-8 8 8 8 0 0 1-8-8z"/><path d="M4 10.5a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3M8 7.5V5M12 7.5V4.5M16 7.5V5"/>',
-  handshake: '<path d="M3 11.5l3.5-3.5 3 1.5 2-1 2 1 3-1.5 3.5 3.5"/><path d="M6.5 12.5l2.5 2.5 2-1 2 1 2.5-2.5"/>',
-  toolbox:   '<rect x="3.5" y="8" width="17" height="11.5" rx="2"/><path d="M9 8V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5V8M3.5 13h17"/>',
-  ladder:    '<path d="M8 3.5v17M16 3.5v17M8 7.5h8M8 12h8M8 16.5h8"/>',
-  megaphone: '<path d="M4 10.5v3a1.5 1.5 0 0 0 1.5 1.5H8l7 4.5V6L8 10.5H5.5A1.5 1.5 0 0 0 4 10.5z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5"/>',
-  text:      '<path d="M4 6.5V4.5h16v2M12 4.5v15M8.5 19.5h7"/>',
-  bank:      '<path d="M3.5 9.5L12 4l8.5 5.5M5 9.5v9M9.5 9.5v9M14.5 9.5v9M19 9.5v9M3.5 20.5h17"/>',
-  muscle:    '<path d="M6.5 11.5c-1.5-1.5-1-4 1-4.5 1.5-.4 2.4.6 3 1.5l3 3.5c1 1.2 2.4 1.4 3.4.5 1-.9 1-2.4 0-3.4"/><path d="M13 6.5l2-2 3.5 3.5-2 2z"/><path d="M4 20c2-1 4-1 6 0 2 1 4 1 6 0"/>',
-  gift:      '<rect x="3.5" y="9" width="17" height="11.5" rx="1.5"/><path d="M3.5 13.5h17M12 9v11.5"/><path d="M12 9S10.5 4.5 8 4.5a2.2 2.2 0 0 0 0 4.5M12 9s1.5-4.5 4-4.5a2.2 2.2 0 0 1 0 4.5"/>',
   eye:       '<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
 };
 
@@ -12699,11 +12639,11 @@ async function compressImageDataURL(dataURL, maxEdge, quality) {
           var cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, ch);
           cx.drawImage(img, 0, 0, cw, ch);
           resolve(cv.toDataURL('image/jpeg', quality));
-        } catch (e) { resolve(dataURL); }
+        } catch (e) { console.warn('[compressImage] 压缩失败，降级用原图：', (e && e.message) || e); resolve(dataURL); }
       };
-      img.onerror = function () { resolve(dataURL); };
+      img.onerror = function () { console.warn('[compressImage] 图片解码失败，降级用原图'); resolve(dataURL); };
       img.src = dataURL;
-    } catch (e) { resolve(dataURL); }
+    } catch (e) { console.warn('[compressImage] 压缩失败，降级用原图：', (e && e.message) || e); resolve(dataURL); }
   });
 }
 // 启发式判断当前模型是否可能支持视觉（图片/视频识别）。图片格式基于 OpenAI image_url，需模型为视觉模型且 API 兼容该格式
@@ -14878,7 +14818,7 @@ const CMDK_COMMANDS = [
   { ic: 'palette', label: '模板库', hint: '', act: 'templates' },
   { ic: 'library', label: '知识库', hint: '', act: 'knowledge' },
   { ic: 'plug', label: '插件中心', hint: '', act: 'plugins' },
-  { ic: 'star', label: '我的收藏', hint: '', act: 'favorites' },
+  { ic: 'heart', label: '我的收藏', hint: '', act: 'favorites' },
   { ic: 'archive', label: '会话管理（切换 / 搜索历史）', hint: '', act: 'sessions' },
   { ic: 'refresh', label: '重新生成上一条回复', hint: '', act: 'regen' },
   { ic: 'zap', label: '提示词库 / 斜杠指令', hint: '也可在输入框打 /', act: 'snippets' },
@@ -16863,7 +16803,7 @@ function askNotificationPermission() {
     Promise.resolve(hostApi.bc_notify('⏰ BotCraft', '通知通道已打通：日程到点会这样弹出系统提醒'))
       .then(function (r) {
         setNotifyState((r && r.ok) ? '桌面壳通知已可用（刚才那条就是到点时的效果）' : '桌面壳通知发送失败，到点将在应用内提示');
-        try { renderRemindersInModal(); } catch (eM) { } // 面板未打开时该函数不存在，别让它毁了结果反馈
+        try { renderRemindersInModal(); } catch (eM) { console.warn('提醒列表渲染失败：', (eM && eM.message) || eM); } // 面板未打开时函数 early return，走到这里就是真实渲染错误，不能静默吞
       })
       .catch(function () { setNotifyState('桌面壳通知发送失败，到点将在应用内提示'); });
     return;
@@ -18143,7 +18083,9 @@ function fillModelOptions(provider, currentModel) {
   const sel = document.getElementById('set-model');
   const meta = PROVIDER_META[provider];
   const models = (meta && meta.models) || [];
-  sel.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('')
+  // 与下方 refreshModelList 的远程分支同一套转义：内置列表当前是常量，
+  // 但一旦放开自定义厂商就会被外部输入污染 —— 防线现在拉齐，不留两套写法。
+  sel.innerHTML = models.map(function (m) { return '<option value="' + escapeAttr(m) + '">' + escapeHtml(m) + '</option>'; }).join('')
     + (models.length ? '<option value="__custom">— 手动输入 —</option>' : '<option value="__custom">手动输入模型名</option>');
   sel.value = models.includes(currentModel) ? currentModel : '__custom';
   document.getElementById('set-model-custom').style.display = (sel.value === '__custom') ? '' : 'none';
@@ -18696,26 +18638,23 @@ window.__debug = {
 // chunks（全部块正文副本）+ tfs（每块完整词频表）。没有上限时「改 20 次文档」
 // 就有 20 份完整索引同时驻留。同一个代码库里 ctxCacheOf 已有 CTX_CACHE_MAX=24，
 // 两套缓存策略不一致；这里照同一套写法加上限（LRU：命中即移到最新）。
-var _kbCache = {};
-var _kbCacheOrder = [];
+var _kbCache = new Map();   // 插入序即新旧序（Map 迭代按插入序），不再需要配套的顺序数组
 var KB_CACHE_MAX = 12;
   // 索引条数上限：比 ctx 缓存（CTX_CACHE_MAX=24）小，单条索引大得多（全文 + 词频表）
 function _kbCachePut(key, idx) {
-  _kbCache[key] = idx;
-  var at = _kbCacheOrder.indexOf(key);
-  if (at >= 0) _kbCacheOrder.splice(at, 1);
-  _kbCacheOrder.push(key);
-  while (_kbCacheOrder.length > KB_CACHE_MAX) delete _kbCache[_kbCacheOrder.shift()];
+  if (_kbCache.has(key)) _kbCache.delete(key);   // 重复 put 也提到最新
+  _kbCache.set(key, idx);
+  while (_kbCache.size > KB_CACHE_MAX) _kbCache.delete(_kbCache.keys().next().value);  // 首个即最旧
 }
 function _kbIndexFor(bot) {
     var key = (bot.id || 'x') + '|' + (bot.knowledges || []).map(function (id) {
       var r = (typeof kbById === 'function') ? kbById(id) : null; return r ? (r.updatedAt || r.name) : '';
     }).join(',');
-    if (_kbCache[key]) {
-      // 命中即提到最新（LRU）
-      var at = _kbCacheOrder.indexOf(key);
-      if (at >= 0) { _kbCacheOrder.splice(at, 1); _kbCacheOrder.push(key); }
-      return _kbCache[key];
+    if (_kbCache.has(key)) {
+      // 命中即提到最新（LRU）：删掉重 set，插入序就是新旧序
+      var v = _kbCache.get(key);
+      _kbCache.delete(key); _kbCache.set(key, v);
+      return v;
     }
     var idx = _buildKBIndex(bot); _kbCachePut(key, idx); return idx;
   }
@@ -18778,8 +18717,7 @@ function _kbIndexFor(bot) {
   }
   // 文档改动后必须让检索索引与缓存失效，否则改完内容仍按旧索引回答
   function kbInvalidate(docId) {
-    _kbCache = {};
-    _kbCacheOrder = [];      // 与 _kbCache 同步清空，否则淘汰时会删到不存在的 key（无害但留脏）
+    _kbCache = new Map();    // 整体换新实例，条目与顺序一并作废
     return docId;
   }
   window.searchKBHits = searchKBHits;
@@ -18894,7 +18832,10 @@ function _kbIndexFor(bot) {
     if (host) {
       return Promise.resolve(host.bc_http(url, 'POST', hdrs, body)).then(function (r) {
         if (!r || !r.ok) throw _searchErr((r && r.status) || 0, r && r.text, '宿主转发失败');
-        return JSON.parse(r.text);
+        // 200 状态下网关/代理也可能回 HTML 错误页：裸 JSON.parse 抛 SyntaxError
+        // 会丢掉 HTTP 状态码上下文，统一转成带状态的 _searchErr。
+        try { return JSON.parse(r.text); }
+        catch (e) { throw _searchErr((r && r.status) || 0, r && r.text, '响应不是合法 JSON（可能被网关错误页接管）'); }
       });
     }
     return fetch(url, { method: 'POST', headers: hdrs, body: body }).then(function (r) {
@@ -18907,7 +18848,10 @@ function _kbIndexFor(bot) {
     if (host) {
       return Promise.resolve(host.bc_http(url, 'GET', { 'Accept': 'application/json' }, '')).then(function (r) {
         if (!r || !r.ok) throw _searchErr((r && r.status) || 0, r && r.text, '宿主转发失败');
-        return JSON.parse(r.text);
+        // 200 状态下网关/代理也可能回 HTML 错误页：裸 JSON.parse 抛 SyntaxError
+        // 会丢掉 HTTP 状态码上下文，统一转成带状态的 _searchErr。
+        try { return JSON.parse(r.text); }
+        catch (e) { throw _searchErr((r && r.status) || 0, r && r.text, '响应不是合法 JSON（可能被网关错误页接管）'); }
       });
     }
     return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (r) {
