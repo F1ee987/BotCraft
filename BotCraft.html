@@ -751,6 +751,11 @@ body.embed-mode #wsName{font-size:15px}
 .bot-card h3{font-size:16.5px;font-weight:600;letter-spacing:-.2px;margin-bottom:5px}
 .bot-card p{font-size:12.5px;color:var(--sub);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .bot-meta{display:flex;gap:var(--sp-6);margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub)}
+/* 卡片 meta / 收藏角标：内嵌 SVG（2026-10-11）——emoji 在部分渲染环境缺字形显示为横线 */
+.bot-meta .i{width:13px;height:13px;margin-right:.3em;color:var(--sub)}
+.i--fav-on{color:var(--brand-text)}
+.i--fav-on svg{fill:currentColor}
+.i--fav-off{color:var(--sub);opacity:.65}
 .bot-meta span{display:flex;align-items:center;gap:var(--sp-2)}
 .mini-x{margin-left:auto;border:none;background:transparent;color:var(--sub);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:var(--r-xs);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .mini-x:hover{background:var(--fill);color:var(--danger-text)}
@@ -3272,6 +3277,9 @@ const ICONS = {
   plug:      '<path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/>',
   moon:      '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>',
   heart:     '<path d="M12 20s-7.5-4.6-7.5-9.6A4.2 4.2 0 0 1 12 7.4a4.2 4.2 0 0 1 7.5 3c0 5-7.5 9.6-7.5 9.6z"/>',
+  star:      '<path d="M12 4.6l2.25 4.55 5.02.73-3.63 3.54.86 5L12 16.05l-4.5 2.37.86-5-3.63-3.54 5.02-.73L12 4.6z"/>',
+             /* star: 2026-10-11 新增——卡片满意度星级原来用星形 emoji 字符，在缺 emoji 字形的
+                exe 渲染环境显示为一条横线（tofu），换内嵌 SVG 消除字体依赖 */
   eye:       '<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
 };
 
@@ -9188,7 +9196,7 @@ function toast(msg, type = '') {
 // ==================== 渲染：卡片 ====================
 function card(b) {
   const cls = b.tag === 'Pro' ? 'pro' : '';
-  const fav = favorites.has(b.id) ? '⭐' : '☆';
+  const favOn = favorites.has(b.id);
   if (multiSelect) {
     const sel = selectedBotIds.has(b.id);
     return `<div class="bot-card${sel ? ' sel' : ''}" data-id="${b.id}">
@@ -9204,9 +9212,9 @@ function card(b) {
     <span class="tag ${cls}">${escapeHtml(b.tag)}</span>
     <div class="bot-avatar" style="background:${b.c}">${botGlyph(b)}</div>
     <h3>${escapeHtml(b.n)}</h3><p>${escapeHtml(b.d)}</p>
-    <div class="bot-meta"><span>👥 ${b.u || '—'}</span><span>⭐ ${b.t || '—'}</span>
+    <div class="bot-meta"><span>${svgIcon('user')} ${b.u || '—'}</span><span>${svgIcon('star')} ${b.t || '—'}</span>
       <span class="card-menu" onclick="cardMenu(event,'${escAttrJs(b.id)}')">⋯</span></div>
-    <div style="position:absolute;top:16px;left:16px;cursor:pointer;font-size:14px;z-index:2" onclick="toggleFavorite('${escAttrJs(b.id)}')" title="收藏">${fav}</div>
+    <div style="position:absolute;top:16px;left:16px;cursor:pointer;z-index:2" onclick="toggleFavorite('${escAttrJs(b.id)}')" title="收藏">${svgIcon('heart', favOn ? 'fav-on' : 'fav-off')}</div>
   </div>`;
 }
 function applyFilter(list) {
@@ -9223,7 +9231,7 @@ function renderGrid() {
   let list = applyFilter(bots.slice());
   list.sort((a, b) => sortAsc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt);
   if (list.length === 0) {
-    grid.innerHTML = `<div class="empty-tip">${currentFilter === 'favorite' ? '还没有收藏内容，去首页 ⭐ 一个吧' : '还没有机器人，点击右上角「＋ 创建」开始吧'}</div>`;
+    grid.innerHTML = `<div class="empty-tip">${currentFilter === 'favorite' ? '还没有收藏内容，去首页点爱心收藏一个吧' : '还没有机器人，点击右上角「＋ 创建」开始吧'}</div>`;
   } else {
     grid.innerHTML = list.map(b => card(b)).join('');
   }
@@ -9277,7 +9285,7 @@ function cardMenu(e, id) {
     <button data-act="chat">${svgIcon('chat')} 立即对话</button>
     <button data-act="edit">${svgIcon('pencil')} 重命名</button>
     <button data-act="copy">⧉ 复制副本</button>
-    <button data-act="fav">${favorites.has(id) ? '☆ 取消收藏' : '⭐ 收藏'}</button>
+    <button data-act="fav">${favorites.has(id) ? '取消收藏' : '收藏'}</button>
     <button data-act="dup"><svg class="ic-btn" aria-hidden="true"><use href="#ic-copy"/></svg>存为内置模板</button>
     <button data-act="pub">${svgIcon('upload')} 存为模板</button>
     <button data-act="del" class="danger">${svgIcon('trash')} 删除</button>`;
@@ -17290,7 +17298,7 @@ function pluginDetailExtraHTML(n){
 function updateFavPage() {
   const grid = document.getElementById('favGrid'); if (!grid) return;
   const list = bots.filter(b => favorites.has(b.id));
-  if (list.length === 0) { grid.innerHTML = `<div class="empty-tip">还没有收藏内容，去首页 ⭐ 一个吧</div>`; return; }
+  if (list.length === 0) { grid.innerHTML = `<div class="empty-tip">还没有收藏内容，去首页点爱心收藏一个吧</div>`; return; }
   grid.innerHTML = list.map(b => card(b)).join('');
   grid.querySelectorAll('.bot-card').forEach(el => el.onclick = e => { if (e.target.closest('.card-menu, [onclick], .card-menu-btn')) return; openBot(el.dataset.id); });
 }
