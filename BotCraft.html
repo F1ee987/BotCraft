@@ -1378,10 +1378,9 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 #anaSettings #updateCheckStatus{font-size:var(--fs-sm) !important}
 /* 设置页收尾区（2026-10-11）：状态 / 检查更新 / 当前生效预览 / 主操作收进同一张卡片 */
 /* 收尾栏常驻底部（三次迭代定稿）：showAnaTab('settings') 时主容器为 flex 列，
+   #anaSettings 占满剩余高度并封顶（min-height:0），设置内容在 .set-layout
+   内部滚动，.set-final 普通文档流沉底——不动、也永不覆盖任何内容 */
 #page-analytics{display:flex;flex-direction:column}
-/* 收尾栏常驻底部（2026-10-11 二次修复）：#anaSettings 占满 .main 剩余高度并封顶
-   （min-height:0 防止内容撑破），设置内容在 .set-layout 内部滚动，
-   .set-final 走普通文档流沉底——滚动时不动、也永不覆盖任何内容 */
 #anaSettings{flex:1;min-height:0;display:flex;flex-direction:column}
 #anaSettings .set-layout{flex:1;min-height:0;overflow-y:auto;margin-bottom:var(--sp-4)}
 .set-final{position:static;margin-top:0;padding:var(--sp-5) var(--sp-6);background:var(--card);border:1px solid var(--line);border-radius:var(--r-md)}
