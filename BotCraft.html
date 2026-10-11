@@ -1362,6 +1362,15 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 #anaSettings .field{margin-bottom:var(--sp-6)}
 #anaSettings .btn{font-size:var(--fs-base)}
 #anaSettings #updateCheckStatus{font-size:var(--fs-sm) !important}
+/* 设置页收尾区（2026-10-11）：状态 / 检查更新 / 当前生效预览 / 主操作收进同一张卡片 */
+.set-final{margin-top:var(--sp-7);padding:var(--sp-6);background:var(--card);border:1px solid var(--line);border-radius:var(--r-md)}
+.set-conn{font-size:var(--fs-sm);color:var(--sub);min-height:18px;margin:0 0 var(--sp-3)}
+.set-update-row{display:flex;gap:var(--sp-4);align-items:center;margin:0 0 var(--sp-5)}
+.set-update-row .btn{white-space:nowrap;flex:none}
+.set-preview{display:flex;gap:var(--sp-4);align-items:baseline;padding:var(--sp-5) var(--sp-6);background:var(--glass-bg);border:1px solid var(--glass-border);border-left:3px solid var(--brand);border-radius:var(--r-sm);font-size:var(--fs-md);color:var(--sub)}
+.set-preview b{color:var(--txt);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-preview-label{font-size:var(--fs-sm);flex:none}
+.set-final-actions{display:flex;justify-content:flex-end;gap:var(--sp-5);margin-top:var(--sp-5)}
 #anaTabUsage,#anaTabSettings{font-size:var(--fs-md);padding:9px 16px}
 /* ============ 浅色模式：统一"控件可见性"（2026-09-23） ============
    浅色主题里 --fill 是「白色 60%」，而面板本身也是浅玻璃，两者叠在一起输入框等于隐形；
@@ -2684,17 +2693,18 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   </div>
 </div>
 
-    <div id="connStatus" style="font-size:12.5px;margin:4px 0 10px;min-height:18px"></div>
-    <div style="display:flex;gap:8px;align-items:center;margin:0 0 10px">
-      <button type="button" class="btn btn-ghost" onclick="manualCheckUpdate()" style="white-space:nowrap;flex:none">检查更新</button>
-      <span id="updateCheckStatus" style="font-size:12px;color:var(--sub)"></span>
+    <div class="set-final">
+      <div id="connStatus" class="set-conn" role="status" aria-live="polite"></div>
+      <div class="set-update-row">
+        <button type="button" class="btn btn-ghost" onclick="manualCheckUpdate()">检查更新</button>
+        <span id="updateCheckStatus"></span>
+      </div>
+      <div class="set-preview"><span class="set-preview-label">即将使用</span><b id="settingsPreview"></b></div>
+      <div class="set-final-actions">
+        <button class="btn btn-ghost" onclick="testConnection()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/></svg></span> 测试连接</button>
+        <button class="btn btn-primary" onclick="saveSettings()">保存并启用</button>
+      </div>
     </div>
-    <div class="set-preview">即将使用：<b id="settingsPreview"></b></div>
-    <div class="mbox-foot">
-      <button class="btn btn-ghost" onclick="testConnection()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/></svg></span> 测试连接</button>
-      <button class="btn btn-primary" onclick="saveSettings()">保存并启用</button>
-    </div>
-  <
     </div>
   </main>
 </div>
