@@ -2533,6 +2533,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="ana-tabs" role="tablist">
         <button class="btn btn-primary" id="anaTabUsage" onclick="showAnaTab('usage')">用量分析</button>
         <button class="btn btn-ghost" id="anaTabSettings" onclick="showAnaTab('settings')">模型与插件设置</button>
+        <button class="btn btn-ghost" id="anaTabSchedule" onclick="showAnaTab('schedule')">运行计划</button>
       </div>
     </div>
     <div id="anaUsage">
@@ -2810,7 +2811,52 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button class="btn btn-primary" onclick="saveSettings()">保存并启用</button>
       </div>
     </div>
+
+    <div id="anaSchedule" style="display:none">
+      <div class="hint">让机器人按计划自动运行：选机器人、设定触发方式、填输入模板。应用开着就会按计划自动跑，结果记到下方「运行历史」。浏览器版同样可用（开着页面即生效）。</div>
+
+      <div class="chart-box" style="margin-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <h3 style="margin:0"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg></span> 运行计划</h3>
+          <button class="btn btn-primary btn-sm" onclick="openScheduleEditor()">+ 新建计划</button>
+        </div>
+
+        <div id="scheduleEditor" class="set-panels" style="display:none;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;padding:12px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <label class="fld"><span>计划名称</span><input id="schName" class="ipt" maxlength="80" placeholder="如：每日经营日报"></label>
+            <label class="fld"><span>机器人</span><select id="schBot" class="ipt"></select></label>
+            <label class="fld"><span>触发方式</span><select id="schMode" class="ipt" onchange="onSchModeChange()">
+              <option value="interval">每隔 N 分钟</option>
+              <option value="daily">每天固定时刻</option>
+              <option value="hourly">每小时第 N 分</option>
+            </select></label>
+            <label class="fld" id="schEveryWrap"><span>间隔（分钟）</span><input id="schEvery" class="ipt" type="number" min="1" max="43200" value="60"></label>
+            <label class="fld" id="schAtDailyWrap" style="display:none"><span>每天时刻</span><input id="schAtDaily" class="ipt" type="time" value="09:00"></label>
+            <label class="fld" id="schAtHourlyWrap" style="display:none"><span>每小时第几分</span><input id="schAtHourly" class="ipt" type="number" min="0" max="59" value="0"></label>
+          </div>
+          <label class="fld" style="margin-top:10px"><span>输入模板（运行时喂给机器人的消息，可留空）</span>
+            <textarea id="schInput" class="ipt" rows="3" placeholder="如：总结今天的经营数据并给出建议"></textarea>
+          </label>
+          <label style="display:inline-flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="schEnabled" checked> 启用</label>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-primary btn-sm" onclick="saveSchedule()">保存</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeScheduleEditor()">取消</button>
+          </div>
+        </div>
+
+        <div id="scheduleList" class="dist-list"></div>
+        <div id="scheduleEmpty" class="hint" style="display:none">还没有计划。点「新建计划」让某个机器人定时自动跑起来。</div>
+      </div>
+
+      <div class="chart-box" style="margin-top:16px">
+        <h3><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span> 运行历史</h3>
+        <div id="runHistoryList" class="sat-list"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-ghost btn-sm" onclick="clearRunHistory()">清空运行历史</button>
+        </div>
+      </div>
     </div>
+
   </main>
 </div>
 
@@ -7113,6 +7159,111 @@ function flowPrevMap(bot) {
   return m;
 }
 
+/* ===== MODULE: core/schedule exports:evalScheduleDue,nextDueAt,coerceSchedule,defaultSchedule ===== */
+// P0-3 定时 / 触发运行（2026-10-12 第三轮）。
+// 纯函数：只吃参数、不碰 DOM / 存储 / 全局状态，前端调度循环与 Node 单测共用同一套逻辑。
+// 调度策略（MVP，面向「应用开着即生效」）：
+//   · interval：每 N 分钟一次（N∈[1,43200]）；
+//   · daily   ：每天固定时刻（HH:MM）；
+//   · hourly   ：每小时第 N 分（N∈[0,59]）。
+// 跨「页面最小化被浏览器降频」的常驻进程调度属后续升级（后端 resident 服务），本轮先把
+// 应用开启期内的触发 + 开机补跑做对、做稳、可观测。
+
+function coerceSchedule(o) {
+  o = (o && typeof o === 'object') ? o : {};
+  var mode = (o.mode === 'daily' || o.mode === 'hourly' || o.mode === 'interval') ? o.mode : 'interval';
+  var every = Number(o.every);
+  if (!isFinite(every) || every <= 0) every = 60;
+  every = Math.min(Math.max(Math.round(every), 1), 60 * 24 * 30);
+  var at = (o.at == null ? '' : String(o.at));
+  if (mode === 'daily') {
+    var dm = String(at).match(/^(\d{1,2}):(\d{2})$/);
+    if (!dm || parseInt(dm[1], 10) > 23 || parseInt(dm[2], 10) > 59) at = '09:00';
+  } else if (mode === 'hourly') {
+    var hmn = Number(at);
+    if (!isFinite(hmn) || hmn < 0 || hmn > 59) hmn = 0;
+    at = String(Math.min(59, Math.max(0, Math.round(hmn))));
+  } else {
+    at = '';
+  }
+  return {
+    id: o.id || ('sch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+    botId: String(o.botId || ''),
+    name: String(o.name || '').slice(0, 80),
+    enabled: o.enabled !== false,
+    mode: mode,
+    every: every,
+    at: at,
+    input: String(o.input == null ? '' : o.input),
+    createdAt: Number(o.createdAt) || Date.now(),
+    lastRun: Number(o.lastRun) || 0,
+    lastStatus: o.lastStatus || null,
+    lastError: String(o.lastError == null ? '' : o.lastError).slice(0, 300)
+  };
+}
+
+// 算出「现在该不该触发」。返回 { due, nextAt, reason }。
+//   disabled / 无 botId → 永不触发；
+//   interval：now - lastRun >= every*60000（lastRun=0 视为从未跑过 → 立即到期）；
+//   daily    ：now 已过今天 at 且上次运行在今天的 at 之前 → 到期（nextAt 指向下一个 at）；
+//   hourly   ：now 已过本小时 at 分且上次在它之前 → 到期（nextAt 指向下一个整点 at 分）。
+function evalScheduleDue(sch, nowMs, lastRunMs) {
+  sch = coerceSchedule(sch);
+  if (!sch.enabled) return { due: false, nextAt: 0, reason: 'disabled' };
+  if (!sch.botId) return { due: false, nextAt: 0, reason: 'no-bot' };
+  var now = Number(nowMs) || Date.now();
+  var last = Number(lastRunMs);
+  if (!isFinite(last) || last <= 0) last = Number(sch.lastRun) || 0;
+  if (sch.mode === 'interval') {
+    var iv = sch.every * 60000;
+    if (!last) return { due: true, nextAt: now + iv, reason: 'never-ran' };
+    if (now - last >= iv) return { due: true, nextAt: now + iv, reason: 'interval-elapsed' };
+    return { due: false, nextAt: last + iv, reason: 'interval-wait' };
+  }
+  if (sch.mode === 'daily') {
+    var d = _schClock(sch.at);
+    var next = _schNextDailyAt(now, d.h, d.m);
+    if (!last) return { due: true, nextAt: next, reason: 'never-ran' };
+    var todayAt = _schTodayAt(now, d.h, d.m);
+    if (now >= todayAt && last < todayAt) return { due: true, nextAt: next, reason: 'daily-due' };
+    return { due: false, nextAt: next, reason: 'daily-wait' };
+  }
+  var hmn2 = Number(sch.at) || 0;
+  var nextH = _schNextHourlyAt(now, hmn2);
+  if (!last) return { due: true, nextAt: nextH, reason: 'never-ran' };
+  var thisHourAt = _schThisHourAt(now, hmn2);
+  if (now >= thisHourAt && last < thisHourAt) return { due: true, nextAt: nextH, reason: 'hourly-due' };
+  return { due: false, nextAt: nextH, reason: 'hourly-wait' };
+}
+
+function nextDueAt(sch, nowMs) {
+  return evalScheduleDue(sch, nowMs, Number(sch.lastRun) || 0).nextAt;
+}
+
+function defaultSchedule(botId) {
+  return coerceSchedule({ botId: botId || '', name: '新建计划', enabled: true, mode: 'interval', every: 60, at: '', input: '' });
+}
+
+// 时钟工具：全部用本地 Date 的时分计算，避免 Date.parse 的时区差异。
+function _schClock(s) {
+  var m = String(s || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return { h: 9, m: 0 };
+  return { h: Math.min(23, Math.max(0, parseInt(m[1], 10))), m: Math.min(59, Math.max(0, parseInt(m[2], 10))) };
+}
+function _schTodayAt(now, h, m) { var d = new Date(now); d.setHours(h, m, 0, 0); return d.getTime(); }
+function _schNextDailyAt(now, h, m) {
+  var t = _schTodayAt(now, h, m);
+  if (t <= now) { var d = new Date(now); d.setDate(d.getDate() + 1); d.setHours(h, m, 0, 0); t = d.getTime(); }
+  return t;
+}
+function _schThisHourAt(now, mn) { var d = new Date(now); d.setMinutes(mn, 0, 0); return d.getTime(); }
+function _schNextHourlyAt(now, mn) {
+  var t = _schThisHourAt(now, mn);
+  if (t <= now) { var d = new Date(now); d.setHours(d.getHours() + 1, mn, 0, 0); t = d.getTime(); }
+  return t;
+}
+/* ===== END MODULE: core/schedule ===== */
+
 // ---------- 变量 ----------
 // 每次新建正则：带 g 标志的正则对象有 lastIndex 状态，共用会在嵌套解析时串味
 function _flowRe() {
@@ -7849,6 +8000,17 @@ inEdges: flowInEdges,
   tplValue: flowTplValue,
   MAX_LOOP: FLOW_MAX_LOOP,
   MAX_CALLS: FLOW_MAX_CALLS,
+};
+
+// P0-3 定时运行纯逻辑导出（供 Node 单测 / 调试）。
+window.BotCraftSchedule = {
+  evalDue: evalScheduleDue,
+  evalScheduleDue: evalScheduleDue,
+  nextDueAt: nextDueAt,
+  coerce: coerceSchedule,
+  coerceSchedule: coerceSchedule,
+  default: defaultSchedule,
+  defaultSchedule: defaultSchedule,
 };
 
 function copyTextRobust(text) {
@@ -8776,6 +8938,7 @@ function onLogin() {
   // 否则会出现「登录成功却一直停在遮罩、点了没反应」的死循环。
   hideAuthMask();
   try { loadBots(); } catch (e) { console.error('[onLogin] loadBots', e); }
+  try { startScheduleLoop(); } catch (e) { console.error('[onLogin] startScheduleLoop', e); }
   try { loadFavorites(); } catch (e) { console.error('[onLogin] loadFavorites', e); }
   try { loadKB(); } catch (e) { console.error('[onLogin] loadKB', e); }
   try { loadSnippets(); } catch (e) { console.error('[onLogin] loadSnippets', e); }
@@ -18458,25 +18621,283 @@ function openSettings() {
   setupSettingsUI();
 }
 function showAnaTab(t) {
-  var u = document.getElementById('anaUsage'), st = document.getElementById('anaSettings');
-  var bu = document.getElementById('anaTabUsage'), bs = document.getElementById('anaTabSettings');
-  if (!u || !st) return;
-  var isSet = t === 'settings';
-  u.style.display = isSet ? 'none' : '';
-  st.style.display = isSet ? '' : 'none';
+  // 三个 Tab：用量分析 / 模型与插件设置 / 运行计划（P0-3）。映射表驱动，避免写死两面板。
+  var panels = { usage: 'anaUsage', settings: 'anaSettings', schedule: 'anaSchedule' };
+  var btns = { usage: 'anaTabUsage', settings: 'anaTabSettings', schedule: 'anaTabSchedule' };
+  var keys = Object.keys(panels);
+  var active = panels[t] ? t : 'usage';
+  keys.forEach(function (k) {
+    var pn = document.getElementById(panels[k]);
+    if (pn) pn.style.display = (k === active) ? '' : 'none';
+    var bn = document.getElementById(btns[k]);
+    if (bn) bn.className = (k === active) ? 'btn btn-primary' : 'btn btn-ghost';
+  });
   /* 设置 Tab 下主容器必须Flex列：#anaSettings 才能被限高、内容内部滚动、收尾栏常驻底部
      （applyPage 会写内联 display:block，这里要覆写回来）。
      守卫：仅当分析页已经可见时才写 display——boot 恢复 Tab 时页面尚隐藏（HTML 初始 none），
      无条件写会把分析页提前点亮，造成首页+设置页并排（2026-10-11 用户截图实测） */
+  // 设置 Tab 下主容器必须 Flex 列（收尾栏常驻底部）；其余 Tab 用 block。
+  // 守卫：仅当分析页已可见时才写 display——boot 恢复 Tab 时页面尚隐藏（HTML 初始 none），
+  // 无条件写会把分析页提前点亮，造成首页+设置页并排（2026-10-11 用户截图实测）。
   var pg = document.getElementById('page-analytics');
-  if (pg && pg.style.display !== 'none') pg.style.display = isSet ? 'flex' : 'block';
-  if (bu) bu.className = isSet ? 'btn btn-ghost' : 'btn btn-primary';
-  if (bs) bs.className = isSet ? 'btn btn-primary' : 'btn btn-ghost';
-  storeSetRaw('botcraft.anaTab', t);
+  if (pg && pg.style.display !== 'none') pg.style.display = (active === 'settings') ? 'flex' : 'block';
+  storeSetRaw('botcraft.anaTab', active);
+  if (active === 'schedule' && typeof renderScheduleUI === 'function') { try { renderScheduleUI(); } catch (e) {} }
 }
 window.showAnaTab = showAnaTab;
 // 初始化时恢复上次停留的 Tab
 try { showAnaTab(storeGetRaw('botcraft.anaTab', '') || 'usage'); } catch (e) { }
+
+// ==================== P0-3 定时 / 触发运行 ====================
+// 应用开启期内生效的调度：setInterval 巡检启用中的计划，到期即跑；onLogin 第一次巡检顺带补跑
+// 「从未跑过 / 远超间隔」的计划（限流防风暴）。常驻进程（最小化被降频）的强调度留待后端
+// resident 服务升级，本轮先把应用内路径做对、做稳、可观测。
+var _SCHED_KEY = function () { return userScopedKey('botcraft.schedules.v1'); };
+var _RHIST_KEY = function () { return userScopedKey('botcraft.runHistory.v1'); };
+var _scheduleTimer = null;
+var _firing = {};   // schId -> true，防同一计划重入
+
+function loadSchedules() {
+  try { var arr = JSON.parse(__storage.getItem(_SCHED_KEY()) || '[]'); return Array.isArray(arr) ? arr.map(coerceSchedule) : []; }
+  catch (e) { return []; }
+}
+function saveSchedules(arr) {
+  try { __storage.setItem(_SCHED_KEY(), JSON.stringify((arr || []).map(coerceSchedule))); return true; } catch (e) { return false; }
+}
+function getRunHistory() {
+  try { var arr = JSON.parse(__storage.getItem(_RHIST_KEY()) || '[]'); return Array.isArray(arr) ? arr : []; }
+  catch (e) { return []; }
+}
+function pushRunHistory(entry) {
+  var arr = getRunHistory();
+  arr.unshift(entry);
+  if (arr.length > 100) arr = arr.slice(0, 100);
+  try { __storage.setItem(_RHIST_KEY(), JSON.stringify(arr)); } catch (e) {}
+  return arr;
+}
+
+// 立即跑一条计划（force 可绕过 enabled 开关，用于「立即运行」与 e2e）。结果记进运行历史。
+async function fireSchedule(id, opts) {
+  opts = opts || {};
+  if (_firing[id]) return { ok: false, reason: 'firing' };
+  _firing[id] = true;
+  try {
+    var arr = loadSchedules();
+    var sch = null;
+    for (var i = 0; i < arr.length; i++) if (arr[i].id === id) { sch = arr[i]; break; }
+    if (!sch) return { ok: false, reason: 'not-found' };
+    if (!sch.enabled && !opts.force) return { ok: false, reason: 'disabled' };
+    if (!bots || !bots.length) { try { loadBots(); } catch (e) {} }
+    var bot = null;
+    for (var j = 0; j < (bots || []).length; j++) if (bots[j].id === sch.botId) { bot = bots[j]; break; }
+    if (!bot) return { ok: false, reason: 'bot-not-found' };
+    var t0 = Date.now();
+    try {
+      var r = await runWorkflow(bot, sch.input || '', null, null, null, '', null, 0);
+      var final = (r && r.final) || '';
+      pushRunHistory({ id: uid(), schId: sch.id, schName: sch.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: true, ms: Date.now() - t0, finalLen: final.length, preview: final.slice(0, 200) });
+      sch.lastRun = Date.now(); sch.lastStatus = 'ok'; sch.lastError = '';
+      saveSchedules(arr);
+      try { renderScheduleUI(); } catch (e) {}
+      return { ok: true, finalLen: final.length, ms: Date.now() - t0 };
+    } catch (e) {
+      var msg = (e && e.message) || String(e);
+      pushRunHistory({ id: uid(), schId: sch.id, schName: sch.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: false, ms: Date.now() - t0, finalLen: 0, preview: '', err: String(msg).slice(0, 300) });
+      sch.lastRun = Date.now(); sch.lastStatus = 'err'; sch.lastError = String(msg).slice(0, 300);
+      saveSchedules(arr);
+      try { renderScheduleUI(); } catch (e2) {}
+      return { ok: false, reason: 'run-failed', err: msg };
+    }
+  } finally {
+    _firing[id] = false;
+  }
+}
+
+function tickSchedules() {
+  try {
+    var arr = loadSchedules();
+    var now = Date.now();
+    arr.forEach(function (sch) {
+      if (!sch.enabled) return;
+      if (evalScheduleDue(sch, now, sch.lastRun).due) fireSchedule(sch.id);
+    });
+  } catch (e) {}
+}
+
+function startScheduleLoop() {
+  if (_scheduleTimer) return;
+  tickSchedules();                       // 启动即巡检一次（含「从未跑过」的补跑）
+  _scheduleTimer = setInterval(tickSchedules, 20000);
+}
+window.bcStartScheduleLoop = startScheduleLoop;
+window.bcTickSchedules = tickSchedules;
+window.bcRunSchedule = fireSchedule;
+window.bcGetSchedules = loadSchedules;
+window.bcGetRunHistory = getRunHistory;
+
+// ---- 计划 / 运行历史 UI ----
+function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+var _editingSchId = null;
+
+function _botOptionsHTML() {
+  var opts = '<option value="">— 选择机器人 —</option>';
+  (bots || []).forEach(function (b) {
+    var nm = b.name || b.n || b.id;
+    opts += '<option value="' + escAttr(b.id) + '">' + escHtml(nm) + '</option>';
+  });
+  return opts;
+}
+
+function renderScheduleUI() {
+  var list = document.getElementById('scheduleList');
+  var empty = document.getElementById('scheduleEmpty');
+  var hist = document.getElementById('runHistoryList');
+  if (!list) return;
+  var arr = loadSchedules();
+  if (!arr.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = '';
+  } else {
+    if (empty) empty.style.display = 'none';
+    var now = Date.now();
+    list.innerHTML = arr.map(function (s) {
+      var botName = '';
+      for (var i = 0; i < (bots || []).length; i++) if (bots[i].id === s.botId) { botName = bots[i].name || bots[i].n || ''; break; }
+      var modeTxt = s.mode === 'daily' ? ('每天 ' + s.at)
+        : s.mode === 'hourly' ? ('每小时第 ' + s.at + ' 分')
+        : ('每 ' + s.every + ' 分钟');
+      var next = nextDueAt(s, now);
+      var nextTxt = next ? new Date(next).toLocaleString() : '—';
+      var lastTxt = s.lastRun ? new Date(s.lastRun).toLocaleString() : '从未运行';
+      var status = s.lastStatus === 'ok' ? '<span style="color:var(--ok)">上次成功</span>'
+        : s.lastStatus === 'err' ? '<span style="color:var(--err)">上次失败</span>' : '<span style="color:var(--sub)">未运行</span>';
+      return '<div class="dist-row" style="align-items:flex-start">'
+        + '<div style="flex:1">'
+        + '<div style="font-weight:600">' + escHtml(s.name || '(未命名)') + ' · ' + escHtml(botName || '（机器人缺失）') + '</div>'
+        + '<div class="sub" style="margin-top:2px">' + escHtml(modeTxt) + ' · ' + status + '</div>'
+        + '<div class="sub" style="margin-top:2px">上次：' + escHtml(lastTxt) + ' ｜ 下次：' + escHtml(nextTxt) + '</div>'
+        + '</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+        + '<button class="btn btn-ghost btn-sm" onclick="toggleSchedule(\'' + s.id + '\')">' + (s.enabled ? '停用' : '启用') + '</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="runNowSchedule(\'' + s.id + '\')">立即运行</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="editSchedule(\'' + s.id + '\')">编辑</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="deleteSchedule(\'' + s.id + '\')">删除</button>'
+        + '</div></div>';
+    }).join('');
+  }
+  if (hist) {
+    var h = getRunHistory();
+    if (!h.length) {
+      hist.innerHTML = '<div class="hint">还没有运行记录。计划触发后会显示在这里。</div>';
+    } else {
+      hist.innerHTML = h.map(function (e) {
+        var t = new Date(e.ts).toLocaleString();
+        var st = e.ok ? '<span style="color:var(--ok)">成功</span>' : '<span style="color:var(--err)">失败</span>';
+        var detail = e.ok ? ('产出 ' + e.finalLen + ' 字 · ' + e.ms + 'ms') : ('错误：' + escHtml(e.err || ''));
+        return '<div class="sat-row" style="display:block">'
+          + '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + escHtml(e.schName || '') + '</b>' + st + '</div>'
+          + '<div class="sub">' + escHtml(t) + ' · ' + escHtml(e.botName || '') + ' · ' + detail + '</div>'
+          + (e.ok && e.preview ? '<div class="sub" style="margin-top:2px;opacity:.8">' + escHtml(e.preview) + '</div>' : '')
+          + '</div>';
+      }).join('');
+    }
+  }
+  var ed = document.getElementById('scheduleEditor');
+  var sel = document.getElementById('schBot');
+  if (sel && ed && ed.style.display !== 'none') {
+    sel.innerHTML = _botOptionsHTML();
+    var cur = _editingSchId ? (loadSchedules().filter(function (x) { return x.id === _editingSchId; })[0] || {}) : {};
+    if (cur && cur.botId) sel.value = cur.botId;
+  }
+}
+
+function openScheduleEditor(id) {
+  _editingSchId = id || null;
+  var ed = document.getElementById('scheduleEditor');
+  if (ed) ed.style.display = '';
+  var sel = document.getElementById('schBot'); if (sel) sel.innerHTML = _botOptionsHTML();
+  document.getElementById('schName').value = '';
+  document.getElementById('schMode').value = 'interval';
+  document.getElementById('schEvery').value = 60;
+  document.getElementById('schAtDaily').value = '09:00';
+  document.getElementById('schAtHourly').value = 0;
+  document.getElementById('schInput').value = '';
+  document.getElementById('schEnabled').checked = true;
+  onSchModeChange();
+  if (_editingSchId) {
+    var s = loadSchedules().filter(function (x) { return x.id === _editingSchId; })[0];
+    if (s) {
+      document.getElementById('schName').value = s.name || '';
+      sel.value = s.botId || '';
+      document.getElementById('schMode').value = s.mode;
+      if (s.mode === 'daily') document.getElementById('schAtDaily').value = s.at;
+      else if (s.mode === 'hourly') document.getElementById('schAtHourly').value = s.at;
+      else document.getElementById('schEvery').value = s.every;
+      document.getElementById('schInput').value = s.input || '';
+      document.getElementById('schEnabled').checked = s.enabled !== false;
+      onSchModeChange();
+    }
+  }
+}
+function closeScheduleEditor() { _editingSchId = null; var ed = document.getElementById('scheduleEditor'); if (ed) ed.style.display = 'none'; }
+function onSchModeChange() {
+  var m = document.getElementById('schMode').value;
+  var iv = document.getElementById('schEveryWrap'), dv = document.getElementById('schAtDailyWrap'), hv = document.getElementById('schAtHourlyWrap');
+  if (iv) iv.style.display = (m === 'interval') ? '' : 'none';
+  if (dv) dv.style.display = (m === 'daily') ? '' : 'none';
+  if (hv) hv.style.display = (m === 'hourly') ? '' : 'none';
+}
+function saveSchedule() {
+  var arr = loadSchedules();
+  var id = _editingSchId;
+  var obj = {
+    id: id || undefined,
+    botId: document.getElementById('schBot').value,
+    name: document.getElementById('schName').value || '新建计划',
+    enabled: document.getElementById('schEnabled').checked,
+    mode: document.getElementById('schMode').value,
+    every: Number(document.getElementById('schEvery').value) || 60,
+    at: document.getElementById('schMode').value === 'daily' ? document.getElementById('schAtDaily').value
+      : document.getElementById('schMode').value === 'hourly' ? String(document.getElementById('schAtHourly').value || 0)
+      : '',
+    input: document.getElementById('schInput').value
+  };
+  if (!obj.botId) { toast('请先选择一个机器人', 'warn'); return; }
+  var cs = coerceSchedule(obj);
+  if (id) {
+    for (var i = 0; i < arr.length; i++) if (arr[i].id === id) {
+      var old = arr[i]; cs.lastRun = old.lastRun; cs.lastStatus = old.lastStatus; cs.lastError = old.lastError; cs.createdAt = old.createdAt; arr[i] = cs; break;
+    }
+  } else {
+    arr.push(cs);
+  }
+  saveSchedules(arr);
+  closeScheduleEditor();
+  renderScheduleUI();
+  toast(id ? '计划已更新' : '计划已创建', 'ok');
+}
+function toggleSchedule(id) {
+  var arr = loadSchedules();
+  for (var i = 0; i < arr.length; i++) if (arr[i].id === id) { arr[i].enabled = !arr[i].enabled; break; }
+  saveSchedules(arr); renderScheduleUI();
+}
+function editSchedule(id) { openScheduleEditor(id); }
+function deleteSchedule(id) {
+  if (!confirm('确定删除这个计划？')) return;
+  saveSchedules(loadSchedules().filter(function (x) { return x.id !== id; }));
+  renderScheduleUI();
+}
+function runNowSchedule(id) {
+  fireSchedule(id, { force: true }).then(function () { try { renderScheduleUI(); } catch (e) {} });
+}
+function clearRunHistory() {
+  if (!confirm('确定清空运行历史？')) return;
+  try { __storage.setItem(_RHIST_KEY(), '[]'); } catch (e) {}
+  renderScheduleUI();
+}
+
 // 首次进入应用就要把服务商下拉与各字段回填好 —— 以前这些在 openSettings 里做，
 // 弹窗时代天然每次打开都执行；合并成常驻页后没人调它，服务商下拉就是空的，
 // 要点一下顶栏模型标签才刷新（2026-09-23 用户实测）。
