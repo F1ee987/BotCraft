@@ -18933,6 +18933,7 @@ window.__debug = {
   // 不会知道它还牵着人工审批前的 AI 预审。
   var APPROVAL_PREREVIEW_SYSTEM = ROLE_SYSTEM.review;
 
+/* ===== MODULE: core/kb exports:searchKBHits,kbClearHits,kbPushHits,kbSnapshotHits,kbChunkOf,kbInvalidate ===== */
   // ---------- TF-IDF 知识库检索 ----------
   function _tokenize(text) {
     return (text || '').toLowerCase().match(/[一-龥]|[a-z0-9]+/g) || [];
@@ -19068,6 +19069,7 @@ function _kbIndexFor(bot) {
   window.kbSnapshotHits = kbSnapshotHits;
   window.kbChunkOf = kbChunkOf;
   window.kbInvalidate = kbInvalidate;
+/* ===== END MODULE: core/kb ===== */
 
   // ---------- 桥接：全局请求函数（退化 BotCraftAI.chat） ----------
   window.BotCraftAI_request = (function () {
