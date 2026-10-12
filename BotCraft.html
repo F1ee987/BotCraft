@@ -2534,6 +2534,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button class="btn btn-primary" id="anaTabUsage" onclick="showAnaTab('usage')">用量分析</button>
         <button class="btn btn-ghost" id="anaTabSettings" onclick="showAnaTab('settings')">模型与插件设置</button>
         <button class="btn btn-ghost" id="anaTabSchedule" onclick="showAnaTab('schedule')">运行计划</button>
+        <button class="btn btn-ghost" id="anaTabWebhook" onclick="showAnaTab('webhook')">入站 API</button>
       </div>
     </div>
     <div id="anaUsage">
@@ -2854,6 +2855,38 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn btn-ghost btn-sm" onclick="clearRunHistory()">清空运行历史</button>
         </div>
+      </div>
+    </div>
+
+    <div id="anaWebhook" style="display:none">
+      <div class="hint">让外部系统（飞书 / 自建后台 / CI）把事件推给机器人：桌面版在 <code>127.0.0.1</code> 监听，按「地址 + token」路由到指定机器人并触发其工作流。<b>仅本机可访问</b>，必须带 token。浏览器版无本地服务，地址不会生效。</div>
+
+      <div class="chart-box" style="margin-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <h3 style="margin:0"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg></span> 入站 Webhook</h3>
+          <button class="btn btn-primary btn-sm" onclick="addWebhook()">+ 新建 Webhook</button>
+        </div>
+
+        <div id="whStatus" class="sub" style="margin-bottom:10px"></div>
+
+        <div id="whEditor" class="set-panels" style="display:none;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;padding:12px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <label class="fld"><span>名称</span><input id="whName" class="ipt" maxlength="80" placeholder="如：飞书消息转发"></label>
+            <label class="fld"><span>机器人</span><select id="whBot" class="ipt"></select></label>
+          </div>
+          <label class="fld" style="margin-top:10px"><span>备注（可选）</span>
+            <input id="whNote" class="ipt" maxlength="200" placeholder="这个 webhook 的用途">
+          </label>
+          <label style="display:inline-flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="whEnabled" checked> 启用</label>
+          <div class="sub" style="margin-top:8px">Token：<code id="whTokenView">（保存后生成）</code></div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-primary btn-sm" onclick="saveWebhook()">保存</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeWebhookEditor()">取消</button>
+          </div>
+        </div>
+
+        <div id="whList" class="dist-list"></div>
+        <div id="whEmpty" class="hint" style="display:none">还没有 Webhook。点「新建 Webhook」让外部系统能调用某个机器人。</div>
       </div>
     </div>
 
@@ -7264,6 +7297,64 @@ function _schNextHourlyAt(now, mn) {
 }
 /* ===== END MODULE: core/schedule ===== */
 
+/* ===== MODULE: core/webhook exports:genWebhookToken,coerceWebhook,matchWebhook,genWebhookUrl,defaultWebhook,coerceWebhookList ===== */
+// 本地入站 API（Webhook）的纯路由判定。桌面版 Python 侧起 loopback HTTP 服务，把「/wh/<token>」
+// 路由到指定机器人并触发其工作流；本 MODULE 只负责「token 怎么生成 / 记录怎么规整 / 怎么匹配」，
+// 不碰 DOM、不发请求，导出到 src/core/webhook.js 镜像供单测真跑。触发与 UI 在 HTML 本体。
+function _whRandBytes(n) {
+  try {
+    var c = (typeof crypto !== 'undefined' && crypto) ? crypto : null;
+    if (c && c.getRandomValues) {
+      var b = new Uint8Array(n);
+      c.getRandomValues(b);
+      return b;
+    }
+  } catch (e) {}
+  var out = [];
+  for (var i = 0; i < n; i++) out.push(Math.floor(Math.random() * 256));
+  return out;
+}
+function genWebhookToken() {
+  var b = _whRandBytes(18), s = '';
+  for (var i = 0; i < b.length; i++) s += (b[i] & 0xff).toString(16).padStart(2, '0');
+  return s;
+}
+function coerceWebhook(o) {
+  o = o || {};
+  var id = (typeof o.id === 'string' && o.id) ? o.id : ('wh_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  var token = (typeof o.token === 'string' && /^[A-Za-z0-9]{8,}$/.test(o.token)) ? o.token : genWebhookToken();
+  var name = (typeof o.name === 'string') ? o.name.slice(0, 80) : '';
+  var botId = (typeof o.botId === 'string') ? o.botId : '';
+  var enabled = o.enabled !== false;
+  var note = (typeof o.note === 'string') ? o.note.slice(0, 200) : '';
+  var createdAt = (typeof o.createdAt === 'number' && o.createdAt) ? o.createdAt : Date.now();
+  var lastRun = (typeof o.lastRun === 'number' && o.lastRun) ? o.lastRun : 0;
+  var lastStatus = (o.lastStatus === 'ok' || o.lastStatus === 'err') ? o.lastStatus : '';
+  var lastError = (typeof o.lastError === 'string') ? o.lastError.slice(0, 300) : '';
+  return { id: id, token: token, name: name, botId: botId, enabled: enabled, note: note,
+    createdAt: createdAt, lastRun: lastRun, lastStatus: lastStatus, lastError: lastError };
+}
+function matchWebhook(routes, token) {
+  if (!Array.isArray(routes) || !token) return null;
+  for (var i = 0; i < routes.length; i++) {
+    var r = routes[i];
+    if (r && r.token === token && r.enabled) return r;
+  }
+  return null;
+}
+function genWebhookUrl(host, port, token) {
+  host = host || '127.0.0.1';
+  port = (typeof port === 'number' && port > 0) ? port : 0;
+  return 'http://' + host + ':' + port + '/wh/' + (token || '');
+}
+function defaultWebhook(botId) {
+  return coerceWebhook({ botId: botId || '', name: '新建 Webhook', enabled: true });
+}
+function coerceWebhookList(arr) {
+  return Array.isArray(arr) ? arr.map(coerceWebhook) : [];
+}
+/* ===== END MODULE: core/webhook ===== */
+
 // ---------- 变量 ----------
 // 每次新建正则：带 g 标志的正则对象有 lastIndex 状态，共用会在嵌套解析时串味
 function _flowRe() {
@@ -8939,6 +9030,7 @@ function onLogin() {
   hideAuthMask();
   try { loadBots(); } catch (e) { console.error('[onLogin] loadBots', e); }
   try { startScheduleLoop(); } catch (e) { console.error('[onLogin] startScheduleLoop', e); }
+  try { if (typeof pushWebhookRoutes === 'function') pushWebhookRoutes(); } catch (e) { console.error('[onLogin] pushWebhookRoutes', e); }
   try { loadFavorites(); } catch (e) { console.error('[onLogin] loadFavorites', e); }
   try { loadKB(); } catch (e) { console.error('[onLogin] loadKB', e); }
   try { loadSnippets(); } catch (e) { console.error('[onLogin] loadSnippets', e); }
@@ -18621,9 +18713,9 @@ function openSettings() {
   setupSettingsUI();
 }
 function showAnaTab(t) {
-  // 三个 Tab：用量分析 / 模型与插件设置 / 运行计划（P0-3）。映射表驱动，避免写死两面板。
-  var panels = { usage: 'anaUsage', settings: 'anaSettings', schedule: 'anaSchedule' };
-  var btns = { usage: 'anaTabUsage', settings: 'anaTabSettings', schedule: 'anaTabSchedule' };
+  // 四个 Tab：用量分析 / 模型与插件设置 / 运行计划（P0-3）/ 入站 API（P1-1）。映射表驱动。
+  var panels = { usage: 'anaUsage', settings: 'anaSettings', schedule: 'anaSchedule', webhook: 'anaWebhook' };
+  var btns = { usage: 'anaTabUsage', settings: 'anaTabSettings', schedule: 'anaTabSchedule', webhook: 'anaTabWebhook' };
   var keys = Object.keys(panels);
   var active = panels[t] ? t : 'usage';
   keys.forEach(function (k) {
@@ -18643,6 +18735,7 @@ function showAnaTab(t) {
   if (pg && pg.style.display !== 'none') pg.style.display = (active === 'settings') ? 'flex' : 'block';
   storeSetRaw('botcraft.anaTab', active);
   if (active === 'schedule' && typeof renderScheduleUI === 'function') { try { renderScheduleUI(); } catch (e) {} }
+  if (active === 'webhook' && typeof renderWebhookUI === 'function') { try { renderWebhookUI(); } catch (e) {} }
 }
 window.showAnaTab = showAnaTab;
 // 初始化时恢复上次停留的 Tab
@@ -18772,7 +18865,7 @@ function renderScheduleUI() {
       var nextTxt = next ? new Date(next).toLocaleString() : '—';
       var lastTxt = s.lastRun ? new Date(s.lastRun).toLocaleString() : '从未运行';
       var status = s.lastStatus === 'ok' ? '<span style="color:var(--ok)">上次成功</span>'
-        : s.lastStatus === 'err' ? '<span style="color:var(--err)">上次失败</span>' : '<span style="color:var(--sub)">未运行</span>';
+        : s.lastStatus === 'err' ? '<span style="color:var(--danger)">上次失败</span>' : '<span style="color:var(--sub)">未运行</span>';
       return '<div class="dist-row" style="align-items:flex-start">'
         + '<div style="flex:1">'
         + '<div style="font-weight:600">' + escHtml(s.name || '(未命名)') + ' · ' + escHtml(botName || '（机器人缺失）') + '</div>'
@@ -18794,10 +18887,11 @@ function renderScheduleUI() {
     } else {
       hist.innerHTML = h.map(function (e) {
         var t = new Date(e.ts).toLocaleString();
-        var st = e.ok ? '<span style="color:var(--ok)">成功</span>' : '<span style="color:var(--err)">失败</span>';
+        var st = e.ok ? '<span style="color:var(--ok)">成功</span>' : '<span style="color:var(--danger)">失败</span>';
+        var srcTag = (e.source === 'webhook') ? ' <span class="sub" style="color:var(--brand)">· Webhook</span>' : '';
         var detail = e.ok ? ('产出 ' + e.finalLen + ' 字 · ' + e.ms + 'ms') : ('错误：' + escHtml(e.err || ''));
         return '<div class="sat-row" style="display:block">'
-          + '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + escHtml(e.schName || '') + '</b>' + st + '</div>'
+          + '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + escHtml(e.schName || '') + '</b>' + st + srcTag + '</div>'
           + '<div class="sub">' + escHtml(t) + ' · ' + escHtml(e.botName || '') + ' · ' + detail + '</div>'
           + (e.ok && e.preview ? '<div class="sub" style="margin-top:2px;opacity:.8">' + escHtml(e.preview) + '</div>' : '')
           + '</div>';
@@ -18885,17 +18979,233 @@ function toggleSchedule(id) {
 }
 function editSchedule(id) { openScheduleEditor(id); }
 function deleteSchedule(id) {
-  if (!confirm('确定删除这个计划？')) return;
-  saveSchedules(loadSchedules().filter(function (x) { return x.id !== id; }));
-  renderScheduleUI();
+  confirmDialog('确定删除这个计划？', { danger: true, okText: '删除' }).then(function (ok) {
+    if (!ok) return;
+    saveSchedules(loadSchedules().filter(function (x) { return x.id !== id; }));
+    renderScheduleUI();
+  });
 }
 function runNowSchedule(id) {
   fireSchedule(id, { force: true }).then(function () { try { renderScheduleUI(); } catch (e) {} });
 }
 function clearRunHistory() {
-  if (!confirm('确定清空运行历史？')) return;
-  try { __storage.setItem(_RHIST_KEY(), '[]'); } catch (e) {}
-  renderScheduleUI();
+  confirmDialog('确定清空运行历史？', { danger: true, okText: '清空' }).then(function (ok) {
+    if (!ok) return;
+    try { __storage.setItem(_RHIST_KEY(), '[]'); } catch (e) {}
+    renderScheduleUI();
+  });
+}
+
+// ==================== P1-1 本地入站 API / Webhook ====================
+// 外部系统（飞书 / 自建后台 / CI）把事件推给机器人：桌面版在 127.0.0.1 起轻量 HTTP 服务
+// （Python 侧，见 build_exe.py 的 WebhookRoutes），按「地址 + token」路由到指定机器人并触发
+// 其工作流；浏览器版没有本地服务，UI 如实提示「需桌面版」。纯路由判定在 core/webhook MODULE，
+// 触发与 UI 在本段。入站触发与定时运行共用「运行历史」（用 source 区分来源）。
+var _WH_KEY = function () { return userScopedKey('botcraft.webhooks.v1'); };
+var _whPort = 0;            // 由桌面版 Python 服务回填（bc_webhook_port）
+var _whPortTried = false;
+
+function loadWebhooks() {
+  try { var arr = JSON.parse(__storage.getItem(_WH_KEY()) || '[]'); return Array.isArray(arr) ? arr.map(coerceWebhook) : []; }
+  catch (e) { return []; }
+}
+function saveWebhooks(arr) {
+  try { __storage.setItem(_WH_KEY(), JSON.stringify((arr || []).map(coerceWebhook))); return true; }
+  catch (e) { return false; }
+}
+
+// 把「启用中的 webhook」同步给桌面版 Python 服务（它据此校验入站请求的 token）。
+// 只在桌面版（有 pywebview 桥）有意义；浏览器版静默跳过。
+function pushWebhookRoutes() {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.bc_set_webhook_routes) {
+      var enabled = loadWebhooks().filter(function (r) { return r.enabled; });
+      window.pywebview.api.bc_set_webhook_routes(JSON.stringify(enabled));
+    }
+  } catch (e) {}
+}
+
+// 桌面版本地服务端口（仅 exe 内可用）。浏览器版返回 0 → UI 提示需桌面版。
+// pywebview api 方法可能返回 Promise，这里统一 Promise 化。
+function bcWebhookPort() {
+  if (_whPort) return Promise.resolve(_whPort);
+  if (_whPortTried) return Promise.resolve(0);
+  return new Promise(function (res) {
+    try {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.bc_webhook_port) {
+        Promise.resolve(window.pywebview.api.bc_webhook_port()).then(function (o) {
+          _whPort = (o && o.port) ? o.port : 0; _whPortTried = true; res(_whPort);
+        }).catch(function () { _whPortTried = true; res(0); });
+      } else { _whPortTried = true; res(0); }
+    } catch (e) { _whPortTried = true; res(0); }
+  });
+}
+
+// 入站触发：Python 服务校验 token 后调用本函数。返回 {ok, ...}。
+async function bcWebhookTrigger(token, payload) {
+  var routes = loadWebhooks();
+  var r = null;
+  for (var i = 0; i < routes.length; i++) if (routes[i].token === token) { r = routes[i]; break; }
+  if (!r || !r.enabled) return { ok: false, code: 'disabled' };
+  if (!bots || !bots.length) { try { loadBots(); } catch (e) {} }
+  var bot = null;
+  for (var j = 0; j < (bots || []).length; j++) if (bots[j].id === r.botId) { bot = bots[j]; break; }
+  if (!bot) return { ok: false, code: 'no-bot' };
+  var input = (payload && typeof payload === 'object') ?
+    (payload.text != null ? String(payload.text) : JSON.stringify(payload)) :
+    String(payload == null ? '' : payload);
+  var t0 = Date.now();
+  var rid = 'wh_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  try {
+    var rr = await runWorkflow(bot, input, null, null, null, '', null, 0);
+    var final = (rr && rr.final) || '';
+    pushRunHistory({ id: rid, schId: r.id, schName: r.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: true, ms: Date.now() - t0, finalLen: final.length, preview: final.slice(0, 200), source: 'webhook' });
+    r.lastRun = Date.now(); r.lastStatus = 'ok'; r.lastError = '';
+    saveWebhooks(routes);
+    return { ok: true, finalLen: final.length, ms: Date.now() - t0 };
+  } catch (e) {
+    var msg = (e && e.message) || String(e);
+    pushRunHistory({ id: rid, schId: r.id, schName: r.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: false, ms: Date.now() - t0, finalLen: 0, preview: '', err: String(msg).slice(0, 300), source: 'webhook' });
+    r.lastRun = Date.now(); r.lastStatus = 'err'; r.lastError = String(msg).slice(0, 300);
+    saveWebhooks(routes);
+    return { ok: false, code: 'run-error', err: msg };
+  }
+}
+
+window.BotCraftWebhook = {
+  list: loadWebhooks,
+  coerce: coerceWebhook,
+  default: defaultWebhook,
+  genToken: genWebhookToken,
+  url: genWebhookUrl,
+  match: matchWebhook,
+  trigger: bcWebhookTrigger
+};
+window.bcWebhookTrigger = bcWebhookTrigger;
+window.bcWebhookPort = bcWebhookPort;
+window.bcSetWebhookRoutes = pushWebhookRoutes;
+
+// ---- Webhook UI ----
+var _editingWhId = null;
+
+function renderWebhookUI() {
+  var list = document.getElementById('whList');
+  if (!list) return;
+  bcWebhookPort().then(function (port) {
+    var s = document.getElementById('whStatus');
+    if (!s) return;
+    if (port) s.innerHTML = '<span style="color:var(--ok)">● 本地服务已启动</span>：<code>http://127.0.0.1:' + port + '/wh/&lt;token&gt;</code>（仅本机可访问，需要 token）';
+    else s.innerHTML = '本地服务未运行（浏览器版不支持）。用 <b>桌面版 BotCraft</b> 打开后，这里会显示可粘贴的 webhook 地址。';
+  });
+  var arr = loadWebhooks();
+  var empty = document.getElementById('whEmpty');
+  if (!arr.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = '';
+  } else {
+    if (empty) empty.style.display = 'none';
+    list.innerHTML = arr.map(function (w) {
+      var botName = '';
+      for (var i = 0; i < (bots || []).length; i++) if (bots[i].id === w.botId) { botName = bots[i].name || bots[i].n || ''; break; }
+      var statusTxt = w.lastStatus === 'ok' ? '<span style="color:var(--ok)">上次成功</span>'
+        : w.lastStatus === 'err' ? '<span style="color:var(--danger)">上次失败</span>' : '<span style="color:var(--sub)">未触发</span>';
+      var lastTxt = w.lastRun ? new Date(w.lastRun).toLocaleString() : '从未触发';
+      return '<div class="dist-row" style="align-items:flex-start">'
+        + '<div style="flex:1">'
+        + '<div style="font-weight:600">' + escHtml(w.name || '(未命名)') + ' · ' + escHtml(botName || '（机器人缺失）') + '</div>'
+        + '<div class="sub" style="margin-top:2px">' + statusTxt + ' · 上次：' + escHtml(lastTxt) + '</div>'
+        + '<div class="sub" style="margin-top:2px;word-break:break-all">Token：<code>' + escHtml(w.token) + '</code></div>'
+        + '</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+        + '<button class="btn btn-ghost btn-sm" onclick="toggleWebhook(\'' + w.id + '\')">' + (w.enabled ? '停用' : '启用') + '</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="copyWebhookUrl(\'' + w.id + '\')">复制地址</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="editWebhook(\'' + w.id + '\')">编辑</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="deleteWebhook(\'' + w.id + '\')">删除</button>'
+        + '</div></div>';
+    }).join('');
+  }
+}
+
+function openWebhookEditor(id) {
+  _editingWhId = id || null;
+  var ed = document.getElementById('whEditor');
+  var sel = document.getElementById('whBot');
+  if (sel) sel.innerHTML = _botOptionsHTML();
+  if (ed) {
+    ed.style.display = '';
+    var fill = function (w) {
+      var n = document.getElementById('whName'); if (n) n.value = w ? (w.name || '') : '';
+      var b = document.getElementById('whBot'); if (b) b.value = w ? (w.botId || '') : '';
+      var en = document.getElementById('whEnabled'); if (en) en.checked = w ? !!w.enabled : true;
+      var nt = document.getElementById('whNote'); if (nt) nt.value = w ? (w.note || '') : '';
+      var tok = document.getElementById('whTokenView'); if (tok) tok.textContent = w ? w.token : '（保存后生成）';
+    };
+    if (id) {
+      var arr = loadWebhooks(), w = null;
+      for (var i = 0; i < arr.length; i++) if (arr[i].id === id) { w = arr[i]; break; }
+      fill(w);
+    } else { fill(null); }
+  }
+}
+function closeWebhookEditor() {
+  var ed = document.getElementById('whEditor');
+  if (ed) ed.style.display = 'none';
+  _editingWhId = null;
+}
+function addWebhook() { openWebhookEditor(null); }
+function editWebhook(id) { openWebhookEditor(id); }
+
+function saveWebhook() {
+  var name = (document.getElementById('whName') || {}).value || '';
+  var botId = (document.getElementById('whBot') || {}).value || '';
+  var enabled = !!(document.getElementById('whEnabled') || {}).checked;
+  var note = (document.getElementById('whNote') || {}).value || '';
+  if (!botId) { if (window.toast) toast('请先选择机器人', 'warn'); return; }
+  var arr = loadWebhooks();
+  var w = null;
+  if (_editingWhId) {
+    for (var i = 0; i < arr.length; i++) if (arr[i].id === _editingWhId) { w = arr[i]; break; }
+  }
+  w = coerceWebhook(w ? Object.assign({}, w, { name: name, botId: botId, enabled: enabled, note: note })
+    : { name: name, botId: botId, enabled: enabled, note: note });
+  var exists = false;
+  for (var k = 0; k < arr.length; k++) { if (arr[k].id === w.id) { arr[k] = w; exists = true; break; } }
+  if (!exists) arr.push(w);
+  saveWebhooks(arr);
+  pushWebhookRoutes();
+  closeWebhookEditor();
+  renderWebhookUI();
+}
+
+function toggleWebhook(id) {
+  var arr = loadWebhooks();
+  for (var i = 0; i < arr.length; i++) if (arr[i].id === id) { arr[i].enabled = !arr[i].enabled; break; }
+  saveWebhooks(arr);
+  pushWebhookRoutes();
+  renderWebhookUI();
+}
+
+function deleteWebhook(id) {
+  confirmDialog('确定删除这个 Webhook？', { danger: true, okText: '删除' }).then(function (ok) {
+    if (!ok) return;
+    saveWebhooks(loadWebhooks().filter(function (x) { return x.id !== id; }));
+    pushWebhookRoutes();
+    renderWebhookUI();
+  });
+}
+
+function copyWebhookUrl(id) {
+  var arr = loadWebhooks(), w = null;
+  for (var i = 0; i < arr.length; i++) if (arr[i].id === id) { w = arr[i]; break; }
+  if (!w) return;
+  bcWebhookPort().then(function (port) {
+    if (!port) { if (window.toast) toast('需桌面版运行本地服务后才能生成地址', 'warn'); return; }
+    var url = genWebhookUrl('127.0.0.1', port, w.token);
+    var done = function () { if (window.toast) toast('已复制 webhook 地址', 'ok'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function () { if (window.toast) toast(url, 'ok'); });
+    } else { if (window.toast) toast(url, 'ok'); }
+  });
 }
 
 // 首次进入应用就要把服务商下拉与各字段回填好 —— 以前这些在 openSettings 里做，
