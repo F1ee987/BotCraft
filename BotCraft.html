@@ -756,6 +756,10 @@ body.embed-mode #wsName{font-size:15px}
 .i--fav-on{color:var(--brand-text)}
 .i--fav-on svg{fill:currentColor}
 .i--fav-off{color:var(--sub);opacity:.65}
+/* 收藏切换的短弹反馈（2026-10-12）：图标是唯一的状态指示，必须让用户看见它变了 */
+.i--fav-on,.i--fav-off{transition:transform var(--dur-2) var(--ease)}
+.fav-pop{animation:favPop .4s var(--ease-out)}
+@keyframes favPop{0%{transform:scale(1)}45%{transform:scale(1.5)}100%{transform:scale(1)}}
 .bot-meta span{display:flex;align-items:center;gap:var(--sp-2)}
 .mini-x{margin-left:auto;border:none;background:transparent;color:var(--sub);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:var(--r-xs);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .mini-x:hover{background:var(--fill);color:var(--danger-text)}
@@ -9199,10 +9203,28 @@ window.addEventListener('resize', () => {
   if (pop && pop.style.display !== 'none') placeUserPop();
 });
 function toggleFavorite(id) {
-  if (favorites.has(id)) favorites.delete(id); else favorites.add(id);
+  var on = !favorites.has(id);
+  if (on) favorites.add(id); else favorites.delete(id);
   saveFavorites();
-  if (currentFilter === 'favorite') renderGrid();
+  // 必须无条件重绘：此前只在收藏页 renderGrid()，首页点收藏后 #botGrid 不刷新，
+  // 爱心一直留着旧的 fav-off 空心类 —— Set 和 localStorage 都变了，唯独图标不变，
+  // 用户看到「菜单显示取消收藏、爱心却还是空心」，以为没点上（2026-10-12 实测）。
+  // 收藏页取消化掉卡片本就该由 renderGrid 的 applyFilter 负责，语义不变。
+  renderGrid();
   updateFavPage();
+  // 重绘后给个短弹动画：图标从空心变实心是唯一的反馈，动画让「成功了」确定无疑
+  try {
+    var cards = document.querySelectorAll('#botGrid .bot-card');
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].dataset.id !== id) continue;
+      var h = cards[i].querySelector('.i--fav-on, .i--fav-off');
+      if (h) {
+        h.classList.add('fav-pop');
+        (function (el) { setTimeout(function () { el.classList.remove('fav-pop'); }, 420); })(h);
+      }
+      break;
+    }
+  } catch (e) { }
 }
 
 // ==================== Toast ====================
