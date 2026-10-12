@@ -1,6 +1,6 @@
 # BotCraft
 
-AI 机器人搭建平台 —— **单文件**前端 SPA（`BotCraft.html`，约 1.5 MB，零构建、零依赖），在浏览器内可视化创建、编排与发布机器人工作流；另提供 Windows 桌面版 `BotCraft.exe`（pywebview 打包，免安装、免浏览器）。
+AI 机器人搭建平台 —— **单文件**前端 SPA（`BotCraft.html`，约 1.37 MB，零构建、零依赖），在浏览器内可视化创建、编排与发布机器人工作流；另提供 Windows 桌面版 `BotCraft.exe`（pywebview 打包，免安装、免浏览器）。
 
 ## 下载
 
@@ -56,7 +56,7 @@ python build_exe\pack_exe.py
 python build_exe\sync_exe_copies.py --sync   # 同步 Downloads / 仓库根 / dist 三处副本
 python build_exe\verify_exe_html.py          # 941 条形态断言
 
-# 全链校验（65 项：语法 / CSS / 功能单测 / lint / 断言 / 对比度 / exe 一致性等）
+# 全链校验（73 项：语法 / CSS / 功能单测 / lint / 断言 / 对比度 / exe 一致性等）
 python build_exe\run_all_checks.py
 
 # 发版：上传到 GitHub Releases（token 走 git credential）

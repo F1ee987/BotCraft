@@ -6011,7 +6011,13 @@ function loadKB() {
   }
 }
 let _saveKBTimer = null;
-function _writeKB() { if (!storeSet(userScopedKey('kb'), ALL_KB)) toast('知识库保存失败（存储已满？）', 'err'); }
+function _writeKB() {
+  if (!storeSet(userScopedKey('kb'), ALL_KB)) {
+    toast('知识库保存失败（存储已满？）', 'err');
+    // 落故障记录：光toast 会被划掉，刷新后无从追溯「知识库到底存没存进去」
+    try { if (window.__bcRecordFault) window.__bcRecordFault('知识库写盘失败', 'kb'); } catch (eF) { }
+  }
+}
 // 防抖 + 空闲写入：导入 / 删除知识库时不再同步阻塞界面
 function saveKB() {
   if (_saveKBTimer) return;
@@ -8467,6 +8473,10 @@ function _botsLoadFailed(raw, reason) {
 // 写盘失败（几乎总是 localStorage 配额满）。原来完全静默：用户改了半天配置、
 // 聊了几十条，界面一切正常，一刷新全没了。
 function _botsWriteFailed(e) {
+  // 写盘失败必须留痕：toast 会被用户划掉，20 秒节流也只会提示一次，
+  // 刷新后无从追溯。__bcRecordFault 的注释原本承诺「供后续块复用」却无读取方，
+  // 这里就是第一个真正的复用点（2026-10-12 审查 P1-2）。
+  try { if (window.__bcRecordFault) window.__bcRecordFault('机器人数据写盘失败', 'bots'); } catch (eF) { }
   if (_botsWriteWarned) return;
   _botsWriteWarned = true;
   setTimeout(function () { _botsWriteWarned = false; }, 20000);  // 20 秒内只提示一次
@@ -13242,8 +13252,16 @@ async function sendMsg() {
   _sendLock = false;
   await runReply(b, { text: v, entry: entry });
 }
-// 这个机器人当前是否还显示在屏幕上。生成是后台异步的，用户随时可能切走，
-// 而界面更新类操作（整段重绘 / 快捷栏 / 滚动到底）一旦落到当前窗口就会张冠李戴。
+/* 「这个机器人当前是否还显示屏幕上」的规范判据。生成是后台异步的，用户随时可能切走，
+   而界面更新类操作（整段重绘 / 快捷栏 / 滚动到底）一旦落到当前窗口就会张冠李戴。
+
+   ⚠️ 不要因为「搜不到调用点」就删掉它 —— 它的存在由两条门禁守卫刻意保证：
+     · verify_bugs.py：      「没有 isBotOnScreen()：界面归属判据应当收敛成一个可复用的出处」
+     · verify_exe_html.py：  MUST_HAVE「界面归属判据收敛成可复用出处」
+   2026-10-12 的审查脚本只做 AST 调用计数、没算设计意图守卫，误判成死代码删了一次，
+   dryrun_assert 当场判红。已恢复。
+   另外不要用它去替换 runReply 里的 _onScreen —— 那个还额外校验 b.history === _histRef
+   （防切会话后把回答写进别的会话），更严格，同样由 MUST_HAVE 钉死。两者是设计分工。 */
 function isBotOnScreen(b) { return !!b && !!currentId && b.id === currentId; }
 
 // 生成一次回复并写回 b.history。
@@ -16777,7 +16795,7 @@ if (kbImportEl) kbImportEl.addEventListener('change', e => { Array.from(e.target
 let _pluginFilter = '全部';
 function renderPluginGrid() {
   loadInstalledPlugins();
-  loadExtPlugins();
+  extInitPage();   // 插件页初始化：加载第三方插件 + 回填注册表地址（原先漏接，见下）
   const grid = document.getElementById('pluginGrid'); if (!grid) return;
   const b = getBot(currentId);
   const extAll = Object.keys(extPlugins).map(k => extPlugins[k]);
@@ -17336,10 +17354,17 @@ function _extDecodeBytes(buf) {
   try { return new TextDecoder('gbk').decode(u8); } catch (e) { return s; }
 }
 
+/* 插件页初始化。2026-10-12 审查发现这个函数**从来没被调用过** ——
+   loadExtPlugins() 的职责被 renderPluginGrid() 代为完成，插件列表看着正常，
+   但「回填上次保存的注册表地址」没有任何替代实现：用户在插件页填过地址并成功
+   拉取后，切走再回来输入框是空的，得重新手打一遍 URL。
+   现已由 renderPluginGrid() 调用。
+   只在空框时回填 —— 用户正在输入时若被重渲染覆盖，打了一半的 URL 会被冲掉
+   （renderPluginGrid 会被安装 / 卸载插件等操作反复触发）。 */
 function extInitPage() {
   loadExtPlugins();
   const el = document.getElementById('extSrcInput');
-  if (el) el.value = getExtSrc();
+  if (el && !el.value) el.value = getExtSrc();
 }
 
 // 第三方插件详情：列出工具，可手动试跑一次（不经过模型，先看插件本身对不对）
