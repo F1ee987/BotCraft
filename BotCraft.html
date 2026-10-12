@@ -2598,6 +2598,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <button type="button" class="set-nav-item" data-setsec="adv" role="tab" aria-selected="false" aria-controls="sec-adv-body" onclick="showSettingsPanel('adv')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span>高级参数</button>
       <button type="button" class="set-nav-item" data-setsec="search" role="tab" aria-selected="false" aria-controls="sec-search-body" onclick="showSettingsPanel('search')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg></span>联网检索</button>
       <button type="button" class="set-nav-item" data-setsec="stt" role="tab" aria-selected="false" aria-controls="sec-stt-body" onclick="showSettingsPanel('stt')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span>语音识别</button>
+      <button type="button" class="set-nav-item" data-setsec="emb" role="tab" aria-selected="false" aria-controls="sec-emb-body" onclick="showSettingsPanel('emb')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span>语义检索</button>
       <button type="button" class="set-nav-item" data-setsec="image" role="tab" aria-selected="false" aria-controls="sec-image-body" onclick="showSettingsPanel('image')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span>文生图</button>
     </nav>
     <div class="set-panels">
@@ -2722,6 +2723,32 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <input id="set-stt-key" type="password" placeholder="留空则录音只作为音频附件发送，不转文字" autocomplete="off">
       </div>
       <div class="hint" style="margin-top:6px;font-size:11.5px;color:var(--sub)">默认硅基流动（open.siliconflow.cn 注册后有免费额度）。识别结果自动填进输入框，可修改后再发送。</div>
+  </div>
+</div>
+
+<!-- 语义检索（2026-10-12 P0-2）。默认三项全空 = 关闭：知识库检索走纯 TF-IDF，
+     行为与加这一路之前完全一致。填齐接口 + 模型即启用混合检索。 -->
+<div class="ssec" id="sec-emb" hidden>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span> 语义检索（知识库混合检索）</span><span class="ssec-badge" id="badge-emb" style="display:none">已配置</span>
+  </div>
+  <div class="ssec-body" id="sec-emb-body">
+      <div class="field">
+        <label>Embedding 接口</label>
+        <input id="set-emb-endpoint" placeholder="https://api.openai.com/v1（任意 OpenAI 兼容 /embeddings 端点）">
+      </div>
+      <div class="field">
+        <label>Embedding 模型</label>
+        <input id="set-emb-model" placeholder="text-embedding-3-small">
+      </div>
+      <div class="field">
+        <label>Embedding API Key</label>
+        <input id="set-emb-key" type="password" placeholder="留空则无法调用，语义检索保持关闭" autocomplete="off">
+      </div>
+      <div class="hint" style="margin-top:6px;font-size:11.5px;color:var(--sub);line-height:1.7">
+        填齐接口与模型即启用：知识库检索会同时走关键词（TF-IDF）与语义两路，分数归一化后加权融合。<br>
+        解决的问题——纯 TF-IDF 只认词项重合，问「怎么退货」检索不到写「七天无理由退换货流程」的文档（词不重叠）。<br>
+        三项全空则完全关闭，走纯 TF-IDF，与之前的行为没有任何差别。向量只在内存缓存、不落盘（体积太大，会撑爆 localStorage）。
+      </div>
   </div>
 </div>
 
@@ -3457,6 +3484,10 @@ function escAttrJs(s) {
     // 无需宿主转发）。Key 留空则录音只作为音频附件发送，不转写。
     sttEndpoint: 'https://api.siliconflow.cn/v1/audio/transcriptions',
     sttModel: 'FunAudioLLM/SenseVoiceSmall', sttAPIKey: '',
+    // 语义检索（知识库混合检索的第二路）。默认全空 = 关闭，此时知识库检索走纯
+    // TF-IDF，行为与本项目加这一路之前完全一致。填齐接口 + 模型即启用，
+    // 与 STT「留空则不转写」同一套路，不引入新的开关模式。
+    embBaseURL: '', embModel: 'text-embedding-3-small', embAPIKey: '',
   };
   let cfg = loadConfig();
 
@@ -4092,6 +4123,9 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
       // 走一次检索并登记命中片段，供回答下方标注引用来源。
       // 注入内容仍是全量（保证回答质量不因改检索而退化），检索只用于「告诉用户依据在哪」。
       // 预览/压缩预演不算真实生成，跳过以免污染引用记录。
+      // 这里刻意用同步版 searchKBHits 而不是混合检索：本函数是同步的，且这一路
+      // 只影响引用标注的呈现，不影响喂给模型的内容。真正喂模型的两个调用点
+      // （工作流检索节点）已迁到 searchKBHitsHybrid。
       if (!(opts && opts.preview) && typeof window.searchKBHits === 'function') {
         try {
           var _lastMe = (bot.history || []).slice().reverse().find(function (m) { return m.role === 'me' && m.text; });
@@ -18368,19 +18402,33 @@ try { showAnaTab(storeGetRaw('botcraft.anaTab', '') || 'usage'); } catch (e) { }
 // 首次进入应用就要把服务商下拉与各字段回填好 —— 以前这些在 openSettings 里做，
 // 弹窗时代天然每次打开都执行；合并成常驻页后没人调它，服务商下拉就是空的，
 // 要点一下顶栏模型标签才刷新（2026-09-23 用户实测）。
-// 启动调用必须推迟到本轮解析结束：setupSettingsUI 会跨块调 block3 的 loadSearchSettings，
-// 同步调用时 block3 还没执行（函数未定义）→ ReferenceError 被这里的 catch 静默吞掉，
-// 模型下拉与「即将使用」整段不回填（2026-10-11 用户实测）。setTimeout(0) 时各块已全部跑完。
-// 回填失败也不再静默：记进 botcraft.jsErrors 供诊断取证（与独立块的 bindCopy 记录同格式）。
-try {
-  setTimeout(function () {
+/* 启动时把设置面板回填好。setupSettingsUI 会跨块调 block3 IIFE 里的 loadSearchSettings，
+   同步调用时 block3 还没解析 → ReferenceError。
+   曾经用 setTimeout(0) 推迟，注释写「setTimeout(0) 时各块已全部跑完」—— **这个假设是错的**：
+   2026-10-12 headless 实测，回调触发时 document.readyState 仍是 'loading'，block3/block4
+   尚未执行，loadSearchSettings 取不到。setupSettingsUI 又在 fillModelOptions **之前**调它，
+   于是整段中断：模型下拉永不填充、set-model-custom 不回填、renderSettingsPreview 不跑。
+   用户进「分析 → 设置」Tab 直接点保存只会得到「请选择或填写模型」，得去点顶栏模型标签
+   触发 openSettings() 才能恢复。该 bug 在 HEAD（v3.8 之后）同样复现，属既有问题。
+   现在改成**轮询等待依赖就绪**，不再依赖「某个延迟一定够长」这种假设。 */
+function _recordBootErr(m) {
+  try { localStorage.setItem('botcraft.jsErrors.v1',
+    JSON.stringify([{ m: m, src: 'block2', t: Date.now() }])); } catch (e3) { }
+}
+function _bootSettingsUI(tries) {
+  if (typeof loadSearchSettings === 'function') {
     try { setupSettingsUI(); }
-    catch (e2) {
-      try { localStorage.setItem('botcraft.jsErrors.v1',
-        JSON.stringify([{ m: 'setupSettingsUI: ' + ((e2 && e2.message) || e2), src: 'block2', t: Date.now() }])); } catch (e3) { }
-    }
-  }, 0);
-} catch (e) { }
+    catch (e2) { _recordBootErr('setupSettingsUI: ' + ((e2 && e2.message) || e2)); }
+    return;
+  }
+  if (tries <= 0) {
+    // 不再静默：明确记下「等到超时依赖仍未就绪」，与「调用炸了」区分开
+    _recordBootErr('setupSettingsUI: 等待 loadSearchSettings 就绪超时（block3 未执行？）');
+    return;
+  }
+  setTimeout(function () { _bootSettingsUI(tries - 1); }, 30);   // 40 × 30ms ≈ 1.2s 上限
+}
+_bootSettingsUI(40);
 function setupSettingsUI() {
   // 只在首次打开时构建一次服务商/模型下拉框，之后直接复用（避免反复 innerHTML 重建导致卡顿）
   if (!_settingsInited) {
@@ -18412,6 +18460,9 @@ function setupSettingsUI() {
   document.getElementById('set-stt-endpoint').value = cfg.sttEndpoint || '';
   document.getElementById('set-stt-model').value = cfg.sttModel || '';
   document.getElementById('set-stt-key').value = cfg.sttAPIKey || '';
+  document.getElementById('set-emb-endpoint').value = cfg.embBaseURL || '';
+  document.getElementById('set-emb-model').value = cfg.embModel || '';
+  document.getElementById('set-emb-key').value = cfg.embAPIKey || '';
   loadSearchSettings(cfg);
   // 刷新「已配置」徽标（平铺布局：无需恢复折叠状态）
   if (window.refreshSettingsSecBadges) refreshSettingsSecBadges(cfg);
@@ -18543,6 +18594,9 @@ function saveSettings() {
   const sttEndpoint = ((document.getElementById('set-stt-endpoint') || {}).value || '').trim();
   const sttModel = ((document.getElementById('set-stt-model') || {}).value || '').trim();
   const sttAPIKey = ((document.getElementById('set-stt-key') || {}).value || '').trim();
+  const embBaseURL = ((document.getElementById('set-emb-endpoint') || {}).value || '').trim();
+  const embModel = ((document.getElementById('set-emb-model') || {}).value || '').trim();
+  const embAPIKey = ((document.getElementById('set-emb-key') || {}).value || '').trim();
   // 选了「自定义接口」却没有地址 = 检索必然静默失败，拦在保存前并说清怎么填
   if (searchProvider === 'custom' && !/^https?:\/\//i.test(searchEndpoint)) {
     const f = document.getElementById('field-search-endpoint');
@@ -18565,7 +18619,7 @@ function saveSettings() {
     toast('未填 API Key：将以无鉴权方式调用（本地模型 / 免 Key 接口适用）。若该接口要求鉴权，会返回 401。', 'warn', 6000);
   }
   if (!model) { toast('请选择或填写模型', 'err'); return; }
-  BotCraftAI.updateConfig({ provider, apiKey, baseURL, noAuth, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std', sttEndpoint, sttModel, sttAPIKey });
+  BotCraftAI.updateConfig({ provider, apiKey, baseURL, noAuth, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std', sttEndpoint, sttModel, sttAPIKey, embBaseURL, embModel, embAPIKey });
   closeSettings();
   // 免鉴权（显式勾选 / 免 Key 端点）且地址填了，就是真的能调，别再报「本地降级回复」
   const head = (apiKey || (noAuth && baseURL))
@@ -18933,7 +18987,7 @@ window.__debug = {
   // 不会知道它还牵着人工审批前的 AI 预审。
   var APPROVAL_PREREVIEW_SYSTEM = ROLE_SYSTEM.review;
 
-/* ===== MODULE: core/kb exports:searchKBHits,kbClearHits,kbPushHits,kbSnapshotHits,kbChunkOf,kbInvalidate ===== */
+/* ===== MODULE: core/kb exports:searchKBHits,searchKBHitsHybrid,kbRegisterEmbedder,kbEmbedAvailable,_kbFuse,kbClearHits,kbPushHits,kbSnapshotHits,kbChunkOf,kbInvalidate ===== */
   // ---------- TF-IDF 知识库检索 ----------
   function _tokenize(text) {
     return (text || '').toLowerCase().match(/[一-龥]|[a-z0-9]+/g) || [];
@@ -18990,6 +19044,10 @@ function _kbCachePut(key, idx) {
   while (_kbCache.size > KB_CACHE_MAX) _kbCache.delete(_kbCache.keys().next().value);  // 首个即最旧
 }
 function _kbIndexFor(bot) {
+    // 空值守卫：bot 为 null/undefined 时旧写法直接抛 TypeError。
+    // searchKBHitsHybrid 比同步版多一层 await，抛错会以 unhandledrejection 的形式
+    // 消失得更隐蔽（不弹窗、不报错，界面像卡住）。对合法输入零行为变化。
+    if (!bot) return { chunks: [], metas: [], tfs: [], idf: {}, n: 0 };
     var key = (bot.id || 'x') + '|' + (bot.knowledges || []).map(function (id) {
       var r = (typeof kbById === 'function') ? kbById(id) : null; return r ? (r.updatedAt || r.name) : '';
     }).join(',');
@@ -19063,7 +19121,156 @@ function _kbIndexFor(bot) {
     _kbCache = new Map();    // 整体换新实例，条目与顺序一并作废
     return docId;
   }
+  // ---------- 语义检索：混合检索的第二路（2026-10-12 P0-2） ----------
+  // 纯 TF-IDF 只认词项重合：问「怎么退货」检索不到写「七天无理由退换货流程」的文档，
+  // 因为两者没有共同词项。这一路用 embedding 抓语义相近的块，与 TF-IDF 融合。
+  //
+  // 三条硬约束，改动前先读：
+  //   1) 可缺失。没配 embedding 就静默退回纯 TF-IDF，结果与加这一路之前完全一致 ——
+  //      混合检索是增强，不是前提。任何人没配 Key 都不该看到行为变化。
+  //   2) 不落盘。向量体积大（每块几百维），全量进 localStorage 会迅速撑爆
+  //      （README 已就 >4MB 告警）。只在内存 LRU 里缓存，刷新即重建。
+  //   3) 可扩展。默认只有 API 提供者；桌面版本地量化模型将来打包后，往
+  //      KB_EMBED_PROVIDERS 注册一个实现即可，检索内核一行不用改。
+  var KB_EMBED_PROVIDERS = {};
+  var _kbEmbCache = new Map();          // chunk 文本 → 向量（插入序即新旧序）
+  var KB_EMB_CACHE_MAX = 600;           // 条目上限：与 _kbCache 同一套 LRU 写法
+  var KB_EMBED_BATCH = 32;              // 单请求最多送多少条，避免请求体过大被端点拒
+  var KB_EMBED_MAX_CHUNKS = 500;        // 块数超过此值不启用向量路（首次嵌入会卡太久）
+  function kbRegisterEmbedder(name, impl) {
+    // impl 需提供 async embed(texts) -> number[][]，条数与入参一一对应
+    KB_EMBED_PROVIDERS[name] = impl;
+    return name;
+  }
+  function kbEmbedCfg() {
+    try {
+      var c = (window.BotCraftAI && window.BotCraftAI.getConfig) ? window.BotCraftAI.getConfig() : null;
+      if (!c) return null;
+      var base = String(c.embBaseURL || '').trim();
+      var model = String(c.embModel || '').trim();
+      // 隐式启用：接口与模型都填了才算配好。与 STT「留空则不转写」同构，
+      // 不引入新的开关模式，也少一处会与主配置打架的状态。
+      if (!base || !model) return null;
+      return { base: base.replace(/\/+$/, ''), model: model, key: String(c.embAPIKey || '').trim() };
+    } catch (e) { return null; }
+  }
+  /* 是否真的能走向量路。注意不能写成「注册表非空即可用」—— 默认就注册了一个
+     'api' 提供者，那样本函数永远返回 true，用户什么都没配也会进向量路、
+     白跑一次注定失败的请求才降级（test_kb.js 首轮跑出来的真 bug）。
+     提供者可声明 available()；没有声明的才默认视为可用（本地提供者通常如此）。 */
+  function kbEmbedAvailable(bot) {
+    if (kbEmbedCfg()) return true;
+    var names = Object.keys(KB_EMBED_PROVIDERS);
+    for (var i = 0; i < names.length; i++) {
+      var p = KB_EMBED_PROVIDERS[names[i]];
+      if (p && typeof p.available === 'function') { if (p.available()) return true; }
+      else return true;
+    }
+    return false;
+  }
+  // 默认提供者：用户自配的 OpenAI 兼容 /embeddings 端点（浏览器与桌面版都能用）。
+  kbRegisterEmbedder('api', {
+    // 没配接口/模型就是不可用 —— 让 kbEmbedAvailable 能如实回答
+    available: function () { return !!kbEmbedCfg(); },
+    embed: async function (texts) {
+      var c = kbEmbedCfg();
+      if (!c) throw new Error('未配置 embedding 接口');
+      var headers = { 'Content-Type': 'application/json' };
+      if (c.key) headers['Authorization'] = 'Bearer ' + c.key;
+      var r = await fetch(c.base + '/embeddings', {
+        method: 'POST', headers: headers,
+        body: JSON.stringify({ model: c.model, input: texts }),
+      });
+      if (!r.ok) throw new Error('embedding HTTP ' + r.status);
+      var j = await r.json();
+      var arr = (j && j.data) || [];
+      if (arr.length !== texts.length) throw new Error('embedding 返回条数不符');
+      return arr.map(function (x) { return (x && x.embedding) || []; });
+    },
+  });
+  // 取向量（带 LRU + 分批）。任一批失败整体抛错，由调用方降级到纯 TF-IDF。
+  async function _kbEmbed(texts) {
+    var miss = texts.filter(function (t) { return !_kbEmbCache.has(t); });
+    if (!miss.length) return texts.map(function (t) { return _kbEmbCache.get(t) || []; });
+    var names = Object.keys(KB_EMBED_PROVIDERS);
+    var provider = null, lastErr = null;
+    for (var i = 0; i < names.length && !provider; i++) {
+      try { await KB_EMBED_PROVIDERS[names[i]].embed(miss.slice(0, 1)); provider = KB_EMBED_PROVIDERS[names[i]]; }
+      catch (e) { lastErr = e; }
+    }
+    if (!provider) throw lastErr || new Error('无可用 embedding 提供者');
+    for (var s = 0; s < miss.length; s += KB_EMBED_BATCH) {
+      var part = miss.slice(s, s + KB_EMBED_BATCH);
+      var got = await provider.embed(part);
+      part.forEach(function (t, k) { _kbEmbCache.set(t, got[k] || []); });
+    }
+    while (_kbEmbCache.size > KB_EMB_CACHE_MAX) _kbEmbCache.delete(_kbEmbCache.keys().next().value);
+    return texts.map(function (t) { return _kbEmbCache.get(t) || []; });
+  }
+  function _vecCos(a, b) {
+    if (!a.length || !b.length || a.length !== b.length) return 0;
+    var dot = 0;
+    for (var i = 0; i < a.length; i++) dot += a[i] * b[i];
+    var na = 0, nb = 0;
+    for (var j = 0; j < a.length; j++) { na += a[j] * a[j]; nb += b[j] * b[j]; }
+    var sa = Math.sqrt(na), sb = Math.sqrt(nb);
+    return (sa && sb) ? dot / (sa * sb) : 0;
+  }
+  // 两路分数各自按最大值归一化到 [0,1] 后加权融合。
+  // 不归一化直接加是错的：两路的 cosine 量纲不同（TF-IDF 稀疏高维、向量稠密低维），
+  // 数值大那一路会直接吞掉另一路，融合名不副实。
+  function _kbFuse(tfidf, vec, wVec) {
+    var mt = 0, mv = 0, i;
+    for (i = 0; i < tfidf.length; i++) { if (tfidf[i] > mt) mt = tfidf[i]; if (vec[i] > mv) mv = vec[i]; }
+    var out = [];
+    for (i = 0; i < tfidf.length; i++) {
+      out.push((mt ? tfidf[i] / mt : 0) * (1 - wVec) + (mv ? vec[i] / mv : 0) * wVec);
+    }
+    return out;
+  }
+  /* 混合检索（async）。与 searchKBHits 同签名同返回形状，内部多走一路向量。
+     为什么要新开一个而不是把 searchKBHits 改成 async：
+     buildCtxSections 是同步函数，那里的检索只用于「参考来源」展示（注入的其实是
+     全文），改成 async 会连带把核心链路拖成异步，风险与收益不匹配。
+     真正喂模型的两个调用点（工作流检索节点）已迁到本函数。 */
+  async function searchKBHitsHybrid(bot, query, k, opt) {
+    k = k || 5;
+    var idx = _kbIndexFor(bot);
+    if (!idx.n) return [];
+    // 第一路：TF-IDF。必须对**全部块**打分，不能复用 searchKBHits 的 score>0 过滤 ——
+    // 那个过滤会把「语义相关但词项不重合」的块提前淘汰，向量路就白做了。
+    var qt = _tokenize(query), qtf = {}, total = qt.length || 1;
+    qt.forEach(function (t) { qtf[t] = (qtf[t] || 0) + 1; });
+    var qvTf = {};
+    Object.keys(qtf).forEach(function (t) { qvTf[t] = qtf[t] / total * (idx.idf[t] || 0); });
+    var tfidf = idx.chunks.map(function (ch, i) { return _cosine(qvTf, idx.tfs[i]); });
+    // 没配 embedding，或块数太多（首次嵌入会卡太久）：走与 searchKBHits 相同的路径
+    if (!kbEmbedAvailable(bot) || idx.n > KB_EMBED_MAX_CHUNKS) return searchKBHits(bot, query, k);
+    try {
+      var vecs = await _kbEmbed(idx.chunks.concat([query]));
+      var qv = vecs[vecs.length - 1];
+      var vs = idx.chunks.map(function (ch, i) { return _vecCos(qv, vecs[i]); });
+      var wVec = (opt && typeof opt.wVec === 'number') ? opt.wVec : 0.5;
+      var fused = _kbFuse(tfidf, vs, wVec);
+      var terms = Object.keys(qtf);
+      var out = idx.chunks.map(function (ch, i) {
+        var m = (idx.metas && idx.metas[i]) || {};
+        return { text: ch, score: fused[i], docId: m.d || '', docName: m.n || '',
+                 chunk: (m.i || 0) + 1, terms: terms, _tfidf: tfidf[i], _vec: vs[i] };
+      });
+      out.sort(function (a, b) { return b.score - a.score; });
+      return out.filter(function (h) { return h.score > 0; }).slice(0, k);
+    } catch (e) {
+      // 降级：向量路挂了不该让检索整体失败
+      try { if (window.__bcRecordFault) window.__bcRecordFault('语义检索失败，已降级 TF-IDF', 'kb'); } catch (eF) { }
+      return searchKBHits(bot, query, k);
+    }
+  }
   window.searchKBHits = searchKBHits;
+  window.searchKBHitsHybrid = searchKBHitsHybrid;
+  window.kbRegisterEmbedder = kbRegisterEmbedder;
+  window.kbEmbedAvailable = kbEmbedAvailable;
+  window.kbFuseScores = _kbFuse;   // 纯函数，单独导出便于单元测试融合归一化
   window.kbClearHits = kbClearHits;
   window.kbPushHits = kbPushHits;
   window.kbSnapshotHits = kbSnapshotHits;
@@ -19331,7 +19538,14 @@ function _kbIndexFor(bot) {
   }
   // 左右布局：左侧分类导航切换右侧面板（切走的面板 hidden，切换带淡入动画）
   function showSettingsPanel(id) {
-    var IDS = ['core', 'adv', 'search', 'stt', 'image'];
+    /* 分区清单从导航项派生，不写死数组。
+       曾经写死成 ['core','adv','search','stt','image']，2026-10-12 加「语义检索」
+       分区时忘了补 'emb'，结果导航项看得见、点得动，面板永远不展开
+       （hidden 没人摘）。导航项与分区一一对应，让清单自己长出来才不会再漏。 */
+    var IDS = Array.prototype.map.call(
+      document.querySelectorAll('.set-nav-item[data-setsec]'),
+      function (el) { return el.getAttribute('data-setsec'); }
+    );
     for (var i = 0; i < IDS.length; i++) {
       var sec = document.getElementById('sec-' + IDS[i]);
       if (sec) sec.hidden = (IDS[i] !== id);
@@ -19864,7 +20078,7 @@ function _kbIndexFor(bot) {
     var q = F ? F.resolve(node.toolQuery || '{{input.msg}}', vars) : '';
     if (!q) q = F ? (F.varGet(vars, 'input.msg') || '') : '';
     if (tool === 'kb') {
-      var hits = searchKBHits(bot, q, 5);
+      var hits = await searchKBHitsHybrid(bot, q, 5);   // P0-2：混合检索（未配 embedding 时内部自动降级为纯 TF-IDF）
       if (!hits || !hits.length) return { out: '（知识库没有检索到相关内容）', value: [] };
       var txt = hits.map(function (h, i) {
         return '（片段' + (i + 1) + '·来自《' + (h.docName || '知识库') + '》第' + (h.chunk || 0) + '段）\n' + h.text;
@@ -20209,7 +20423,7 @@ function _kbIndexFor(bot) {
         // 这里按 query 缓存本次工作流内的检索结果，只活到本次调用结束。
         var _kbq = String(queryForKB || ''), hits = null;
         if (_wfKbHits.has(_kbq)) hits = _wfKbHits.get(_kbq);
-        else { hits = searchKBHits(bot, queryForKB, 5); _wfKbHits.set(_kbq, hits); }
+        else { hits = await searchKBHitsHybrid(bot, queryForKB, 5); _wfKbHits.set(_kbq, hits); }
         if (hits.length) {
           kbCtx = '\n【相关知识库（Top-5 相关片段）】\n' + hits.map(function (h, idx) {
             return '（片段' + (idx + 1) + '·来自《' + (h.docName || '知识库') + '》第' + (h.chunk || 0) + '段）\n' + h.text;
