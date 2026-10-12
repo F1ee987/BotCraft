@@ -753,11 +753,18 @@ body.embed-mode #wsName{font-size:15px}
 .bot-meta{display:flex;gap:var(--sp-6);margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub)}
 /* 卡片 meta / 收藏角标：内嵌 SVG（2026-10-11）——emoji 在部分渲染环境缺字形显示为横线 */
 .bot-meta .i{width:13px;height:13px;margin-right:.3em;color:var(--sub)}
-.i--fav-on{color:var(--brand-text)}
-.i--fav-on svg{fill:currentColor}
-.i--fav-off{color:var(--sub);opacity:.65}
+/* 收藏角标：必须写成 `.i.i--fav-on` 而不是 `.i--fav-on`。
+   早先是 `.i--fav-on{color:var(--brand-text)}`（特异性 0,1,0），与后写的
+   `.i{color:inherit}`（L1947 线性图标体系，同特异性）撞车 —— 平级时后写赢，
+   品牌色从未生效；`.i--fav-on svg{fill:currentColor}` 同样被 `.i svg{fill:none}`
+   后写盖掉，实心也从未生效。2026-10-12 实测：两个状态计算样式完全一致，
+   只有 opacity 从 .65 变 1，用户看到「爱心根本不变色」。
+   提特异性到 0,2,0 / 0,2,1 稳定赢过全局规则，且不依赖规则书写顺序。 */
+.i.i--fav-on{color:var(--brand-text)}
+.i.i--fav-on svg{fill:currentColor}
+.i.i--fav-off{color:var(--sub);opacity:.65}
 /* 收藏切换的短弹反馈（2026-10-12）：图标是唯一的状态指示，必须让用户看见它变了 */
-.i--fav-on,.i--fav-off{transition:transform var(--dur-2) var(--ease)}
+.i.i--fav-on,.i.i--fav-off{transition:transform var(--dur-2) var(--ease)}
 .fav-pop{animation:favPop .4s var(--ease-out)}
 @keyframes favPop{0%{transform:scale(1)}45%{transform:scale(1.5)}100%{transform:scale(1)}}
 .bot-meta span{display:flex;align-items:center;gap:var(--sp-2)}
