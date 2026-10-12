@@ -7008,6 +7008,8 @@ function flowCanLink(b, from, to) {
 }
 
 // Kahn 拓扑排序。返回 { order, cycle }：cycle 非空表示这几张卡在环里、跑不起来。
+/* ===== MODULE: core/flowlayers exports:flowPlan,flowLayers ===== */
+// Kahn 拓扑排序。返回 { order, cycle }：cycle 非空表示这几张卡在环里、跑不起来。
 function flowPlan(b) {
   var ns = (b && b.nodes) || [];
   var ids = {}, indeg = {}, adj = {};
@@ -7035,6 +7037,80 @@ function flowPlan(b) {
     ns.forEach(function (n) { if (n && n.id && order.indexOf(n.id) < 0) cycle.push(n.id); });
   }
   return { order: order, cycle: cycle };
+}
+
+/* 把拓扑序拆成执行层（2026-10-12 P0-1 并行执行）。
+   同层节点互为反链 —— 彼此无数据依赖，可以并发跑；跨层才有依赖，
+   合流节点（多入边）所在层必然晚于它全部上游所在的层，于是「等所有上游
+   到齐再继续」由分层天然保证，不需要额外的同步原语。
+   层内顺序沿用拓扑序中的先后，保证 emit 顺序与 prev 取值确定、可复现。
+
+   为什么不用 flowUpstream 取前驱：它返回的是**传递闭包**（整棵上游子树），
+   分层要的是**直接**前驱。用传递闭包会把间接上游也当成依赖，层数虚高，
+   并行度直接归零 —— 那这个函数就白做了。
+
+   有环时与 flowPlan 同一套契约：layers 为空 + cycle 非空，调用方据此报错。 */
+function flowLayers(b) {
+  var plan = flowPlan(b);
+  var order = (plan && plan.order) || [];
+  if (!order.length || (plan && plan.cycle)) {
+    return { layers: [], cycle: (plan && plan.cycle) || null, order: order };
+  }
+  var pred = {};   // 直接前驱（不做传递闭包，理由见上）
+  ((b && b.edges) || []).forEach(function (e) {
+    if (!e || !e.from || !e.to || e.from === e.to) return;
+    (pred[e.to] = pred[e.to] || []).push(e.from);
+  });
+  var lvl = {};
+  // order 是拓扑序：任何边 from→to 里 from 都排在 to 之前，
+  // 所以顺序扫描一遍即可保证算 lvl[from] 时它已经就绪。
+  order.forEach(function (id) {
+    var m = 0, ps = pred[id] || [];
+    for (var i = 0; i < ps.length; i++) {
+      var p = ps[i], lp = lvl[p];
+      if (lp != null && lp + 1 > m) m = lp + 1;
+    }
+    lvl[id] = m;
+  });
+  var layers = [];
+  order.forEach(function (id) {
+    var L = lvl[id] || 0;
+    if (!layers[L]) layers[L] = [];
+    layers[L].push(id);
+  });
+  for (var k = 0; k < layers.length; k++) if (!layers[k]) layers[k] = [];
+  return { layers: layers, cycle: null, order: order };
+}
+/* ===== END MODULE: core/flowlayers ===== */
+/* 每个节点的 prev 来源映射（2026-10-12 P0-1 并行执行）。
+   返回 id -> 直接前驱 id（无前驱为 null）。为何要它：
+   串行版用单个全局 prev 穿线，分支节点会错拿到「最后执行的兄弟节点」的产出；
+   并行后每个节点必须精确拿到自己**直接前驱**的产出。规则：
+     · 无直接前驱（起点 / 孤立节点）→ null（运行时退化为 userMsg，与 start 节点同级）；
+     · 恰好一个前驱 → 它；
+     · 多个前驱（合流）→ 拓扑序中最后一个前驱（与串行「最后执行者即 prev」一致）。
+   只算**直接**前驱：用传递闭包会多算间接上游，分层时才不会虚高、并行度才保得住。 */
+function flowPrevMap(bot) {
+  var plan = flowPlan(bot);
+  var order = (plan && plan.order) || [];
+  var pos = {};
+  order.forEach(function (id, k) { pos[id] = k; });
+  var pred = {};
+  ((bot && bot.edges) || []).forEach(function (e) {
+    if (!e || !e.from || !e.to || e.from === e.to) return;
+    (pred[e.to] = pred[e.to] || []).push(e.from);
+  });
+  var m = {};
+  order.forEach(function (id) {
+    var ps = pred[id] || [];
+    if (!ps.length) { m[id] = null; return; }
+    if (ps.length === 1) { m[id] = ps[0]; return; }
+    var last = ps[0];
+    for (var i = 1; i < ps.length; i++) if (pos[ps[i]] != null && pos[ps[i]] > pos[last]) last = ps[i];
+    m[id] = last;
+  });
+  ((bot && bot.nodes) || []).forEach(function (n) { if (n && n.id && !(n.id in m)) m[n.id] = null; });
+  return m;
 }
 
 // ---------- 变量 ----------
@@ -7743,6 +7819,8 @@ window.BotCraftFlow = {
   idxOf: flowIdxOf,
   edges: flowNormalizeEdges,
   plan: flowPlan,
+  layers: flowLayers,
+  prevMap: flowPrevMap,
   upstream: flowUpstream,
   downstream: flowDownstream,
   canLink: flowCanLink,
@@ -18737,7 +18815,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.8';
+var APP_VERSION = '3.9';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -20311,6 +20389,7 @@ function _kbIndexFor(bot) {
     var _execCount = 0;
     var _lastExecNode = null;
     var prev = '', finalText = userMsg;
+    var _pi = 0;  // runHumanNode 的驳回重启信号（置 -1 时并行调度递归重跑整条流程）
     var _lastNonEmpty = '', _lastNonEmptyNode = '', _lastNodeName = ''; // 空产出兜底用
     var _imgInjected = false; // 多模态：图片仅注入到第一个处理节点，避免重复
 
@@ -20346,8 +20425,8 @@ function _kbIndexFor(bot) {
 
     // ---- 非 LLM 节点（条件 / 代码 / 工具 / HTTP / 子工作流 / 循环 / 结束）----
     // 交给各自执行器，产出写回变量池；返回 'stop' 表示该节点配置了「中断」，外层需 break。
-    async function runSpecialNode(node, i, _kind) {
-      var _sr = await flowRunSpecialNode(bot, node, _kind, _vars, prev, userMsg, _depth || 0);
+    async function runSpecialNode(node, i, _kind, prevArg) {
+      var _sr = await flowRunSpecialNode(bot, node, _kind, _vars, prevArg, userMsg, _depth || 0);
       if (_sr.note) console.log('[flowV2] ' + (node.h || _kind) + '：' + _sr.note);
       logs.push({
         i: i + 1, role: _kind, name: node.h || ('步骤' + (i + 1)), ms: _sr.ms || 0,
@@ -20356,7 +20435,7 @@ function _kbIndexFor(bot) {
       if (node.id) _vars[node.id] = { text: _sr.out, value: _sr.value };
       flushLogs();
       emit({ total: _order.length, done: _pi + 1, lastDone: (node.h || ('步骤' + i)), role: _kind, phase: 'done', text: _sr.out });
-      if (_sr.out) { prev = _sr.out; finalText = _sr.out; _lastExecNode = node; }
+      if (_sr.out) { _lastExecNode = node; }
       if (_F && node.id && _sr.branchPort !== undefined && !_sr.failed) {
         // 只有命中的那一路的下游继续跑，其余分支的边标 dead
         _F.killPorts(bot, node.id, _sr.branchPort, _edgeState);
@@ -20370,23 +20449,24 @@ function _kbIndexFor(bot) {
         flushLogs();
         return 'stop';
       }
-      return;
+      return _sr.out;
     }
 
     // ---- LLM 节点：按角色裁剪上下文、注入知识库/联网/天气/记忆后流式调用 ----
-    async function runLlmNode(node, i, role) {
+    async function runLlmNode(node, i, role, prevArg) {
+      var t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       // 按节点角色裁剪上下文：中间节点只拿它该看的信息，避免所有节点都生成最终回复
       var ctx = '';
       if (role === 'intent') {
         ctx = '【用户原始需求】\n' + userMsg;
       } else if (role === 'retrieve') {
-        ctx = '【用户原始需求】\n' + userMsg + '\n\n【上一步意图识别结果】\n' + (prev || '（未提供）');
+        ctx = '【用户原始需求】\n' + userMsg + '\n\n【上一步意图识别结果】\n' + (prevArg || '（未提供）');
       } else if (role === 'clarify' || role === 'outline') {
-        ctx = '【用户原始需求】\n' + userMsg + (prev && prev !== userMsg ? ('\n\n【上一步信息】\n' + prev) : '');
+        ctx = '【用户原始需求】\n' + userMsg + (prevArg && prevArg !== userMsg ? ('\n\n【上一步信息】\n' + prevArg) : '');
       } else {
         ctx = '【用户原始需求】\n' + userMsg;
         var _pn = _lastExecNode || nodes[i - 1];
-        if (prev && prev !== userMsg) ctx += '\n\n【上一步（' + (_pn ? (_pn.h || '上一步') : '上一步') + '）输出】\n' + prev;
+        if (prevArg && prevArg !== userMsg) ctx += '\n\n【上一步（' + (_pn ? (_pn.h || '上一步') : '上一步') + '）输出】\n' + prevArg;
       }
       // 只有真正需要查资料的节点才注入知识库/联网/天气；意图识别不需要
       // 注入白名单：只有「需要外部事实」的 role 才注入知识库/联网/天气。
@@ -20414,7 +20494,7 @@ function _kbIndexFor(bot) {
       var injectKB = (role === 'retrieve' || role === 'draft' || role === 'generate' || role === 'outline' || role === 'step');
       var kbCtx = '';
       if (injectKB) {
-        var queryForKB = (role === 'retrieve' && prev && prev !== userMsg) ? prev : (prev || userMsg);
+        var queryForKB = (role === 'retrieve' && prevArg && prevArg !== userMsg) ? prevArg : (prevArg || userMsg);
         // 工作流内的知识库检索缓存（第 3 批性能优化 #23）。
         // 原先每个节点都做一次全量余弦扫描：FLOW_MAX_CALLS=200、块数 500+
         // 时是 200 × 500 × 词数 次运算。queryForKB 虽然随节点变化，但「循环 /
@@ -20520,7 +20600,7 @@ function _kbIndexFor(bot) {
           out = '';
           if (_it && typeof _it[Symbol.asyncIterator] === 'function') {
             for await (var _ch of _it) {
-              if (_ch) { out += _ch; emit({ total: _order.length, done: _pi, curName: (node.h || ('步骤' + (i + 1))), role: role, phase: 'token', text: out }); }
+              if (_ch) { out += _ch; emit({ total: _order.length, done: i, curName: (node.h || ('步骤' + (i + 1))), role: role, phase: 'token', text: out }); }
             }
           } else if (typeof _it === 'string') {
             out = _it;
@@ -20542,40 +20622,107 @@ function _kbIndexFor(bot) {
       });
       if (node.id) _vars[node.id] = { text: out };
       _lastExecNode = node;
-      flushLogs(); emit({ total: _order.length, done: _pi + 1, lastDone: (node.h || ('步骤' + i)), role: role, phase: 'done', text: out }); prev = out; finalText = out;
+      flushLogs(); emit({ total: _order.length, done: i + 1, lastDone: (node.h || ('步骤' + i)), role: role, phase: 'done', text: out });
+      return out;
     }
 
-    for (var _pi = 0; _pi < _order.length; _pi++) {
-      var node = (_F && _F.byId(bot, _order[_pi])) || nodes[_pi];
-      if (!node) continue;
-      var i = (_F && _F.idxOf) ? _F.idxOf(bot, node.id) : _pi;
-      if (i < 0) i = _pi;
-      // 跳过传播：本节点的**所有**入边都已 dead 才跳过。分支在汇合处靠这条收敛，
-      // 无入边的起点永不跳过 —— 否则被断开连线的孤立节点会被静默吞掉。
-      if (_F && node.id && _F.nodeDead(bot, node.id, _edgeState)) {
-        _F.killOut(bot, node.id, _edgeState);
+    // ---- P0-1 分层并行调度：同层节点无数据依赖 → Promise.all 并发；
+    //      合流节点（多入边）落在上游之后一层，由分层天然「等齐上游再继续」。
+    //      prev 由「直接前驱产出」精确给出（_prevFor），分支节点各自拿到分支点的输出，
+    //      不再像串行那样把「最后执行的兄弟节点」错当成自己的上游。
+    var _posOf = {};
+    _order.forEach(function (_id, _k) { _posOf[_id] = _k; });
+    var _outputs = {};   // id -> 该节点产出（已执行的节点才有）
+    var _predAll = {};
+    ((bot && bot.edges) || []).forEach(function (e) {
+      if (!e || !e.from || !e.to || e.from === e.to) return;
+      (_predAll[e.to] = _predAll[e.to] || []).push(e.from);
+    });
+    function _prevFor(_id) {
+      var _ps = _predAll[_id] || [];
+      if (!_ps.length) return userMsg;                 // 起点：与 start 节点同级
+      for (var _j = 0; _j < _ps.length; _j++) if (_outputs[_ps[_j]] != null) return _outputs[_ps[_j]];
+      return userMsg;                                  // 前驱被跳过（落在死支）时退化
+    }
+    function _applyOut(_n, _i, _o) {
+      var _nm = _n.h || ('步骤' + (_i + 1));
+      _lastExecNode = _n; prev = _o; finalText = _o; _lastNodeName = _nm;
+      if (_o) { _lastNonEmpty = _o; _lastNonEmptyNode = _nm; }
+    }
+    var _sch = (_F && _F.layers) ? _F.layers(bot) : null;
+    var _layers = (_sch && _sch.layers && _sch.layers.length) ? _sch.layers : [_order.slice()];
+    var _stop = false;
+    for (var _L = 0; _L < _layers.length && !_stop; _L++) {
+      var _ln = _layers[_L] || [];
+      // 先按已定稿的 edgeState 判定本层哪些节点该跑（合流依赖上层 killer 的判定）
+      var _todo = [];
+      for (var _li = 0; _li < _ln.length; _li++) {
+        var _nid = _ln[_li];
+        var _nd = (_F && _F.byId(bot, _nid)) || nodes[_posOf[_nid] != null ? _posOf[_nid] : _nid];
+        if (!_nd) continue;
+        if (_F && _nd.id && _F.nodeDead(bot, _nd.id, _edgeState)) {
+          _F.killOut(bot, _nd.id, _edgeState);         // 死边继续向后传，下层据此跳过
+          continue;
+        }
+        _todo.push(_nd);
+      }
+      if (!_todo.length) continue;
+      // 本层含 开始/审批 节点 → 二者有副作用（重置游标 / 暂停等待人工），必须串行并按拓扑序
+      var _forceSerial = _todo.some(function (_tn) {
+        var _tk = _F ? _F.kindOf(_tn) : 'llm', _tr = getNodeRole(_tn);
+        return _tk === 'human' || _tr === 'human' || _tk === 'start' || _tr === 'start';
+      });
+      if (_forceSerial) {
+        for (var _si = 0; _si < _todo.length; _si++) {
+          var _sn = _todo[_si];
+          var _sp = _posOf[_sn.id != null ? _sn.id : ''];
+          var _si2 = (_F && _F.idxOf) ? _F.idxOf(bot, _sn.id) : _sp; if (_si2 < 0) _si2 = _sp;
+          if (++_execCount > ((_F && _F.MAX_CALLS) || 200)) { emit({ phase: 'error', text: '本次运行节点执行次数超过上限，已中止（可能是循环配置把调用量放大了）' }); _stop = true; break; }
+          var _sk = _F ? _F.kindOf(_sn) : 'llm', _sr2 = getNodeRole(_sn);
+          emit({ total: _order.length, done: _sp, curName: _sn.h || ('步骤' + (_si2 + 1)), role: _sr2, phase: 'node' });
+          if (_sk === 'start' || _sr2 === 'start') {
+            prev = userMsg; finalText = userMsg;
+            logs.push({ i: _si2 + 1, role: 'start', name: _sn.h || '用户输入', ms: 0, output: userMsg });
+            if (_sn.id) _vars[_sn.id] = { text: userMsg };
+            _lastExecNode = _sn;
+            flushLogs(); emit({ total: _order.length, done: _sp + 1, lastDone: '开始', role: 'start', phase: 'done' });
+            _outputs[_sn.id] = userMsg; _applyOut(_sn, _si2, userMsg); continue;
+          }
+          if (_sk === 'human' || _sr2 === 'human') {
+            await runHumanNode(_sn, _si2);
+            _outputs[_sn.id] = prev; _applyOut(_sn, _si2, prev);
+            if (_pi < 0) { return runWorkflow(bot, userMsg, imgs, auds, frms, imagePrompt, onProgress, _depth, _sharedImage); }
+            continue;
+          }
+          if (_sk !== 'llm') {
+            var _rr = await runSpecialNode(_sn, _si2, _sk, _prevFor(_sn.id));
+            if (_rr === 'stop') { _stop = true; break; }
+            _outputs[_sn.id] = _rr; _applyOut(_sn, _si2, _rr); continue;
+          }
+          _outputs[_sn.id] = await runLlmNode(_sn, _si2, _sr2, _prevFor(_sn.id)); _applyOut(_sn, _si2, _outputs[_sn.id]);
+        }
+        if (_stop) break;
         continue;
       }
-      if (++_execCount > ((_F && _F.MAX_CALLS) || 200)) {
-        emit({ phase: 'error', text: '本次运行节点执行次数超过上限，已中止（可能是循环配置把调用量放大了）' });
-        break;
-      }
-      var _kind = _F ? _F.kindOf(node) : 'llm';
-      var role = getNodeRole(node);
-      var t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      emit({ total: _order.length, done: _pi, curName: node.h || ('步骤' + (i + 1)), role: role, phase: 'node' });
-      if (_kind === 'start' || role === 'start') {
-        prev = userMsg; finalText = userMsg;
-        logs.push({ i: i + 1, role: 'start', name: node.h || '用户输入', ms: 0, output: userMsg });
-        if (node.id) _vars[node.id] = { text: userMsg };
-        _lastExecNode = node;
-        flushLogs(); emit({ total: _order.length, done: _pi + 1, lastDone: '开始', role: 'start', phase: 'done' }); continue;
-      }
-      // 审批节点：暂停等待人工确认（runHumanNode）；非模型节点（runSpecialNode），返回 'stop' 则中断
-      if (_kind === 'human' || role === 'human') { await runHumanNode(node, i); continue; }
-      if (_kind !== 'llm') { if (await runSpecialNode(node, i, _kind) === 'stop') break; continue; }
-      // LLM 节点：上下文裁剪 + 知识库/联网/天气/记忆注入 + 流式调用（runLlmNode）
-      await runLlmNode(node, i, role);
+      // 纯计算层：并发跑，每个节点各拿自己的 prev，互不影响
+      await Promise.all(_todo.map(async function (_cn) {
+        var _cp = _posOf[_cn.id != null ? _cn.id : ''];
+        var _ci = (_F && _F.idxOf) ? _F.idxOf(bot, _cn.id) : _cp; if (_ci < 0) _ci = _cp;
+        if (++_execCount > ((_F && _F.MAX_CALLS) || 200)) { emit({ phase: 'error', text: '本次运行节点执行次数超过上限，已中止（可能是循环配置把调用量放大了）' }); _stop = true; return; }
+        var _ck = _F ? _F.kindOf(_cn) : 'llm', _cr = getNodeRole(_cn);
+        emit({ total: _order.length, done: _cp, curName: _cn.h || ('步骤' + (_ci + 1)), role: _cr, phase: 'node' });
+        var _p = _prevFor(_cn.id);
+        var _o;
+        if (_ck !== 'llm') {
+          var _rv = await runSpecialNode(_cn, _ci, _ck, _p);
+          if (_rv === 'stop') { _stop = true; return; }
+          _o = _rv;
+        } else {
+          _o = await runLlmNode(_cn, _ci, _cr, _p);
+        }
+        _outputs[_cn.id] = _o; _applyOut(_cn, _ci, _o);
+      }));
+      if (_stop) break;
     }
     // 最终交付兜底：末尾节点没产出时，退回最后一个有内容的节点，而不是给用户一片空白
     var _fin = (finalText || '').toString().trim();
@@ -20589,6 +20736,8 @@ function _kbIndexFor(bot) {
     }
     return { final: finalText, logs: logs };
   }
+  // 暴露给测试：headless e2e 直接驱动工作流（验证分层并行 / 合流 / prev 语义），不改界面行为
+  window.runWorkflow = runWorkflow;
 
   // ---------- 执行日志面板（右下角 360px 浮窗） ----------
   function injectLogPanel() {
