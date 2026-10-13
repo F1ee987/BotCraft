@@ -1387,6 +1387,15 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 .set-nav-item .i svg{width:100%;height:100%}
 .set-panels{flex:1;min-width:0}
 .set-panels>.ssec{animation:setPanelIn .22s ease}
+/* P0-3 运行计划 / P1-1 入站 API 两个编辑器的字段类。这两个类此前只有 HTML 在用、
+   CSS 从未定义（2026-10-13 用户截图实测：空 textarea 的基线是其底边，59px 高的框
+   按 inline-block 与文字基线对齐时整体上跳、脱离 label 悬在表单中部；input/select
+   也全是浏览器默认宽度不拉伸）。定义成 flex 列字段 + 满宽控件，与项目输入惯例一致 */
+.fld{display:flex;flex-direction:column;gap:6px;min-width:0}
+.fld>span{font-size:var(--fs-sm);color:var(--sub)}
+.ipt{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;min-width:0;transition:border-color var(--dur-3) var(--ease)}
+.ipt:focus{outline:none;border-color:var(--brand)}
+textarea.ipt{resize:vertical;min-height:64px;line-height:1.5}
 @keyframes setPanelIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.set-panels>.ssec{animation:none}}
 @media (max-width:720px){
@@ -19548,7 +19557,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.9.2';
+var APP_VERSION = '3.9.3';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
