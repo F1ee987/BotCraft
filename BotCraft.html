@@ -2815,7 +2815,6 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
     
     
-  </main>
 </div>
 
 <div id="anaSchedule" style="display:none">
@@ -2863,7 +2862,6 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
     </div>
 
-
 <div id="anaWebhook" style="display:none">
       <div class="hint">让外部系统（飞书 / 自建后台 / CI）把事件推给机器人：桌面版在 <code>127.0.0.1</code> 监听，按「地址 + token」路由到指定机器人并触发其工作流。<b>仅本机可访问</b>，必须带 token。浏览器版无本地服务，地址不会生效。</div>
 
@@ -2896,7 +2894,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
     </div>
 
-
+  </main>
 <!-- ==================== 创建向导 ==================== -->
 <div class="modal" id="createModal">
   <div class="mbox">
@@ -19550,7 +19548,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.9.1';
+var APP_VERSION = '3.9.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
