@@ -2611,6 +2611,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <button type="button" class="set-nav-item" data-setsec="stt" role="tab" aria-selected="false" aria-controls="sec-stt-body" onclick="showSettingsPanel('stt')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span>语音识别</button>
       <button type="button" class="set-nav-item" data-setsec="emb" role="tab" aria-selected="false" aria-controls="sec-emb-body" onclick="showSettingsPanel('emb')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span>语义检索</button>
       <button type="button" class="set-nav-item" data-setsec="image" role="tab" aria-selected="false" aria-controls="sec-image-body" onclick="showSettingsPanel('image')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span>文生图</button>
+      <button type="button" class="set-nav-item" data-setsec="chain" role="tab" aria-selected="false" aria-controls="sec-chain-body" onclick="showSettingsPanel('chain')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg></span>备用模型</button>
     </nav>
     <div class="set-panels">
 
@@ -2763,6 +2764,31 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   </div>
 </div>
 
+<div class="ssec" id="sec-chain" hidden>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg></span> 备用模型链</span><span class="ssec-badge" id="badge-chain" style="display:none">已配置</span>
+  </div>
+  <div class="ssec-body" id="sec-chain-body">
+    <div class="hint">主模型遇到 429 / 5xx / 网络故障时，按顺序自动切换下面的备用模型（401 / 403 等鉴权错误不切换——换了也白换）。留空则不启用，行为与本功能之前一致。降级发生的调用会在用量统计里单独计数（计费主体不同）。</div>
+    <div id="mcList" class="dist-list" style="margin-top:10px"></div>
+    <div id="mcEmpty" class="hint" style="display:none">还没有备用模型。主模型被限流时只能得到「演示回复」而不是真实回答。</div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button type="button" class="btn btn-primary btn-sm" onclick="openModelChainEditor()">+ 添加备用模型</button>
+    </div>
+    <div id="mcEditor" style="display:none;margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <label class="fld"><span>备注名</span><input id="mcName" class="ipt" maxlength="40" placeholder="如：智谱备用"></label>
+        <label class="fld"><span>模型</span><input id="mcModel" class="ipt" maxlength="120" placeholder="如：glm-4.7-flash"></label>
+      </div>
+      <label class="fld" style="margin-top:10px"><span>接口地址（baseURL）</span><input id="mcBase" class="ipt" maxlength="300" placeholder="https://open.bigmodel.cn/api/paas/v4"></label>
+      <label class="fld" style="margin-top:10px"><span>API Key（留空 = 免鉴权端点）</span><input id="mcKey" class="ipt" maxlength="300" placeholder="sk-..."></label>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveModelChainItem()">保存</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeModelChainEditor()">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="ssec" id="sec-image" hidden>
   <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span> 文生图（可选）</span><span class="ssec-badge" id="badge-image" style="display:none">已配置</span>
   </div>
@@ -2864,6 +2890,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
       <div class="chart-box" style="margin-top:16px">
         <h3><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span> 运行历史</h3>
+        <div id="runHistoryBar"></div>
         <div id="runHistoryList" class="sat-list"></div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn btn-ghost btn-sm" onclick="clearRunHistory()">清空运行历史</button>
@@ -3559,6 +3586,9 @@ function escAttrJs(s) {
     // noAuth：该接口无需鉴权（免 Key 公共接口 / 本机模型）。默认 false —— 默认配置指向
     // api.openai.com 且没有 Key，若当成「已配置」会让人一发消息就吃 401。
     noAuth: false,
+    // P1-4 备用模型链：主模型瞬态失败（429/5xx/网络）时按序切换，401/403 不切。
+    // 每项 {label, baseURL, apiKey, model}，最多 5 项；空数组 = 不启用（行为与本功能之前一致）。
+    modelChain: [],
     provider: 'openai', baseURL: PROVIDERS.openai.base, apiKey: '', model: 'gpt-4o-mini',
     temperature: 0.7, maxTokens: 2048, directCall: true, proxyURL: '', fallback: 'smart', fastReply: false,
     // 上下文超预算时用压缩摘要代替截断（默认开）。压缩有缓存，同一份内容只压一次；
@@ -3636,6 +3666,8 @@ function escAttrJs(s) {
   var VISION_MODEL_RE = /vision|(^|[^a-z])vl([^a-z]|$)|omni|gpt-4o|gpt-4\.1|gpt-4v|gpt-4-turbo|gemini|claude|glm-4\.\dv|qwen[^,]*-vl|hunyuan-vision/i;
   function isVisionModel(name) { return VISION_MODEL_RE.test(String(name || '')); }
   var _visionWarnAt = 0;
+  var _lastFallback = null;   // P1-4：最近一次降级信息（供 UI / 诊断）
+  var _chainWarnAt = 0;      // P1-4：降级 toast 限频
 
   // 构造 messages（含历史上下文 + 系统提示）
   // opts.preview=true 为纯预演：不累加记忆使用次数、不写盘，供上下文面板测算用量
@@ -5094,31 +5126,46 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
 
   // gen（可选）：该机器人的生成参数覆盖 { temperature }。模型仍走 forceModel 位置参数。
   async function request(messages, signal, stream, forceModel, gen) {
-    const url = (cfg.proxyURL && !cfg.directCall)
-      ? cfg.proxyURL
-      : cfg.baseURL.replace(/\/$/, '') + '/chat/completions';
-
     // 温度：机器人显式设置过就用它的 —— 0 是合法值（要最确定性的输出），
     // 必须显式判 null，绝不能用 || 兜底（本项目踩过这个坑）。未设置才回落全局。
     var _bt = (gen && gen.temperature !== null && gen.temperature !== undefined)
       ? Number(gen.temperature) : NaN;
     if (!isFinite(_bt)) _bt = Number(cfg.temperature) || 0.7;
-    const body = {
-      model: forceModel || cfg.model,
-      messages: messages,
-      temperature: _bt,
-      max_tokens: Number(cfg.maxTokens) || 2048,
-      stream: !!stream,
+    // P1-4 端点化：主配置 + 备用模型链统一成端点列表。attemptOne 的一切输入
+    //（url/headers/body）都从 ep 取，端点之间才能降级切换。
+    var _mkUrl = function (baseURL) {
+      return (cfg.proxyURL && !cfg.directCall)
+        ? cfg.proxyURL
+        : String(baseURL || '').replace(/\/$/, '') + '/chat/completions';
     };
-    // 思考型模型（GLM-5 / Qwen3 等）默认会把 max_tokens 大量甚至全部消耗在「思考过程」上，
-    // 正式回答（content）因此为空、finish_reason='length'——表现为「工作流步骤跑完了，却没有输出」。
-    // 实测同一任务：开启思考 670 completion tokens（其中 626 是思考）且正文为空；
-    // 关闭思考后 45 tokens 且正文完整，既修掉空回复又省约 93% 输出成本。
-    if (/dashscope\.aliyuncs\.com/i.test(url)) body.enable_thinking = false;
-    else if (/(open\.bigmodel\.cn|zhipu)/i.test(url)) body.thinking = { type: 'disabled' };
-
-    const headers = { 'Content-Type': 'application/json' };
-    if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
+    var _mkHeaders = function (apiKey) {
+      var hd = { 'Content-Type': 'application/json' };
+      if (apiKey) hd['Authorization'] = 'Bearer ' + apiKey;
+      return hd;
+    };
+    var _mkBody = function (model, url) {
+      var body = {
+        model: model,
+        messages: messages,
+        temperature: _bt,
+        max_tokens: Number(cfg.maxTokens) || 2048,
+        stream: !!stream,
+      };
+      // 思考型模型（GLM-5 / Qwen3 等）默认会把 max_tokens 大量甚至全部消耗在「思考过程」上，
+      // 正式回答（content）因此为空、finish_reason='length'——表现为「工作流步骤跑完了，却没有输出」。
+      // 实测同一任务：开启思考 670 completion tokens（其中 626 是思考）且正文为空；
+      // 关闭思考后 45 tokens 且正文完整，既修掉空回复又省约 93% 输出成本。
+      if (/dashscope\.aliyuncs\.com/i.test(url)) body.enable_thinking = false;
+      else if (/(open\.bigmodel\.cn|zhipu)/i.test(url)) body.thinking = { type: 'disabled' };
+      return body;
+    };
+    var _eps = [{ label: cfg.label || cfg.provider || '主模型', url: _mkUrl(cfg.baseURL),
+      headers: _mkHeaders(cfg.apiKey), model: forceModel || cfg.model }];
+    var _chain = [];
+    try { _chain = coerceModelChain(cfg.modelChain); } catch (e) { _chain = []; }
+    _chain.forEach(function (it) {
+      _eps.push({ label: it.label, url: _mkUrl(it.baseURL), headers: _mkHeaders(it.apiKey), model: it.model });
+    });
 
     // 携带 HTTP 状态的错误类型，便于上层精确提示（区分「上下文超限/鉴权失败」与「网络抖动」）
     function ApiError(status, statusText, detail) {
@@ -5126,11 +5173,11 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
       e.name = 'ApiError'; e.status = status; e.detail = detail || '';
       return e;
     }
-    // 单次尝试：成功返回 resp；失败抛 ApiError（HTTP 错误）或网络错误（可重试）
-    async function attemptOne(ac) {
+    // 单次尝试（对指定端点）：成功返回 resp；失败抛 ApiError（HTTP 错误）或网络错误（可重试）
+    async function attemptEp(ep, ac) {
       let resp;
       try {
-        resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: ac ? ac.signal : undefined });
+        resp = await fetch(ep.url, { method: 'POST', headers: ep.headers, body: JSON.stringify(_mkBody(ep.model, ep.url)), signal: ac ? ac.signal : undefined });
       } catch (netErr) {
         const e = new Error('网络请求失败：' + (netErr && netErr.message ? netErr.message : netErr));
         e.name = (netErr && netErr.name) || 'NetworkError'; e.isNetwork = true;
@@ -5139,9 +5186,7 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
       if (!resp.ok) {
         let txt = '';
         try { txt = await resp.text(); } catch (err2) { txt = ''; }
-        let detail = txt;
-        try { const j = JSON.parse(txt); if (j && j.error && j.error.message) detail = j.error.message; } catch (err3) {}
-        throw ApiError(resp.status, resp.statusText, detail || txt);
+        throw ApiError(resp.status, resp.statusText, txt.slice(0, 200));
       }
       return resp;
     }
@@ -5155,124 +5200,147 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     const MAX_RETRY = 3;
     const BACKOFF = [800, 1600, 3200];
 
-    if (stream) {
-      // SSE 流式：连接阶段带重试；拿到 200 后再流式吐字
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 180_000);
-      if (signal && typeof signal.then === 'function') signal.then(() => ctrl.abort());
-      const ac = ctrl;
-      let lastErr = null, lastStatus = 0, resp = null;
+    // 单端点完整执行（含瞬态重试）：stream 返回 async iterable，非流式返回字符串。
+    // 失败抛错，由外层降级循环决定换不换端点。viaFallback 供用量统计标注计费主体。
+    async function runEp(ep, viaFallback) {
+      if (stream) {
+        // SSE 流式：连接阶段带重试；拿到 200 后再流式吐字
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 180_000);
+        if (signal && typeof signal.then === 'function') signal.then(() => ctrl.abort());
+        const ac = ctrl;
+        let lastErr = null, lastStatus = 0, resp = null;
+        for (let i = 0; i < MAX_RETRY; i++) {
+          try { resp = await attemptEp(ep, ac); lastErr = null; lastStatus = 0; break; }
+          catch (e) {
+            lastErr = e; lastStatus = e && e.status ? e.status : 0;
+            if (i < MAX_RETRY - 1 && isRetryable(e, lastStatus)) { await new Promise(r => setTimeout(r, BACKOFF[i] || 1500)); continue; }
+            break;
+          }
+        }
+        if (!resp) { clearTimeout(timer); throw lastErr || new Error('请求失败'); }
+        const _promptChars = countPromptChars(messages);
+        let lastFinish = '';
+        async function* iter() {
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          let _finish = '', _yielded = 0, _reasonLen = 0, _usage = null, _outChars = 0;
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buf += decoder.decode(value, { stream: true });
+              const lines = buf.split('\n');
+              buf = lines.pop() || '';
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data:')) continue;
+                const data = trimmed.slice(5).trim();
+                if (data === '[DONE]') return;
+                try {
+                  const json = JSON.parse(data);
+                  if (json.usage) _usage = json.usage;   // 多数服务只在末尾那个 chunk 回传用量
+                  const _ch = json.choices?.[0];
+                  if (_ch && _ch.finish_reason) _finish = _ch.finish_reason;
+                  const _rc = _ch && _ch.delta ? _ch.delta.reasoning_content : '';
+                  if (_rc) _reasonLen += _rc.length;
+                  const delta = _ch && _ch.delta ? _ch.delta.content : '';
+                  if (delta) { _yielded++; _outChars += delta.length; yield delta; }
+                } catch (e) { /* 忽略非 JSON 行 */ }
+              }
+            }
+          } finally {
+            clearTimeout(timer);
+            lastFinish = _finish; // 供上层判断是否被 max_tokens 截断
+            // 采集用量：优先服务端真实 usage，缺失时按字符数估算并打 est 标记。
+            // 模型名用**实际端点**的，viaFallback 标明这次由备用模型完成（计费主体）。
+            if (typeof window.recordUsage === 'function') {
+              var _uPt = _usage && _usage.prompt_tokens != null ? _usage.prompt_tokens : 0;
+              var _uCt = _usage && _usage.completion_tokens != null ? _usage.completion_tokens : 0;
+              var _uReal = !!(_uPt || _uCt);
+              window.recordUsage(ep.model,
+                _uReal ? _uPt : estimateTokens(_promptChars),
+                _uReal ? _uCt : estimateTokens(_outChars), !_uReal, viaFallback);
+            }
+            // 思考过程吃光 max_tokens 时正文为空。必须显式报错——旧版静默返回空串，
+            // 工作流最后一个节点拿到空产出，用户只看到「一条什么都没有的回复」。
+            if (!_yielded && _reasonLen > 0) {
+              const e = new Error('模型正文为空：' + _reasonLen + ' 字输出被用于「思考过程」，' +
+                (_finish === 'length' ? '正式回答前就已达到 max_tokens 上限' : '未产生正式回答内容'));
+              e.name = 'EmptyOutputError';
+              e.reasoningLength = _reasonLen;
+              e.finishReason = _finish;
+              throw e;
+            }
+          }
+        }
+        const _stream = iter();
+        // finish_reason 只在流结束时才知道，挂在迭代器上供工作流判断「是否被截断」
+        _stream.getFinishReason = function () { return lastFinish; };
+        return _stream;
+      }
+
+      // 非流式：整段带重试
+      const controller = signal ? null : new AbortController();
+      const timer = controller ? setTimeout(() => controller.abort(), 90_000) : null;
+      const ac = controller;
+      let lastErr = null, lastStatus = 0, data = null;
       for (let i = 0; i < MAX_RETRY; i++) {
-        try { resp = await attemptOne(ac); lastErr = null; lastStatus = 0; break; }
-        catch (e) {
+        try {
+          const r = await attemptEp(ep, ac);
+          clearTimeout(timer);
+          data = await r.json();
+          lastErr = null; lastStatus = 0; break;
+        } catch (e) {
           lastErr = e; lastStatus = e && e.status ? e.status : 0;
           if (i < MAX_RETRY - 1 && isRetryable(e, lastStatus)) { await new Promise(r => setTimeout(r, BACKOFF[i] || 1500)); continue; }
           break;
         }
       }
-      if (!resp) { clearTimeout(timer); throw lastErr || new Error('请求失败'); }
-      const _promptChars = countPromptChars(messages);
-      let lastFinish = '';
-      async function* iter() {
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-        let _finish = '', _yielded = 0, _reasonLen = 0, _usage = null, _outChars = 0;
-        try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const lines = buf.split('\n');
-            buf = lines.pop() || '';
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed || !trimmed.startsWith('data:')) continue;
-              const data = trimmed.slice(5).trim();
-              if (data === '[DONE]') return;
-              try {
-                const json = JSON.parse(data);
-                if (json.usage) _usage = json.usage;   // 多数服务只在末尾那个 chunk 回传用量
-                const _ch = json.choices?.[0];
-                if (_ch && _ch.finish_reason) _finish = _ch.finish_reason;
-                const _rc = _ch && _ch.delta ? _ch.delta.reasoning_content : '';
-                if (_rc) _reasonLen += _rc.length;
-                const delta = _ch && _ch.delta ? _ch.delta.content : '';
-                if (delta) { _yielded++; _outChars += delta.length; yield delta; }
-              } catch (e) { /* 忽略非 JSON 行 */ }
-            }
-          }
-        } finally {
-          clearTimeout(timer);
-          lastFinish = _finish; // 供上层判断是否被 max_tokens 截断
-          // 采集用量：优先服务端真实 usage，缺失时按字符数估算并打 est 标记
-          if (typeof window.recordUsage === 'function') {
-            var _uPt = _usage && _usage.prompt_tokens != null ? _usage.prompt_tokens : 0;
-            var _uCt = _usage && _usage.completion_tokens != null ? _usage.completion_tokens : 0;
-            var _uReal = !!(_uPt || _uCt);
-            window.recordUsage(forceModel || cfg.model,
-              _uReal ? _uPt : estimateTokens(_promptChars),
-              _uReal ? _uCt : estimateTokens(_outChars), !_uReal);
-          }
-          // 思考过程吃光 max_tokens 时正文为空。必须显式报错——旧版静默返回空串，
-          // 工作流最后一个节点拿到空产出，用户只看到「一条什么都没有的回复」。
-          if (!_yielded && _reasonLen > 0) {
-            const e = new Error('模型正文为空：' + _reasonLen + ' 字输出被用于「思考过程」，' +
-              (_finish === 'length' ? '正式回答前就已达到 max_tokens 上限' : '未产生正式回答内容'));
-            e.name = 'EmptyOutputError';
-            e.reasoningLength = _reasonLen;
-            e.finishReason = _finish;
-            throw e;
-          }
-        }
+      if (lastErr) { clearTimeout(timer); throw lastErr; }
+      const choice = data && data.choices && data.choices[0];
+      const content = choice && (choice.message ? choice.message.content : choice.text);
+      // 采集用量（非流式响应本身就带 usage 字段）；模型名取实际端点，viaFallback 标降级
+      if (typeof window.recordUsage === 'function') {
+        var _nu = data && data.usage;
+        var _nPt = _nu && _nu.prompt_tokens != null ? _nu.prompt_tokens : 0;
+        var _nCt = _nu && _nu.completion_tokens != null ? _nu.completion_tokens : 0;
+        var _nReal = !!(_nPt || _nCt);
+        window.recordUsage(ep.model,
+          _nReal ? _nPt : estimateTokens(countPromptChars(messages)),
+          _nReal ? _nCt : estimateTokens(String(content || '').length), !_nReal, viaFallback);
       }
-      const _stream = iter();
-      // finish_reason 只在流结束时才知道，挂在迭代器上供工作流判断「是否被截断」
-      _stream.getFinishReason = function () { return lastFinish; };
-      return _stream;
+      if (!content) {
+        // 与流式分支保持一致的诊断：区分「思考吃光预算」和「真的什么都没有」
+        const _r = (choice && choice.message && choice.message.reasoning_content) || '';
+        if (_r) {
+          const e = new Error('模型正文为空：' + _r.length + ' 字输出被用于「思考过程」，正式回答未产生内容');
+          e.name = 'EmptyOutputError'; e.reasoningLength = _r.length;
+          throw e;
+        }
+        throw new Error('模型返回为空');
+      }
+      return content.trim();
     }
 
-    // 非流式：整段带重试
-    const controller = signal ? null : new AbortController();
-    const timer = controller ? setTimeout(() => controller.abort(), 90_000) : null;
-    const ac = controller;
-    let lastErr = null, lastStatus = 0, data = null;
-    for (let i = 0; i < MAX_RETRY; i++) {
+    // 端点间降级（P1-4）：主端点失败且错误可降级 → 依次切备用链；
+    // 全部失败或错误不可降级 → 抛最后一个错（上层 chat 照旧降级「演示回复」）。
+    for (let _i = 0; _i < _eps.length; _i++) {
+      const ep = _eps[_i];
       try {
-        const r = await attemptOne(ac);
-        clearTimeout(timer);
-        data = await r.json();
-        lastErr = null; lastStatus = 0; break;
+        return await runEp(ep, _i > 0);
       } catch (e) {
-        lastErr = e; lastStatus = e && e.status ? e.status : 0;
-        if (i < MAX_RETRY - 1 && isRetryable(e, lastStatus)) { await new Promise(r => setTimeout(r, BACKOFF[i] || 1500)); continue; }
-        break;
+        if (_i === _eps.length - 1 || !isDegradable(e)) throw e;
+        const _next = _eps[_i + 1];
+        _lastFallback = { from: ep.label, to: _next.label, model: _next.model, at: Date.now() };
+        if (Date.now() - (_chainWarnAt || 0) > 60000) {
+          _chainWarnAt = Date.now();
+          try { toast('主模型（' + ep.label + '）不可用，已切换备用模型：' + _next.label, 'warn', 6000); } catch (e2) { }
+        }
+        console.warn('[BotCraft AI] 主模型失败，降级到备用模型', ep.label, '→', _next.label, e);
       }
     }
-    if (lastErr) { clearTimeout(timer); throw lastErr; }
-    const choice = data && data.choices && data.choices[0];
-    const content = choice && (choice.message ? choice.message.content : choice.text);
-    // 采集用量（非流式响应本身就带 usage 字段）
-    if (typeof window.recordUsage === 'function') {
-      var _nu = data && data.usage;
-      var _nPt = _nu && _nu.prompt_tokens != null ? _nu.prompt_tokens : 0;
-      var _nCt = _nu && _nu.completion_tokens != null ? _nu.completion_tokens : 0;
-      var _nReal = !!(_nPt || _nCt);
-      window.recordUsage(forceModel || cfg.model,
-        _nReal ? _nPt : estimateTokens(countPromptChars(messages)),
-        _nReal ? _nCt : estimateTokens(String(content || '').length), !_nReal);
-    }
-    if (!content) {
-      // 与流式分支保持一致的诊断：区分「思考吃光预算」和「真的什么都没有」
-      const _r = (choice && choice.message && choice.message.reasoning_content) || '';
-      if (_r) {
-        const e = new Error('模型正文为空：' + _r.length + ' 字输出被用于「思考过程」，正式回答未产生内容');
-        e.name = 'EmptyOutputError'; e.reasoningLength = _r.length;
-        throw e;
-      }
-      throw new Error('模型返回为空');
-    }
-    return content.trim();
   }
 
   function runFallback(bot, history, messages, err, immediate) {
@@ -5314,7 +5382,7 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     return new Promise(resolve => setTimeout(() => resolve(reply), 400 + Math.random() * 500));
   }
 
-  window.BotCraftAI = { chat, request, canCall, isNoAuthEndpoint, isVisionModel, getConfig, updateConfig, getProviders, composeSystemPrompt };
+  window.BotCraftAI = { chat, request, canCall, isNoAuthEndpoint, isVisionModel, getConfig, updateConfig, getProviders, composeSystemPrompt , getModelChain: function () { return coerceModelChain(cfg.modelChain); } };
   // 品牌档案 / 模板导入导出：这三个函数此前只被内联事件属性调用，却没有导出。
   // 内联 on* 属性在**全局作用域**求值，而它们定义在本 IIFE 内 → 点击/输入时
   // 抛 ReferenceError，表现为「品牌信息改了不保存」「导出/导入模板点了没反应」。
@@ -7484,6 +7552,83 @@ function coerceWebhookList(arr) {
   return Array.isArray(arr) ? arr.map(coerceWebhook) : [];
 }
 /* ===== END MODULE: core/webhook ===== */
+
+/* ===== MODULE: core/modelchain exports:isDegradable,coerceModelChain ===== */
+// P1-4 模型自动降级：主模型瞬态失败时按备用链切换「真·备用模型」，而不是直接掉
+// 「演示回复」（README 明列 429 是高频痛点）。判定与规整都是纯函数，镜像供单测。
+// 降级边界：网络失败 / 408 / 409 / 429 / 5xx 值得换；401/403/400 不换（Key 错、
+// 参数错，换了也白换）；AbortError 是用户主动停；EmptyOutputError 是主模型能通
+// 但正文被思考吃光，换模型治不了。
+function isDegradable(e) {
+  if (!e) return false;
+  if (e.name === 'AbortError') return false;
+  if (e.name === 'EmptyOutputError') return false;
+  if (e.isNetwork) return true;
+  var s = e.status ? Number(e.status) : 0;
+  if (!s) return false;
+  if (s === 429 || s === 408 || s === 409) return true;
+  if (s >= 500 && s < 600) return true;
+  return false;
+}
+function coerceModelChain(arr) {
+  if (!Array.isArray(arr)) return [];
+  var out = [];
+  for (var i = 0; i < arr.length && out.length < 5; i++) {
+    var it = arr[i] || {};
+    var baseURL = (typeof it.baseURL === 'string') ? it.baseURL.trim().slice(0, 300) : '';
+    var model = (typeof it.model === 'string') ? it.model.trim().slice(0, 120) : '';
+    if (!baseURL || !model) continue;          // 缺接口或模型就没法调，剔除
+    var apiKey = (typeof it.apiKey === 'string') ? it.apiKey.trim().slice(0, 300) : '';
+    var label = (typeof it.label === 'string') ? it.label.trim().slice(0, 40) : '';
+    out.push({ label: label || model, baseURL: baseURL, apiKey: apiKey, model: model });
+  }
+  return out;
+}
+/* ===== END MODULE: core/modelchain ===== */
+
+/* ===== MODULE: core/runhist exports:filterRunHistory,runHistoryCsv,runHistoryCsvName ===== */
+// N5 运行历史可观测性：P0-3 的运行历史上限 100 条、无筛选——计划/Webhook 一多，
+// 「上周那个失败的日报」基本翻不到。过滤与 CSV 导出都是纯函数，镜像供单测。
+function filterRunHistory(hist, filter) {
+  if (!Array.isArray(hist)) return [];
+  var f = filter || 'all';
+  return hist.filter(function (e) {
+    if (f === 'fail') return e && e.ok === false;
+    if (f === 'schedule') return e && e.source !== 'webhook';
+    if (f === 'webhook') return e && e.source === 'webhook';
+    return true;
+  });
+}
+function runHistoryCsv(hist) {
+  var rows = [['时间', '来源', '名称', '机器人', '状态', '耗时ms', '产出字数', '错误']];
+  (hist || []).forEach(function (e) {
+    rows.push([
+      e.ts ? new Date(e.ts).toLocaleString('zh-CN') : '',
+      e.source === 'webhook' ? 'Webhook' : '计划',
+      String(e.schName || ''),
+      String(e.botName || ''),
+      e.ok ? '成功' : '失败',
+      String(e.ms || 0),
+      String(e.finalLen || 0),
+      String(e.err || '')
+    ]);
+  });
+  // CSV 转义：含逗号 / 引号 / 换行 / 前后空白的字段用双引号包裹，内部引号翻倍。
+  // 不转义的解释器（Excel 中文环境常见）会把一个含逗号的备注撑成两列。
+  return '\uFEFF' + rows.map(function (r) {
+    return r.map(function (c) {
+      c = String(c);
+      return (/[",\n\r]|^\s|\s$/.test(c)) ? '"' + c.replace(/"/g, '""') + '"' : c;
+    }).join(',');
+  }).join('\r\n');
+}
+function runHistoryCsvName() {
+  var d = new Date();
+  var p = function (n) { return (n < 10 ? '0' : '') + n; };
+  return 'botcraft-run-history-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate())
+    + '-' + p(d.getHours()) + p(d.getMinutes()) + '.csv';
+}
+/* ===== END MODULE: core/runhist ===== */
 
 // ---------- 变量 ----------
 // 每次新建正则：带 g 标志的正则对象有 lastIndex 状态，共用会在嵌套解析时串味
@@ -18389,7 +18534,7 @@ function saveUsage(d) {
   _usageCache = null;
 }
 // 唯一写入入口：一次 API 调用记一条。任何异常都在这里兜住，统计绝不阻断对话。
-window.recordUsage = function (model, pt, ct, isEst) {
+window.recordUsage = function (model, pt, ct, isEst, viaFallback) {
   try {
     pt = Math.max(0, Math.round(pt || 0)); ct = Math.max(0, Math.round(ct || 0));
     if (!pt && !ct) return;
@@ -18397,6 +18542,7 @@ window.recordUsage = function (model, pt, ct, isEst) {
     var bump = function (o) { o.calls = (o.calls || 0) + 1; o.pt = (o.pt || 0) + pt; o.ct = (o.ct || 0) + ct; };
     d.totals.calls++; d.totals.pt += pt; d.totals.ct += ct;
     if (isEst) d.totals.est = (d.totals.est || 0) + 1;
+    if (viaFallback) d.totals.fb = (d.totals.fb || 0) + 1;   // P1-4：备用模型完成的调用（计费主体不同，须单独计）
     if (!d.days[day]) d.days[day] = { calls: 0, pt: 0, ct: 0 };
     bump(d.days[day]);
     var botName = '';
@@ -18405,6 +18551,7 @@ window.recordUsage = function (model, pt, ct, isEst) {
     var mk = String(model || '未知模型');
     if (!d.models[mk]) d.models[mk] = { calls: 0, pt: 0, ct: 0 };
     bump(d.models[mk]);
+    if (viaFallback) d.models[mk].fb = (d.models[mk].fb || 0) + 1;
     saveUsage(d);
     var pg = document.getElementById('page-analytics');
     if (pg && pg.style.display !== 'none') renderUsagePanel();   // 正看着分析页就实时刷新
@@ -18962,6 +19109,46 @@ window.bcGetSchedules = loadSchedules;
 window.bcGetRunHistory = getRunHistory;
 
 // ---- 计划 / 运行历史 UI ----
+// N5：运行历史过滤（全部 / 仅计划 / 仅 Webhook / 仅失败）+ CSV 导出。
+var _rhFilter = 'all';
+var _RH_FILTERS = [
+  { k: 'all', label: '全部' },
+  { k: 'schedule', label: '仅计划' },
+  { k: 'webhook', label: '仅 Webhook' },
+  { k: 'fail', label: '仅失败' }
+];
+function renderRunHistoryBar(total, shown) {
+  var bar = document.getElementById('runHistoryBar');
+  if (!bar) return;
+  if (!total) { bar.innerHTML = ''; return; }
+  var chips = _RH_FILTERS.map(function (f) {
+    var on = f.k === _rhFilter;
+    return '<button type="button" class="btn ' + (on ? 'btn-primary' : 'btn-ghost') + ' btn-sm" onclick="setRunHistoryFilter(\'' + f.k + '\')">' + f.label + '</button>';
+  }).join('');
+  bar.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
+    + chips
+    + '<span class="sub" style="margin-left:auto">' + shown + ' / ' + total + ' 条</span>'
+    + '<button type="button" class="btn btn-ghost btn-sm" onclick="exportRunHistoryCsv()">导出 CSV</button>'
+    + '</div>';
+}
+function setRunHistoryFilter(f) {
+  _rhFilter = f;
+  renderScheduleUI();
+}
+function exportRunHistoryCsv() {
+  var rows = filterRunHistory(getRunHistory(), _rhFilter);
+  if (!rows.length) { toast('当前过滤条件下没有记录可导出', 'warn'); return; }
+  var blob = new Blob([runHistoryCsv(rows)], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = runHistoryCsvName();
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { try { URL.revokeObjectURL(a.href); } catch (e) { } a.remove(); }, 0);
+  toast('已导出 ' + rows.length + ' 条运行历史', 'ok');
+}
+window.setRunHistoryFilter = setRunHistoryFilter;
+window.exportRunHistoryCsv = exportRunHistoryCsv;
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -19014,9 +19201,12 @@ function renderScheduleUI() {
     }).join('');
   }
   if (hist) {
-    var h = getRunHistory();
-    if (!h.length) {
+    var hAll = getRunHistory();
+    var h = filterRunHistory(hAll, _rhFilter);
+    if (!hAll.length) {
       hist.innerHTML = '<div class="hint">还没有运行记录。计划触发后会显示在这里。</div>';
+    } else if (!h.length) {
+      hist.innerHTML = '<div class="hint">当前过滤条件下没有记录（共 ' + hAll.length + ' 条）。</div>';
     } else {
       hist.innerHTML = h.map(function (e) {
         var t = new Date(e.ts).toLocaleString();
@@ -19030,6 +19220,7 @@ function renderScheduleUI() {
           + '</div>';
       }).join('');
     }
+    renderRunHistoryBar(hAll.length, h.length);
   }
   var ed = document.getElementById('scheduleEditor');
   var sel = document.getElementById('schBot');
@@ -19413,7 +19604,89 @@ function setupSettingsUI() {
     (cfg.model && !(PROVIDER_META[cfg.provider] || {}).models?.includes(cfg.model)) ? cfg.model : '';
   setConnStatus(''); renderSettingsPreview();
   // 设置已是页面内嵌区块（无弹窗）：无需再控制 modal 显隐
+  if (typeof renderModelChainUI === 'function') { try { renderModelChainUI(); } catch (e) { } }
 }
+// ---------- P1-4 备用模型链 UI ----------
+// 数据经 BotCraftAI.getModelChain()（coerceModelChain 规整）读、updateConfig 写，
+// 单一真实源是 cfg.modelChain；UI 只做增删改与排序。
+var _mcEditing = -1;
+function renderModelChainUI() {
+  var list = document.getElementById('mcList');
+  var empty = document.getElementById('mcEmpty');
+  var badge = document.getElementById('badge-chain');
+  if (!list) return;
+  var chain = BotCraftAI.getModelChain();
+  if (badge) badge.style.display = chain.length ? '' : 'none';
+  if (!chain.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  list.innerHTML = chain.map(function (it, i) {
+    return '<div class="dist-row" style="align-items:flex-start">'
+      + '<div style="flex:1">'
+      + '<div style="font-weight:600">' + escHtml(it.label) + '</div>'
+      + '<div class="sub" style="margin-top:2px;word-break:break-all">' + escHtml(it.model) + ' · ' + escHtml(it.baseURL) + '</div>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+      + (i > 0 ? '<button class="btn btn-ghost btn-sm" onclick="moveModelChainItem(' + i + ',-1)">上移</button>' : '')
+      + (i < chain.length - 1 ? '<button class="btn btn-ghost btn-sm" onclick="moveModelChainItem(' + i + ',1)">下移</button>' : '')
+      + '<button class="btn btn-ghost btn-sm" onclick="openModelChainEditor(' + i + ')">编辑</button>'
+      + '<button class="btn btn-ghost btn-sm" onclick="deleteModelChainItem(' + i + ')">删除</button>'
+      + '</div></div>';
+  }).join('');
+}
+function openModelChainEditor(idx) {
+  _mcEditing = (typeof idx === 'number') ? idx : -1;
+  var ed = document.getElementById('mcEditor');
+  if (!ed) return;
+  ed.style.display = '';
+  var chain = BotCraftAI.getModelChain();
+  var it = (_mcEditing >= 0 && chain[_mcEditing]) ? chain[_mcEditing] : null;
+  document.getElementById('mcName').value = it ? it.label : '';
+  document.getElementById('mcModel').value = it ? it.model : '';
+  document.getElementById('mcBase').value = it ? it.baseURL : '';
+  document.getElementById('mcKey').value = it ? it.apiKey : '';
+}
+function closeModelChainEditor() {
+  var ed = document.getElementById('mcEditor');
+  if (ed) ed.style.display = 'none';
+  _mcEditing = -1;
+}
+function saveModelChainItem() {
+  var name = (document.getElementById('mcName').value || '').trim();
+  var model = (document.getElementById('mcModel').value || '').trim();
+  var base = (document.getElementById('mcBase').value || '').trim();
+  var key = (document.getElementById('mcKey').value || '').trim();
+  if (!model) { toast('请填写模型名', 'warn'); return; }
+  if (!base) { toast('请填写接口地址', 'warn'); return; }
+  var chain = BotCraftAI.getModelChain();
+  var item = { label: name || model, baseURL: base, apiKey: key, model: model };
+  if (_mcEditing >= 0 && chain[_mcEditing]) chain[_mcEditing] = item; else chain.push(item);
+  BotCraftAI.updateConfig({ modelChain: coerceModelChain(chain) });
+  closeModelChainEditor();
+  renderModelChainUI();
+  toast('已保存备用模型链', 'ok');
+}
+function moveModelChainItem(i, d) {
+  var chain = BotCraftAI.getModelChain();
+  var j = i + d;
+  if (j < 0 || j >= chain.length) return;
+  var t = chain[i]; chain[i] = chain[j]; chain[j] = t;
+  BotCraftAI.updateConfig({ modelChain: coerceModelChain(chain) });
+  renderModelChainUI();
+}
+function deleteModelChainItem(i) {
+  confirmDialog('确定删除这个备用模型？', { danger: true, okText: '删除' }).then(function (ok) {
+    if (!ok) return;
+    var chain = BotCraftAI.getModelChain();
+    chain.splice(i, 1);
+    BotCraftAI.updateConfig({ modelChain: coerceModelChain(chain) });
+    renderModelChainUI();
+  });
+}
+window.renderModelChainUI = renderModelChainUI;
 function fillModelOptions(provider, currentModel) {
   const sel = document.getElementById('set-model');
   const meta = PROVIDER_META[provider];
@@ -19679,7 +19952,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.9.4';
+var APP_VERSION = '3.9.5';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
