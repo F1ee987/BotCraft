@@ -5337,6 +5337,16 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
   window.extractMemoryLocal = extractMemoryLocal;
   window.selectRelevantMemories = selectRelevantMemories;
   window._memSaveDebounce = _memSaveDebounce;
+  // 跨 IIFE 边界使用的函数必须显式导出（2026-10-13 实测教训）：本 IIFE 封装后，
+  // 以下函数在全局不可见，而 IIFE 外有调用方 —— stripCtxPlaceholders（runReply 收尾，
+  // 访客发每条消息都报 "is not defined"）、scheduleMemoryUpdate（同收尾）、
+  // renderMemoryPanel（记忆面板入口）、importTplFile（创建向导导入按钮 onclick）、
+  // withTimeout（生图提示词增强链）。封装可以，跨边界必须挂 window。
+  window.stripCtxPlaceholders = stripCtxPlaceholders;
+  window.scheduleMemoryUpdate = scheduleMemoryUpdate;
+  window.renderMemoryPanel = renderMemoryPanel;
+  window.importTplFile = importTplFile;
+  window.withTimeout = withTimeout;
 })();
 </script>
 
@@ -6599,11 +6609,15 @@ function copyCodeBlock(btn) {
 // 接进去等于把「无限联网」白送出去；沙箱里只能用它自己的 fetch，受同源策略约束。
 // 执行时机：**只有用户点「▶ 运行」才会跑**，模型输出永远不会自动执行。
 //
-// 已知边界（浏览器模型决定，不是可以改的实现细节）：沙箱 iframe 与宿主同进程同线程，
-// 沙箱里一个纯计算死循环（while(1){}）会一直占着这个线程 —— 超时只能摘掉 iframe、
-// 停止接收消息，**无法中断正在执行的同步循环**。真能强杀的是 Web Worker，但 Worker
-// 里没有 DOM 与 document，AI 写的网页脚本在那边基本跑不起来。这里选了
-// 「能跑真实场景 + 用户主动触发」，而不是「随时可强杀」。
+// 已知边界（P1-5 起按语言分流）：
+//   · JS 走 Web Worker：天然隔离（无 DOM、无 localStorage，API Key 在宿主 localStorage 里，
+//      Worker 够不着）且**可强杀** —— worker.terminate() 能中断同步死循环，界面不再被卡 8 秒。
+//     与旧 iframe 沙箱的差异要如实记账：Worker 全局没有 document/localStorage，但**有 fetch /
+//     importScripts**（同源可用）。核心安全目标（摸不到 API Key 与机器人数据）不受影响；
+//     file:// 桌面版同源面就是自己，http(s) 部署时同源 fetch 的暴露面在注释里存档备查。
+//   · HTML 模式保留 iframe 沙箱：预览需要真实 DOM 渲染，Worker 里跑不了。死循环卡界面这条
+//     老边界对 HTML 模式仍然存在（8 秒摘除）。
+//   · Python 走桌面版 bc_py_run（白名单 + 超时），浏览器版不给入口。
 
 const RUN_TIMEOUT = 8000;      // 单次运行上限（毫秒）
 const RUN_MAX_LINES = 400;     // 最多回传多少条输出（防一行一打印刷爆 DOM）
@@ -6723,9 +6737,114 @@ function buildHtmlRunDoc(id, code) {
   return bridge + h;
 }
 
+// JS 沙箱（Web Worker）：把用户代码与运行时桥拼成 Worker 源码字符串，经 blob URL 起 Worker。
+// 与 iframe 方案的对应关系：
+//   · 序列化 S()/console 重定向/done 协议/MAX 行数截断 —— 与 runBridgeSrc 同一套语义；
+//   · 没有 parent.postMessage，Worker 里就是 postMessage（发回宿主线程）；
+//   · 没有 document/DOM —— 恰恰是隔离性的一部分（用户代码摸不到宿主页面）；
+//   · alert/prompt/confirm 在 Worker 里不存在，给空实现并回传一条 log，
+//     保持与旧沙箱一致的可观测性（不静默）。
+function buildWorkerSrc(code) {
+  const lit = JSON.stringify(String(code)).replace(/</g, '\\u003c');
+  return '(function(){'
+    + 'var N=0,MAX=' + RUN_MAX_LINES + ';'
+    + 'function S(v){try{'
+    + 'if(v===undefined)return "undefined";'
+    + 'if(v===null)return "null";'
+    + 'var t=typeof v;'
+    + 'if(t==="string")return v;'
+    + 'if(t==="number"||t==="boolean"||t==="bigint")return String(v);'
+    + 'if(t==="function")return "[Function "+(v.name||"anonymous")+"]";'
+    + 'if(t==="symbol")return v.toString();'
+    + 'if(v instanceof Error)return (v.name||"Error")+": "+v.message;'
+    + 'var seen=[];'
+    + 'return JSON.stringify(v,function(k,x){'
+    + 'if(typeof x==="function")return "[Function]";'
+    + 'if(x===undefined)return "[undefined]";'
+    + 'if(typeof x==="object"&&x!==null){if(seen.indexOf(x)>=0)return "[Circular]";seen.push(x);}'
+    + 'return x;},2);'
+    + '}catch(e){try{return String(v);}catch(_){return "[无法显示]";}}}'
+    + 'function bcsnd(t,p){N++;'
+    + 'if(N>MAX){if(N===MAX+1){postMessage({t:"log",p:{lvl:"warn",text:"输出过多，仅保留前 "+MAX+" 条"}});}return;}'
+    + 'postMessage({t:t,p:p});}'
+    + 'var mk=function(l){return function(){var a=[];'
+    + 'for(var i=0;i<arguments.length;i++)a.push(S(arguments[i]));'
+    + 'bcsnd("log",{lvl:l,text:a.join(" ")});};};'
+    + 'var C={log:mk("log"),info:mk("log"),debug:mk("log"),dir:mk("log"),'
+    + 'table:mk("log"),trace:mk("log"),warn:mk("warn"),error:mk("err"),'
+    + 'clear:function(){},group:function(){},groupEnd:function(){},time:function(){},timeEnd:function(){}};'
+    + 'self.console=C;'
+    + 'self.alert=function(){bcsnd("log",{lvl:"log",text:"[alert]"});};'
+    + 'self.prompt=function(){return null;};'
+    + 'self.confirm=function(){return true;};'
+    + 'self.onerror=function(m,s,l,c,err){bcsnd("log",{lvl:"err",text:S(err||m)});};'
+    + 'self.addEventListener("unhandledrejection",function(e){'
+    + 'bcsnd("log",{lvl:"err",text:"未处理的 Promise 拒绝："+S(e&&e.reason)});});'
+    + 'var out=function(){var a=[];for(var i=0;i<arguments.length;i++)a.push(S(arguments[i]));'
+    + 'bcsnd("log",{lvl:"log",text:a.join(" ")});};'
+    + 'try{'
+    + '(new Function("console","print","alert","prompt","confirm",' + lit + '))'
+    + '(C,out,self.alert,self.prompt,self.confirm);'
+    + 'bcsnd("done",{ok:1});'
+    + '}catch(e){bcsnd("log",{lvl:"err",text:S(e)});bcsnd("done",{ok:0});}'
+    + '})();';
+}
+
+// 起一个 Worker 跑 JS。事件契约与 runInSandbox 一致：
+//   {type:'log',lvl} / {type:'done'} / {type:'error',text} / {type:'timeout'}
+// 关键差异：超时用 worker.terminate() **强杀**（同步死循环也跑不掉），不是摘节点。
+// 创建失败（无 Worker / blob 受限等）返回 null，由调用方降级 iframe 沙箱。
+function runInWorker(code, onEvent) {
+  const id = 'r' + (++_runSeq);
+  let worker = null, url = '', dead = false, timer = null, sawDone = false;
+  function kill() {
+    if (dead) return; dead = true;
+    if (timer) { clearTimeout(timer); timer = null; }
+    try { if (worker) { worker.terminate(); worker = null; } } catch (e) { }
+    if (url) { try { URL.revokeObjectURL(url); } catch (e) { } url = ''; }
+  }
+  function onMsg(e) {
+    if (dead) return;
+    const d = e && e.data;
+    if (!d || typeof d !== 'object') return;
+    if (d.t === 'log') {
+      const p = d.p || {};
+      onEvent({ type: 'log', lvl: p.lvl === 'err' ? 'err' : (p.lvl === 'warn' ? 'warn' : 'log'), text: String(p.text == null ? '' : p.text) });
+      return;
+    }
+    if (d.t === 'done') { sawDone = true; onEvent({ type: 'done' }); setTimeout(kill, 40); return; }
+  }
+  try {
+    const W = (typeof Worker !== 'undefined') ? Worker : (window.Worker || null);
+    if (typeof W !== 'function') return null;
+    url = URL.createObjectURL(new Blob([buildWorkerSrc(code)], { type: 'text/javascript' }));
+    worker = new W(url);
+    worker.onmessage = onMsg;
+    worker.onerror = function (e) {
+      if (dead) return;
+      onEvent({ type: 'error', text: String((e && e.message) || e) });
+      kill();
+    };
+  } catch (e) {
+    return null;   // 起不来就降级 iframe，不 regression
+  }
+  timer = setTimeout(function () {
+    if (sawDone) return;
+    onEvent({ type: 'timeout' });
+    kill();
+  }, RUN_TIMEOUT);
+  return { id: id, frame: null, kill: kill };
+}
+
 // 起一个沙箱跑一段代码。事件按次回调：
 //   {type:'log',lvl} / {type:'height',h} / {type:'done'} / {type:'error',text} / {type:'timeout'}
+// 分流（P1-5）：js → Web Worker（可强杀，失败降级 iframe）；html → iframe（预览要 DOM）。
 function runInSandbox(kind, code, onEvent, mountEl) {
+  if (kind === 'js') {
+    const wh = runInWorker(code, onEvent);
+    if (wh) return wh;
+    // Worker 不可用：降级 iframe 沙箱（老路径，行为与 P1-5 之前一致）
+  }
   let frame = null, dead = false, timer = null, sawDone = false;
   const id = 'r' + (++_runSeq);
   function kill() {
@@ -15402,6 +15521,9 @@ document.addEventListener('keydown', function (e) {
   }, true);
   window.addEventListener('blur', closeMenu);
   window.addEventListener('resize', closeMenu);
+  // 跨 IIFE 边界：insertText 被 STT 语音识别回填调用（L13589，IIFE 外裸调用）。
+  // 2026-10-13 实测 typeof insertText === 'undefined'，语音识别填入输入框必然报错。
+  window.insertText = insertText;
 })();
 
 // ==================== 命令面板 ====================
@@ -19557,7 +19679,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.9.3';
+var APP_VERSION = '3.9.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
