@@ -1391,7 +1391,7 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
    CSS 从未定义（2026-10-13 用户截图实测：空 textarea 的基线是其底边，59px 高的框
    按 inline-block 与文字基线对齐时整体上跳、脱离 label 悬在表单中部；input/select
    也全是浏览器默认宽度不拉伸）。定义成 flex 列字段 + 满宽控件，与项目输入惯例一致 */
-.fld{display:flex;flex-direction:column;gap:6px;min-width:0}
+.fld{display:flex;flex-direction:column;gap:var(--sp-3);min-width:0}
 .fld>span{font-size:var(--fs-sm);color:var(--sub)}
 .ipt{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;min-width:0;transition:border-color var(--dur-3) var(--ease)}
 .ipt:focus{outline:none;border-color:var(--brand)}
