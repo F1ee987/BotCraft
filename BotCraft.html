@@ -7005,6 +7005,8 @@ function runBoxHtml(kind) {
     + '<span class="md-runout-st">运行中…</span>'
     + '<button type="button" class="md-runout-btn" onclick="closeRunBox(this)">关闭</button>'
     + '</div>'
+    // 沙箱边界明示（P1 安全审计）：尽力而为的受限环境 ≠ 强隔离，明示防用户跑不可信代码
+    + '<div class="sub" style="opacity:.75">沙箱为尽力而为的受限环境，请勿运行来源不可信的代码</div>'
     // HTML 模式下输出区默认藏着（预览才是主体），有 console 输出时才露出来
     + '<pre class="md-runout-body' + (isHtml ? ' hide' : '') + '"></pre>';
 }
@@ -13029,6 +13031,17 @@ function hydrateLazyMedia(root) {
     el.parentNode.insertBefore(btn, el);
   });
 }
+// blob: URL 只在创建它的页面会话内有效——刷新/重启后历史里回放必然 onerror。
+// 与其让用户对着一个永远转圈的死播放器，不如给出明确占位说明边界（P0-2 的「假持久化」面）。
+function _mediaDeadNote(el, text) {
+  el.onerror = function () {
+    if (!el.parentNode) return;
+    var note = document.createElement('div');
+    note.className = 'sub';
+    note.textContent = text;
+    el.replaceWith(note);
+  };
+}
 function appendMsg(b, m, mi) {
   const chat = document.getElementById('chat'); if (!chat) return;
   const div = document.createElement('div');
@@ -13045,6 +13058,7 @@ function appendMsg(b, m, mi) {
       m.audio.forEach(function (src) {
         var au = document.createElement('audio'); au.className = 'msg-audio'; au.controls = true;
         if (_lazyMedia(div, au, src, '播放音频')) return;
+        _mediaDeadNote(au, '音频无法播放：录音未持久化（刷新或重启后失效），如需保留请另存原文件');
         au.src = src; div.appendChild(au);
       });
     }
@@ -13053,6 +13067,7 @@ function appendMsg(b, m, mi) {
         var vv = document.createElement('video'); vv.className = 'msg-video'; vv.controls = true; vv.muted = true; vv.playsInline = true;
         if (m.frames && m.frames.length && String(m.frames[0]).length < LAZY_MEDIA_MIN) vv.poster = m.frames[0];
         if (_lazyMedia(div, vv, item && item.url, '播放视频')) return;
+        _mediaDeadNote(vv, '视频无法播放：媒体未持久化（刷新或重启后失效），如需保留请另存原文件');
         vv.src = (item && item.url) || ''; div.appendChild(vv);
       });
     }
@@ -14100,6 +14115,9 @@ async function sendMsg() {
     } catch (e) { /* 抽帧失败不影响发送 */ }
   }
   b.history.push(entry);
+  // blob: URL 随页面生命周期销毁（刷新即失效，不止重启）：发的时候就把边界说清楚，
+  // 免得用户以为历史视频永久可回看、哪天 F5 之后才发现全裂（P0-2）。
+  if (vids.length) toast('视频仅本次会话有效：刷新或重启后历史里的视频将无法播放，需要保留请先另存到本地', 'warn', 8000);
   // 多模态提示：发送图片/视频帧时若当前模型可能不支持视觉，明确提醒（不阻止发送）
   if ((imgs.length || vids.length || (entry.frames && entry.frames.length)) && !isLikelyVisionModel(BotCraftAI.getConfig().model || '')) {
     toast('当前模型「' + (BotCraftAI.getConfig().model || '未设置') + '」可能不支持图片/视频识别，内容可能被忽略。建议改用视觉模型（如 gpt-4o / qwen-vl / glm-4v）', 'warn', 6000);
@@ -15087,6 +15105,21 @@ document.getElementById('importFile').addEventListener('change', e => {
 
 // ==================== 全部配置导出 / 导入（跨源迁移） ====================
 // 把本机所有 botcraft.* 键打包成 JSON，解决 file:// 与 localhost 源隔离导致数据互不可见的问题。
+// 导出脱敏：AI 配置里的 Key 类字段（含备用模型链逐项 apiKey）统一打码为 '***'——
+// 桌面版 DPAPI 密文、浏览器版明文都不出本机。导入侧遇 '***' 保留本机现值（见 importAllConfig），
+// 绝不能把 '***' 当真 Key 写进配置。清单只收「确为密钥」的字段；新加 Key 类字段必须同步补这里。
+function _maskCfgSecrets(cfg) {
+  const SK = ['apiKey', 'imageAPIKey', 'searchApiKey', 'sttAPIKey', 'embAPIKey'];
+  if (!cfg || typeof cfg !== 'object') return cfg;
+  SK.forEach(function (sk) { if (cfg[sk]) cfg[sk] = '***'; });
+  if (Array.isArray(cfg.modelChain)) {
+    cfg.modelChain = cfg.modelChain.map(function (it) {
+      if (it && it.apiKey) it.apiKey = '***';
+      return it;
+    });
+  }
+  return cfg;
+}
 function exportAllConfig() {
   const data = {};
   const keys = storage.keys();
@@ -15094,10 +15127,20 @@ function exportAllConfig() {
     const k = keys[i];
     if (k.indexOf('botcraft.') === 0) data[k] = storage.getItem(k);
   }
+  // 敏感键统一脱敏（含备用模型链逐项 Key）。解析失败 = 内容不可信：fail-closed 直接跳过
+  // 该键并计数明示，绝不「按原样导出」——异常路径恰恰是最不能泄密的路径。
+  let skippedSecret = 0;
+  Object.keys(data).forEach(function (k) {
+    if (k.indexOf('botcraft.ai.config') !== 0) return;
+    try {
+      const cfg = JSON.parse(data[k]);
+      data[k] = JSON.stringify(_maskCfgSecrets(cfg));
+    } catch (e) { delete data[k]; skippedSecret++; }
+  });
   const payload = {
     app: 'BotCraft', version: 1,
     exportedAt: new Date().toISOString(),
-    note: 'BotCraft 全量配置：机器人 / 知识库 / 收藏 / 账号 / AI 设置',
+    note: 'BotCraft 全量配置：机器人 / 知识库 / 收藏 / 账号 / AI 设置（API Key 已脱敏为 ***，不在文件内）',
     data: data,
   };
   const filename = 'botcraft-config-' + new Date().toISOString().slice(0, 10) + '.json';
@@ -15108,17 +15151,20 @@ function exportAllConfig() {
       pass = (pass || '').trim();
       if (!pass) {
         _downloadJson(filename, payload);
-        toast('已导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人，未加密）', 'ok');
+        toast('已导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人，未加密）'
+          + (skippedSecret ? '；' + skippedSecret + ' 项 AI 配置解析失败已跳过' : '') + '。API Key 已脱敏，不在文件内', 'ok');
         return;
       }
       bcEncrypt(crypto.subtle, JSON.stringify(payload), pass).then(function (env) {
         _downloadJson(filename, env);
-        toast('已加密导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人）', 'ok');
+        toast('已加密导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人）'
+          + (skippedSecret ? '；' + skippedSecret + ' 项 AI 配置解析失败已跳过' : ''), 'ok');
       }).catch(function (e) { toast('加密失败：' + e.message, 'err'); });
-    }, '留空则不加密（含明文 API Key，外传有泄露风险）；填写则用 AES-GCM 加密，导入时需同一口令。');
+    }, '留空则不加密（明文 JSON，API Key 已脱敏）；填写则用 AES-GCM 加密，导入时需同一口令。');
   } else {
     _downloadJson(filename, payload);
-    toast('已导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人，未加密）', 'ok');
+    toast('已导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人，未加密）'
+      + (skippedSecret ? '；' + skippedSecret + ' 项 AI 配置解析失败已跳过' : '') + '。API Key 已脱敏，不在文件内', 'ok');
   }
 }
 // 将导入文件中「按旧用户名分键」的机器人/知识库/收藏合并到当前登录账号，避免换用户名后看不到数据
@@ -15160,6 +15206,35 @@ async function importAllConfig(file) {
         try { payload = JSON.parse(dec.text); } catch (e) { toast('解密后内容不是合法 JSON', 'err'); return; }
       }
       const data = (payload && payload.data && typeof payload.data === 'object') ? payload.data : payload;
+      // 导出侧 Key 已脱敏为 '***'（见 _maskCfgSecrets）：导入时 '***' 字段保留本机现值
+      //（本机没有则留空），绝不能把 '***' 当真 Key 写进配置——否则导入后所有调用直接 401。
+      // 备用模型链逐项 Key 按 label+baseURL+model 匹配本机对应项找回。
+      Object.keys(data).forEach(function (k) {
+        if (k.indexOf('botcraft.ai.config') !== 0) return;
+        try {
+          const inc = JSON.parse(typeof data[k] === 'string' ? data[k] : JSON.stringify(data[k]));
+          if (!inc || typeof inc !== 'object') return;
+          let cur = null;
+          try { cur = JSON.parse(storage.getItem(k) || 'null'); } catch (e) { cur = null; }
+          ['apiKey', 'imageAPIKey', 'searchApiKey', 'sttAPIKey', 'embAPIKey'].forEach(function (sk) {
+            if (inc[sk] === '***') inc[sk] = (cur && cur[sk]) || '';
+          });
+          if (Array.isArray(inc.modelChain)) {
+            inc.modelChain = inc.modelChain.map(function (it) {
+              if (!it || it.apiKey !== '***') return it;
+              let hit = null;
+              if (Array.isArray(cur && cur.modelChain)) {
+                hit = cur.modelChain.filter(function (c) {
+                  return c && c.label === it.label && c.baseURL === it.baseURL && c.model === it.model;
+                })[0];
+              }
+              it.apiKey = (hit && hit.apiKey) || '';
+              return it;
+            });
+          }
+          data[k] = JSON.stringify(inc);
+        } catch (e) { /* 该键不是合法 JSON：按原值走通用导入路径，失败会进 failed 明示 */ }
+      });
       let count = 0, failed = [];
       Object.keys(data).forEach(function (k) {
         if (k.indexOf('botcraft.') !== 0) return;
@@ -20375,7 +20450,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.10.0';
+var APP_VERSION = '3.11.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
