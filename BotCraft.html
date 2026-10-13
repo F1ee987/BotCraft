@@ -1722,6 +1722,18 @@ html[data-theme='light'] #anaSettings .field select:focus{
 .sat-bar{flex:1;height:6px;min-width:40px;background:var(--fill);border-radius:var(--r-full);overflow:hidden}
 .sat-bar i{display:block;height:100%;background:var(--brand);border-radius:var(--r-full)}
 .sat-pct{flex:none;width:42px;text-align:right;color:var(--txt);font-weight:600}
+.fb-diagnose{display:flex;flex-direction:column;gap:var(--sp-5)}
+.fb-dx{display:flex;gap:var(--sp-5);align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--fill)}
+.fb-dx-ic{flex:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.fb-dx-warn .fb-dx-ic{background:rgba(245,158,11,.18);color:#f59e0b}
+.fb-dx-ok .fb-dx-ic{background:rgba(16,185,129,.18);color:#10b981}
+.fb-dx-info .fb-dx-ic{background:rgba(99,102,241,.18);color:#818cf8}
+.fb-dx-body{flex:1;min-width:0}
+.fb-dx-dim{font-size:11px;color:var(--sub);font-weight:600;margin-bottom:2px}
+.fb-dx-text{font-size:13px;color:var(--txt)}
+.fb-dx-act{font-size:12px;color:var(--sub);margin-top:3px}
+.sec-h{display:flex;align-items:center;gap:var(--sp-4);font-size:15px;font-weight:700;color:var(--txt);margin:0}
+.sec-h .i{width:18px;height:18px;color:var(--sub)}
 .sat-cnt{flex:none;color:var(--sub);font-size:11px}
 .sat-empty{padding:var(--sp-4) 0;color:var(--sub);font-size:12px}
 .sat-ops{display:flex;gap:var(--sp-4);margin-top:var(--sp-5)}
@@ -2527,6 +2539,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="grid" id="extOnlineGrid"></div>
 
     <div class="grid" id="pluginGrid"></div>
+    <h3 class="sec-h" style="margin-top:22px"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 6h15v10H6z"/><path d="M3 10h3v6H3z"/></svg></span> 发现插件（官方示例市场）</h3>
+    <div class="hint" style="margin:-4px 0 10px">以下为官方整理的示例插件，点「安装」会从清单里的 updateUrl 拉取代码（桌面版直连；浏览器版请复制清单用「导入本地文件」安装）。已装插件可在此检查更新。</div>
+    <div class="grid" id="pluginMarket"></div>
   </main>
 
   <!-- ==================== 收藏 ==================== -->
@@ -2580,6 +2595,10 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button type="button" class="btn btn-ghost" onclick="exportFeedback()">导出评价数据</button>
         <button type="button" class="btn btn-ghost" onclick="resetFeedback()">重置评价数据</button>
       </div>
+    </div>
+    <div class="chart-box" style="margin-top:16px">
+      <h3><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.5 9.5h5M9.5 14.5h5"/></svg></span> 满意度诊断建议</h3>
+      <div id="fbDiagnose" class="fb-diagnose"></div>
     </div>
     <div class="chart-box" style="margin-top:16px">
       <h3><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="5.5" y="11" width="3.4" height="6"/><rect x="10.3" y="7" width="3.4" height="10"/><rect x="15.1" y="13" width="3.4" height="4"/></svg></span> 上传数据做自定义分析</h3>
@@ -3066,6 +3085,10 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <button class="btn btn-primary" style="flex:1" onclick="exportAllConfig()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></span> 导出全部配置</button>
       <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('importConfigFile').click()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span> 从文件导入</button>
       <input id="importConfigFile" type="file" accept="application/json,.json" style="display:none">
+    </div>
+    <div style="display:flex;gap:12px;margin:0 0 14px">
+      <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('botImportFile').click()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span> 导入单机器人（.bot.json）</button>
+      <input id="botImportFile" type="file" accept="application/json,.json,.bot.json" style="display:none">
     </div>
     <div class="hint" style="font-size:11.5px;color:var(--sub)">提示：① 导出请在「数据多的源」（如双击本地文件打开）操作；② <b style="color:var(--txt)">导入前先登录</b>（否则数据无法绑定到账号）；③ 再到目标源登录后导入。两端都是同一个源（都从 localhost 导出/导入）就会「没区别」。</div>
 
@@ -7630,6 +7653,205 @@ function runHistoryCsvName() {
 }
 /* ===== END MODULE: core/runhist ===== */
 
+/* ===== MODULE: core/botshare exports:buildBotShare,detectImportConflict,applyBotImport ===== */
+// P1-2 单机器人分享：把单个机器人（配置+工作流+知识库引用+插件+提示词）打包成一份
+// .bot.json，可单独发给别人导入；历史默认不带（体积+隐私）。冲突检测结果由 UI 据此弹
+// 「保留现有 / 覆盖 / 两者都留」让用户选，applyBotImport 落最终合并。
+function _cloneShareBot(b) {
+  try { return structuredClone(b || {}); } catch (e) { return {}; }
+}
+function _newBotId() {
+  return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+function buildBotShare(bot, opts) {
+  opts = opts || {};
+  if (!bot) return null;
+  var b = {};
+  ['n', 'd', 'c', 'tag', 'model', 'prompt', 'expertise', 'temperature'].forEach(function (k) {
+    if (bot[k] !== undefined) b[k] = bot[k];
+  });
+  b.nodes = Array.isArray(bot.nodes) ? bot.nodes : [];
+  b.edges = Array.isArray(bot.edges) ? bot.edges : [];
+  b.knowledges = Array.isArray(bot.knowledges)
+    ? bot.knowledges.map(function (k) {
+        var id = (k && k.id) ? k.id : k;
+        if (opts.resolveKb) {
+          var kb = opts.resolveKb(id);
+          if (kb) return { id: id, name: kb.name, content: kb.content };
+        }
+        return { id: id, name: (k && k.name) ? k.name : id };
+      })
+    : [];
+  b.plugins = Array.isArray(bot.plugins) ? bot.plugins.slice() : [];
+  var out = {
+    app: 'BotCraft', kind: 'bot', version: 1,
+    exportedAt: new Date().toISOString(),
+    note: 'BotCraft 单机器人分享文件。导入后需在本机为该模型配置 API Key。',
+    bot: b, includesHistory: !!opts.includeHistory
+  };
+  if (opts.includeHistory && Array.isArray(bot.history)) out.bot.history = bot.history;
+  return out;
+}
+function detectImportConflict(existing, incoming) {
+  if (!Array.isArray(existing) || !incoming || !incoming.bot) return { conflict: null };
+  var bot = incoming.bot;
+  for (var i = 0; i < existing.length; i++) {
+    if (bot.id && existing[i].id === bot.id) return { conflict: 'id', existingId: existing[i].id };
+    if (bot.n && existing[i].n === bot.n) return { conflict: 'name', existingId: existing[i].id };
+  }
+  return { conflict: null };
+}
+function applyBotImport(existing, incoming, decision) {
+  if (!incoming || !incoming.bot) return { bots: existing.slice(), bot: null };
+  var bot = incoming.bot, arr = existing.slice(), c, i, nb;
+  if (decision === 'replace') {
+    c = detectImportConflict(arr, incoming);
+    if (!c.existingId) return applyBotImport(arr, incoming, 'add');
+    for (i = 0; i < arr.length; i++) {
+      if (arr[i].id === c.existingId) {
+        nb = _cloneShareBot(bot); nb.id = c.existingId;
+        nb.createdAt = arr[i].createdAt || Date.now(); nb.updatedAt = Date.now();
+        arr[i] = nb; break;
+      }
+    }
+    return { bots: arr, bot: nb };
+  }
+  nb = _cloneShareBot(bot); delete nb.id; nb.id = _newBotId();
+  nb.createdAt = Date.now(); nb.updatedAt = Date.now();
+  if (decision === 'rename') nb.n = (bot.n || '机器人') + ' (导入)';
+  arr.push(nb);
+  return { bots: arr, bot: nb };
+}
+/* ===== END MODULE: core/botshare ===== */
+
+/* ===== MODULE: core/encfile exports:bcEncrypt,bcDecrypt,bcIsEncrypted ===== */
+// P1-3 导出加密：把配置 JSON 用口令加密后再落盘，避免明文 API Key 随导出文件外传
+// （见安全审计 P0-1）。算法：PBKDF2-SHA256 派生 256bit 密钥（迭代 210000，OWASP 2023
+// 对 PBKDF2-SHA256 的推荐下限）+ AES-GCM 认证加密（一次性 IV）。subtle 作为首个参数注入，
+// 桌面版/https 用原生 crypto.subtle，Node 测试注入 webcrypto.subtle；file:// 直开无 subtle
+// 时由调用方降级提示（不在这里兜底，避免纯 JS AES-GCM 的维护负担）。
+var BC_ENC_MAGIC = 'BCENC1';
+function _b64u(buf) {
+  var bytes = (buf instanceof Uint8Array) ? buf : new Uint8Array(buf), s = '';
+  for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function _b64uDecode(str) {
+  str = String(str).replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  var bin = atob(str), out = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function _encRandomBytes(n) {
+  var a = new Uint8Array(n);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(a);
+  else for (var i = 0; i < n; i++) a[i] = Math.floor(Math.random() * 256);
+  return a;
+}
+function bcIsEncrypted(obj) { return !!(obj && obj.enc === BC_ENC_MAGIC); }
+async function bcEncrypt(subtle, text, pass, opts) {
+  opts = opts || {};
+  var iter = opts.iterations || 210000;
+  var salt = _encRandomBytes(16), iv = _encRandomBytes(12);
+  var key = await subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  var ck = await subtle.deriveKey(
+    { name: 'PBKDF2', salt: salt, iterations: iter, hash: 'SHA-256' },
+    key, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  var ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv: iv }, ck, new TextEncoder().encode(text)));
+  return { enc: BC_ENC_MAGIC, kdf: 'PBKDF2', hash: 'SHA-256', cipher: 'AES-GCM',
+    iterations: iter, salt: _b64u(salt), iv: _b64u(iv), ct: _b64u(ct) };
+}
+async function bcDecrypt(subtle, obj, pass) {
+  if (!bcIsEncrypted(obj)) return { ok: false, reason: 'fmt' };
+  try {
+    var salt = _b64uDecode(obj.salt), iv = _b64uDecode(obj.iv);
+    var key = await subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+    var ck = await subtle.deriveKey(
+      { name: 'PBKDF2', salt: salt, iterations: obj.iterations || 210000, hash: 'SHA-256' },
+      key, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    var pt = await subtle.decrypt({ name: 'AES-GCM', iv: iv }, ck, _b64uDecode(obj.ct));
+    return { ok: true, text: new TextDecoder().decode(pt) };
+  } catch (e) { return { ok: false, reason: 'pass' }; }
+}
+/* ===== END MODULE: core/encfile ===== */
+
+/* ===== MODULE: core/fbdiagnose exports:diagnoseFeedback ===== */
+// P2-1 满意度数据行动闭环：collectFeedback() 只汇总「现状」（赞/踩/按机器人/按模型），
+// 但用户看到数字不知道「该改什么」。这里把数字落成可执行建议：哪个维度异常 → 该改哪。
+// fb = collectFeedback() 形态；usage = getUsage() 形态（totals.fb = 降级调用数）。
+var FB_DIAG_MIN = 10;       // 总评价样本低于这个数，不下结论（避免一两票的噪声）
+var FB_DIAG_LOW = 70;       // 整体好评率低于此视为偏低
+var FB_DIAG_BOT_LOW = 60;   // 单机器人/模型好评率低于此且样本足够，单独点名
+var FB_DIAG_FB_RATE = 0.3;  // 降级率（降级调用/总调用）高于此提示查主模型额度
+function satPctOf(o) {
+  var n = (o && ((o.up || 0) + (o.down || 0))) || 0;
+  return n ? Math.round((o.up || 0) / n * 100) : null;
+}
+function diagnoseFeedback(fb, usage) {
+  var out = [];
+  if (!fb) return out;
+  var up = fb.up || 0, down = fb.down || 0, total = up + down;
+  if (total < FB_DIAG_MIN) {
+    out.push({ level: 'info', dim: '样本', text: '评价样本不足（' + total + '/' + FB_DIAG_MIN + '），继续在对话里点「有用 / 没用」收集即可', action: '暂无' });
+    return out;
+  }
+  var pct = Math.round(up / total * 100);
+  if (pct < FB_DIAG_LOW) out.push({ level: 'warn', dim: '整体满意度', text: '整体好评率 ' + pct + '% 偏低', action: '检查全局提示词，给机器人补充知识库，或换更稳的模型' });
+  else out.push({ level: 'ok', dim: '整体满意度', text: '整体好评率 ' + pct + '%，表现健康', action: '保持' });
+  Object.keys(fb.byBot || {}).forEach(function (nm) {
+    var o = fb.byBot[nm], n = (o.up || 0) + (o.down || 0);
+    if (n >= 5) {
+      var bp = Math.round((o.up || 0) / n * 100);
+      if (bp < FB_DIAG_BOT_LOW) out.push({ level: 'warn', dim: '机器人', text: '「' + nm + '」好评率 ' + bp + '%（' + n + ' 次）偏低', action: '优化该机器人的提示词与知识库' });
+    }
+  });
+  Object.keys(fb.byModel || {}).forEach(function (mk) {
+    var o = fb.byModel[mk], n = (o.up || 0) + (o.down || 0);
+    if (n >= 5) {
+      var mp = Math.round((o.up || 0) / n * 100);
+      if (mp < FB_DIAG_BOT_LOW) out.push({ level: 'warn', dim: '模型', text: '模型 ' + mk + ' 好评率 ' + mp + '%（' + n + ' 次）偏低', action: '考虑在备用链里优先或更换主模型' });
+    }
+  });
+  var calls = (usage && usage.totals && usage.totals.calls) || 0;
+  var fbCalls = (usage && usage.totals && usage.totals.fb) || 0;
+  if (calls > 20 && fbCalls / calls > FB_DIAG_FB_RATE) {
+    out.push({ level: 'warn', dim: '降级率', text: '降级调用占比 ' + Math.round(fbCalls / calls * 100) + '%，主模型可能额度不足', action: '检查主模型配额，或在「备用模型链」补强' });
+  }
+  return out;
+}
+/* ===== END MODULE: core/fbdiagnose ===== */
+
+/* ===== MODULE: core/plugmarket exports:cmpVersion,checkPluginUpdate ===== */
+// P2-3 插件版本管理与市场：清单带 version（语义化 x.y.z）；已装插件与「发现插件」里的
+// 远程清单比对版本号，判断是否有更新。比对是纯函数，UI 用桌面版 bc_http 拉取远程清单、
+// 浏览器版提示「检查更新需桌面版」。
+function _splitVer(v) {
+  if (typeof v !== 'string') return null;
+  var m = v.trim().match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+function cmpVersion(a, b) {
+  var xa = _splitVer(a), xb = _splitVer(b);
+  if (!xa || !xb) return null;
+  for (var i = 0; i < 3; i++) {
+    if (xa[i] !== xb[i]) return xa[i] < xb[i] ? -1 : 1;
+  }
+  return 0;
+}
+function checkPluginUpdate(installed, remote) {
+  if (!installed || !remote) return 'unknown';
+  var c = cmpVersion(installed.version, remote.version);
+  if (c === null) return 'unknown';
+  if (c >= 0) return 'none';
+  var xi = _splitVer(installed.version), xr = _splitVer(remote.version);
+  if (!xi || !xr) return 'minor';
+  if (xr[0] > xi[0]) return 'major';
+  return 'minor';
+}
+/* ===== END MODULE: core/plugmarket ===== */
+
 // ---------- 变量 ----------
 // 每次新建正则：带 g 标志的正则对象有 lastIndex 状态，共用会在嵌套解析时串味
 function _flowRe() {
@@ -10036,6 +10258,7 @@ function cardMenu(e, id) {
     <button data-act="fav">${favorites.has(id) ? '取消收藏' : '收藏'}</button>
     <button data-act="dup"><svg class="ic-btn" aria-hidden="true"><use href="#ic-copy"/></svg>存为内置模板</button>
     <button data-act="pub">${svgIcon('upload')} 存为模板</button>
+    <button data-act="share">⇪ 分享（导出 .bot.json）</button>
     <button data-act="del" class="danger">${svgIcon('trash')} 删除</button>`;
   document.body.appendChild(pop);
   const r = el.getBoundingClientRect();
@@ -10074,6 +10297,7 @@ function cardMenu(e, id) {
     if (act === 'fav' && b) { toggleFavorite(id); }
     if (act === 'dup' && b) { publishToPlaza(b); }
     if (act === 'pub' && b) { publishToPlaza(b); }
+    if (act === 'share' && b) { exportBotToFile(id); }
     if (act === 'del' && b) {
       if (await confirmDialog(`确定删除「${b.n}」吗？此操作不可恢复。`)) {
         cwForgetBot(id);           // 释放画布撤销栈，见 cwForgetBot 注释
@@ -14876,16 +15100,26 @@ function exportAllConfig() {
     note: 'BotCraft 全量配置：机器人 / 知识库 / 收藏 / 账号 / AI 设置',
     data: data,
   };
-  const json = JSON.stringify(payload, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'botcraft-config-' + new Date().toISOString().slice(0, 10) + '.json';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  const filename = 'botcraft-config-' + new Date().toISOString().slice(0, 10) + '.json';
   let botCount = 0;
   Object.keys(data).forEach(function (k) { if (k.indexOf('botcraft.bots.v2.') === 0) { try { botCount += JSON.parse(data[k]).length; } catch (e) {} } });
-  toast('已导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人）', 'ok');
+  if (hasSubtle()) {
+    openNameInput('加密口令（可选）', '', function (pass) {
+      pass = (pass || '').trim();
+      if (!pass) {
+        _downloadJson(filename, payload);
+        toast('已导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人，未加密）', 'ok');
+        return;
+      }
+      bcEncrypt(crypto.subtle, JSON.stringify(payload), pass).then(function (env) {
+        _downloadJson(filename, env);
+        toast('已加密导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人）', 'ok');
+      }).catch(function (e) { toast('加密失败：' + e.message, 'err'); });
+    }, '留空则不加密（含明文 API Key，外传有泄露风险）；填写则用 AES-GCM 加密，导入时需同一口令。');
+  } else {
+    _downloadJson(filename, payload);
+    toast('已导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人，未加密）', 'ok');
+  }
 }
 // 将导入文件中「按旧用户名分键」的机器人/知识库/收藏合并到当前登录账号，避免换用户名后看不到数据
 function _mergeUserKey(prefix, targetUser) {
@@ -14912,9 +15146,19 @@ async function importAllConfig(file) {
   if (!requireLogin()) { toast('请先登录账号，导入的数据会绑定到当前账号', 'err'); return; }
   if (!(await confirmDialog('导入将覆盖本机现有的 BotCraft 配置（机器人 / 知识库 / 收藏 / 账号 / AI 设置），确定继续？', { danger: true, okText: '覆盖导入' }))) return;
   const reader = new FileReader();
-  reader.onload = function () {
+  reader.onload = async function () {
     try {
-      const payload = JSON.parse(decodeTextBytes(reader.result).text);
+      const rawText = decodeTextBytes(reader.result).text;
+      let payload;
+      try { payload = JSON.parse(rawText); } catch (e) { toast('解析失败：不是合法的配置 JSON', 'err'); return; }
+      if (bcIsEncrypted(payload)) {
+        if (!hasSubtle()) { toast('该文件已加密，但当前环境不支持解密（请用桌面版或 https）', 'err'); return; }
+        const pass = await new Promise(function (res) { openNameInput('输入解密口令', '', function (v) { res((v || '').trim()); }, '输入导出时设置的口令。'); });
+        if (!pass) { toast('解密需要口令', 'err'); return; }
+        const dec = await bcDecrypt(crypto.subtle, payload, pass);
+        if (!dec.ok) { toast('解密失败：口令错误或文件损坏', 'err'); return; }
+        try { payload = JSON.parse(dec.text); } catch (e) { toast('解密后内容不是合法 JSON', 'err'); return; }
+      }
       const data = (payload && payload.data && typeof payload.data === 'object') ? payload.data : payload;
       let count = 0, failed = [];
       Object.keys(data).forEach(function (k) {
@@ -14979,6 +15223,93 @@ function _reloadAfterImport() {
 document.getElementById('importConfigFile').addEventListener('change', function (e) {
   const f = e.target.files[0]; if (f) importAllConfig(f); e.target.value = '';
 });
+document.getElementById('botImportFile').addEventListener('change', function (e) {
+  const f = e.target.files[0]; if (f) importBotFromFile(f); e.target.value = '';
+});
+// ============ P1-2 单机器人分享 / 导入 ============
+function _downloadJson(filename, obj) {
+  try {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    return true;
+  } catch (e) { toast('下载失败：' + e.message, 'err'); return false; }
+}
+async function exportBotToFile(id) {
+  const b = getBot(id); if (!b) return;
+  const payload = buildBotShare(b, { resolveKb: (typeof getKb === 'function') ? getKb : null });
+  if (hasSubtle()) {
+    openNameInput('加密口令（可选）', '', function (pass) {
+      pass = (pass || '').trim();
+      if (!pass) {
+        _downloadJson((b.n || 'bot') + '.bot.json', payload);
+        toast('已导出「' + b.n + '」（未加密）', 'ok');
+        return;
+      }
+      bcEncrypt(crypto.subtle, JSON.stringify(payload), pass).then(function (env) {
+        _downloadJson((b.n || 'bot') + '.bot.json', env);
+        toast('已导出「' + b.n + '」（已加密）', 'ok');
+      }).catch(function (e) { toast('加密失败：' + e.message, 'err'); });
+    }, '留空则不加密（明文 .bot.json）；填写则用 AES-GCM 加密，对方需同一口令导入。');
+  } else {
+    _downloadJson((b.n || 'bot') + '.bot.json', payload);
+    toast('已导出「' + b.n + '」（当前环境不支持加密，已明文）', 'ok');
+  }
+}
+function importBotFromFile(file) {
+  if (!file) return;
+  if (!requireLogin()) { toast('请先登录账号，导入的机器人会绑定到当前账号', 'err'); return; }
+  const reader = new FileReader();
+  reader.onload = function () {
+    try {
+      const text = decodeTextBytes(reader.result).text;
+      let data;
+      try { data = JSON.parse(text); } catch (e) { toast('解析失败：不是合法的 JSON 文件', 'err'); return; }
+      const finish = function (payload) {
+        if (!payload || payload.kind !== 'bot' || !payload.bot) { toast('这不是单机器人分享文件（请用「从文件导入」恢复全部配置）', 'err'); return; }
+        const conflict = detectImportConflict(bots, payload);
+        if (!conflict.conflict) {
+          const r = applyBotImport(bots, payload, 'add');
+          bots = r.bots; saveBots(); renderGrid(); updateStats();
+          toast('已导入机器人「' + (r.bot && r.bot.n) + '」', 'ok'); return;
+        }
+        const ex = getBot(conflict.existingId);
+        confirmDialog('已存在同名/同 ID 的机器人「' + (ex ? ex.n : '') + '」。\n点「覆盖」用导入文件替换；点「取消」可改为导入为副本。', { title: '导入冲突', okText: '覆盖', cancelText: '取消' })
+          .then(function (ok) {
+            if (ok) {
+              const r = applyBotImport(bots, payload, 'replace');
+              bots = r.bots; saveBots(); renderGrid(); updateStats();
+              toast('已覆盖「' + (ex ? ex.n : '') + '」', 'ok'); return;
+            }
+            confirmDialog('改为导入为副本（重命名后保留两者）？', { title: '导入为副本', okText: '导入副本', cancelText: '取消' })
+              .then(function (ok2) {
+                if (!ok2) return;
+                const r = applyBotImport(bots, payload, 'rename');
+                bots = r.bots; saveBots(); renderGrid(); updateStats();
+                toast('已导入为副本「' + (r.bot && r.bot.n) + '」', 'ok');
+              });
+          });
+      };
+      if (bcIsEncrypted(data)) {
+        if (!hasSubtle()) { toast('该文件已加密，但当前环境不支持解密（请用桌面版或 https）', 'err'); return; }
+        openNameInput('输入解密口令', '', function (pass) {
+          pass = (pass || '').trim();
+          if (!pass) { toast('解密需要口令', 'err'); return; }
+          bcDecrypt(crypto.subtle, data, pass).then(function (res) {
+            if (!res.ok) { toast('解密失败：口令错误或文件损坏', 'err'); return; }
+            try { finish(JSON.parse(res.text)); } catch (e) { toast('解密后内容不是合法 JSON', 'err'); }
+          }).catch(function (e) { toast('解密失败：' + e.message, 'err'); });
+        }, '输入导出时设置的口令。');
+      } else {
+        finish(data);
+      }
+    } catch (e) { toast('导入失败：' + e.message, 'err'); }
+  };
+  reader.readAsArrayBuffer(file);
+}
 // 顶栏「💾 备份」专用弹窗
 function openDataMigrate() {
   document.getElementById('dataMigrateModal').classList.add('on');
@@ -17438,6 +17769,80 @@ function _kbNameFromUrl(url) {
 const kbImportEl = document.getElementById('kbImport');
 if (kbImportEl) kbImportEl.addEventListener('change', e => { Array.from(e.target.files || []).forEach(importKbFile); e.target.value = ''; });
 let _pluginFilter = '全部';
+// P2-3 插件市场：官方示例清单。updateUrl 指向清单文件（含 code + version），
+// 桌面版直连拉取安装；浏览器版提示手动导入。清单本身可由任何可访问的 URL 托管。
+const PLUGIN_MARKET = [
+  { id: 'weather-demo', name: '天气查询（示例）', version: '1.0.0', category: '工具', icon: '🌤',
+    desc: '演示用：根据城市返回天气摘要。', homepage: 'https://example.com/botcraft/weather-demo',
+    updateUrl: 'https://example.com/botcraft/weather-demo/manifest.json' },
+  { id: 'pdf-summary', name: 'PDF 摘要（示例）', version: '1.1.0', category: '文档', icon: '📄',
+    desc: '演示用：上传 PDF 生成结构化摘要。', homepage: 'https://example.com/botcraft/pdf-summary',
+    updateUrl: 'https://example.com/botcraft/pdf-summary/manifest.json' },
+  { id: 'todo-sync', name: '待办同步（示例）', version: '0.9.0', category: '效率', icon: '✅',
+    desc: '演示用：把对话里的事项同步到待办列表。', homepage: 'https://example.com/botcraft/todo-sync',
+    updateUrl: 'https://example.com/botcraft/todo-sync/manifest.json' },
+];
+function _pluginFetchJson(url) {
+  var api = (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+  if (api && typeof api.bc_http === 'function') {
+    return Promise.resolve(api.bc_http(String(url), 'GET', { 'Accept': 'application/json' }, '')).then(function (r) {
+      if (!r || !r.ok) throw new Error('HTTP ' + ((r && r.status) || 0));
+      return JSON.parse(r.text);
+    });
+  }
+  return fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } }).then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
+}
+function renderPluginMarket() {
+  var box = document.getElementById('pluginMarket'); if (!box) return;
+  box.innerHTML = PLUGIN_MARKET.map(function (p) {
+    var installed = extPlugins[p.id];
+    var ver = installed ? ('v' + installed.version) : ('v' + p.version + '（未装）');
+    var btn = installed
+      ? '<button class="style-view-btn" onclick="event.stopPropagation();checkPluginUpdateRemote(\'' + p.id + '\')">检查更新</button>'
+      : '<button class="style-view-btn" onclick="event.stopPropagation();installFromMarket(\'' + p.id + '\')">安装</button>';
+    return '<div class="bot-card plugin-card" data-mid="' + escapeAttr(p.id) + '">'
+      + '<div class="bot-avatar" style="background:linear-gradient(135deg,#8e7cff,#5b8def)">' + escapeHtml(p.icon || '🧩') + '</div>'
+      + '<h3>' + escapeHtml(p.name) + '</h3><p>' + escapeHtml(p.desc || '') + '</p>'
+      + '<div class="bot-meta"><span class="plugin-cat">' + escapeHtml(p.category || '示例') + '</span><span class="plugin-badge">' + escapeHtml(ver) + '</span></div>'
+      + '<div class="plugin-actions">' + btn + '<button class="mini-x" onclick="event.stopPropagation();openMarketDetail(\'' + p.id + '\')">详情</button></div>'
+      + '</div>';
+  }).join('');
+}
+async function installFromMarket(id) {
+  var p = PLUGIN_MARKET.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+  if (!(await confirmDialog('安装示例插件「' + p.name + '」？\n它将从 ' + p.updateUrl + ' 拉取代码并在隔离沙箱中安装。', { title: '安装插件', okText: '安装' }))) return;
+  toast('正在拉取插件清单…', '');
+  try {
+    var manifest = await _pluginFetchJson(p.updateUrl);
+    if (!manifest || !manifest.code) { toast('清单里没有可安装的 code 字段', 'err'); return; }
+    var r = await installExtPlugin(manifest);
+    if (r.ok) { renderPluginGrid(); renderPluginMarket(); toast('已安装「' + p.name + '」', 'ok'); }
+    else if (r.err) { toast('安装失败：' + r.err, 'err', 9000); }
+  } catch (e) { toast('拉取失败（桌面版可直连；浏览器版请复制清单用「导入本地文件」）：' + e.message, 'err', 10000); }
+}
+async function checkPluginUpdateRemote(id) {
+  var p = extPlugins[id]; if (!p) return;
+  var market = PLUGIN_MARKET.filter(function (x) { return x.id === id; })[0];
+  if (!market || !market.updateUrl) { toast('该插件不在官方市场，无法检查更新', 'err'); return; }
+  toast('正在检查更新…', '');
+  try {
+    var manifest = await _pluginFetchJson(market.updateUrl);
+    var upd = checkPluginUpdate({ version: p.version }, { version: manifest.version || market.version });
+    if (upd === 'none') { toast('已是最新（v' + p.version + '）', 'ok'); return; }
+    if (upd === 'unknown') { toast('无法判断版本（清单缺少 version）', 'err'); return; }
+    if (!(await confirmDialog('发现新版本：v' + p.version + ' → v' + (manifest.version || '?') + '（' + (upd === 'major' ? '大版本' : '小版本') + '更新）。\n是否更新？', { title: '插件更新', okText: '更新' }))) return;
+    var r = await installExtPlugin(manifest);
+    if (r.ok) { renderPluginGrid(); renderPluginMarket(); toast('已更新到 v' + (manifest.version || '?'), 'ok'); }
+    else if (r.err) { toast('更新失败：' + r.err, 'err', 9000); }
+  } catch (e) { toast('检查更新失败：' + e.message, 'err', 9000); }
+}
+function openMarketDetail(id) {
+  var p = PLUGIN_MARKET.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+  confirmDialog('插件：' + p.name + '（v' + p.version + '）\n分类：' + (p.category || '示例') + '\n' + p.desc + '\n\n主页：' + p.homepage + '\n清单地址：' + p.updateUrl, { title: '插件详情', okText: '知道了' });
+}
 function renderPluginGrid() {
   loadInstalledPlugins();
   extInitPage();   // 插件页初始化：加载第三方插件 + 回填注册表地址（原先漏接，见下）
@@ -17474,7 +17879,7 @@ function renderPluginGrid() {
     return `<div class="bot-card plugin-card" data-plug="${key}">
       <div class="bot-avatar" style="background:linear-gradient(135deg,#8e7cff,#5b8def)">${escapeHtml(p.icon || '🧩')}</div>
       <h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.desc || '')}</p>
-      <div class="bot-meta"><span class="plugin-cat">${escapeHtml(p.category || '第三方')}</span><span class="plugin-badge ${enabled ? 'on' : ''}">${enabled ? '🟢 已启用' : '已安装'}</span></div>
+      <div class="bot-meta"><span class="plugin-cat">${escapeHtml(p.category || '第三方')}</span><span class="plugin-badge ${enabled ? 'on' : ''}">${enabled ? '🟢 已启用' : '已安装'} · v${escapeHtml(p.version || '?')}</span></div>
       <div class="plugin-actions">
         ${enabled
           ? `<button class="style-view-btn" onclick="event.stopPropagation();disablePluginFromBot('${escAttrJs(key)}')">取消启用</button>`
@@ -17484,6 +17889,7 @@ function renderPluginGrid() {
     </div>`;
   }).join('');
   grid.innerHTML = `<div class="chip-row" style="grid-column:1 / -1">${chips}</div>` + cards + extCards;
+  renderPluginMarket();
   grid.querySelectorAll('.chip-row .chip').forEach(ch => { ch.onclick = () => { _pluginFilter = ch.dataset.cat; renderPluginGrid(); }; });
   grid.querySelectorAll('.plugin-card').forEach(el => { el.onclick = () => {
     const n = el.dataset.plug; if (!n) return;
@@ -18684,6 +19090,23 @@ function renderAnalytics() {
   // 满意度柱状 + 按机器人明细
   renderBarChart();
   renderSatList();
+  renderFbDiagnose();
+}
+function renderFbDiagnose() {
+  var box = document.getElementById('fbDiagnose'); if (!box) return;
+  var fb = collectFeedback();
+  var usage = null; try { usage = getUsage(); } catch (e) { usage = null; }
+  var list = diagnoseFeedback(fb, usage);
+  if (!list.length) { box.innerHTML = '<div class="sat-empty">暂无评价数据</div>'; return; }
+  box.innerHTML = list.map(function (d) {
+    var cls = d.level === 'warn' ? 'warn' : (d.level === 'ok' ? 'ok' : 'info');
+    var ic = d.level === 'warn' ? '⚠' : (d.level === 'ok' ? '✓' : 'ℹ');
+    return '<div class="fb-dx fb-dx-' + cls + '">'
+      + '<span class="fb-dx-ic">' + ic + '</span>'
+      + '<div class="fb-dx-body"><div class="fb-dx-dim">' + escapeHtml(d.dim) + '</div>'
+      + '<div class="fb-dx-text">' + escapeHtml(d.text) + '</div>'
+      + '<div class="fb-dx-act">建议：' + escapeHtml(d.action) + '</div></div></div>';
+  }).join('');
 }
 function renderLineChart() {
   const svg = document.getElementById('lineChart'); if (!svg) return;
@@ -19952,7 +20375,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.9.5';
+var APP_VERSION = '3.10.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -20134,6 +20557,10 @@ window.openSettings = openSettings; window.closeSettings = closeSettings;
 window.saveSettings = saveSettings; window.testConnection = testConnection;
 window.toggleFavorite = toggleFavorite;
 window.toggleCmdK = toggleCmdK; window.exportWorkflow = exportWorkflow; window.importWorkflowFromFile = importWorkflowFromFile; window.exportAllConfig = exportAllConfig; window.importAllConfig = importAllConfig; window.openDataMigrate = openDataMigrate; window.closeDataMigrate = closeDataMigrate;
+window.buildBotShare = buildBotShare; window.detectImportConflict = detectImportConflict; window.applyBotImport = applyBotImport; window.exportBotToFile = exportBotToFile; window.importBotFromFile = importBotFromFile;
+window.bcEncrypt = bcEncrypt; window.bcDecrypt = bcDecrypt; window.bcIsEncrypted = bcIsEncrypted;
+window.diagnoseFeedback = diagnoseFeedback; window.renderFbDiagnose = renderFbDiagnose;
+window.PLUGIN_MARKET = PLUGIN_MARKET; window.checkPluginUpdate = checkPluginUpdate; window.renderPluginMarket = renderPluginMarket; window.installFromMarket = installFromMarket; window.checkPluginUpdateRemote = checkPluginUpdateRemote;
 window.bkRefresh = bkRefresh; window.bkNow = bkNow; window.bkRestore = bkRestore; window.bkDelete = bkDelete; window.renderStorageUsage = renderStorageUsage; window.storageUsageDetail = storageUsageDetail;
 window.openNameInput = openNameInput; window.closeNameInput = closeNameInput; window.confirmNameInput = confirmNameInput; window.nameInputKey = nameInputKey;
 window.publishAllBots = publishAllBots; window.publishTemplateBots = publishTemplateBots;
