@@ -3613,6 +3613,10 @@ function escAttrJs(s) {
     // 每项 {label, baseURL, apiKey, model}，最多 5 项；空数组 = 不启用（行为与本功能之前一致）。
     modelChain: [],
     provider: 'openai', baseURL: PROVIDERS.openai.base, apiKey: '', model: 'gpt-4o-mini',
+    // Key 按服务商分格记（{ [provider]: key }）：切换服务商时自动带入该服务商上次填的 Key，
+    // 避免把 A 家的 Key 发给 B 家端点（跨服务商串用）；切回来仍在，不用重打。
+    // 它只是「各服务商名下记着什么」，当前生效值仍然是 cfg.apiKey。
+    keyByProvider: {},
     temperature: 0.7, maxTokens: 2048, directCall: true, proxyURL: '', fallback: 'smart', fastReply: false,
     // 上下文超预算时用压缩摘要代替截断（默认开）。压缩有缓存，同一份内容只压一次；
     // 若关闭，则完全回退到旧行为（超限直接截断/丢弃，不产生任何额外调用）
@@ -15118,6 +15122,12 @@ function _maskCfgSecrets(cfg) {
       return it;
     });
   }
+  // 按服务商分格记的 Key：格子里存的同样是真 Key，漏掉就等于脱敏白做
+  if (cfg.keyByProvider && typeof cfg.keyByProvider === 'object') {
+    Object.keys(cfg.keyByProvider).forEach(function (p) {
+      if (cfg.keyByProvider[p]) cfg.keyByProvider[p] = '***';
+    });
+  }
   return cfg;
 }
 function exportAllConfig() {
@@ -15230,6 +15240,13 @@ async function importAllConfig(file) {
               }
               it.apiKey = (hit && hit.apiKey) || '';
               return it;
+            });
+          }
+          // 按服务商分格的 Key：'***' 逐格保留本机现值，其余照搬导入值
+          if (inc.keyByProvider && typeof inc.keyByProvider === 'object') {
+            Object.keys(inc.keyByProvider).forEach(function (p) {
+              if (inc.keyByProvider[p] !== '***') return;
+              inc.keyByProvider[p] = ((cur && cur.keyByProvider) ? cur.keyByProvider[p] : '') || '';
             });
           }
           data[k] = JSON.stringify(inc);
@@ -20072,6 +20089,7 @@ function setupSettingsUI() {
   const cfg = BotCraftAI.getConfig();
   const provSel = document.getElementById('set-provider');
   provSel.value = cfg.provider in PROVIDER_META ? cfg.provider : 'custom';
+  _curSelProvider = provSel.value;   // Key 跟随服务商切换：记住「当前是哪个服务商」
   document.getElementById('set-key').value = cfg.apiKey || '';
   // 免鉴权回填：显式勾过就勾上；没勾过但地址本身属于免鉴权端点（本机 / 免 Key 公共接口）
   // 也勾上，避免「明明能免 Key 调用，界面却显示未配置」的错位
@@ -20246,11 +20264,32 @@ async function refreshModelList() {
     _modelListBusy = false;
   }
 }
+// Key 跟随服务商切换：切走前把输入框里的 Key 存回「旧服务商」的格子，再带入「新服务商」
+// 上次填的 Key。以前只换接口地址和模型、Key 原样留在输入框 —— 从 OpenAI 切到 DeepSeek
+// 一点保存，OpenAI 的 Key 就被发去了 DeepSeek 端点（跨服务商串用，等于把 Key 交给不对的一方）。
+var _curSelProvider = null;
+function _swapKeyByProvider(fromP, toP) {
+  var keyEl = document.getElementById('set-key');
+  if (!keyEl || !window.BotCraftAI) return;
+  var cur = window.BotCraftAI.getConfig() || {};
+  var byP = (cur.keyByProvider && typeof cur.keyByProvider === 'object')
+    ? Object.assign({}, cur.keyByProvider) : {};
+  var typed = (keyEl.value || '').trim();
+  // 只在确实填了时记格；留空则清掉该格。不能让一个空值把已存的真 Key 覆盖掉 ——
+  // 免鉴权端点 / 本地模型本来就不需要 Key，留空是正常的。
+  if (fromP) { if (typed) byP[fromP] = typed; else delete byP[fromP]; }
+  window.BotCraftAI.updateConfig({ keyByProvider: byP });
+  keyEl.value = (toP && byP[toP]) ? byP[toP] : '';
+  setConnStatus((toP && byP[toP]) ? '已带入该服务商上次填写的 API Key' : '该服务商还没填过 Key，请填写', '');
+}
 document.addEventListener('change', e => {
   const provSel = document.getElementById('set-provider');
   if (e.target && e.target.id === 'set-provider') {
     const p = provSel.value, meta = PROVIDER_META[p];
     if (meta) {
+      // 换 Key 必须发生在改写 baseURL / 模型之前：顺序反了会拿新服务商的地址去记旧格
+      try { _swapKeyByProvider(_curSelProvider, p); } catch (err) { }
+      _curSelProvider = p;
       document.getElementById('set-base').value = meta.base || '';
       fillModelOptions(p, meta.models[0]);
       document.getElementById('set-model-custom').value = '';
@@ -20332,7 +20371,16 @@ function saveSettings() {
     toast('未填 API Key：将以无鉴权方式调用（本地模型 / 免 Key 接口适用）。若该接口要求鉴权，会返回 401。', 'warn', 6000);
   }
   if (!model) { toast('请选择或填写模型', 'err'); return; }
-  BotCraftAI.updateConfig({ provider, apiKey, baseURL, noAuth, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std', sttEndpoint, sttModel, sttAPIKey, embBaseURL, embModel, embAPIKey });
+  // Key 按服务商记格：保存时把当前 Key 归到当前服务商名下（留空则清格）。
+  // 这样下次切走再切回来，还能自动带回这个 Key。
+  var _kbp = {};
+  try {
+    var _c0 = BotCraftAI.getConfig() || {};
+    _kbp = (_c0.keyByProvider && typeof _c0.keyByProvider === 'object')
+      ? Object.assign({}, _c0.keyByProvider) : {};
+  } catch (e) { _kbp = {}; }
+  if (apiKey) _kbp[provider] = apiKey; else delete _kbp[provider];
+  BotCraftAI.updateConfig({ provider, apiKey, baseURL, noAuth, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std', sttEndpoint, sttModel, sttAPIKey, embBaseURL, embModel, embAPIKey, keyByProvider: _kbp });
   closeSettings();
   // 免鉴权（显式勾选 / 免 Key 端点）且地址填了，就是真的能调，别再报「本地降级回复」
   const head = (apiKey || (noAuth && baseURL))
@@ -20450,7 +20498,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.11.0';
+var APP_VERSION = '3.12.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');

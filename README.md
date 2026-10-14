@@ -31,6 +31,7 @@ python -m http.server 8000   # 访问 http://localhost:8000/BotCraft.html
 - 配置项存于 `botcraft.ai.config.v1`（localStorage）：`noAuth / provider / baseURL / apiKey / model / temperature / maxTokens / directCall / proxyURL / fallback / fastReply / autoCompress`，另有三组独立子配置 `image*`（文生图）、`search*`（联网检索）、`stt*`（语音识别）。`noAuth=true` 时 Key 留空也可调用，用于免 Key 公共接口与本机模型。
 - **免 Key**：设置面板点「🆓 免 Key 试用」（Pollinations 公共接口，无需注册）；此类接口容量共享、易限流，429 稍等重试即可。
 - **安全**：推荐关闭「浏览器直连」并配置代理 URL，由后端补 `Authorization` 隐藏 Key。`examples/` 目前只含插件示例（`examples/plugins/`），**不含代理示例**，需自行实现。
+- **API Key 跟随服务商**：Key 按服务商分格记在 `keyByProvider`（`{ [provider]: key }`）。切换服务商时，先把输入框里的 Key 存回旧服务商的格子，再自动带入新服务商上次填的 Key —— 不会把 A 家的 Key 发给 B 家端点，切回来也不用重打。留空则清掉该服务商的格子（本地模型 / 免鉴权本来就不需要 Key）。
 - **常见报错**：401 换 Key；403 + "Free quota exhausted" = 免费额度用完（阿里云百炼控制台关闭「用完即停」或换模型）；429 限流稍后重试；5xx 已自动重试。误删数据去「💾 备份」面板回滚（快照文件名即拍摄时刻）。
 
 ## 已知限制
@@ -38,7 +39,7 @@ python -m http.server 8000   # 访问 http://localhost:8000/BotCraft.html
 - 编排引擎是前端编排器：已支持同层并行与合流语义，无断点续跑；循环 20 次 / 单次运行 200 节点 / 嵌套 5 层为刻意闸门。
 - 数据在本地：桌面版落 `%APPDATA%\BotCraft\data.json`；浏览器版依赖 localStorage，换 origin / 清缓存会丢，请用「导出全部配置」迁移。
 - 自动备份是防损坏兜底（限频 10 分钟、保留 7 份），不是版本控制；长期留档请导出配置。
-- API Key 已 DPAPI 加密，且**导出配置时 Key 类字段（含备用模型链逐项 Key）一律脱敏为 `***` 不出本机**；本机数据与自动备份仍为明文 JSON，勿外传、勿同步进网盘 / 仓库。
+- API Key 已 DPAPI 加密，且**导出配置时 Key 类字段一律脱敏为 `***` 不出本机**（含备用模型链逐项 Key、按服务商分格记的 `keyByProvider`）；本机数据与自动备份仍为明文 JSON，勿外传、勿同步进网盘 / 仓库。新增任何 Key 类字段都必须同步补进脱敏清单，否则等于脱敏白做。
 - 代码运行按语言分流：JS 走 Web Worker（死循环可被强杀，不卡界面）；HTML 预览仍走 iframe 沙箱（需要 DOM，死循环会卡界面至 8 秒超时摘除）；Python 仅桌面版可用（白名单后端，进程级串行锁防并发串味）。**沙箱是尽力而为的受限环境，不是强隔离——请勿运行来源不可信的代码。**
 - 聊天里发送的视频/录音以 blob URL 随历史保存：**仅当前页面会话可回放，刷新或重启后失效**（历史消息里会显示占位说明），需要保留请先另存原文件。
 
