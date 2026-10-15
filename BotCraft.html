@@ -2041,6 +2041,13 @@ html[data-glass="on"] body .ctxp-box{
    重名会让后定义的覆盖前面的 —— 那两团光晕会悄悄换成这套 background-position 关键帧。
    （2026-10-15 差点踩上：第一版就叫 lgFlow。） */
 @keyframes lgSheen{0%{background-position:0% 0%}50%{background-position:100% 100%}100%{background-position:0% 0%}}
+/* ⚠️ 顶栏 / 侧栏有首屏入场动画（bcFade / bcSlideIn，见样式表前部「首屏入场序列」）。
+   一条 animation 属性只能有一份声明，而这条规则的特异性更高、位置更靠后 ——
+   只写 lgSheen 会把入场动画整个顶掉，首屏那一下淡入/滑入就没了（2026-10-15 自查发现）。
+   所以这里把两者**并列**写全；改前部那两行 boot 动画时，这两行必须同步。
+   减动效时上面那个媒体查询会用同特异性把它们一并归零，不受影响。 */
+html[data-glass="on"] body .topbar{animation:bcFade .5s var(--ease-out) backwards,lgSheen 9s linear infinite}
+html[data-glass="on"] body .sidebar{animation:bcSlideIn .56s var(--ease-out) .06s backwards,lgSheen 9s linear infinite}
 /* 减弱动态效果：流动停掉，静态玻璃照旧（玻璃是材质、不是动画，不该被一起关掉） */
 @media (prefers-reduced-motion: reduce){
   html[data-glass="on"] body .topbar, html[data-glass="on"] body .sidebar, html[data-glass="on"] body .ws-side,
@@ -2756,7 +2763,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
     <div class="field" style="display:flex;align-items:center;gap:8px">
       <input id="set-glass" type="checkbox" checked style="width:auto" onchange="toggleLiquidGlass()">
-      <label style="margin:0">液态玻璃视觉效果（折射模糊 + 高光流动）</label>
+      <label style="margin:0"><svg class="ic-btn" aria-hidden="true"><use href="#ic-droplet"/></svg>液态玻璃视觉效果（折射模糊 + 高光流动）</label>
       <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
         开启：整界面的玻璃面走真实折射（更深的模糊与饱和度），并有一道高光缓慢流过。关闭：降级为实底平面，低端机上更省性能。
         勾选即时生效，不必再按保存；选择随主题一样记住。系统开了「减弱动态效果」时，流动会自动停下、玻璃材质保留。
@@ -14483,18 +14490,23 @@ async function runReply(b, opt) {
             toast('画布已更新 🧩', 'ok', 4000);
             // 回执并进正文（markdown 引用块）：渲染、历史、重新生成全都自然带上，
             // 下一轮对话里模型也能看到自己刚才改了什么
-            full = full.replace(/\s*$/, '') + (full ? '\n\n' : '') + '> ' + iconToken('puzzle') + ' ' + _cMsg;
+            full = full.replace(/\s*$/, '') + (full ? '\n\n' : '') + '> ' + iconToken('puzzle') + _cMsg;
           } else {
             full = full.replace(/\[\s*CANVAS\s*:[^\]\n]*\]/gi, '').replace(/\n{3,}/g, '\n\n').trim();
             var _cErr = '画布没改：' + (_cV.error || '指令不合法')
               + (_cV.warnings && _cV.warnings.length ? '（' + _cV.warnings.join('；') + '）' : '');
             toast('画布指令有问题，未执行', 'warn', 4000);
-            full = full.replace(/\s*$/, '') + (full ? '\n\n' : '') + '> ' + iconToken('warn') + ' ' + _cErr;
+            full = full.replace(/\s*$/, '') + (full ? '\n\n' : '') + '> ' + iconToken('warn') + _cErr;
           }
         }
       } catch (e) { console.warn('[画布工具] 执行失败：', e); }
     }
     span.innerHTML = renderMarkdown(full);
+    // 图标哨兵只服务于「这一屏的渲染」。进了历史就会泄到三处：导出 Markdown / 复制全文
+    // 原样带走 NUL 垃圾字符；下一轮模型上下文里模型看得到它 —— 本项目有过「占位符被模型
+    // 照猫画虎学进回复」的前科（假图占位符）。所以落历史前剥掉，图标是渲染期装饰。
+    // （图标与文字的间距由 .i 的 margin-right 提供，剥掉后不会留下双空格。）
+    full = full.replace(ICON_TOKEN_RE, '');
     _histRef.push({ role: 'bot', text: full, who: activeBot.n, t: Date.now(), kbHits: _kbSnap(), model: _curModel() });
     // 流式气泡要补上 data-mi：它不走 appendMsg，之后若走增量收尾（如补图追加），
     // _finishGenAppend 靠 data-mi 判断「已画到第几条」，缺了会把这条回答重复画一遍。
@@ -19274,7 +19286,11 @@ window.recordUsage = function (model, pt, ct, isEst, viaFallback) {
 // 统计任何一环出错（会话结构异常 / 存储写满）都不能阻断对话主流程。
 function _recordSessionUsage(model, pt, ct, isEst) {
   try {
-    var b = getBot(currentId); if (!b) return;
+    // 归属必须用「正在生成的那一个」，不能用「当前选中的」：runReply 明确允许生成期间
+    // 换机器人（界面更新靠 _onScreen 收敛，这是设计而非疏漏），而 _generatingBotId 在
+    // 生成开始时落定、finally 里才清。用 currentId 会把 A 的花费记到 B 的会话头上。
+    var bid = (typeof _generatingBotId !== 'undefined' && _generatingBotId) ? _generatingBotId : currentId;
+    var b = getBot(bid); if (!b) return;
     var s = _activeSessionOf(b); if (!s) return;
     s.usage = addSessionUsage(s.usage, model, pt, ct, isEst, priceOf);
     b.updatedAt = Date.now();
@@ -20803,7 +20819,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.13.1';
+var APP_VERSION = '3.13.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
