@@ -1227,6 +1227,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .sess-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--sp-1)}
 .sess-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sess-sub{font-size:11px;color:var(--sub)}
+/* 对话头部状态行：在线状态 + 本会话用量。基线对齐让两种字号排在同一行不跳动；
+   超长时省略号截断（.ch-id 本身可收缩），绝不给头部增加固定宽度。 */
+.ch-stat-row{display:flex;align-items:baseline;gap:var(--sp-4);min-width:0}
+.ch-usage{font-size:11px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .sess-acts{display:flex;gap:var(--sp-4);flex:0 0 auto;opacity:0;transition:var(--dur-2) var(--ease)}
 .sess-row:hover .sess-acts{opacity:1}
 .sess-acts em{font-style:normal;font-size:11.5px;color:var(--sub);padding:3px 7px;border-radius:var(--r-xs);background:var(--fill-strong)}
@@ -2418,7 +2422,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <div class="ava" id="chatAva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></div>
         <div class="ch-id">
           <div id="chatBotName" style="font-weight:600;font-size:14px">机器人</div>
-          <div style="font-size:11.5px;color:var(--sub)" id="chatStatus">在线 · 响应 &lt; 1s</div>
+          <div class="ch-stat-row">
+            <div style="font-size:11.5px;color:var(--sub)" id="chatStatus">在线 · 响应 &lt; 1s</div>
+            <!-- 本会话 Token 用量与费用估算：挂在会话对象上，切换会话各自独立、即时更新 -->
+            <span class="ch-usage" id="sessUsageTag" title="当前会话累计 Token 与费用估算"></span>
+          </div>
         </div>
         <div style="flex:1;min-width:0"></div>
         <div class="bot-switch" id="botSwitch">
@@ -10839,6 +10847,9 @@ function apiErrHint(err) {
 window.apiErrHint = apiErrHint;
 
 function refreshWorkspace() {
+  // 先刷用量行：放在 getBot 早退之前，切到「没有选中机器人」时那行也要归零，
+  // 不能留着上一条会话的数字（用户会以为还在计费）。
+  renderSessUsageTag();
   const b = getBot(currentId); if (!b) return;
   document.getElementById('wsName').textContent = b.n;
   document.getElementById('wsFlow').textContent = `工作流 · ${b.tag} · ${BotCraftAI.getConfig().model || 'gpt-4o-mini'}`;
@@ -14810,7 +14821,7 @@ function renderSessPanel() {
     var on = s.id === b.activeSession ? ' on' : '';
     return '<div class="sess-row' + on + '" data-sid="' + escapeAttr(s.id) + '" onclick="switchSession(\'' + escAttrJs(s.id) + '\')">'
       + '<span class="sess-main"><span class="sess-title">' + escapeHtml(sessionTitle(s)) + '</span>'
-      + '<span class="sess-sub">' + sessionMsgCount(s) + ' 条消息 · ' + escapeHtml(fmtSessTime(s.updatedAt || s.createdAt)) + '</span></span>'
+      + '<span class="sess-sub">' + sessionMsgCount(s) + ' 条消息' + sessRowUsage(s) + ' · ' + escapeHtml(fmtSessTime(s.updatedAt || s.createdAt)) + '</span></span>'
       + '<span class="sess-acts">'
       + '<em onclick="event.stopPropagation();renameSession(\'' + escAttrJs(s.id) + '\')">重命名</em>'
       + (b.sessions.length > 1 ? '<em onclick="event.stopPropagation();deleteSession(\'' + escAttrJs(s.id) + '\')">删除</em>' : '')
@@ -14930,6 +14941,7 @@ function switchSession(sid, silent) {
   renderHistory(b); renderQuickBar();
   if (!silent) toast('已切换到「' + sessionTitle(next) + '」', 'ok');
   renderSessPanel();
+  renderSessUsageTag();   // 切换会话：用量行换成新会话的数字（各自独立，不累计）
 }
 function newSession() {
   if (sessionOpGuard()) return;
@@ -14943,6 +14955,7 @@ function newSession() {
   b.history = s.history;
   b.updatedAt = Date.now(); saveBots();
   renderHistory(b); renderQuickBar(); closeSessPanel();
+  renderSessUsageTag();   // 新会话从 0 开始
   var inp = document.getElementById('msgInput'); if (inp) inp.focus();
   toast('已新建会话', 'ok');
 }
@@ -14965,6 +14978,7 @@ async function deleteSession(sid) {
   }
   b.updatedAt = Date.now(); saveBots();
   renderSessPanel();
+  renderSessUsageTag();   // 删的可能正是当前会话：那行要换成新当前会话的数字
   toast('已删除会话', 'ok');
 }
 // 行内重命名：不用 window.prompt —— 桌面端 WebView 里它是 no-op
@@ -19011,6 +19025,69 @@ function usageDayKey(ts) {
   var d = new Date(ts);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
+/* ===== MODULE: core/sessusage exports:coerceSessionUsage,sessionUsageCost,sessionUsageSummary,addSessionUsage ===== */
+/* 单会话（一个机器人的一条 session）的 Token 用量与费用。
+   挂在会话对象上（s.usage），随机器人一起落盘 —— 隔离靠的是「对象本身」而不是机器人**名字**
+   这类会变的键：此前全局统计只有按机器人名聚合一档，改名即丢统计，且一个机器人多条会话时
+   全糊在一起，看不出是哪条会话烧的钱。
+   cost 不累加、每次从 models 明细按 priceOf 重算：单价表会变（新增模型 / 调价），累加值会
+   悄悄漂成旧价，重算则永远与当前口径一致。models 明细也让「这条会话分别用了哪些模型」可查。 */
+function coerceSessionUsage(u) {
+  var r = { calls: 0, pt: 0, ct: 0, est: 0, cost: 0, models: {} };
+  if (!u || typeof u !== 'object') return r;
+  r.calls = Math.max(0, Math.round(Number(u.calls) || 0));
+  r.pt = Math.max(0, Math.round(Number(u.pt) || 0));
+  r.ct = Math.max(0, Math.round(Number(u.ct) || 0));
+  r.est = Math.max(0, Math.round(Number(u.est) || 0));
+  r.cost = Math.max(0, Number(u.cost) || 0);
+  if (u.models && typeof u.models === 'object') {
+    Object.keys(u.models).forEach(function (k) {
+      var m = u.models[k];
+      if (!m || typeof m !== 'object') return;
+      var pt = Math.max(0, Math.round(Number(m.pt) || 0));
+      var ct = Math.max(0, Math.round(Number(m.ct) || 0));
+      // 0/0 的档位是噪声：既不含信息，又会让 Object.keys 无谓增长
+      if (pt || ct) r.models[k] = { pt: pt, ct: ct };
+    });
+  }
+  return r;
+}
+// priceOf 由调用方注入（应用层的 PRICE_TABLE），模块本身不依赖任何全局 —— 保持可单测。
+function sessionUsageCost(u, priceOf) {
+  var c = (u && u.models) ? u : coerceSessionUsage(u), sum = 0;
+  Object.keys(c.models).forEach(function (k) {
+    var p = (typeof priceOf === 'function') ? priceOf(k) : null;
+    var pi = (p && p.length) ? (Number(p[0]) || 0) : 0;
+    var po = (p && p.length) ? (Number(p[1]) || 0) : 0;
+    sum += c.models[k].pt / 1e6 * pi + c.models[k].ct / 1e6 * po;
+  });
+  return sum > 0 ? sum : 0;
+}
+function sessionUsageSummary(u, priceOf) {
+  var c = coerceSessionUsage(u);
+  return {
+    calls: c.calls, pt: c.pt, ct: c.ct, tokens: c.pt + c.ct, est: c.est,
+    cost: sessionUsageCost(c, priceOf)
+  };
+}
+// 返回**新**对象（不改传入的旧对象）：调用方直接赋值回 s.usage，无需关心浅拷贝/别名问题。
+function addSessionUsage(u, model, pt, ct, isEst, priceOf) {
+  var c = coerceSessionUsage(u);
+  pt = Math.max(0, Math.round(Number(pt) || 0));
+  ct = Math.max(0, Math.round(Number(ct) || 0));
+  if (!pt && !ct) return c;   // 没有用量就不建档位、不涨调用数
+  c.calls += 1;
+  c.pt += pt;
+  c.ct += ct;
+  if (isEst) c.est += 1;
+  var mk = String(model || '').trim() || '未知模型';
+  if (!c.models[mk]) c.models[mk] = { pt: 0, ct: 0 };
+  c.models[mk].pt += pt;
+  c.models[mk].ct += ct;
+  c.cost = sessionUsageCost(c, priceOf);
+  return c;
+}
+/* ===== END MODULE: core/sessusage ===== */
 function loadUsage() {
   var d = null;
   try { d = JSON.parse(__storage.getItem(userScopedKey('usage')) || 'null'); } catch (e) { d = null; }
@@ -19051,10 +19128,30 @@ window.recordUsage = function (model, pt, ct, isEst, viaFallback) {
     bump(d.models[mk]);
     if (viaFallback) d.models[mk].fb = (d.models[mk].fb || 0) + 1;
     saveUsage(d);
+    // 按会话再记一档（挂在会话对象上，随机器人落盘）。全局统计回答「一共花了多少」，
+    // 这一档回答「这条对话花了多少」—— 切换会话时各自独立，互不串。
+    _recordSessionUsage(model, pt, ct, isEst);
     var pg = document.getElementById('page-analytics');
     if (pg && pg.style.display !== 'none') renderUsagePanel();   // 正看着分析页就实时刷新
   } catch (e) { /* 静默：统计失败不影响对话主流程 */ }
 };
+// 单会话用量写入 + 实时刷新。单独抽一层是为了让 recordUsage 的 catch 仍然兜得住它 ——
+// 统计任何一环出错（会话结构异常 / 存储写满）都不能阻断对话主流程。
+function _recordSessionUsage(model, pt, ct, isEst) {
+  try {
+    var b = getBot(currentId); if (!b) return;
+    var s = _activeSessionOf(b); if (!s) return;
+    s.usage = addSessionUsage(s.usage, model, pt, ct, isEst, priceOf);
+    b.updatedAt = Date.now();
+    saveBots();                 // 与消息本身同一条落盘路径（200ms 合并），不额外加噪
+    renderSessUsageTag();       // 对话窗口那行立刻跟上
+    if (_sessPanelOpen()) renderSessPanel();   // 会话列表开着才刷，别白跑
+  } catch (e) { /* 静默：与 recordUsage 同一口径 */ }
+}
+function _sessPanelOpen() {
+  var m = document.getElementById('sessModal');
+  return !!(m && m.classList.contains('on'));
+}
 // 统计输入侧字符数时跳过 data:URI（图片/音频 base64 不是「文本 token」，且体积巨大）
 function countPromptChars(messages) {
   var n = 0;
@@ -19110,6 +19207,33 @@ function fmtMoney(v) {
   if (v < 1) return '¥' + v.toFixed(3);
   if (v < 100) return '¥' + v.toFixed(2);
   return '¥' + v.toFixed(0);
+}
+// ---------- 单会话（session）用量展示 ----------
+// 对话窗口那行的文案。有估算值必须标出来：服务端没回 usage 时是按字符数估的，
+// 混在实测里会让人以为精度很高。
+function sessUsageText(u) {
+  var s = sessionUsageSummary(u, priceOf);
+  if (!s.calls) return '本会话 0 token · ¥0';
+  return '本会话 ' + fmtTokens(s.tokens) + ' token（入 ' + fmtTokens(s.pt) + ' / 出 ' + fmtTokens(s.ct) + '）'
+    + ' · ' + fmtMoney(s.cost) + (s.est ? '（含 ' + s.est + ' 次估算）' : '');
+}
+// 会话列表行内的用量：没花钱的会话只显示 token 数，不硬挂一个 ¥0（每行都挂 ¥0 是噪声）。
+function sessRowUsage(s) {
+  var x = sessionUsageSummary(s && s.usage, priceOf);
+  if (!x.calls) return ' · 0 token';
+  return ' · ' + fmtTokens(x.tokens) + ' token' + (x.cost > 0 ? ' · ' + fmtMoney(x.cost) : '');
+}
+// 切换机器人 / 会话时由 refreshWorkspace 等调用；每次 API 调用后由 _recordSessionUsage 调用。
+function renderSessUsageTag() {
+  var el = document.getElementById('sessUsageTag'); if (!el) return;
+  var u = null;
+  try { var b = getBot(currentId); var s = b && _activeSessionOf(b); u = s ? s.usage : null; } catch (e) { u = null; }
+  var x = sessionUsageSummary(u, priceOf);
+  el.textContent = sessUsageText(u);
+  el.title = '当前会话累计 ' + x.calls + ' 次调用 · 输入 ' + fmtTokens(x.pt) + ' / 输出 ' + fmtTokens(x.ct)
+    + ' token · 约 ' + fmtMoney(x.cost) + '。按各模型参考单价估算，仅为量级参考、非账单金额；'
+    + '切换会话后各自独立统计，互不累计。'
+    + (x.est ? '其中 ' + x.est + ' 次调用服务端未返回用量，已按字符数估算。' : '');
 }
 function renderUsagePanel() {
   var box = document.getElementById('usageCards'); if (!box) return;
@@ -20528,7 +20652,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.11.2';
+var APP_VERSION = '3.12.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
