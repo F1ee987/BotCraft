@@ -1993,6 +1993,46 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
    文字门槛），要品牌色得用 --brand-text —— 与其留一个会被误用的类，不如不提供。 */
 .i--ok{color:var(--ok-text)} .i--warn{color:var(--warn-text)}
 .i--danger{color:var(--danger-text)}
+/* ============ 液态玻璃（Liquid Glass）开关 ============
+   玻璃体系本来就是本应用的默认视觉语言（见样式表顶部那份 !important 清单：
+   backdrop-filter + --lg-spec 对角高光 + --lg-shadow 浮投影）。这个开关不是新增一种
+   特效，而是把既有体系做成可切换：默认开启 = 外观零变化；关掉则整体降级为实底平面，
+   顺带也是个性能选项（大面积 backdrop-filter 在低端机上滚动时成本很高）。
+
+   关闭态要盖住的是带 !important 的基线规则，三条同时满足才盖得动：
+   ① 选择器特异性更高 —— html[data-glass="off"] 比 body 多一个属性选择器
+   ② 同样带 !important
+   ③ 放在样式表更后面（同特异性时后者胜）
+   ⚠️ .modal 是整屏暗场遮罩：只去它的模糊，**绝不给实底** —— 否则遮罩变成一块死板，
+      弹窗背后的内容全被糊住。所以它只进第一条规则，不进第二条。 */
+#glassBtn{width:32px;height:32px;padding:0;border-radius:var(--r-full);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+#glassBtn .ic-btn{width:17px;height:17px}
+#glassBtn[aria-pressed="true"]{background:var(--brand-tint);box-shadow:0 0 0 1px var(--brand-line),0 4px 14px var(--brand-glow)}
+#glassBtn[aria-pressed="true"]:hover{background:var(--brand-tint-2)}
+html[data-glass="off"] body .topbar, html[data-glass="off"] body .sidebar, html[data-glass="off"] body .ws-side,
+html[data-glass="off"] body .mbox, html[data-glass="off"] body .toast, html[data-glass="off"] body .cmd-panel,
+html[data-glass="off"] body .pop-menu, html[data-glass="off"] body .ws-more-menu, html[data-glass="off"] body .bot-switch-menu,
+html[data-glass="off"] body .ch-more-menu, html[data-glass="off"] body .modal, html[data-glass="off"] body .modal-box,
+html[data-glass="off"] body .ctxp-box,
+html[data-glass="off"] body .stat-card, html[data-glass="off"] body .chart-box, html[data-glass="off"] body .brand-card,
+html[data-glass="off"] body .pub-card, html[data-glass="off"] body .batch-bar, html[data-glass="off"] body .main.scrolled > .page-head,
+html[data-glass="off"] body .cw-tools, html[data-glass="off"] body .cw-mini{
+  -webkit-backdrop-filter:none !important;
+  backdrop-filter:none !important;
+  background-image:none !important;
+}
+html[data-glass="off"] body .topbar, html[data-glass="off"] body .sidebar, html[data-glass="off"] body .ws-side,
+html[data-glass="off"] body .main, html[data-glass="off"] body .workspace,
+html[data-glass="off"] body .mbox, html[data-glass="off"] body .cmdk-box, html[data-glass="off"] body .toast,
+html[data-glass="off"] body .cmd-panel, html[data-glass="off"] body .pop-menu, html[data-glass="off"] body .ws-more-menu,
+html[data-glass="off"] body .bot-switch-menu, html[data-glass="off"] body .ch-more-menu, html[data-glass="off"] body .modal-box,
+html[data-glass="off"] body .ctxp-box, html[data-glass="off"] body .batch-bar,
+html[data-glass="off"] body .stat-card, html[data-glass="off"] body .chart-box, html[data-glass="off"] body .brand-card,
+html[data-glass="off"] body .pub-card{
+  box-shadow:none !important;
+  background:var(--popover) !important;
+  border-color:var(--line) !important;
+}
 /* 自适应高度输入框：高度交给 autoGrowTa() 按内容算，所以禁用手动拖拽 ——
    两套机制并存会出现「拖大了、一打字又跳回内容高度」的怪现象。
    这条必须留在样式表末尾：它要盖住前面 `.batch-area` / `.field textarea` /
@@ -2019,6 +2059,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <span class="model-tag model-tag-click" id="topModelTag" title="点击切换模型" onclick="openSettings()">gpt-4o-mini</span>
   <button class="btn btn-ghost btn-sm" onclick="toggleCmdK()" title="命令面板 (Cmd/Ctrl + K)">⌘K</button>
   <button id="themeBtn" class="btn btn-ghost btn-sm" onclick="toggleTheme()" title="切换深色/浅色主题" aria-label="切换主题"><span class="orb"></span></button>
+  <button id="glassBtn" class="btn btn-ghost btn-sm" onclick="toggleLiquidGlass()" title="液态玻璃视觉效果" aria-label="液态玻璃视觉效果" aria-pressed="true"><svg class="ic-btn" aria-hidden="true"><use href="#ic-droplet"/></svg></button>
   <button class="btn btn-ghost btn-sm" onclick="openDataMigrate()" title="数据备份与迁移（导入 / 导出配置）"><svg class="ic-btn" aria-hidden="true"><use href="#ic-save"/></svg>备份</button>
   <button class="btn btn-primary btn-sm" onclick="if(requireLogin())openCreate()">＋ 创建</button>
   <div id="userMenuWrap"></div>
@@ -2138,6 +2179,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <symbol id="ic-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15H2.8a2 2 0 1 1 0-4H3a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4.1V4a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11h.2a2 2 0 1 1 0 4H21z"/></symbol>
   <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
   <symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/></symbol>
+  <!-- 液态玻璃开关：水滴形 + 一道高光，读作「液体」；线性描边与全站一致 -->
+  <symbol id="ic-droplet" viewBox="0 0 24 24"><path d="M12 3.5c3.4 3.9 5.8 6.9 5.8 9.6a5.8 5.8 0 0 1-11.6 0C6.2 10.4 8.6 7.4 12 3.5z"/><path d="M9.7 14.1a2.5 2.5 0 0 0 2.1 2.5"/></symbol>
 </svg>
 
 <div class="modal" id="authModal">
@@ -16184,6 +16227,36 @@ function initTheme() {
   else mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   applyTheme(mode);
 }
+/* ==================== 液态玻璃（Liquid Glass）开关 ==================== */
+/* 玻璃体系本来就是本应用的默认视觉语言（见样式表顶部那份 !important 清单：
+   backdrop-filter + --lg-spec 对角高光 + --lg-shadow 浮投影）。这个开关不是新增一种
+   特效，而是把既有体系做成可切换：默认开启 = 外观零变化；关掉则整体降级为实底平面，
+   顺带也是个性能选项（大面积 backdrop-filter 在低端机上滚动时成本很高）。
+   持久化走 botcraft.glass，与 botcraft.theme 同一套路。 */
+var GLASS_KEY = 'botcraft.glass';
+function applyLiquidGlass(on) {
+  // 显式写 on/off 两个值，不做「删属性」：关闭态的 CSS 选择器是 [data-glass="off"]，
+  // 属性缺失时必须落到基线玻璃，而不是看起来像关着。
+  document.documentElement.setAttribute('data-glass', on ? 'on' : 'off');
+  var btn = document.getElementById('glassBtn');
+  if (btn) {
+    // 激活态不靠改形状（那就和旁边的主题按钮不对称了），靠 aria-pressed 驱动的
+    // 品牌淡底 + 1px 品牌描边 + 辉光：一眼看得出「开着」，且不与任何既有样式打架。
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.title = on ? '液态玻璃视觉效果（点击关闭）' : '液态玻璃视觉效果（点击开启）';
+  }
+}
+function toggleLiquidGlass() {
+  var on = document.documentElement.getAttribute('data-glass') !== 'off';
+  applyLiquidGlass(!on);
+  try { __storage.setItem(GLASS_KEY, !on ? 'on' : 'off'); } catch (e) {}
+  toast(!on ? '液态玻璃已开启' : '液态玻璃已关闭', 'ok');
+}
+function initLiquidGlass() {
+  var saved = null;
+  try { saved = __storage.getItem(GLASS_KEY); } catch (e) {}
+  applyLiquidGlass(saved !== 'off');   // 默认开启：既有外观不变
+}
 function renderCmdK(kw) {
   const list = document.getElementById('cmdkList'); if (!list) return;
   const k = (kw || '').trim().toLowerCase();
@@ -20680,7 +20753,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.12.2';
+var APP_VERSION = '3.13.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -20811,6 +20884,7 @@ window.manualCheckUpdate = manualCheckUpdate;
 
 function safeStart() {
   try { initTheme(); } catch (e) { console.error('initTheme failed', e); }
+  try { initLiquidGlass(); } catch (e) { console.error('initLiquidGlass failed', e); }
   // 版本检查是设置弹窗底部的手动按钮（用户明确要求：启动不弹窗、不做自动检测）
   // 启动本地提醒检查器（每 20s 检查到点提醒并弹通知；用户隔离）
   try { startReminderChecker(); } catch (e) { console.error('startReminderChecker failed', e); }
@@ -20875,6 +20949,7 @@ window.pickAvatarBg = pickAvatarBg; window.pickAvatarLetter = pickAvatarLetter; 
 window.resetAccountAvatar = resetAccountAvatar; window.onAccountAvatarFile = onAccountAvatarFile;
 window.renderAcctHeader = renderAcctHeader; window.avatarHtml = avatarHtml;
 window.toggleTheme = toggleTheme; window.applyTheme = applyTheme; window.initTheme = initTheme;
+window.toggleLiquidGlass = toggleLiquidGlass; window.applyLiquidGlass = applyLiquidGlass; window.initLiquidGlass = initLiquidGlass;
 window.__debug = {
   getBots: () => bots,
   getFavorites: () => [...favorites],
