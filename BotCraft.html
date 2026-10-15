@@ -20290,9 +20290,18 @@ document.addEventListener('change', e => {
       // 换 Key 必须发生在改写 baseURL / 模型之前：顺序反了会拿新服务商的地址去记旧格
       try { _swapKeyByProvider(_curSelProvider, p); } catch (err) { }
       _curSelProvider = p;
+      // 记住切换前的模型：新服务商内置列表里没有它时明说，别让用户以为选丢了
+      var _prevModel = (function () {
+        var s = document.getElementById('set-model').value;
+        return s === '__custom' ? (document.getElementById('set-model-custom').value || '').trim() : s;
+      })();
       document.getElementById('set-base').value = meta.base || '';
       fillModelOptions(p, meta.models[0]);
       document.getElementById('set-model-custom').value = '';
+      if (_prevModel && (meta.models || []).indexOf(_prevModel) < 0) {
+        setConnStatus('已切到 ' + meta.label + '，模型重置为 ' + meta.models[0]
+          + '（原模型 ' + _prevModel + ' 不在其内置列表）', '');
+      }
     }
   }
   if (e.target && e.target.id === 'set-model') {
@@ -20304,7 +20313,18 @@ document.addEventListener('change', e => {
   if (e.target && e.target.id === 'set-base') {
     setConnStatus('已修改接口地址，点「刷新列表」拉取最新模型', '');
   }
+  _syncSettingsPreview(e);
 });
+// 「即将使用」预览以前只在 setupSettingsUI（打开面板时）渲染一次：之后改服务商 / 模型 /
+// 地址 / 直连开关、点免 Key 预设、乃至保存，那行文字都停在打开面板时的旧快照 —— 于是出现
+// 「智谱 GLM · Qwen Plus」这种服务商与模型对不上的组合，用户还以为是选丢了
+// （2026-10-15 实测截图）。凡喂给预览的字段，change / input 一律重渲染。
+var _PREVIEW_FIELDS = ['set-provider', 'set-model', 'set-model-custom', 'set-base', 'set-direct'];
+function _syncSettingsPreview(e) {
+  var id = e && e.target && e.target.id;
+  if (_PREVIEW_FIELDS.indexOf(id) >= 0) renderSettingsPreview();
+}
+document.addEventListener('input', _syncSettingsPreview);
 function setConnStatus(msg, type = '') {
   const el = document.getElementById('connStatus'); if (!el) return;
   el.textContent = msg || '';
@@ -20318,6 +20338,13 @@ function renderSettingsPreview() {
     var modelCustom = (document.getElementById('set-model-custom').value || '').trim();
     var model = modelSel === '__custom' ? modelCustom : modelSel;
     var label = ((typeof resolveModelLabel === 'function' ? resolveModelLabel(model, provider) : model) || model || '未选择');
+    // 模型不在当前服务商的内置清单里时明确标出来。兼容网关确实可以这么配（智谱的端点上
+    // 跑 Qwen 的模型名），但不标出来就会显示成「智谱 GLM · Qwen Plus」这种张冠李戴，
+    // 看着像 bug —— 标一句「自定义模型名」让人看懂这是刻意选的，不是串了。
+    var _pm = PROVIDER_META[provider];
+    if (model && _pm && Array.isArray(_pm.models) && _pm.models.length && _pm.models.indexOf(model) < 0) {
+      label += '（自定义模型名）';
+    }
     var direct = document.getElementById('set-direct').checked;
     host.innerHTML = escapeHtml(label) + ' · ' + (direct ? '浏览器直连' : '走代理');
   } catch (e) {}
@@ -20400,6 +20427,8 @@ function saveSettings() {
     var _m = BotCraftAI.getConfig().model;
     _tg.textContent = (typeof resolveModelLabel === 'function' ? resolveModelLabel(_m) : _m) || _m || '未配置';
   }
+  // 保存后刷新「即将使用」：否则那行还停在打开面板时的旧快照，与刚存进去的配置对不上
+  renderSettingsPreview();
 }
 // 一键套用国内免费生图预设：只填「接口地址 + 模型」，Key 留给用户（各家密钥不通用，
 // 代填会误导）。接口路径 / 尺寸字段名 / 返回结构的差异由 generateImage 内部适配。
@@ -20426,6 +20455,7 @@ function applyFreePreset() {
   if (noAuthBox) noAuthBox.checked = true;
   if (modelSel) modelSel.value = '__custom';
   if (custom) { custom.style.display = ''; custom.value = 'openai-fast'; }
+  renderSettingsPreview();   // 预设是程序化改表单，不会派发 change，得手动刷预览
   var hint = document.getElementById('freeHint');
   if (hint) {
     hint.innerHTML = '已套用 <b>Pollinations</b>（免注册、免密钥，本机实测可达）。它是第三方公益接口，'
@@ -20498,7 +20528,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.11.1';
+var APP_VERSION = '3.11.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
