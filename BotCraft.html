@@ -1996,8 +1996,9 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 /* ============ 液态玻璃（Liquid Glass）开关 ============
    玻璃体系本来就是本应用的默认视觉语言（见样式表顶部那份 !important 清单：
    backdrop-filter + --lg-spec 对角高光 + --lg-shadow 浮投影）。这个开关不是新增一种
-   特效，而是把既有体系做成可切换：默认开启 = 外观零变化；关掉则整体降级为实底平面，
+   特效，而是把既有体系做成可切换：默认开启；关掉则整体降级为实底平面，
    顺带也是个性能选项（大面积 backdrop-filter 在低端机上滚动时成本很高）。
+   入口在「设置 → 基础」的复选框，不在顶栏 —— 顶栏那排按钮的宽度是算过的。
 
    关闭态要盖住的是带 !important 的基线规则，三条同时满足才盖得动：
    ① 选择器特异性更高 —— html[data-glass="off"] 比 body 多一个属性选择器
@@ -2005,10 +2006,49 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
    ③ 放在样式表更后面（同特异性时后者胜）
    ⚠️ .modal 是整屏暗场遮罩：只去它的模糊，**绝不给实底** —— 否则遮罩变成一块死板，
       弹窗背后的内容全被糊住。所以它只进第一条规则，不进第二条。 */
-#glassBtn{width:32px;height:32px;padding:0;border-radius:var(--r-full);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-#glassBtn .ic-btn{width:17px;height:17px}
-#glassBtn[aria-pressed="true"]{background:var(--brand-tint);box-shadow:0 0 0 1px var(--brand-line),0 4px 14px var(--brand-glow)}
-#glassBtn[aria-pressed="true"]:hover{background:var(--brand-tint-2)}
+
+/* 增强态：只改令牌、不重写规则。--glass-filter 由 --glass-blur / --glass-sat 拼成，
+   --lg-shadow 由 --lg-top / --lg-bottom / --lg-float 拼成 —— 改令牌即同时改掉全部
+   21 个玻璃面，且关闭态（[data-glass="off"]）完全不受影响。
+   自定义属性的替换发生在「使用它的元素」上，而这里与 :root 是同一个元素（html），
+   属性选择器特异性更高，所以覆盖生效。 */
+html[data-glass="on"]{
+  --glass-blur:44px;
+  --glass-sat:280%;
+  --lg-top:inset 0 1px 0 rgba(255,255,255,.42),inset 0 12px 22px -8px rgba(255,255,255,.26);
+  --lg-bottom:inset 0 -1px 0 rgba(0,0,0,.32),inset 0 -10px 18px -8px rgba(255,255,255,.12);
+  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.30),rgba(255,255,255,.11) 34%,rgba(255,255,255,.03) 56%,rgba(255,255,255,.16) 100%);
+}
+/* 流动特效：一道柔光缓慢扫过玻璃面。用 background-position 驱动，**不用伪元素 + transform**
+   —— 这些面里加 overflow:hidden 会剪掉内部 fixed 浮层（.topbar 里就有 .modal），
+   而 background-position 不需要裁剪。
+   ⚠️ 刻意不含 .main / .workspace：它们是大面积滚动容器，逐帧重画背景等于整页重绘，
+   与顶部那份「.main 不挂 backdrop-filter」的既有结论同一理由。卡片也不进 ——
+   数量不设上限，每张都动就是一场重绘风暴。 */
+html[data-glass="on"] body .topbar,
+html[data-glass="on"] body .sidebar,
+html[data-glass="on"] body .ws-side,
+html[data-glass="on"] body .mbox,
+html[data-glass="on"] body .cmdk-box,
+html[data-glass="on"] body .toast,
+html[data-glass="on"] body .cmd-panel,
+html[data-glass="on"] body .pop-menu,
+html[data-glass="on"] body .ctxp-box{
+  background-size:240% 240%;
+  animation:lgSheen 9s linear infinite;
+}
+/* 名字必须独一份：lgFlow / lgFlow2 已被 body::before / body::after 的背景光晕占用，
+   重名会让后定义的覆盖前面的 —— 那两团光晕会悄悄换成这套 background-position 关键帧。
+   （2026-10-15 差点踩上：第一版就叫 lgFlow。） */
+@keyframes lgSheen{0%{background-position:0% 0%}50%{background-position:100% 100%}100%{background-position:0% 0%}}
+/* 减弱动态效果：流动停掉，静态玻璃照旧（玻璃是材质、不是动画，不该被一起关掉） */
+@media (prefers-reduced-motion: reduce){
+  html[data-glass="on"] body .topbar, html[data-glass="on"] body .sidebar, html[data-glass="on"] body .ws-side,
+  html[data-glass="on"] body .mbox, html[data-glass="on"] body .cmdk-box, html[data-glass="on"] body .toast,
+  html[data-glass="on"] body .cmd-panel, html[data-glass="on"] body .pop-menu, html[data-glass="on"] body .ctxp-box{
+    animation:none;
+  }
+}
 html[data-glass="off"] body .topbar, html[data-glass="off"] body .sidebar, html[data-glass="off"] body .ws-side,
 html[data-glass="off"] body .mbox, html[data-glass="off"] body .toast, html[data-glass="off"] body .cmd-panel,
 html[data-glass="off"] body .pop-menu, html[data-glass="off"] body .ws-more-menu, html[data-glass="off"] body .bot-switch-menu,
@@ -2059,7 +2099,6 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <span class="model-tag model-tag-click" id="topModelTag" title="点击切换模型" onclick="openSettings()">gpt-4o-mini</span>
   <button class="btn btn-ghost btn-sm" onclick="toggleCmdK()" title="命令面板 (Cmd/Ctrl + K)">⌘K</button>
   <button id="themeBtn" class="btn btn-ghost btn-sm" onclick="toggleTheme()" title="切换深色/浅色主题" aria-label="切换主题"><span class="orb"></span></button>
-  <button id="glassBtn" class="btn btn-ghost btn-sm" onclick="toggleLiquidGlass()" title="液态玻璃视觉效果" aria-label="液态玻璃视觉效果" aria-pressed="true"><svg class="ic-btn" aria-hidden="true"><use href="#ic-droplet"/></svg></button>
   <button class="btn btn-ghost btn-sm" onclick="openDataMigrate()" title="数据备份与迁移（导入 / 导出配置）"><svg class="ic-btn" aria-hidden="true"><use href="#ic-save"/></svg>备份</button>
   <button class="btn btn-primary btn-sm" onclick="if(requireLogin())openCreate()">＋ 创建</button>
   <div id="userMenuWrap"></div>
@@ -2714,6 +2753,14 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button class="btn btn-ghost" type="button" onclick="refreshModelList()" style="white-space:nowrap;flex:none"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-1.2 5.2"/><path d="M20 5v6h-6"/></svg></span> 刷新列表</button>
       </div>
       <input id="set-model-custom" placeholder="或手动填写模型名，如 gpt-4o-mini" style="display:none;margin-top:8px;width:100%;padding:10px 13px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px">
+      <input id="set-glass" type="checkbox" checked style="width:auto" onchange="toggleLiquidGlass()">
+      <label style="margin:0">液态玻璃视觉效果（折射模糊 + 高光流动）</label>
+      <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
+        开启：整界面的玻璃面走真实折射（更深的模糊与饱和度），并有一道高光缓慢流过。关闭：降级为实底平面，低端机上更省性能。
+        勾选即时生效，不必再按保存；选择随主题一样记住。系统开了「减弱动态效果」时，流动会自动停下、玻璃材质保留。
+      </div>
     </div>
   </div>
 </div>
@@ -16234,28 +16281,28 @@ function initTheme() {
    顺带也是个性能选项（大面积 backdrop-filter 在低端机上滚动时成本很高）。
    持久化走 botcraft.glass，与 botcraft.theme 同一套路。 */
 var GLASS_KEY = 'botcraft.glass';
+function isLiquidGlassOn() { return document.documentElement.getAttribute('data-glass') !== 'off'; }
 function applyLiquidGlass(on) {
   // 显式写 on/off 两个值，不做「删属性」：关闭态的 CSS 选择器是 [data-glass="off"]，
   // 属性缺失时必须落到基线玻璃，而不是看起来像关着。
   document.documentElement.setAttribute('data-glass', on ? 'on' : 'off');
-  var btn = document.getElementById('glassBtn');
-  if (btn) {
-    // 激活态不靠改形状（那就和旁边的主题按钮不对称了），靠 aria-pressed 驱动的
-    // 品牌淡底 + 1px 品牌描边 + 辉光：一眼看得出「开着」，且不与任何既有样式打架。
-    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    btn.title = on ? '液态玻璃视觉效果（点击关闭）' : '液态玻璃视觉效果（点击开启）';
-  }
+  // 同步设置面板里的复选框 —— 开关搬进设置后，那里是唯一入口。设置是常驻页而非弹窗，
+  // 元素始终在 DOM 里，所以总能同步到（面板没打开也一样）。
+  var cb = document.getElementById('set-glass');
+  if (cb) cb.checked = !!on;
 }
-function toggleLiquidGlass() {
-  var on = document.documentElement.getAttribute('data-glass') !== 'off';
-  applyLiquidGlass(!on);
-  try { __storage.setItem(GLASS_KEY, !on ? 'on' : 'off'); } catch (e) {}
-  toast(!on ? '液态玻璃已开启' : '液态玻璃已关闭', 'ok');
+// quiet=true 给「保存并启用」用：那里只负责落地，不再弹一次 toast（点复选框时已经提示过）。
+function setLiquidGlass(on, quiet) {
+  on = !!on;
+  applyLiquidGlass(on);
+  try { __storage.setItem(GLASS_KEY, on ? 'on' : 'off'); } catch (e) {}
+  if (!quiet) toast(on ? '液态玻璃已开启' : '液态玻璃已关闭', 'ok');
 }
+function toggleLiquidGlass() { setLiquidGlass(!isLiquidGlassOn()); }
 function initLiquidGlass() {
   var saved = null;
   try { saved = __storage.getItem(GLASS_KEY); } catch (e) {}
-  applyLiquidGlass(saved !== 'off');   // 默认开启：既有外观不变
+  applyLiquidGlass(saved !== 'off');   // 默认开启：玻璃本来就是这套界面的默认视觉语言
 }
 function renderCmdK(kw) {
   const list = document.getElementById('cmdkList'); if (!list) return;
@@ -20326,6 +20373,7 @@ function setupSettingsUI() {
   document.getElementById('set-maxtokens').value = cfg.maxTokens || 2048;
   document.getElementById('set-direct').checked = !!cfg.directCall;
   document.getElementById('set-serial').checked = getSerialInput();
+  document.getElementById('set-glass').checked = isLiquidGlassOn();
   document.getElementById('set-proxy').value = cfg.proxyURL || '';
   document.getElementById('set-img-base').value = cfg.imageBaseURL || '';
   document.getElementById('set-img-key').value = cfg.imageAPIKey || '';
@@ -20609,6 +20657,8 @@ function saveSettings() {
     return;
   }
   setSerialInput(document.getElementById('set-serial').checked);
+  // 液态玻璃：复选框的 onchange 已即时生效并提示过，这里只做落地（quiet），不重复弹 toast
+  setLiquidGlass(document.getElementById('set-glass').checked, true);
   const fKey = document.getElementById('field-key'), fBase = document.getElementById('field-base');
   fKey.classList.remove('invalid'); fBase.classList.remove('invalid');
   if (directCall && !baseURL) { fBase.classList.add('invalid'); toast('请填写接口地址', 'err'); return; }
@@ -20753,7 +20803,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.13.0';
+var APP_VERSION = '3.13.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -20950,6 +21000,7 @@ window.resetAccountAvatar = resetAccountAvatar; window.onAccountAvatarFile = onA
 window.renderAcctHeader = renderAcctHeader; window.avatarHtml = avatarHtml;
 window.toggleTheme = toggleTheme; window.applyTheme = applyTheme; window.initTheme = initTheme;
 window.toggleLiquidGlass = toggleLiquidGlass; window.applyLiquidGlass = applyLiquidGlass; window.initLiquidGlass = initLiquidGlass;
+window.setLiquidGlass = setLiquidGlass; window.isLiquidGlassOn = isLiquidGlassOn;
 window.__debug = {
   getBots: () => bots,
   getFavorites: () => [...favorites],
