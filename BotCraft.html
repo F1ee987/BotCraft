@@ -1227,10 +1227,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .sess-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--sp-1)}
 .sess-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sess-sub{font-size:11px;color:var(--sub)}
-/* 对话头部状态行：在线状态 + 本会话用量。基线对齐让两种字号排在同一行不跳动；
-   超长时省略号截断（.ch-id 本身可收缩），绝不给头部增加固定宽度。 */
-.ch-stat-row{display:flex;align-items:baseline;gap:var(--sp-4);min-width:0}
-.ch-usage{font-size:11px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* 单会话用量（Token + 费用，v3.12.0）：放在上下文用量条里，与「上下文 X 字」同属
+   「本次对话的账」，语义比聊天头部更近，也不用跟头部那一排按钮抢宽度。
+   加粗 + 主文本色：这一排都是 11.5px 的灰数字，不加重认不出来。 */
+.ctx-sess{font-weight:600;color:var(--txt);white-space:nowrap;font-variant-numeric:tabular-nums}
 .sess-acts{display:flex;gap:var(--sp-4);flex:0 0 auto;opacity:0;transition:var(--dur-2) var(--ease)}
 .sess-row:hover .sess-acts{opacity:1}
 .sess-acts em{font-style:normal;font-size:11.5px;color:var(--sub);padding:3px 7px;border-radius:var(--r-xs);background:var(--fill-strong)}
@@ -2422,11 +2422,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <div class="ava" id="chatAva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></div>
         <div class="ch-id">
           <div id="chatBotName" style="font-weight:600;font-size:14px">机器人</div>
-          <div class="ch-stat-row">
-            <div style="font-size:11.5px;color:var(--sub)" id="chatStatus">在线 · 响应 &lt; 1s</div>
-            <!-- 本会话 Token 用量与费用估算：挂在会话对象上，切换会话各自独立、即时更新 -->
-            <span class="ch-usage" id="sessUsageTag" title="当前会话累计 Token 与费用估算"></span>
-          </div>
+          <div style="font-size:11.5px;color:var(--sub)" id="chatStatus">在线 · 响应 &lt; 1s</div>
         </div>
         <div style="flex:1;min-width:0"></div>
         <div class="bot-switch" id="botSwitch">
@@ -11034,7 +11030,8 @@ function renderCtxBar(b) {
   // ② 用量：快照不可用时降级为纯摘要，保证不出现空白条
   var snap = ctxSnapNow(b);
   if (!snap || !snap.sections || !snap.sections.length) {
-    el.innerHTML = '<div class="ctx-wrap"><div class="ctx-mini">' + summary + '</div></div>';
+    el.innerHTML = '<div class="ctx-wrap"><div class="ctx-head">' + sessUsageChipHtml() + '</div>'
+      + '<div class="ctx-mini">' + summary + '</div></div>';
     return;
   }
   var sysBudget = snap.budget || 20000;
@@ -11063,6 +11060,8 @@ function renderCtxBar(b) {
   if (snap.histDropped) html += '<span class="ctx-over" title="历史超出预算，已从最旧的消息开始丢弃">已丢弃最旧 ' + snap.histDropped + ' 条</span>';
   if (comp.length) html += '<span class="ctx-ok" title="' + escapeAttr(comp.map(function (s) { return s.label + '：' + s.note; }).join('　')) + '">' + svgIcon('compress') + ' 已压缩 ' + comp.length + ' 个区块（省 ' + fmtCtxLen(snap.compressedSaved || 0) + ' 字）</span>';
   if (cut.length) html += '<span class="ctx-over" title="' + escapeAttr(cut.map(function (s) { return s.label + '：' + s.note; }).join('　')) + '">' + svgIcon('warn','danger') + ' 已裁剪 ' + cut.length + ' 个区块</span>';
+  // 单会话用量放在「上下文详情」左边：两者同属本次对话的账，挨着看最顺
+  html += sessUsageChipHtml();
   html += '<span class="ctx-btn" onclick="openCtxPanel()" title="查看上下文逐区块明细与实际注入内容">上下文详情 <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.8 10.2 8 6 12.2"/></svg></span>';
   html += '</div>';
   html += '<div class="ctx-band">' + segs + '</div>';
@@ -19224,16 +19223,29 @@ function sessRowUsage(s) {
   return ' · ' + fmtTokens(x.tokens) + ' token' + (x.cost > 0 ? ' · ' + fmtMoney(x.cost) : '');
 }
 // 切换机器人 / 会话时由 refreshWorkspace 等调用；每次 API 调用后由 _recordSessionUsage 调用。
-function renderSessUsageTag() {
-  var el = document.getElementById('sessUsageTag'); if (!el) return;
-  var u = null;
-  try { var b = getBot(currentId); var s = b && _activeSessionOf(b); u = s ? s.usage : null; } catch (e) { u = null; }
+function _activeSessUsageRaw() {
+  try { var b = getBot(currentId); var s = b && _activeSessionOf(b); return s ? s.usage : null; } catch (e) { return null; }
+}
+function sessUsageTitle(u) {
   var x = sessionUsageSummary(u, priceOf);
-  el.textContent = sessUsageText(u);
-  el.title = '当前会话累计 ' + x.calls + ' 次调用 · 输入 ' + fmtTokens(x.pt) + ' / 输出 ' + fmtTokens(x.ct)
+  return '当前会话累计 ' + x.calls + ' 次调用 · 输入 ' + fmtTokens(x.pt) + ' / 输出 ' + fmtTokens(x.ct)
     + ' token · 约 ' + fmtMoney(x.cost) + '。按各模型参考单价估算，仅为量级参考、非账单金额；'
     + '切换会话后各自独立统计，互不累计。'
     + (x.est ? '其中 ' + x.est + ' 次调用服务端未返回用量，已按字符数估算。' : '');
+}
+function renderSessUsageTag() {
+  var el = document.getElementById('sessUsageTag'); if (!el) return;
+  var u = _activeSessUsageRaw();
+  el.textContent = sessUsageText(u);
+  el.title = sessUsageTitle(u);
+}
+// 供 renderCtxBar 重建 DOM 时用：chip 连同当前值一起产出，重建后不必再补刷一次。
+// 之所以是独立元素而不是塞进 summary 字符串：recordUsage 后只改 textContent 就够，
+// 不必跑整条 renderCtxBar（它内含 150ms 节流的 preview，重建会拿到旧快照）。
+function sessUsageChipHtml() {
+  var u = _activeSessUsageRaw();
+  return '<span class="ctx-sess" id="sessUsageTag" title="' + escapeAttr(sessUsageTitle(u)) + '">'
+    + escapeHtml(sessUsageText(u)) + '</span>';
 }
 function renderUsagePanel() {
   var box = document.getElementById('usageCards'); if (!box) return;
@@ -20652,7 +20664,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.12.0';
+var APP_VERSION = '3.12.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
