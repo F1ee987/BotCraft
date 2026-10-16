@@ -1509,6 +1509,10 @@ textarea.ipt{resize:vertical;min-height:64px;line-height:1.5}
 #page-analytics{display:flex;flex-direction:column}
 #anaSettings{flex:1;min-height:0;display:flex;flex-direction:column}
 #anaSettings .set-layout{flex:1;min-height:0;overflow-y:auto;margin-bottom:var(--sp-4)}
+/* 界面设置 Tab：内容短（两张卡片），不需要内部滚动，走普通文档流、由 .main 滚。
+   字段间距与设置中心保持一致（否则同一个 .field 在两个 Tab 下疏密不同） */
+#anaUI .field{margin-bottom:var(--sp-6)}
+#anaUI .set-head{margin-bottom:var(--sp-5)}
 .set-final{position:static;margin-top:0;padding:var(--sp-5) var(--sp-6);background:var(--card);border:1px solid var(--line);border-radius:var(--r-md)}
 .set-conn{font-size:var(--fs-sm);color:var(--sub);min-height:18px;margin:0 0 var(--sp-3)}
 .set-update-row{display:flex;gap:var(--sp-4);align-items:center;margin:0 0 var(--sp-5)}
@@ -2739,10 +2743,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <!-- ==================== 数据分析 ==================== -->
   <main class="main" id="page-analytics" style="display:none">
     <div class="page-head">
-      <div><h1>设置与数据</h1><div class="sub">用量统计 · 模型与插件配置</div></div>
+      <div><h1>设置与数据</h1><div class="sub">用量统计 · 模型与插件配置 · 界面设置</div></div>
       <div class="ana-tabs" role="tablist">
         <button class="btn btn-primary" id="anaTabUsage" onclick="showAnaTab('usage')">用量分析</button>
         <button class="btn btn-ghost" id="anaTabSettings" onclick="showAnaTab('settings')">模型与插件设置</button>
+        <button class="btn btn-ghost" id="anaTabUI" onclick="showAnaTab('ui')">界面设置</button>
         <button class="btn btn-ghost" id="anaTabSchedule" onclick="showAnaTab('schedule')">运行计划</button>
         <button class="btn btn-ghost" id="anaTabWebhook" onclick="showAnaTab('webhook')">入站 API</button>
       </div>
@@ -2869,25 +2874,6 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button class="btn btn-ghost" type="button" onclick="refreshModelList()" style="white-space:nowrap;flex:none"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-1.2 5.2"/><path d="M20 5v6h-6"/></svg></span> 刷新列表</button>
       </div>
       <input id="set-model-custom" placeholder="或手动填写模型名，如 gpt-4o-mini" style="display:none;margin-top:8px;width:100%;padding:10px 13px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
-    </div>
-    <div class="field" style="display:flex;align-items:center;gap:8px">
-      <input id="set-glass" type="checkbox" checked style="width:auto" onchange="toggleLiquidGlass()">
-      <label style="margin:0"><svg class="ic-btn" aria-hidden="true"><use href="#ic-droplet"/></svg>液态玻璃视觉效果（折射模糊 + 高光流动）</label>
-      <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
-        开启：整界面的玻璃面走真实折射（更深的模糊与饱和度），并有一道高光缓慢流过。关闭：降级为实底平面，低端机上更省性能。
-        勾选即时生效，不必再按保存；选择随主题一样记住。系统开了「减弱动态效果」时，流动会自动停下、玻璃材质保留。
-      </div>
-    </div>
-    <div class="field">
-      <label>主题外观</label>
-      <div class="theme-picker" role="radiogroup" aria-label="主题外观">
-        <label class="theme-opt"><input type="radio" name="set-theme" value="light" onchange="setThemeMode('light')"><span>浅色</span></label>
-        <label class="theme-opt"><input type="radio" name="set-theme" value="dark" onchange="setThemeMode('dark')"><span>深色</span></label>
-        <label class="theme-opt"><input type="radio" name="set-theme" value="system" checked onchange="setThemeMode('system')"><span>跟随系统</span></label>
-      </div>
-      <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
-        跟随系统：应用随系统的浅色/深色偏好<strong>实时</strong>切换（不是只在启动时读一次）。选浅色或深色则固定不变，不受系统影响。顶栏的圆球按钮也可以快速循环切换这三种模式。
-      </div>
     </div>
   </div>
 </div>
@@ -3088,8 +3074,55 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
     </div>
 
-    
-    
+
+
+</div>
+
+<!-- ==================== 界面设置（独立模块） ====================
+     2026-10-16：外观类设置从「模型接入」分区里摘出来，单独成一个 Tab。
+     原先液态玻璃 / 主题外观混在 sec-core 里 —— 那是模型配置的地方，用户截图指出
+     「出现了多余的元素」。外观设置归外观，模型设置归模型，各自一个模块。
+     布局：模块头（与设置中心同一套 .set-head）+ 两张分区卡片，无左侧导航 ——
+     只有两个设置项，不值得为此再建一套七分类的导航。 -->
+<div id="anaUI" style="display:none">
+  <div class="set-head">
+    <div class="set-head-txt">
+      <h2>界面设置</h2>
+      <p>主题外观与视觉材质。所有改动即时生效，不必按保存；选择仅保存在本机，不上传任何服务器。</p>
+    </div>
+  </div>
+
+  <div class="ssec" id="sec-ui-theme">
+    <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span> 主题外观</span><span class="ssec-sub">浅色 / 深色 / 跟随系统</span>
+    </div>
+    <div class="ssec-body">
+      <div class="field">
+        <div class="theme-picker" role="radiogroup" aria-label="主题外观">
+          <label class="theme-opt"><input type="radio" name="set-theme" value="light" onchange="setThemeMode('light')"><span>浅色</span></label>
+          <label class="theme-opt"><input type="radio" name="set-theme" value="dark" onchange="setThemeMode('dark')"><span>深色</span></label>
+          <label class="theme-opt"><input type="radio" name="set-theme" value="system" checked onchange="setThemeMode('system')"><span>跟随系统</span></label>
+        </div>
+        <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
+          跟随系统：应用随系统的浅色/深色偏好<strong>实时</strong>切换（不是只在启动时读一次）。选浅色或深色则固定不变，不受系统影响。顶栏的圆球按钮也可以快速循环切换这三种模式。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ssec" id="sec-ui-glass">
+    <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ic-droplet"/></svg></span> 液态玻璃视觉效果</span><span class="ssec-sub">折射模糊 + 高光流动</span>
+    </div>
+    <div class="ssec-body">
+      <div class="field" style="display:flex;align-items:center;gap:8px">
+        <input id="set-glass" type="checkbox" checked style="width:auto" onchange="toggleLiquidGlass()">
+        <label style="margin:0">开启液态玻璃材质</label>
+      </div>
+      <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
+        开启：整界面的玻璃面走真实折射（更深的模糊与饱和度），并有一道高光缓慢流过。关闭：降级为实底平面，低端机上更省性能。
+        勾选即时生效；选择随主题一样记住。系统开了「减弱动态效果」时，流动会自动停下、玻璃材质保留。
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="anaSchedule" style="display:none">
@@ -19954,9 +19987,9 @@ function openSettings() {
   setupSettingsUI();
 }
 function showAnaTab(t) {
-  // 四个 Tab：用量分析 / 模型与插件设置 / 运行计划（P0-3）/ 入站 API（P1-1）。映射表驱动。
-  var panels = { usage: 'anaUsage', settings: 'anaSettings', schedule: 'anaSchedule', webhook: 'anaWebhook' };
-  var btns = { usage: 'anaTabUsage', settings: 'anaTabSettings', schedule: 'anaTabSchedule', webhook: 'anaTabWebhook' };
+  // 五个 Tab：用量分析 / 模型与插件设置 / 界面设置 / 运行计划（P0-3）/ 入站 API（P1-1）。映射表驱动。
+  var panels = { usage: 'anaUsage', settings: 'anaSettings', ui: 'anaUI', schedule: 'anaSchedule', webhook: 'anaWebhook' };
+  var btns = { usage: 'anaTabUsage', settings: 'anaTabSettings', ui: 'anaTabUI', schedule: 'anaTabSchedule', webhook: 'anaTabWebhook' };
   var keys = Object.keys(panels);
   var active = panels[t] ? t : 'usage';
   keys.forEach(function (k) {
@@ -20983,7 +21016,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.14.1';
+var APP_VERSION = '3.14.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
