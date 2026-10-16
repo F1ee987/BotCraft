@@ -307,6 +307,20 @@ body::after{
   33%{transform:translate3d(-4%,2.6%,0) rotate(-2deg) scale(1.06)}
   66%{transform:translate3d(3.4%,-3.2%,0) rotate(1.4deg) scale(1.1)}
 }
+/* ============ 切页窗口暂停光晕（2026-10-16「切页掉帧随后恢复」的针对性优化） ============
+   机制：body::before/::after 每帧都在动 → 玻璃面的 backdrop（背后内容）每帧都变 →
+   21 个 backdrop-filter 面**每一帧都要重跑 saturate+blur**，这是稳态底噪。
+   切页是交叉淡化：旧页整屏 fixed 淡出 + 新页展开，过渡窗口内玻璃面数量翻倍、
+   再叠整屏 opacity 动画 → GPU 打满几百毫秒 → 掉帧；旧页 display:none 后层数回落 → 恢复。
+   对策：切页窗口给 html 挂 .pg-switch，**暂停两层光晕** —— 背景不再逐帧失效，
+   所有玻璃面整帧跳过重滤镜，GPU 让给淡出合成。视觉代价：26s 循环冻 0.4s ≈ 1.5%，无感。
+   挂/摘点在 go() / dropLeaveEl()。visibilitychange 时同理（见 bgHidden）。 */
+html.pg-switch body::before, html.pg-switch body::after{animation-play-state:paused}
+/* 页面不可见（最小化 / 切走）时同样暂停：光晕动画是无限循环，窗口看不见时
+   每帧合成纯属白烧 GPU。WebView2 对隐藏窗口有节流但不保证归零，显式暂停兜底。
+   ⚠️ 不能复用 .pg-switch：那个类由切页流程挂/摘，这里独立用 .bg-hidden，
+   两者同时发生时互不覆盖（先切页再最小化、再恢复，各归各的）。 */
+html.bg-hidden body::before, html.bg-hidden body::after{animation-play-state:paused}
 /* ============ 浅色主题：参考图（LightC）的弥散光背景 ============
    参考图的设计类型：明亮浅色 + 柔和绿色 aurora（薄荷 / 翡翠），主卡片中央有一团
    Bloom 向四周淡出到近白。光晕本身在 :root / [data-theme="light"] 的 --bg-glow-* 里
@@ -10991,6 +11005,8 @@ function applyPage(p, keep) {
    摘掉 .bc-leaving、真正 display:none。不收的话它会以 fixed 姿态永久浮在新页上面。 */
 function dropLeaveEl() {
   clearTimeout(_leaveTimer); _leaveTimer = 0;
+  /* 淡出收场 = 切页窗口结束：恢复光晕动画（见 CSS .pg-switch 注释） */
+  document.documentElement.classList.remove('pg-switch');
   const el = _leaveEl; _leaveEl = null;
   if (!el) return;
   el.classList.remove('bc-leaving');
@@ -11030,10 +11046,18 @@ function go(p) {
   /* keep 住旧页：applyPage 会把其余页面隐藏，但这一张要留到最后一口气再收获 */
   applyPage(p, curEl);
   if (!ms) { dropLeaveEl(); return; }   /* 降级用户没有收起动画，不必等 */
+  /* 切页窗口开始：暂停背景光晕（.pg-switch），背景不再逐帧失效，
+     过渡窗口内翻倍的玻璃面整帧跳过重滤镜 —— 这是「切页掉帧」的主因（见 CSS 注释） */
+  document.documentElement.classList.add('pg-switch');
   const seq = ++_goSeq;
   _leaveTimer = setTimeout(function () { if (seq === _goSeq) dropLeaveEl(); }, ms + 40);
 }
 function toggleNav() { var n = document.querySelector('.nav'); if (n) n.classList.toggle('open'); }
+/* 页面不可见时暂停背景光晕（见 CSS .bg-hidden 注释）：无限循环动画在看不见的窗口里
+   每帧合成是白烧 GPU。恢复可见即续播，26s 循环没有「从头再来」的跳变。 */
+document.addEventListener('visibilitychange', function () {
+  document.documentElement.classList.toggle('bg-hidden', document.hidden);
+});
 
 document.querySelectorAll('.nav a').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.page); });
 document.querySelectorAll('.sidebar .side-item').forEach(item => {
@@ -21038,7 +21062,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.14.4';
+var APP_VERSION = '3.14.5';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
