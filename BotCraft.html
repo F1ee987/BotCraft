@@ -24,7 +24,7 @@
 :root{
   /* ===== Apple 深色系统色板（对齐 iOS/macOS Dark 语义色） ===== */
   /* 液态玻璃的地基：底色压深，真正的层次由多层半透明表面叠出来 */
-  --bg:#0f1117;                     /* 窗口底（玻璃后面透出的彩色光晕叠在它之上） */
+  --bg:#0a0e14;                     /* 窗口底：近黑带一丝青（参考图 LightC 深色） */
   --popover:#22222b;                /* 弹出菜单（更多 ▾ 等）：比窗口底抬亮一档，一眼可辨「浮在上面」 */
   --panel:rgba(28,28,33,.50);       /* 侧栏 / 面板：玻璃层 */
   --panel2:rgba(18,18,22,.26);      /* 聊天区 / 输入区底：更薄的玻璃 */
@@ -60,18 +60,19 @@
      玻璃必须有东西可以透出来才成立 —— 这是「液态玻璃」与「死灰玻璃」的分界。
      抽成两个令牌（每层一整套 4 束 radial）是为了让浅色主题整套换色而不必复制渐变文本：
      换色只改这两个值，body::before/after 的规则一动不动。
-     深色（默认）＝ 品牌紫为主 + 青/粉/橙点缀；浅色 ＝ 参考图（LightC）的薄荷/翡翠绿，
-     更淡更干净，参考值见 [data-theme="light"] 里的覆盖。 */
+     深色（默认，参考图 LightC 深色）＝ 翡翠/薄荷绿单色系 + 第二层一丝品牌靛调和，
+     浓度比浅色压得低 —— 近黑底上给高了会发脏；
+     浅色换成更淡的薄荷/翡翠，参考值见 [data-theme="light"] 里的覆盖。 */
   --bg-glow-1:
-    radial-gradient(44% 40% at 12% 6%, rgba(139,92,246,.42), transparent 64%),
-    radial-gradient(38% 36% at 86% 10%, rgba(99,102,241,.30), transparent 66%),
-    radial-gradient(42% 38% at 76% 86%, rgba(48,209,88,.20), transparent 68%),
-    radial-gradient(36% 34% at 16% 90%, rgba(167,139,250,.26), transparent 68%);
+    radial-gradient(46% 42% at 50% 4%, rgba(16,185,129,.26), transparent 66%),
+    radial-gradient(40% 36% at 14% 26%, rgba(52,211,153,.16), transparent 66%),
+    radial-gradient(42% 38% at 86% 72%, rgba(45,212,191,.14), transparent 68%),
+    radial-gradient(34% 32% at 26% 92%, rgba(5,150,105,.18), transparent 68%);
   --bg-glow-2:
-    radial-gradient(34% 30% at 78% 22%, rgba(34,211,238,.20), transparent 66%),
-    radial-gradient(30% 28% at 20% 40%, rgba(244,114,182,.17), transparent 66%),
-    radial-gradient(36% 32% at 62% 78%, rgba(251,146,60,.15), transparent 68%),
-    radial-gradient(28% 26% at 44% 10%, rgba(129,140,248,.18), transparent 66%);
+    radial-gradient(32% 28% at 74% 26%, rgba(16,185,129,.12), transparent 66%),
+    radial-gradient(28% 26% at 20% 60%, rgba(94,234,212,.09), transparent 66%),
+    radial-gradient(30% 28% at 60% 86%, rgba(52,211,153,.10), transparent 68%),
+    radial-gradient(26% 24% at 40% 8%, rgba(99,102,241,.10), transparent 66%);
   --glass-blur:26px;
   --glass-sat:190%;
   --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
@@ -322,6 +323,13 @@ body::after{
     radial-gradient(58% 46% at 50% 32%, rgba(52,211,153,.18), rgba(52,211,153,0) 72%),
     var(--lg-spec);
 }
+/* 深色同款：参考图深色里那团绿光在卡片**底部**（空状态区），不在中央 —— 位置跟着参考图走 */
+[data-theme="dark"] body .main,
+[data-theme="dark"] body .workspace{
+  background-image:
+    radial-gradient(62% 50% at 50% 98%, rgba(16,185,129,.16), rgba(16,185,129,0) 70%),
+    var(--lg-spec);
+}
 @media (prefers-reduced-motion: reduce){body::before,body::after{animation:none}}
 
 /* ============ 颗粒质感层 ============
@@ -510,9 +518,26 @@ select option{background:#1f1f24;color:#f2f2f7}
   background:linear-gradient(135deg,#8e8e93 0%,#48484a 100%);
   transition:background var(--dur-6) var(--ease),transform var(--dur-6) var(--ease)}
 html[data-theme="light"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60a 0%,#ff9f0a 100%)}
+/* 跟随系统：左上半日、右下半月的双色球 —— 一眼看出「自动」，不用猜。
+   用 data-theme-mode 而不是 data-theme：系统解析成深色时 data-theme 也是 dark，
+   分不出「用户选了深色」与「系统给的深色」，只有 mode 能分。 */
+html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,#ffd60a 0%,#ff9f0a 46%,#8e8e93 54%,#48484a 100%)}
 #themeBtn:hover{background:var(--fill-hover)}
 #themeBtn:hover .orb{transform:scale(1.08)}
 #themeBtn:active{transform:scale(.94)}
+/* 主题三分段选择器（浅色 / 深色 / 跟随系统）：radio 视觉隐藏但保留键盘聚焦与读屏，
+   可见「药丸」是 input 后面的 span，选中态用 :checked + span 驱动 —— 不用 :has()，
+   老 WebView2 也能用。轨道用 --sunken（凹陷底），选中态抬成玻璃面，和设置里其他控件同族。 */
+.theme-picker{display:flex;gap:var(--sp-2);padding:3px;border-radius:var(--r-md);background:var(--sunken)}
+.theme-opt{flex:1;min-width:0}
+.theme-opt input{position:absolute;width:1px;height:1px;opacity:0;margin:0;padding:0}
+.theme-opt span{display:flex;align-items:center;justify-content:center;gap:var(--sp-3);
+  padding:7px var(--sp-4);border-radius:var(--r-sm);font-size:12.5px;font-weight:590;color:var(--sub);
+  cursor:pointer;white-space:nowrap;
+  transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease)}
+.theme-opt:hover span{color:var(--txt)}
+.theme-opt input:checked + span{background:var(--glass-bg-hover);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.22)}
+.theme-opt input:focus-visible + span{outline:2px solid var(--brand-text);outline-offset:1px}
 .avatar{border:1px solid transparent;height:32px;width:32px;border-radius:50%;background:linear-gradient(180deg,#5e5ce6,#4845d2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;color:#fff;transition:var(--dur-2) var(--ease)}
 .avatar:hover{filter:brightness(1.08)}
 #userMenuWrap{position:relative;display:flex;align-items:center}
@@ -2800,6 +2825,17 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
         开启：整界面的玻璃面走真实折射（更深的模糊与饱和度），并有一道高光缓慢流过。关闭：降级为实底平面，低端机上更省性能。
         勾选即时生效，不必再按保存；选择随主题一样记住。系统开了「减弱动态效果」时，流动会自动停下、玻璃材质保留。
+      </div>
+    </div>
+    <div class="field">
+      <label>主题外观</label>
+      <div class="theme-picker" role="radiogroup" aria-label="主题外观">
+        <label class="theme-opt"><input type="radio" name="set-theme" value="light" onchange="setThemeMode('light')"><span>浅色</span></label>
+        <label class="theme-opt"><input type="radio" name="set-theme" value="dark" onchange="setThemeMode('dark')"><span>深色</span></label>
+        <label class="theme-opt"><input type="radio" name="set-theme" value="system" checked onchange="setThemeMode('system')"><span>跟随系统</span></label>
+      </div>
+      <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
+        跟随系统：应用随系统的浅色/深色偏好<strong>实时</strong>切换（不是只在启动时读一次）。选浅色或深色则固定不变，不受系统影响。顶栏的圆球按钮也可以快速循环切换这三种模式。
       </div>
     </div>
   </div>
@@ -16295,29 +16331,67 @@ function toggleCmdK(force) {
   if (next) { box.classList.add('on'); renderCmdK(''); setTimeout(() => document.getElementById('cmdkInput').focus(), 0); }
   else { box.classList.remove('on'); }
 }
-/* ==================== 主题切换（深色 / 浅色） ==================== */
+/* ==================== 主题：浅色 / 深色 / 跟随系统 ==================== */
+/* 三态模型。用户偏好存 'light' | 'dark' | 'system'（botcraft.theme），
+   默认 'system' —— 「跟随系统」不是启动时猜一次就算：它必须在系统偏好变化时**当场**
+   跟上（见 _bindThemeMq），否则用户改了系统主题、应用毫无反应，这个选项就是假的。
+
+   深色也**显式写** data-theme 属性（老实现是删属性、用「缺失」表示深色）。三种模式在
+   DOM 上是同一个键、三种取值，少一种隐含约定 —— 已核实全站没有任何规则依赖
+   「无 data-theme 属性」，改造是安全的。
+   另设 data-theme-mode 记录**用户选的**那个值（含 system），CSS 靠它区分
+   「用户选了深色」与「系统解析成深色」（顶栏图标球的双色渐变就用这个）。 */
+var THEME_KEY = 'botcraft.theme';
+var THEME_MODES = ['light', 'dark', 'system'];
+var _themeMq = null;
+function themeMode() {
+  var s = null;
+  try { s = __storage.getItem(THEME_KEY); } catch (e) {}
+  return (s === 'light' || s === 'dark' || s === 'system') ? s : 'system';
+}
+function resolveTheme(mode) {
+  if (mode === 'light' || mode === 'dark') return mode;
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+}
+function themeModeLabel(mode) {
+  return mode === 'light' ? '浅色' : mode === 'dark' ? '深色' : '跟随系统';
+}
+function applyThemeMode(mode) {
+  var eff = resolveTheme(mode);
+  document.documentElement.setAttribute('data-theme', eff);
+  document.documentElement.setAttribute('data-theme-mode', mode);
+  var btn = document.getElementById('themeBtn');
+  // orb 的渐变由 data-theme / data-theme-mode 驱动（见 CSS），这里只改文案，
+  // 不动 innerHTML —— 免得覆盖掉 .orb 那个 span。
+  if (btn) {
+    var tip = '主题：' + themeModeLabel(mode) + '（点击切换）';
+    btn.title = tip;
+    btn.setAttribute('aria-label', tip);
+  }
+  // 设置面板里的单选同步：面板是常驻页（不是弹窗），元素一直在，关着也能同步
+  var r = document.querySelector('input[name="set-theme"][value="' + mode + '"]');
+  if (r) r.checked = true;
+}
+function setThemeMode(mode, quiet) {
+  if (THEME_MODES.indexOf(mode) < 0) mode = 'system';
+  applyThemeMode(mode);
+  try { __storage.setItem(THEME_KEY, mode); } catch (e) {}
+  if (!quiet) toast('主题：' + themeModeLabel(mode), 'ok');
+}
+/* 顶栏按钮：三态循环 浅色 → 深色 → 跟随系统。设置里另有单选，两者都走 setThemeMode。 */
 function toggleTheme() {
-  const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-  const next = cur === 'light' ? 'dark' : 'light';
-  applyTheme(next);
-  try { __storage.setItem('botcraft.theme', next); } catch (e) {}
-  toast(next === 'light' ? '已切换到浅色主题' : '已切换到深色主题', 'ok');
+  var cur = themeMode();
+  setThemeMode(THEME_MODES[(THEME_MODES.indexOf(cur) + 1) % THEME_MODES.length]);
 }
-function applyTheme(mode) {
-  if (mode === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  else document.documentElement.removeAttribute('data-theme');
-  const btn = document.getElementById('themeBtn');
-  // orb 渐变由 [data-theme="light"] CSS 自动驱动；此处只更新 title，不改 innerHTML 以免覆盖 .orb
-  if (btn) btn.title = mode === 'light' ? '切换到深色主题' : '切换到浅色主题';
-}
-function initTheme() {
-  // 优先用户保存的选择；否则跟随系统偏好
-  let saved = null;
-  try { saved = __storage.getItem('botcraft.theme'); } catch (e) {}
-  let mode;
-  if (saved === 'light' || saved === 'dark') mode = saved;
-  else mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-  applyTheme(mode);
+function initTheme() { applyThemeMode(themeMode()); _bindThemeMq(); }
+/* 系统偏好变化时当场跟上。只认 change 事件，不轮询 —— 轮询是纯浪费。
+   addListener 是老 Safari 的 deprecated API，留着做兜底。 */
+function _bindThemeMq() {
+  if (_themeMq || !window.matchMedia) return;
+  _themeMq = window.matchMedia('(prefers-color-scheme: dark)');
+  var onChange = function () { if (themeMode() === 'system') applyThemeMode('system'); };
+  if (_themeMq.addEventListener) _themeMq.addEventListener('change', onChange);
+  else if (_themeMq.addListener) _themeMq.addListener(onChange);
 }
 /* ==================== 液态玻璃（Liquid Glass）开关 ==================== */
 /* 玻璃体系本来就是本应用的默认视觉语言（见样式表顶部那份 !important 清单：
@@ -20423,6 +20497,9 @@ function setupSettingsUI() {
   document.getElementById('set-direct').checked = !!cfg.directCall;
   document.getElementById('set-serial').checked = getSerialInput();
   document.getElementById('set-glass').checked = isLiquidGlassOn();
+  // 主题三分段：按用户偏好回填（'system' 也要能选中 —— 它是默认值）
+  var _tr = document.querySelector('input[name="set-theme"][value="' + themeMode() + '"]');
+  if (_tr) _tr.checked = true;
   document.getElementById('set-proxy').value = cfg.proxyURL || '';
   document.getElementById('set-img-base').value = cfg.imageBaseURL || '';
   document.getElementById('set-img-key').value = cfg.imageAPIKey || '';
@@ -20708,6 +20785,9 @@ function saveSettings() {
   setSerialInput(document.getElementById('set-serial').checked);
   // 液态玻璃：复选框的 onchange 已即时生效并提示过，这里只做落地（quiet），不重复弹 toast
   setLiquidGlass(document.getElementById('set-glass').checked, true);
+  // 主题：单选 onchange 已即时生效，这里只做落地（quiet）
+  var _tm = document.querySelector('input[name="set-theme"]:checked');
+  setThemeMode(_tm ? _tm.value : 'system', true);
   const fKey = document.getElementById('field-key'), fBase = document.getElementById('field-base');
   fKey.classList.remove('invalid'); fBase.classList.remove('invalid');
   if (directCall && !baseURL) { fBase.classList.add('invalid'); toast('请填写接口地址', 'err'); return; }
@@ -20852,7 +20932,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.13.3';
+var APP_VERSION = '3.14.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -21047,7 +21127,8 @@ window.saveAccountProfile = saveAccountProfile; window.changeAccountPassword = c
 window.pickAvatarBg = pickAvatarBg; window.pickAvatarLetter = pickAvatarLetter; window.pickAvatarEmoji = pickAvatarEmoji;
 window.resetAccountAvatar = resetAccountAvatar; window.onAccountAvatarFile = onAccountAvatarFile;
 window.renderAcctHeader = renderAcctHeader; window.avatarHtml = avatarHtml;
-window.toggleTheme = toggleTheme; window.applyTheme = applyTheme; window.initTheme = initTheme;
+window.toggleTheme = toggleTheme; window.themeMode = themeMode; window.resolveTheme = resolveTheme;
+window.setThemeMode = setThemeMode; window.applyThemeMode = applyThemeMode; window.initTheme = initTheme;
 window.toggleLiquidGlass = toggleLiquidGlass; window.applyLiquidGlass = applyLiquidGlass; window.initLiquidGlass = initLiquidGlass;
 window.setLiquidGlass = setLiquidGlass; window.isLiquidGlassOn = isLiquidGlassOn;
 window.__debug = {
