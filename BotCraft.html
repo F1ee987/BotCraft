@@ -1464,14 +1464,17 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
      ④ 轻微折射质感    → background-image:var(--lg-spec)（150° 对角高光渐变）
    margin:10px 0 与右侧首张 .ssec 的 margin:10px 0 齐平 —— 两栏上沿对齐才谈得上对称。
    ⚠️ background 简写会重置 background-image，所以 --lg-spec 必须写在它之后（同 .sidebar）。
-   ⚠️ sticky + backdrop-filter 并存是安全的：.topbar 本来就是这两者叠加（见顶部 !important 清单）。
    ⚠️ 刻意**不**挂流动高光（lgSheen）：导航是文字密集区，流动会持续干扰阅读，
       用户要的四样里也没有它。 */
 .set-nav{flex:none;width:238px;display:flex;flex-direction:column;gap:var(--sp-6);
-  position:sticky;top:calc(var(--ph-h,64px) + 12px);margin:10px 0;padding:var(--sp-4);
+  margin:10px 0;padding:var(--sp-4);
   background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--r-xl);
   background-image:var(--lg-spec);box-shadow:var(--lg-shadow);
   -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
+/* ⚠️ 左栏**不做 sticky**（2026-10-16 用户截图反馈）：原先 position:sticky 把左栏钉在
+   滚动容器顶部，右侧内容继续上移 —— 一滚动两栏顶部就错位（截图正是这个状态）。
+   去掉 sticky 让两栏在同一个滚动容器里**同流滚动**，顶部在任意滚动位置都齐平。
+   代价是滚 deep 了导航会滚出视野，但顶部齐平是用户明确要的，且设置分区都不长。 */
 /* 分组：role=presentation 只是给 ARIA 看的（tablist 的直接子节点应当是 tab），
    视觉上把七个分类归成两簇，簇标题是小号灰字 */
 .set-nav-group{display:flex;flex-direction:column;gap:var(--sp-2)}
@@ -1509,8 +1512,8 @@ textarea.ipt{resize:vertical;min-height:64px;line-height:1.5}
 @media (max-width:720px){
   .set-layout{display:block}
   /* 窄屏：导航从「竖立玻璃面板」转成「横滚玻璃条」—— 面板感保留（描边/圆角/玻璃底
-     都在，只是不 sticky、不竖排），组标签与说明文字没地方放，藏掉 */
-  .set-nav{position:static;width:auto;flex-direction:row;align-items:center;overflow-x:auto;gap:var(--sp-3);margin:var(--sp-3) 0;padding:var(--sp-3) var(--sp-4)}
+     都在，只是不竖排），组标签与说明文字没地方放，藏掉 */
+  .set-nav{width:auto;flex-direction:row;align-items:center;overflow-x:auto;gap:var(--sp-3);margin:var(--sp-3) 0;padding:var(--sp-3) var(--sp-4)}
   .set-nav-group{flex-direction:row;gap:var(--sp-2);flex:none}
   .set-nav-glabel{display:none}
   .set-nav-item{flex:none;width:auto;min-height:0;padding:10px 16px;border-radius:var(--r-full)}
@@ -21035,7 +21038,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.14.3';
+var APP_VERSION = '3.14.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
