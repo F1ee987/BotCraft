@@ -56,6 +56,22 @@
   --glass-border:rgba(255,255,255,.17);
   --glass-border-hover:rgba(255,255,255,.30);
   --glass-shadow:0 10px 34px rgba(0,0,0,.46);
+  /* ===== 背景弥散光（aurora）=====
+     玻璃必须有东西可以透出来才成立 —— 这是「液态玻璃」与「死灰玻璃」的分界。
+     抽成两个令牌（每层一整套 4 束 radial）是为了让浅色主题整套换色而不必复制渐变文本：
+     换色只改这两个值，body::before/after 的规则一动不动。
+     深色（默认）＝ 品牌紫为主 + 青/粉/橙点缀；浅色 ＝ 参考图（LightC）的薄荷/翡翠绿，
+     更淡更干净，参考值见 [data-theme="light"] 里的覆盖。 */
+  --bg-glow-1:
+    radial-gradient(44% 40% at 12% 6%, rgba(139,92,246,.42), transparent 64%),
+    radial-gradient(38% 36% at 86% 10%, rgba(99,102,241,.30), transparent 66%),
+    radial-gradient(42% 38% at 76% 86%, rgba(48,209,88,.20), transparent 68%),
+    radial-gradient(36% 34% at 16% 90%, rgba(167,139,250,.26), transparent 68%);
+  --bg-glow-2:
+    radial-gradient(34% 30% at 78% 22%, rgba(34,211,238,.20), transparent 66%),
+    radial-gradient(30% 28% at 20% 40%, rgba(244,114,182,.17), transparent 66%),
+    radial-gradient(36% 32% at 62% 78%, rgba(251,146,60,.15), transparent 68%),
+    radial-gradient(28% 26% at 44% 10%, rgba(129,140,248,.18), transparent 66%);
   --glass-blur:26px;
   --glass-sat:190%;
   --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
@@ -162,7 +178,19 @@
 }
 /* ==================== 浅色主题 ==================== */
 [data-theme="light"]{
-  --bg:#e9ecf5;                     /* 窗口底：浅灰蓝，让彩色光晕透出来 */
+  --bg:#edf2ee;                     /* 窗口底：近白带一丝绿，参考图（LightC）的干净底子 */
+  /* 浅色背景弥散光：换成参考图的薄荷 / 翡翠绿单色系。刻意不放粉/橙 ——
+     参考图是单色系绿色，杂色一进来就脏。深色那套（品牌紫 + 青粉橙）见 :root。 */
+  --bg-glow-1:
+    radial-gradient(46% 42% at 50% 6%, rgba(52,211,153,.30), transparent 66%),
+    radial-gradient(38% 36% at 12% 24%, rgba(16,185,129,.22), transparent 66%),
+    radial-gradient(40% 38% at 86% 74%, rgba(45,212,191,.20), transparent 68%),
+    radial-gradient(34% 32% at 26% 94%, rgba(134,239,172,.24), transparent 68%);
+  --bg-glow-2:
+    radial-gradient(32% 28% at 74% 28%, rgba(16,185,129,.14), transparent 66%),
+    radial-gradient(28% 26% at 20% 62%, rgba(94,234,212,.12), transparent 66%),
+    radial-gradient(30% 28% at 60% 88%, rgba(52,211,153,.12), transparent 68%),
+    radial-gradient(26% 24% at 40% 10%, rgba(110,231,183,.12), transparent 66%);
   --popover:#ffffff;                /* 弹出菜单（浅色）：纯白浮层 */
   --panel:rgba(255,255,255,.52);    /* 玻璃层（浅色玻璃是「白色提亮」而非变暗） */
   --panel2:rgba(255,255,255,.30);
@@ -257,21 +285,13 @@
    看上去只是一堆灰色半透明块 —— 这是「液态玻璃」与「死灰玻璃」的分界。 */
 body::before{
   content:'';position:fixed;inset:-24%;z-index:-1;pointer-events:none;
-  background:
-    radial-gradient(44% 40% at 12% 6%, rgba(139,92,246,.42), transparent 64%),
-    radial-gradient(38% 36% at 86% 10%, rgba(99,102,241,.30), transparent 66%),
-    radial-gradient(42% 38% at 76% 86%, rgba(48,209,88,.20), transparent 68%),
-    radial-gradient(36% 34% at 16% 90%, rgba(167,139,250,.26), transparent 68%);
+  background:var(--bg-glow-1);
   animation:lgFlow 26s ease-in-out infinite;
 }
-/* 第二流动层：异色（青/粉/橙）反向慢流，与第一层错速叠加出液体感 */
+/* 第二流动层：异色反向慢流，与第一层错速叠加出液体感 */
 body::after{
   content:'';position:fixed;inset:-26%;z-index:-1;pointer-events:none;
-  background:
-    radial-gradient(34% 30% at 78% 22%, rgba(34,211,238,.20), transparent 66%),
-    radial-gradient(30% 28% at 20% 40%, rgba(244,114,182,.17), transparent 66%),
-    radial-gradient(36% 32% at 62% 78%, rgba(251,146,60,.15), transparent 68%),
-    radial-gradient(28% 26% at 44% 10%, rgba(129,140,248,.18), transparent 66%);
+  background:var(--bg-glow-2);
   animation:lgFlow2 38s ease-in-out infinite;
 }
 /* 液体的缓慢流动：只动 transform，走 GPU 合成，不触发重排重绘 */
@@ -286,9 +306,22 @@ body::after{
   33%{transform:translate3d(-4%,2.6%,0) rotate(-2deg) scale(1.06)}
   66%{transform:translate3d(3.4%,-3.2%,0) rotate(1.4deg) scale(1.1)}
 }
-/* 浅色模式：光晕降浓度，避免在浅底上发脏 */
-[data-theme="light"] body::before{opacity:.55}
-[data-theme="light"] body::after{opacity:.45}
+/* ============ 浅色主题：参考图（LightC）的弥散光背景 ============
+   参考图的设计类型：明亮浅色 + 柔和绿色 aurora（薄荷 / 翡翠），主卡片中央有一团
+   Bloom 向四周淡出到近白。光晕本身在 :root / [data-theme="light"] 的 --bg-glow-* 里
+   整套换色；这里补两处参考图特有的东西：
+   ① 光晕浓度（.7/.5）：参考图的绿很淡，但浅底下要比原来更明显一点才读得出来
+   ② 主内容区 / 工作台的居中 Bloom —— 参考图最具辨识度的一处（大白卡片中心一团绿）。
+      用 background-image 叠加在 --lg-spec 之前，不新增元素、不碰布局；
+      .main 本身是 60% 白玻璃，浓度给太高会发绿发脏，所以只给 .18 */
+[data-theme="light"] body::before{opacity:.7}
+[data-theme="light"] body::after{opacity:.5}
+[data-theme="light"] body .main,
+[data-theme="light"] body .workspace{
+  background-image:
+    radial-gradient(58% 46% at 50% 32%, rgba(52,211,153,.18), rgba(52,211,153,0) 72%),
+    var(--lg-spec);
+}
 @media (prefers-reduced-motion: reduce){body::before,body::after{animation:none}}
 
 /* ============ 颗粒质感层 ============
@@ -20819,7 +20852,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.13.2';
+var APP_VERSION = '3.13.3';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
