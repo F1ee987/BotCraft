@@ -1177,7 +1177,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 #kbPrevBody .kb-meta-k,.kb-prev .kb-meta-k{flex:none;font-weight:600;color:var(--sub);min-width:40px}
 #kbPrevBody .kb-meta-v,.kb-prev .kb-meta-v{color:var(--txt);word-break:break-all}
 /* ===== 设置面板：分区折叠 ===== */
-.ssec{margin:10px 0;border:1px solid var(--line);border-radius:var(--r-md);background:var(--glass-bg);overflow:hidden}
+.ssec{margin:10px 0;border:1px solid var(--line);border-radius:var(--r-md);background:var(--glass-bg);overflow:hidden;box-shadow:var(--lg-shadow)}
 .ssec-head{display:flex;align-items:center;gap:var(--sp-2);padding:12px 14px;background:var(--fill);border-bottom:1px solid var(--line);color:var(--txt);font-size:13px;font-weight:700;text-align:left}
 .ssec-sub,.ssec-badge{margin-left:auto;font-weight:400;font-size:11.5px;color:var(--sub);flex:none}
 .ssec-badge{padding:1px 7px;border-radius:var(--r-full);background:var(--ok-bg);color:var(--ok-text)}
@@ -1436,17 +1436,45 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 #anaSettings .ssec-sub{font-size:var(--fs-sm) !important}
 #anaSettings .ssec-body{padding:var(--sp-2) var(--sp-4) var(--sp-4)}
 #anaSettings .field{margin-bottom:var(--sp-6)}
+/* ============ 设置中心（独立设置模块）============
+   三段式：模块头（标题 + 主操作）→ 左右两栏（左分组导航 / 右内容面板）→ 收尾栏。
+   2026-10-16 重做：导航按「模型与能力 / 检索与生成」分组、每项带一行说明 ——
+   七个分类平铺时用户记不住哪个是哪个，让导航自己解释自己；激活态加左侧竖条，
+   位置感比整块底色更明确。顺手修掉一个既有问题：导航 hover 原先写死
+   rgba(255,255,255,.05)，浅色主题下白发白、hover 根本没有反馈，改用 var(--fill)。 */
+.set-head{display:flex;align-items:center;gap:var(--sp-5);flex-wrap:wrap;
+  padding:var(--sp-5) var(--sp-6);margin:var(--sp-4) 0 var(--sp-5);
+  background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--r-xl);
+  box-shadow:var(--lg-shadow);
+  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
+.set-head-txt{flex:1;min-width:0}
+.set-head-txt h2{margin:0;font-size:var(--fs-3xl);font-weight:700;color:var(--txt);letter-spacing:-.2px;line-height:1.25}
+.set-head-txt p{margin:var(--sp-2) 0 0;font-size:var(--fs-sm);color:var(--sub);line-height:1.55}
+.set-head-ops{display:flex;align-items:center;gap:var(--sp-4);flex:none}
 /* 设置页左右展开布局：左分类导航 + 右内容面板 */
 .set-layout{display:flex;align-items:flex-start;gap:var(--sp-5);margin:var(--sp-4) 0}
-.set-nav{flex:none;width:190px;display:flex;flex-direction:column;gap:var(--sp-4);position:sticky;top:calc(var(--ph-h,64px) + 12px)}
-/* 导航项间距（2026-10-11 用户要求放宽）：外距走 .set-nav 的 gap(--sp-4)，内边距 12px 14px，
-   min-height:44px 保证触屏点击舒适度；悬停/激活样式与分区卡片同一套令牌 */
-.set-nav-item{display:flex;align-items:center;gap:var(--sp-4);width:100%;min-height:44px;padding:12px 14px;border:1px solid transparent;border-radius:var(--r-md);background:transparent;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;text-align:left;transition:background .15s ease,color .15s ease,border-color .15s ease}
-.set-nav-item:hover{background:rgba(255,255,255,.05);color:var(--txt)}
-.set-nav-item.active{background:var(--fill);color:var(--brand-text);border-color:var(--line)}
+.set-nav{flex:none;width:238px;display:flex;flex-direction:column;gap:var(--sp-6);position:sticky;top:calc(var(--ph-h,64px) + 12px)}
+/* 分组：role=presentation 只是给 ARIA 看的（tablist 的直接子节点应当是 tab），
+   视觉上把七个分类归成两簇，簇标题是小号灰字 */
+.set-nav-group{display:flex;flex-direction:column;gap:var(--sp-2)}
+.set-nav-glabel{padding:0 var(--sp-4);margin-bottom:var(--sp-1);font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.08em;line-height:1.4}
+/* 导航项间距（2026-10-11 用户要求放宽）：外距走 .set-nav-group 的 gap(--sp-2)，
+   min-height:44px 保证触屏点击舒适度；图标进 28px 方块，与右侧两行文字形成稳定栏格 */
+.set-nav-item{position:relative;display:flex;align-items:center;gap:var(--sp-4);width:100%;min-height:44px;padding:9px 12px;border:1px solid transparent;border-radius:var(--r-md);background:transparent;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;text-align:left;transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease)}
+.set-nav-item:hover{background:var(--fill);color:var(--txt)}
+.set-nav-item.active{background:var(--brand-tint);color:var(--brand-text);border-color:var(--brand-line)}
+/* 激活态左侧竖条：比整块底色更明确「你现在在这儿」 */
+.set-nav-item.active::before{content:'';position:absolute;left:-1px;top:50%;transform:translateY(-50%);width:3px;height:20px;border-radius:var(--r-full);background:var(--brand-fill)}
 .set-nav-item:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
-.set-nav-item .i{width:16px;height:16px;flex:none}
-.set-nav-item .i svg{width:100%;height:100%}
+.set-nav-ic{flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:var(--r-sm);background:var(--fill);color:var(--sub);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease)}
+.set-nav-item:hover .set-nav-ic{background:var(--fill-strong);color:var(--txt)}
+.set-nav-item.active .set-nav-ic{background:var(--brand-fill);color:#fff}
+.set-nav-ic .i{width:16px;height:16px;margin-right:0}
+.set-nav-ic .i svg{width:100%;height:100%}
+.set-nav-txt{display:flex;flex-direction:column;gap:var(--sp-1);min-width:0}
+.set-nav-t{font-size:13px;font-weight:600;line-height:1.3}
+.set-nav-desc{font-size:11px;font-weight:400;color:var(--sub);line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-nav-item.active .set-nav-desc{color:var(--brand-text)}
 .set-panels{flex:1;min-width:0}
 .set-panels>.ssec{animation:setPanelIn .22s ease}
 /* P0-3 运行计划 / P1-1 入站 API 两个编辑器的字段类。这两个类此前只有 HTML 在用、
@@ -1462,8 +1490,15 @@ textarea.ipt{resize:vertical;min-height:64px;line-height:1.5}
 @media (prefers-reduced-motion:reduce){.set-panels>.ssec{animation:none}}
 @media (max-width:720px){
   .set-layout{display:block}
-  .set-nav{position:static;width:auto;flex-direction:row;overflow-x:auto;gap:var(--sp-2);margin-bottom:var(--sp-3)}
+  /* 窄屏：导航横滚，组标签与说明文字没地方放，藏掉；竖条也去掉（药丸形态自带选中态） */
+  .set-nav{position:static;width:auto;flex-direction:row;overflow-x:auto;gap:var(--sp-3);margin-bottom:var(--sp-3)}
+  .set-nav-group{flex-direction:row;gap:var(--sp-2);flex:none}
+  .set-nav-glabel{display:none}
   .set-nav-item{flex:none;width:auto;min-height:0;padding:10px 16px;border-radius:var(--r-full)}
+  .set-nav-item.active::before{display:none}
+  .set-nav-desc{display:none}
+  .set-head{padding:var(--sp-4) var(--sp-5)}
+  .set-head-ops{width:100%;justify-content:flex-end}
 }
 #anaSettings .btn{font-size:var(--fs-base)}
 #anaSettings #updateCheckStatus{font-size:var(--fs-sm) !important}
@@ -2771,17 +2806,33 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
 
     <div id="anaSettings" style="display:none">
+    <div class="set-head">
+      <div class="set-head-txt">
+        <h2>设置中心</h2>
+        <p>共 7 个分类：模型接入、高级参数、备用模型、联网检索、语音识别、语义检索、文生图。所有改动即时生效，仅保存在本机，不上传任何服务器。</p>
+      </div>
+      <div class="set-head-ops">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="testConnection()">测试连接</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveSettings()">保存并启用</button>
+      </div>
+    </div>
     <div class="hint">填写后，工作台的聊天将调用真实大模型。Key 仅保存在本机 localStorage，不会上传任何服务器。</div>
 
     <div class="set-layout">
     <nav class="set-nav" role="tablist" aria-label="设置分类">
-      <button type="button" class="set-nav-item active" data-setsec="core" role="tab" aria-selected="true" aria-controls="sec-core-body" onclick="showSettingsPanel('core')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/></svg></span>模型接入</button>
-      <button type="button" class="set-nav-item" data-setsec="adv" role="tab" aria-selected="false" aria-controls="sec-adv-body" onclick="showSettingsPanel('adv')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span>高级参数</button>
-      <button type="button" class="set-nav-item" data-setsec="search" role="tab" aria-selected="false" aria-controls="sec-search-body" onclick="showSettingsPanel('search')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg></span>联网检索</button>
-      <button type="button" class="set-nav-item" data-setsec="stt" role="tab" aria-selected="false" aria-controls="sec-stt-body" onclick="showSettingsPanel('stt')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span>语音识别</button>
-      <button type="button" class="set-nav-item" data-setsec="emb" role="tab" aria-selected="false" aria-controls="sec-emb-body" onclick="showSettingsPanel('emb')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span>语义检索</button>
-      <button type="button" class="set-nav-item" data-setsec="image" role="tab" aria-selected="false" aria-controls="sec-image-body" onclick="showSettingsPanel('image')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span>文生图</button>
-      <button type="button" class="set-nav-item" data-setsec="chain" role="tab" aria-selected="false" aria-controls="sec-chain-body" onclick="showSettingsPanel('chain')"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg></span>备用模型</button>
+      <div class="set-nav-group" role="presentation">
+        <div class="set-nav-glabel">模型与能力</div>
+        <button type="button" class="set-nav-item active" data-setsec="core" role="tab" aria-selected="true" aria-controls="sec-core-body" onclick="showSettingsPanel('core')"><span class="set-nav-ic"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"/><path d="M12 17v4"/></svg></span></span><span class="set-nav-txt"><span class="set-nav-t">模型接入</span><span class="set-nav-desc">服务商 · Key · 模型</span></span></button>
+        <button type="button" class="set-nav-item" data-setsec="adv" role="tab" aria-selected="false" aria-controls="sec-adv-body" onclick="showSettingsPanel('adv')"><span class="set-nav-ic"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span></span><span class="set-nav-txt"><span class="set-nav-t">高级参数</span><span class="set-nav-desc">温度 · 输出长度 · 输入方式</span></span></button>
+        <button type="button" class="set-nav-item" data-setsec="chain" role="tab" aria-selected="false" aria-controls="sec-chain-body" onclick="showSettingsPanel('chain')"><span class="set-nav-ic"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg></span></span><span class="set-nav-txt"><span class="set-nav-t">备用模型</span><span class="set-nav-desc">主模型失败时自动切换</span></span></button>
+      </div>
+      <div class="set-nav-group" role="presentation">
+        <div class="set-nav-glabel">检索与生成</div>
+        <button type="button" class="set-nav-item" data-setsec="search" role="tab" aria-selected="false" aria-controls="sec-search-body" onclick="showSettingsPanel('search')"><span class="set-nav-ic"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg></span></span><span class="set-nav-txt"><span class="set-nav-t">联网检索</span><span class="set-nav-desc">搜索源 · API Key</span></span></button>
+        <button type="button" class="set-nav-item" data-setsec="stt" role="tab" aria-selected="false" aria-controls="sec-stt-body" onclick="showSettingsPanel('stt')"><span class="set-nav-ic"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span></span><span class="set-nav-txt"><span class="set-nav-t">语音识别</span><span class="set-nav-desc">语音转文字</span></span></button>
+        <button type="button" class="set-nav-item" data-setsec="emb" role="tab" aria-selected="false" aria-controls="sec-emb-body" onclick="showSettingsPanel('emb')"><span class="set-nav-ic"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span></span><span class="set-nav-txt"><span class="set-nav-t">语义检索</span><span class="set-nav-desc">向量化模型</span></span></button>
+        <button type="button" class="set-nav-item" data-setsec="image" role="tab" aria-selected="false" aria-controls="sec-image-body" onclick="showSettingsPanel('image')"><span class="set-nav-ic"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span></span><span class="set-nav-txt"><span class="set-nav-t">文生图</span><span class="set-nav-desc">接口 · 模型 · 尺寸</span></span></button>
+      </div>
     </nav>
     <div class="set-panels">
 
@@ -2876,7 +2927,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
 
 <div class="ssec" id="sec-search" hidden>
-  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg></span> 联网检索（网页搜索插件生效）</span><span class="ssec-badge" id="badge-search" style="display:none">已配置</span>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg></span> 联网检索（网页搜索插件生效）</span><span class="ssec-sub">搜索源 · API Key</span><span class="ssec-badge" id="badge-search" style="display:none">已配置</span>
   </div>
   <div class="ssec-body" id="sec-search-body">
       <!-- 2026-09-22：默认源从 DuckDuckGo 换成国产。桌面版统一走宿主 bc_http 转发：
@@ -2905,7 +2956,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 </div>
 
 <div class="ssec" id="sec-stt" hidden>
-  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span> 语音识别（录音自动转文字）</span><span class="ssec-badge" id="badge-stt" style="display:none">已配置</span>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span> 语音识别（录音自动转文字）</span><span class="ssec-sub">录音自动转文字</span><span class="ssec-badge" id="badge-stt" style="display:none">已配置</span>
   </div>
   <div class="ssec-body" id="sec-stt-body">
       <!-- 默认硅基流动：OpenAI Whisper 兼容 multipart 接口，免费额度、中文效果好。
@@ -2930,7 +2981,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 <!-- 语义检索（2026-10-12 P0-2）。默认三项全空 = 关闭：知识库检索走纯 TF-IDF，
      行为与加这一路之前完全一致。填齐接口 + 模型即启用混合检索。 -->
 <div class="ssec" id="sec-emb" hidden>
-  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span> 语义检索（知识库混合检索）</span><span class="ssec-badge" id="badge-emb" style="display:none">已配置</span>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span> 语义检索（知识库混合检索）</span><span class="ssec-sub">知识库混合检索的向量模型</span><span class="ssec-badge" id="badge-emb" style="display:none">已配置</span>
   </div>
   <div class="ssec-body" id="sec-emb-body">
       <div class="field">
@@ -2954,7 +3005,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 </div>
 
 <div class="ssec" id="sec-chain" hidden>
-  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg></span> 备用模型链</span><span class="ssec-badge" id="badge-chain" style="display:none">已配置</span>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg></span> 备用模型链</span><span class="ssec-sub">主模型失败时按序切换</span><span class="ssec-badge" id="badge-chain" style="display:none">已配置</span>
   </div>
   <div class="ssec-body" id="sec-chain-body">
     <div class="hint">主模型遇到 429 / 5xx / 网络故障时，按顺序自动切换下面的备用模型（401 / 403 等鉴权错误不切换——换了也白换）。留空则不启用，行为与本功能之前一致。降级发生的调用会在用量统计里单独计数（计费主体不同）。</div>
@@ -2979,7 +3030,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 </div>
 
 <div class="ssec" id="sec-image" hidden>
-  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span> 文生图（可选）</span><span class="ssec-badge" id="badge-image" style="display:none">已配置</span>
+  <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.8-4.6a1.5 1.5 0 0 1 2.1 0l3.4 3.2M14 14.4l1.7-1.6a1.5 1.5 0 0 1 2.1 0l2 1.9"/></svg></span> 文生图（可选）</span><span class="ssec-sub">接口 · 模型 · 尺寸</span><span class="ssec-badge" id="badge-image" style="display:none">已配置</span>
   </div>
   <div class="ssec-body" id="sec-image-body">
       <!-- 国内可直连的免费生图一键预设：省得用户去查端点、模型名与参数差异
@@ -20932,7 +20983,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.14.0';
+var APP_VERSION = '3.14.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -21760,6 +21811,26 @@ function _kbIndexFor(bot) {
       items[j].setAttribute('aria-selected', on ? 'true' : 'false');
     }
   }
+  /* 分类导航的方向键支持（role=tablist 的标准交互）。此前只有 Tab 能进出：
+     键盘用户想从「模型接入」到「文生图」得按七次 Tab，中间还要穿过一堆链接。
+     现在方向键在七个分类之间循环移动并自动切换，与原生选项卡一致。 */
+  (function () {
+    var nav = document.querySelector('.set-nav');
+    if (!nav || nav.__bcArrowBound) return;
+    nav.__bcArrowBound = true;
+    nav.addEventListener('keydown', function (e) {
+      var k = e.key;
+      if (k !== 'ArrowDown' && k !== 'ArrowUp' && k !== 'ArrowLeft' && k !== 'ArrowRight') return;
+      var its = Array.prototype.slice.call(nav.querySelectorAll('.set-nav-item'));
+      var i = its.indexOf(document.activeElement);
+      if (i < 0) return;                       // 焦点不在分类上，别抢按键
+      e.preventDefault();
+      var dir = (k === 'ArrowDown' || k === 'ArrowRight') ? 1 : -1;
+      var next = its[(i + dir + its.length) % its.length];
+      next.focus();
+      showSettingsPanel(next.getAttribute('data-setsec'));
+    });
+  })();
   window.showSettingsPanel = showSettingsPanel;
   window.refreshSettingsSecBadges = refreshSettingsSecBadges;
   window.settingsSecConfigured = settingsSecConfigured;
