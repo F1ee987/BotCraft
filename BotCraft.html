@@ -1441,7 +1441,8 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
    2026-10-16 重做：导航按「模型与能力 / 检索与生成」分组、每项带一行说明 ——
    七个分类平铺时用户记不住哪个是哪个，让导航自己解释自己；激活态加左侧竖条，
    位置感比整块底色更明确。顺手修掉一个既有问题：导航 hover 原先写死
-   rgba(255,255,255,.05)，浅色主题下白发白、hover 根本没有反馈，改用 var(--fill)。 */
+   rgba(255,255,255,.05)，浅色主题下白发白、hover 根本没有反馈；左栏抬成玻璃面板后
+   hover 改用 var(--fill-hover)（浅色压暗、深色提亮，两个主题都看得见）。 */
 .set-head{display:flex;align-items:center;gap:var(--sp-5);flex-wrap:wrap;
   padding:var(--sp-5) var(--sp-6);margin:var(--sp-4) 0 var(--sp-5);
   background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--r-xl);
@@ -1453,7 +1454,24 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 .set-head-ops{display:flex;align-items:center;gap:var(--sp-4);flex:none}
 /* 设置页左右展开布局：左分类导航 + 右内容面板 */
 .set-layout{display:flex;align-items:flex-start;gap:var(--sp-5);margin:var(--sp-4) 0}
-.set-nav{flex:none;width:238px;display:flex;flex-direction:column;gap:var(--sp-6);position:sticky;top:calc(var(--ph-h,64px) + 12px)}
+/* ============ 左栏：液态玻璃面板（2026-10-16 用户要求） ============
+   原先左栏是一排裸浮动的按钮，右侧却是卡片堆 —— 两栏完全不对称。现在把左栏
+   整块抬成玻璃面板，与模块头、侧栏同一套语言，四样东西逐条对应用户要求：
+     ① 半透明磨砂背景  → background:var(--glass-bg)
+     ② 背景模糊        → backdrop-filter:var(--glass-filter)
+     ③ 高光边缘        → box-shadow:var(--lg-shadow)（内含 --lg-top/--lg-bottom 的
+                          上下内描边：顶缘亮线 + 底缘暗线）
+     ④ 轻微折射质感    → background-image:var(--lg-spec)（150° 对角高光渐变）
+   margin:10px 0 与右侧首张 .ssec 的 margin:10px 0 齐平 —— 两栏上沿对齐才谈得上对称。
+   ⚠️ background 简写会重置 background-image，所以 --lg-spec 必须写在它之后（同 .sidebar）。
+   ⚠️ sticky + backdrop-filter 并存是安全的：.topbar 本来就是这两者叠加（见顶部 !important 清单）。
+   ⚠️ 刻意**不**挂流动高光（lgSheen）：导航是文字密集区，流动会持续干扰阅读，
+      用户要的四样里也没有它。 */
+.set-nav{flex:none;width:238px;display:flex;flex-direction:column;gap:var(--sp-6);
+  position:sticky;top:calc(var(--ph-h,64px) + 12px);margin:10px 0;padding:var(--sp-4);
+  background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--r-xl);
+  background-image:var(--lg-spec);box-shadow:var(--lg-shadow);
+  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
 /* 分组：role=presentation 只是给 ARIA 看的（tablist 的直接子节点应当是 tab），
    视觉上把七个分类归成两簇，簇标题是小号灰字 */
 .set-nav-group{display:flex;flex-direction:column;gap:var(--sp-2)}
@@ -1461,7 +1479,7 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 /* 导航项间距（2026-10-11 用户要求放宽）：外距走 .set-nav-group 的 gap(--sp-2)，
    min-height:44px 保证触屏点击舒适度；图标进 28px 方块，与右侧两行文字形成稳定栏格 */
 .set-nav-item{position:relative;display:flex;align-items:center;gap:var(--sp-4);width:100%;min-height:44px;padding:9px 12px;border:1px solid transparent;border-radius:var(--r-md);background:transparent;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;text-align:left;transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease)}
-.set-nav-item:hover{background:var(--fill);color:var(--txt)}
+.set-nav-item:hover{background:var(--fill-hover);color:var(--txt)}
 .set-nav-item.active{background:var(--brand-tint);color:var(--brand-text);border-color:var(--brand-line)}
 /* 激活态左侧竖条：比整块底色更明确「你现在在这儿」 */
 .set-nav-item.active::before{content:'';position:absolute;left:-1px;top:50%;transform:translateY(-50%);width:3px;height:20px;border-radius:var(--r-full);background:var(--brand-fill)}
@@ -1490,8 +1508,9 @@ textarea.ipt{resize:vertical;min-height:64px;line-height:1.5}
 @media (prefers-reduced-motion:reduce){.set-panels>.ssec{animation:none}}
 @media (max-width:720px){
   .set-layout{display:block}
-  /* 窄屏：导航横滚，组标签与说明文字没地方放，藏掉；竖条也去掉（药丸形态自带选中态） */
-  .set-nav{position:static;width:auto;flex-direction:row;overflow-x:auto;gap:var(--sp-3);margin-bottom:var(--sp-3)}
+  /* 窄屏：导航从「竖立玻璃面板」转成「横滚玻璃条」—— 面板感保留（描边/圆角/玻璃底
+     都在，只是不 sticky、不竖排），组标签与说明文字没地方放，藏掉 */
+  .set-nav{position:static;width:auto;flex-direction:row;align-items:center;overflow-x:auto;gap:var(--sp-3);margin:var(--sp-3) 0;padding:var(--sp-3) var(--sp-4)}
   .set-nav-group{flex-direction:row;gap:var(--sp-2);flex:none}
   .set-nav-glabel{display:none}
   .set-nav-item{flex:none;width:auto;min-height:0;padding:10px 16px;border-radius:var(--r-full)}
@@ -2172,7 +2191,7 @@ html[data-glass="off"] body .cmd-panel, html[data-glass="off"] body .pop-menu, h
 html[data-glass="off"] body .bot-switch-menu, html[data-glass="off"] body .ch-more-menu, html[data-glass="off"] body .modal-box,
 html[data-glass="off"] body .ctxp-box, html[data-glass="off"] body .batch-bar,
 html[data-glass="off"] body .stat-card, html[data-glass="off"] body .chart-box, html[data-glass="off"] body .brand-card,
-html[data-glass="off"] body .pub-card{
+html[data-glass="off"] body .pub-card, html[data-glass="off"] body .set-nav{
   box-shadow:none !important;
   background:var(--popover) !important;
   border-color:var(--line) !important;
@@ -21016,7 +21035,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.14.2';
+var APP_VERSION = '3.14.3';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
