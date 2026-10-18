@@ -307,14 +307,16 @@ body::after{
   33%{transform:translate3d(-4%,2.6%,0) rotate(-2deg) scale(1.06)}
   66%{transform:translate3d(3.4%,-3.2%,0) rotate(1.4deg) scale(1.1)}
 }
-/* ============ 切页窗口暂停光晕（2026-10-16「切页掉帧随后恢复」的针对性优化） ============
+/* ============ 切页窗口暂停光晕（2026-10-16 首版 / 10-18 实测修正） ============
+   首版把挂点放在 applyPage 之后，实测没用：卡顿帧发生在切换后 55~85ms，
+   是新页玻璃面「从零开始 blur」的头几帧，那时才暂停已经晚了；而且 go() 开头的
+   dropLeaveEl() 还会把类摘掉。现在挂点前移到 applyPage 之前（见 go() 内注释）。
    机制：body::before/::after 每帧都在动 → 玻璃面的 backdrop（背后内容）每帧都变 →
-   21 个 backdrop-filter 面**每一帧都要重跑 saturate+blur**，这是稳态底噪。
-   切页是交叉淡化：旧页整屏 fixed 淡出 + 新页展开，过渡窗口内玻璃面数量翻倍、
-   再叠整屏 opacity 动画 → GPU 打满几百毫秒 → 掉帧；旧页 display:none 后层数回落 → 恢复。
-   对策：切页窗口给 html 挂 .pg-switch，**暂停两层光晕** —— 背景不再逐帧失效，
-   所有玻璃面整帧跳过重滤镜，GPU 让给淡出合成。视觉代价：26s 循环冻 0.4s ≈ 1.5%，无感。
-   挂/摘点在 go() / dropLeaveEl()。visibilitychange 时同理（见 bgHidden）。 */
+   21 个 backdrop-filter 面每一帧都要重跑 saturate+blur。新页 display:none→可见时
+   它那十几个面要从零 blur 一遍，背后还在流动 = 每帧一次全新的全半径模糊，头几帧
+   48ms+。冻结背景后 blur 结果可跨帧缓存，头几帧才便宜。
+   挂/摘点：go() 交叉淡化分支（applyPage 之前）挂，dropLeaveEl() 摘。
+   visibilitychange 时同理（见 bgHidden）。 */
 html.pg-switch body::before, html.pg-switch body::after{animation-play-state:paused}
 /* 页面不可见（最小化 / 切走）时同样暂停：光晕动画是无限循环，窗口看不见时
    每帧合成纯属白烧 GPU。WebView2 对隐藏窗口有节流但不保证归零，显式暂停兜底。
@@ -446,6 +448,22 @@ body .pub-card, body .batch-bar, body .main.scrolled > .page-head,
 body .cw-tools, body .cw-mini{
   backdrop-filter: var(--glass-filter) !important;
   -webkit-backdrop-filter: var(--glass-filter) !important;
+}
+/* ============ 旧页淡化期摘掉 backdrop-filter（2026-10-18 实测定位） ============
+   切页掉帧的真正主因不是背景光晕，而是**旧页本身**：它被抬成 position:fixed 做
+   opacity 淡出，内部每个玻璃面的「背后」都在变（新页在展开）→ 每帧重跑一次全半径
+   模糊。实测这一个原因就占掉切换窗口 42.5ms 的 p95 帧间隔。
+   对策：淡化期间把旧页整棵子树的 backdrop-filter 摘掉。旧页正在消失，240ms 内不模糊
+   肉眼几乎看不出来；而帧间隔从 42.5ms 回到 6.3ms（与关玻璃持平，实测见
+   build_exe/_perf_switch8.py）。
+   ⚠️ 位置有讲究：必须放在上面那条全局玻璃规则**之后**。两条都带 !important、
+   特异性又相同（都是 0,1,1），CSS 对等特异性比的是源顺序 —— 放前面会被全局规则
+   压回去，等于没写（第一版就踩了这个坑：单测全绿、实测照卡）。
+   ⚠️ 移不动的话退而求其次：把选择器加成 body main.bc-leaving *（0,1,3）提高特异性，
+   但那样一旦全局清单以后加了更长的选择器又会失效，跟着源顺序走更稳。 */
+body .bc-leaving, body .bc-leaving *{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
 }
 body .topbar{background:var(--glass-bg-hover) !important;}
 /* 玻璃珠物理层补齐：--lg-* 变量升级只对「引用了它们」的组件生效，
@@ -11027,6 +11045,13 @@ function go(p) {
     if (getComputedStyle(el).display !== 'none') curEl = el;
   });
   if (!curEl || curEl.id === 'page-' + p) { applyPage(p); return; }
+  /* ⚠️ 冻结背景光晕必须放在这里 —— applyPage（新页 display:none→可见）之前。
+     2026-10-18 实测：切页那一下的 48~60ms 卡顿帧发生在切换后 55~85ms，
+     正是新页 13 个玻璃面「从零开始 blur」的头几帧。光晕若还在流动，背后内容每帧都变，
+     每个新可见面都是全新的一次全半径模糊，头几帧直接超预算；先冻结背景，
+     blur 结果可跨帧缓存，头几帧才便宜。（原先挂点在 applyPage 之后 = 暂停晚了，
+     且开头的 dropLeaveEl() 还会把它摘掉，等于没暂停。） */
+  document.documentElement.classList.add('pg-switch');
   /* 交叉淡化：先把旧页以**此刻的坐标**抬成 position:fixed —— 它因此脱离文档流，不再与
      新页互挤宽度（都是 .app 的 flex 子项，同时在场会被压成半屏），于是两页可以同时在场，
      旧页在上层淡出、新页在下面展开，中间没有「等它消失」的空窗。
@@ -11046,9 +11071,6 @@ function go(p) {
   /* keep 住旧页：applyPage 会把其余页面隐藏，但这一张要留到最后一口气再收获 */
   applyPage(p, curEl);
   if (!ms) { dropLeaveEl(); return; }   /* 降级用户没有收起动画，不必等 */
-  /* 切页窗口开始：暂停背景光晕（.pg-switch），背景不再逐帧失效，
-     过渡窗口内翻倍的玻璃面整帧跳过重滤镜 —— 这是「切页掉帧」的主因（见 CSS 注释） */
-  document.documentElement.classList.add('pg-switch');
   const seq = ++_goSeq;
   _leaveTimer = setTimeout(function () { if (seq === _goSeq) dropLeaveEl(); }, ms + 40);
 }
@@ -21062,7 +21084,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.14.5';
+var APP_VERSION = '3.14.6';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
