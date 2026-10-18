@@ -1539,7 +1539,11 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 .ipt{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;min-width:0;transition:border-color var(--dur-3) var(--ease)}
 .ipt:focus{outline:none;border-color:var(--brand)}
 textarea.ipt{resize:vertical;min-height:64px;line-height:1.5}
-@keyframes setPanelIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* 2026-10-18：去掉 opacity  ramp，只留 6px 位移。原因：分区卡片是半透明玻璃
+   （--glass-bg），opacity 0→1 会让背景在 220ms 里透过卡片逐渐「显形」——
+   用户反馈这就是「切换时背景重新渲染」的观感。位移不改变玻璃 alpha，
+   入场感保留、背景不再闪。若日后要恢复淡入，先想清楚半透明面 + 淡入 = 背景闪烁。 */
+@keyframes setPanelIn{from{transform:translateY(6px)}to{transform:none}}
 @media (prefers-reduced-motion:reduce){.set-panels>.ssec{animation:none}}
 @media (max-width:720px){
   .set-layout{display:block}
@@ -21095,7 +21099,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.14.7';
+var APP_VERSION = '3.14.8';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
