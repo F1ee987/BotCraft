@@ -25,6 +25,9 @@
   /* ===== Apple 深色系统色板（对齐 iOS/macOS Dark 语义色） ===== */
   /* 液态玻璃的地基：底色压深，真正的层次由多层半透明表面叠出来 */
   --bg:#0a0e14;                     /* 窗口底：近黑带一丝青（参考图 LightC 深色） */
+  /* 模态遮罩：深色下刻意比浅色淡（.30 vs .42）—— 黑遮罩压在近黑底上会把极光
+      压成纯黑（实测 rgb(2,12,12)），用户反馈「一片死黑」。淡一点才透得出光晕。 */
+  --scrim:rgba(0,0,0,.30);
   --popover:#22222b;                /* 弹出菜单（更多 ▾ 等）：比窗口底抬亮一档，一眼可辨「浮在上面」 */
   --panel:rgba(28,28,33,.50);       /* 侧栏 / 面板：玻璃层 */
   --panel2:rgba(18,18,22,.26);      /* 聊天区 / 输入区底：更薄的玻璃 */
@@ -60,19 +63,21 @@
      玻璃必须有东西可以透出来才成立 —— 这是「液态玻璃」与「死灰玻璃」的分界。
      抽成两个令牌（每层一整套 4 束 radial）是为了让浅色主题整套换色而不必复制渐变文本：
      换色只改这两个值，body::before/after 的规则一动不动。
-     深色（默认，参考图 LightC 深色）＝ 翡翠/薄荷绿单色系 + 第二层一丝品牌靛调和，
-     浓度比浅色压得低 —— 近黑底上给高了会发脏；
+     深色（默认，参考图 LightC 深色）＝ 翡翠/薄荷绿单色系 + 第二层一丝品牌靛调和。
+     2026-10-18 上调浓度（.26→.42 等）：实测深色首页背景只有 rgb(11,14,18)~rgb(27,28,41)，
+     极光几乎看不见，而玻璃框因 saturate(280%) 会把背后色彩放大 2.8 倍 —— 于是
+     「流动光效只在液态框里显示」，裸背景一片死黑。浓度调到能在裸背景上也读得出层次。
      浅色换成更淡的薄荷/翡翠，参考值见 [data-theme="light"] 里的覆盖。 */
   --bg-glow-1:
-    radial-gradient(46% 42% at 50% 4%, rgba(16,185,129,.26), transparent 66%),
-    radial-gradient(40% 36% at 14% 26%, rgba(52,211,153,.16), transparent 66%),
-    radial-gradient(42% 38% at 86% 72%, rgba(45,212,191,.14), transparent 68%),
-    radial-gradient(34% 32% at 26% 92%, rgba(5,150,105,.18), transparent 68%);
+    radial-gradient(60% 55% at 50% 4%, rgba(16,185,129,.45), transparent 70%),
+    radial-gradient(50% 46% at 14% 26%, rgba(52,211,153,.32), transparent 70%),
+    radial-gradient(52% 48% at 86% 72%, rgba(45,212,191,.28), transparent 72%),
+    radial-gradient(44% 42% at 26% 92%, rgba(5,150,105,.36), transparent 70%);
   --bg-glow-2:
-    radial-gradient(32% 28% at 74% 26%, rgba(16,185,129,.12), transparent 66%),
-    radial-gradient(28% 26% at 20% 60%, rgba(94,234,212,.09), transparent 66%),
-    radial-gradient(30% 28% at 60% 86%, rgba(52,211,153,.10), transparent 68%),
-    radial-gradient(26% 24% at 40% 8%, rgba(99,102,241,.10), transparent 66%);
+    radial-gradient(42% 38% at 74% 26%, rgba(16,185,129,.26), transparent 68%),
+    radial-gradient(38% 36% at 20% 60%, rgba(94,234,212,.20), transparent 68%),
+    radial-gradient(40% 38% at 60% 86%, rgba(52,211,153,.22), transparent 70%),
+    radial-gradient(36% 34% at 40% 8%, rgba(99,102,241,.20), transparent 68%);
   --glass-blur:26px;
   --glass-sat:190%;
   --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
@@ -180,6 +185,7 @@
 /* ==================== 浅色主题 ==================== */
 [data-theme="light"]{
   --bg:#edf2ee;                     /* 窗口底：近白带一丝绿，参考图（LightC）的干净底子 */
+  --scrim:rgba(0,0,0,.42);         /* 浅色下遮罩深一档：白底上需要更强的压暗才能突出模态 */
   /* 浅色背景弥散光：换成参考图的薄荷 / 翡翠绿单色系。刻意不放粉/橙 ——
      参考图是单色系绿色，杂色一进来就脏。深色那套（品牌紫 + 青粉橙）见 :root。 */
   --bg-glow-1:
@@ -340,10 +346,14 @@ html.bg-hidden body::before, html.bg-hidden body::after{animation-play-state:pau
     var(--lg-spec);
 }
 /* 深色同款：参考图深色里那团绿光在卡片**底部**（空状态区），不在中央 —— 位置跟着参考图走 */
+/* 2026-10-18 增强（.16→.32，覆盖 62%×50%→85%×70%）：用户反馈深色下「一片死黑，
+   流动光效只在液态框里显示」。主区域的 56% 深色玻璃会吞掉背后 60% 以上的极光，
+   自带的这层 Bloom 是主区域内唯一不隔玻璃的光源 —— 太淡就等于没有。 */
 [data-theme="dark"] body .main,
 [data-theme="dark"] body .workspace{
   background-image:
-    radial-gradient(62% 50% at 50% 98%, rgba(16,185,129,.16), rgba(16,185,129,0) 70%),
+    radial-gradient(85% 70% at 50% 100%, rgba(16,185,129,.32), rgba(16,185,129,0) 72%),
+    radial-gradient(60% 50% at 12% 8%, rgba(94,234,212,.14), rgba(94,234,212,0) 70%),
     var(--lg-spec);
 }
 @media (prefers-reduced-motion: reduce){body::before,body::after{animation:none}}
@@ -1402,7 +1412,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .list-row .act:hover{background:var(--fill);color:var(--txt)}
 
 /* ============ 弹窗 ============ */
-.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center;padding:20px;will-change:transform}
+.modal{display:none;position:fixed;inset:0;background:var(--scrim);z-index:100;align-items:center;justify-content:center;padding:20px;will-change:transform}
 .modal.on{display:flex;animation:modalMaskIn .26s ease both}
 .mbox{background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-2xl);padding:24px;width:520px;max-width:92vw;box-shadow:0 24px 60px rgba(0,0,0,.36);max-height:90vh;overflow-y:auto;transform:translateZ(0);position:relative;
   -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
@@ -21125,7 +21135,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.15.0';
+var APP_VERSION = '3.15.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
