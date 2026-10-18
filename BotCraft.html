@@ -1084,12 +1084,28 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .fast-ico{font-size:14px}
 .fast-txt{letter-spacing:.5px}
 /* iOS 开关（51×31，开启色 systemGreen） */
-.fast-toggle .switch{position:relative;display:inline-block;width:51px;height:31px;margin-left:2px}
-.fast-toggle .switch input{opacity:0;width:0;height:0}
-.fast-toggle .slider{position:absolute;inset:0;background:var(--fill-strong);border:1px solid transparent;border-radius:var(--r-full);transition:background var(--dur-5) var(--ease)}
-.fast-toggle .slider::before{content:"";position:absolute;height:27px;width:27px;left:2px;top:1px;background:#fff;border-radius:50%;transition:transform var(--dur-5) var(--ease);box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16)}
-.fast-toggle .switch input:checked + .slider{background:#30d158;border-color:transparent}
-.fast-toggle .switch input:checked + .slider::before{transform:translateX(20px)}
+/* ============ 开关控件（toggle switch，左=关 / 右=开）============
+   2026-10-18：全站「打勾复选框」统一替换成左右拨动开关。此前这套样式只作用于
+   聊天输入区（.fast-toggle 作用域），这里抽成全局组件 .switch，视觉语言与原版一致：
+   51×31 胶囊轨道 + 27px 白色圆钮 + 开启时轨道变 --ok 绿、圆钮右移。
+   结构（输入框仍是真正的 checkbox，JS 绑定一概不动）：
+     <label class="switch"><input type="checkbox" id="x" ...><span class="slider"></span></label>
+   三个刻意的设计：
+   ① input 绝对定位**铺满整个开关**并保持 opacity:0 —— 整块可点、Tab 可聚焦、
+      Space 可切、读屏播报「复选框/已勾选」。不能用 width:0;height:0 那种隐形写法：
+      焦点环没处画，点击区域也只剩 input 自身那一条。
+   ② 状态全部由 :checked + .slider 驱动，零 JS；减动效下过渡关闭。
+   ③ 开启色用 --ok 令牌而非写死 #30d158 —— 浅色主题下令牌会给 #34c759。 */
+.switch{position:relative;display:inline-block;width:51px;height:31px;flex:none;vertical-align:middle}
+.switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:pointer;z-index:1}
+.switch .slider{position:absolute;inset:0;background:var(--fill-strong);border:1px solid var(--line);border-radius:var(--r-full);pointer-events:none;transition:background var(--dur-5) var(--ease),border-color var(--dur-5) var(--ease)}
+.switch .slider::before{content:"";position:absolute;height:27px;width:27px;left:1px;top:1px;background:#fff;border-radius:50%;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform var(--dur-5) var(--ease)}
+.switch input:checked + .slider{background:var(--ok);border-color:transparent}
+.switch input:checked + .slider::before{transform:translateX(20px)}
+.switch input:focus-visible + .slider{outline:2px solid var(--brand);outline-offset:2px}
+.switch input:disabled + .slider{opacity:.5}
+.switch input:disabled{cursor:not-allowed}
+@media (prefers-reduced-motion:reduce){.switch .slider,.switch .slider::before{transition:none}}
 .fast-toggle:hover .fast-txt{color:var(--brand-text)}
 /* 快捷提示词按钮：使用不透明实体色，与聊天背景明确区分，避免毛玻璃半透明导致的"发白发灰" */
 .quick-chip{padding:7px 14px;border-radius:var(--r-full);font-size:12.5px;cursor:pointer;font-weight:590;transition:background var(--dur-2) var(--ease);
@@ -2639,7 +2655,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
             <textarea id="batchInput" class="batch-area" data-grow data-grow-max="320" placeholder="每行一个问题，例如：&#10;帮我写一句种草文案&#10;给新手介绍这个产品&#10;总结三个卖点" oninput="updateBatchCount()"></textarea>
           </div>
           <div class="batch-ctrls">
-            <label class="batch-chk"><input type="checkbox" id="batchSkipHeader" onchange="updateBatchCount()"> 首行作为标题（跳过）</label>
+            <label class="batch-chk"><span class="switch"><input type="checkbox" id="batchSkipHeader" onchange="updateBatchCount()"><span class="slider"></span></span><span>首行作为标题（跳过）</span></label>
             <button class="btn btn-ghost btn-sm" onclick="document.getElementById('batchFile').click()"><svg class="ic-btn" aria-hidden="true"><use href="#ic-folder"/></svg>导入</button>
             <input type="file" id="batchFile" accept=".txt,.csv,text/plain,text/csv" style="display:none" onchange="importBatchFile(event)">
             <button class="btn btn-ghost btn-sm" onclick="clearBatchInput()"><svg class="ic-btn" aria-hidden="true"><use href="#ic-broom"/></svg>清空</button>
@@ -2914,7 +2930,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <input id="set-key" type="password" placeholder="sk-…（本地模型 / 免 Key 接口可留空）" autocomplete="off">
       <div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">API Key 不能为空（自定义模式下 baseURL 也必填）</div>
       <label for="set-noauth" style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:12px;color:var(--txt);cursor:pointer">
-        <input id="set-noauth" type="checkbox" style="width:15px;height:15px;flex:none;accent-color:var(--brand);cursor:pointer">
+        <span class="switch"><input type="checkbox" id="set-noauth"><span class="slider"></span></span>
         <span>该接口无需鉴权（免 Key 公共接口 / 本地模型，Key 留空也能调用）</span>
       </label>
       <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">留空也能保存：本地模型（Ollama / LM Studio，地址填 http://localhost:11434/v1）与免 Key 公共接口不需要鉴权。</div>
@@ -2951,12 +2967,12 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
     </div>
     <div class="field" style="display:flex;align-items:center;gap:8px">
-      <input id="set-direct" type="checkbox" checked style="width:auto">
-      <label style="margin:0">浏览器直连模型接口（关闭则走下方代理地址）</label>
+      <span class="switch"><input type="checkbox" id="set-direct" checked><span class="slider"></span></span>
+      <label for="set-direct" style="margin:0;cursor:pointer">浏览器直连模型接口（关闭则走下方代理地址）</label>
     </div>
     <div class="field" style="display:flex;align-items:center;gap:8px">
-      <input id="set-serial" type="checkbox" checked style="width:auto">
-      <label style="margin:0">串行输入（回复期间锁定输入框）</label>
+      <span class="switch"><input type="checkbox" id="set-serial" checked><span class="slider"></span></span>
+      <label for="set-serial" style="margin:0;cursor:pointer">串行输入（回复期间锁定输入框）</label>
       <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">开启：必须等上一条完成才能发下一条。关闭：回复期间可预输入，消息自动排队依次发送。</div>
     </div>
     <div class="field">
@@ -3168,8 +3184,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
     <div class="ssec-body">
       <div class="field" style="display:flex;align-items:center;gap:8px">
-        <input id="set-glass" type="checkbox" checked style="width:auto" onchange="toggleLiquidGlass()">
-        <label style="margin:0">开启液态玻璃材质</label>
+        <span class="switch"><input type="checkbox" id="set-glass" checked onchange="toggleLiquidGlass()"><span class="slider"></span></span>
+        <label for="set-glass" style="margin:0;cursor:pointer">开启液态玻璃材质</label>
       </div>
       <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
         开启：整界面的玻璃面走真实折射（更深的模糊与饱和度），并有一道高光缓慢流过。关闭：降级为实底平面，低端机上更省性能。
@@ -3218,7 +3234,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <label class="fld" style="margin-top:10px"><span>输入模板（运行时喂给机器人的消息，可留空）</span>
             <textarea id="schInput" class="ipt" rows="3" placeholder="如：总结今天的经营数据并给出建议"></textarea>
           </label>
-          <label style="display:inline-flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="schEnabled" checked> 启用</label>
+          <label style="display:inline-flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer"><span class="switch"><input type="checkbox" id="schEnabled" checked><span class="slider"></span></span><span>启用</span></label>
           <div style="display:flex;gap:8px;margin-top:12px">
             <button class="btn btn-primary btn-sm" onclick="saveSchedule()">保存</button>
             <button class="btn btn-ghost btn-sm" onclick="closeScheduleEditor()">取消</button>
@@ -3258,7 +3274,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <label class="fld" style="margin-top:10px"><span>备注（可选）</span>
             <input id="whNote" class="ipt" maxlength="200" placeholder="这个 webhook 的用途">
           </label>
-          <label style="display:inline-flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="whEnabled" checked> 启用</label>
+          <label style="display:inline-flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer"><span class="switch"><input type="checkbox" id="whEnabled" checked><span class="slider"></span></span><span>启用</span></label>
           <div class="sub" style="margin-top:8px">Token：<code id="whTokenView">（保存后生成）</code></div>
           <div style="display:flex;gap:8px;margin-top:12px">
             <button class="btn btn-primary btn-sm" onclick="saveWebhook()">保存</button>
@@ -5167,7 +5183,7 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     var f = _memFilter;
     var html = '';
     html += '<div style="font-size:12px;color:var(--sub);margin-bottom:10px">开启后会自动从对话中沉淀长期记忆（未配置 Key 时用本地规则提炼，配置后由 AI 智能提炼），并在后续对话里按相关性运用。也可手动添加。</div>';
-    html += '<label class="kb-row" style="margin-bottom:10px"><input type="checkbox" id="memEnable" ' + (m.enabled ? 'checked' : '') + '> <span>' + svgIcon('brain') + ' 启用长期记忆</span><span class="kb-toggle">' + (m.enabled ? '已开启' : '已关闭') + '</span></label>';
+    html += '<label class="kb-row" style="margin-bottom:10px">' + SW('id="memEnable" ' + (m.enabled ? 'checked' : '')) + '<span>' + svgIcon('brain') + ' 启用长期记忆</span><span class="kb-toggle">' + (m.enabled ? '已开启' : '已关闭') + '</span></label>';
     html += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="updateMemoryNow()">' + svgIcon('zap') + ' 立即更新</button><button class="btn btn-ghost btn-sm" onclick="dedupeMemoryNow()" title="合并语义重复的记忆，并按重要度清理超量条目">' + svgIcon('broom') + ' 去重合并</button></div>';
     html += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">';
     html += '<button class="btn btn-ghost btn-sm" onclick="exportMemory()" title="把该机器人的记忆导出为 JSON，便于迁移或存档">' + svgIcon('download') + ' 导出</button>';
@@ -12078,7 +12094,7 @@ function cwBeginEdit(el, b, i) {
     <div style="margin-top:6px">
       <div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>
       <textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical">${escapeHtml(nd.note || '')}</textarea>
-      <label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><input class="ne-autoreview" type="checkbox" ${nd.autoReview ? 'checked' : ''}> 启用预审（复用质检逻辑，发出前先出质检意见）</label>
+      <label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><span class="switch"><input type="checkbox" class="ne-autoreview" ${nd.autoReview ? 'checked' : ''}><span class="slider"></span></span> 启用预审（复用质检逻辑，发出前先出质检意见）</label>
     </div>` : ''}
     <div class="node-edit-save">
       <button class="ok" data-act="save">保存</button>
@@ -12152,7 +12168,7 @@ function cwBeginEdit(el, b, i) {
       aprBox.style.marginTop = '6px';
       aprBox.innerHTML = '<div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>' +
         '<textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical"></textarea>' +
-        '<label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><input class="ne-autoreview" type="checkbox" checked> 启用预审（复用质检逻辑，发出前先出质检意见）</label>';
+        '<label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)">' + SW('class="ne-autoreview" checked') + ' 启用预审（复用质检逻辑，发出前先出质检意见）</label>';
       el.insertBefore(aprBox, el.querySelector('.node-edit-save'));
     }
     aprBox.style.display = willHuman ? 'block' : 'none';
@@ -21109,7 +21125,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.14.9';
+var APP_VERSION = '3.15.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
