@@ -20060,6 +20060,17 @@ function showAnaTab(t) {
   var btns = { usage: 'anaTabUsage', settings: 'anaTabSettings', ui: 'anaTabUI', schedule: 'anaTabSchedule', webhook: 'anaTabWebhook' };
   var keys = Object.keys(panels);
   var active = panels[t] ? t : 'usage';
+  /* 切换窗口暂停背景光晕（与 go() 同一手段，理由见 CSS .pg-switch 注释）：
+     新面板 display:none→可见，它内部的玻璃面要从零 blur 一遍；背后若还在流动，
+     每帧都是全新的全半径模糊。实测各标签的玻璃面数量：usage 14 个、settings 5 个、
+     schedule 5 个、ui/webhook 4 个 —— 从 settings 切到 usage 时有 9 个面要从零 blur。
+     强机上这只占几毫秒（实测 p95 6.2ms 无感），弱机上正好超帧预算。
+     这里没有交叉淡化、不存在「旧页每帧重滤镜」的问题，所以只暂停、不摘 blur。 */
+  document.documentElement.classList.add('pg-switch');
+  clearTimeout(window.__anaTabPauseT);
+  window.__anaTabPauseT = setTimeout(function () {
+    document.documentElement.classList.remove('pg-switch');
+  }, 320);
   keys.forEach(function (k) {
     var pn = document.getElementById(panels[k]);
     if (pn) pn.style.display = (k === active) ? '' : 'none';
@@ -21084,7 +21095,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.14.6';
+var APP_VERSION = '3.14.7';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
