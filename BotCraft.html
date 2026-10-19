@@ -3099,7 +3099,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg></span> 备用模型链</span><span class="ssec-sub">主模型失败时按序切换</span><span class="ssec-badge" id="badge-chain" style="display:none">已配置</span>
   </div>
   <div class="ssec-body" id="sec-chain-body">
-    <div class="hint">主模型遇到 429 / 5xx / 网络故障时，按顺序自动切换下面的备用模型（401 / 403 等鉴权错误不切换——换了也白换）。留空则不启用，行为与本功能之前一致。降级发生的调用会在用量统计里单独计数（计费主体不同）。<br>添加时从下拉里选模型即可，接口地址会自动带出来；跨厂商备用（如主用 OpenAI、备用智谱）在列表里换一个厂商的模型就行。</div>
+    <div class="hint">主模型遇到 429 / 5xx / 网络故障时，按顺序自动切换下面的备用模型（401 / 403 等鉴权错误不切换——换了也白换）。留空则不启用，行为与本功能之前一致。降级发生的调用会在用量统计里单独计数（计费主体不同）。<br>添加时先选服务商、再选它的模型，接口地址会自动带出来——剩下只要填个 Key。跨厂商备用（如主用 OpenAI、备用智谱）换个服务商即可。</div>
     <div id="mcList" class="dist-list" style="margin-top:10px"></div>
     <div id="mcEmpty" class="hint" style="display:none">还没有备用模型。主模型被限流时只能得到「演示回复」而不是真实回答。</div>
     <div style="display:flex;gap:8px;margin-top:10px">
@@ -3108,12 +3108,16 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div id="mcEditor" style="display:none;margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:12px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <label class="fld"><span>备注名</span><input id="mcName" class="ipt" maxlength="40" placeholder="如：智谱备用"></label>
-        <label class="fld"><span>模型</span>
-          <select id="mcModelSel" class="ipt" onchange="onMcModelPick()"></select>
-          <input id="mcModel" class="ipt" maxlength="120" placeholder="手动输入模型名，如 glm-4.7-flash" style="display:none">
-          <span class="wh-fld-hint">选已知模型会自动填好接口地址；目录里没有就选「手动输入」</span>
+        <label class="fld"><span>服务商</span>
+          <select id="mcProviderSel" class="ipt" onchange="onMcProviderPick()"></select>
+          <span class="wh-fld-hint">选定服务商会自动带出接口地址</span>
         </label>
       </div>
+      <label class="fld" style="margin-top:10px"><span>模型</span>
+        <select id="mcModelSel" class="ipt" onchange="onMcModelPick()"></select>
+        <input id="mcModel" class="ipt" maxlength="120" placeholder="手动输入模型名，如 glm-4.7-flash" style="display:none">
+        <span class="wh-fld-hint">只列该服务商的模型；目录里没有就选「手动输入」</span>
+      </label>
       <label class="fld" style="margin-top:10px"><span>接口地址（baseURL）</span><input id="mcBase" class="ipt" maxlength="300" placeholder="https://open.bigmodel.cn/api/paas/v4"></label>
       <label class="fld" style="margin-top:10px"><span>API Key（留空 = 免鉴权端点）</span><input id="mcKey" class="ipt" maxlength="300" placeholder="sk-..."></label>
       <div style="display:flex;gap:8px;margin-top:12px">
@@ -20907,11 +20911,11 @@ function renderModelChainUI() {
       + '</div></div>';
   }).join('');
 }
-/* ============ 备用模型下拉（2026-10-19） ============
-   旧版「模型」是自由文本：既要记住准确模型名，又要自己拼对应的 baseURL，两处都容易错。
-   现在按内置服务商目录分组列出已知模型，选中即回填该厂商的接口地址；
-   目录里没有的模型仍可走「手动输入」，行为与旧版一致。
-   真实值仍写在 #mcModel 里，saveModelChainItem 的读取逻辑零改动。 */
+/* ============ 备用模型：服务商 → 模型 两步选择（2026-10-19） ============
+   为什么两步而不是一个混合列表：备用模型通常是「换一家厂商」——先把范围收敛到
+   某一家，再在它的模型里挑，比在 20 个混排模型里找要清楚；选定服务商同时把
+   baseURL 带出来，用户只剩「填个 Key」一件事。
+   真实值仍写在 #mcModel，saveModelChainItem 的读取逻辑零改动。 */
 function mcProviderList() {
   var provs = {};
   try { provs = (typeof BotCraftAI !== 'undefined' && BotCraftAI.getProviders) ? BotCraftAI.getProviders() : {}; } catch (e) { }
@@ -20919,35 +20923,62 @@ function mcProviderList() {
   for (var key in provs) {
     if (!Object.prototype.hasOwnProperty.call(provs, key)) continue;
     var p = provs[key] || {};
-    if (!p.models || !p.models.length) continue;   // custom 厂商没有内置模型，跳过
-    out.push({ key: key, label: p.label || key, base: p.base || '', models: p.models });
+    out.push({ key: key, label: p.label || key, base: p.base || '', models: p.models || [] });
   }
   return out;
 }
-// 填充下拉：currentModel 能在目录里找到就选中它，否则落到「手动输入」
+function mcProviderByKey(key) {
+  var list = mcProviderList();
+  for (var i = 0; i < list.length; i++) if (list[i].key === key) return list[i];
+  return null;
+}
+// 反查：已存条目属于哪家服务商 —— 先按地址精确匹配，再按模型归属，都不中则归到自定义
+function mcDetectProvider(baseURL, model) {
+  var list = mcProviderList();
+  var i, j;
+  for (i = 0; i < list.length; i++) {
+    if (list[i].base && baseURL && list[i].base === baseURL) return list[i].key;
+  }
+  for (i = 0; i < list.length; i++) {
+    for (j = 0; j < list[i].models.length; j++) if (list[i].models[j] === model) return list[i].key;
+  }
+  return 'custom';
+}
+function fillMcProviderOptions(currentKey) {
+  var sel = document.getElementById('mcProviderSel');
+  if (!sel) return;
+  var list = mcProviderList();
+  sel.innerHTML = list.map(function (p) {
+    return '<option value="' + escapeAttr(p.key) + '">' + escapeHtml(p.label) + '</option>';
+  }).join('');
+  var has = false;
+  for (var i = 0; i < list.length; i++) if (list[i].key === currentKey) has = true;
+  sel.value = has ? currentKey : (list.length ? list[0].key : '');
+}
+// 只列当前服务商的模型；空目录（自定义）直接落到「手动输入」
 function fillMcModelOptions(currentModel) {
   var sel = document.getElementById('mcModelSel');
   if (!sel) return;
-  var provs = mcProviderList();
+  var p = mcProviderByKey(document.getElementById('mcProviderSel').value);
+  var models = (p && p.models) || [];
   var buf = [];
-  for (var i = 0; i < provs.length; i++) {
-    buf.push('<optgroup label="' + escapeAttr(provs[i].label) + '">');
-    for (var j = 0; j < provs[i].models.length; j++) {
-      var m = provs[i].models[j];
-      buf.push('<option value="' + escapeAttr(m) + '">' + escapeHtml(m) + '</option>');
-    }
-    buf.push('</optgroup>');
+  for (var j = 0; j < models.length; j++) {
+    buf.push('<option value="' + escapeAttr(models[j]) + '">' + escapeHtml(models[j]) + '</option>');
   }
   buf.push('<option value="__custom">— 手动输入 —</option>');
   sel.innerHTML = buf.join('');
-  var hit = false;
-  for (var k = 0; k < provs.length && !hit; k++) {
-    if (provs[k].models.indexOf(currentModel) >= 0) { sel.value = currentModel; hit = true; }
-  }
-  if (!hit) sel.value = '__custom';
-  onMcModelPick(true);   // 静默同步（不回填 base，由调用方决定要不要覆盖）
+  sel.value = models.indexOf(currentModel) >= 0 ? currentModel : '__custom';
+  onMcModelPick(true);   // 静默同步（不回填 base，由调用方决定）
 }
-// silent=true 只同步值/显隐；false（用户主动选）时回填该厂商 baseURL
+// 用户换服务商：模型列表跟着换、默认选第一个、地址带出来
+function onMcProviderPick() {
+  var p = mcProviderByKey(document.getElementById('mcProviderSel').value);
+  var first = (p && p.models && p.models.length) ? p.models[0] : '';
+  fillMcModelOptions(first);
+  var base = document.getElementById('mcBase');
+  if (p && p.base && base) base.value = p.base;   // 自定义厂商 base 为空 → 保留用户已填的
+}
+// silent=true 只同步值/显隐；false（用户主动选模型）时按模型归属回填 baseURL
 function onMcModelPick(silent) {
   var sel = document.getElementById('mcModelSel');
   var mdl = document.getElementById('mcModel');
@@ -20961,9 +20992,11 @@ function onMcModelPick(silent) {
   mdl.style.display = 'none';
   mdl.value = v;
   if (silent) return;
-  var provs = mcProviderList(), prov = null;
-  for (var i = 0; i < provs.length; i++) {
-    if (provs[i].models.indexOf(v) >= 0) { prov = provs[i]; break; }
+  var list = mcProviderList(), prov = null, i, j;
+  for (i = 0; i < list.length && !prov; i++) {
+    for (j = 0; j < list[i].models.length; j++) {
+      if (list[i].models[j] === v) { prov = list[i]; break; }
+    }
   }
   if (prov && prov.base && base) base.value = prov.base;
 }
@@ -20980,18 +21013,20 @@ function openModelChainEditor(idx) {
   document.getElementById('mcBase').value = it ? it.baseURL : '';
   document.getElementById('mcKey').value = it ? it.apiKey : '';
   if (it) {
-    fillMcModelOptions(it.model);        // 编辑既有条目：反查选中，且不覆盖已存的地址
+    // 编辑既有条目：反查服务商并选中，模型反查选中；地址保持已存值不被覆盖
+    fillMcProviderOptions(mcDetectProvider(it.baseURL, it.model));
+    fillMcModelOptions(it.model);
   } else {
-    // 新建：预填目录里第一个模型并带出地址，省得从空白开始
-    var provs = mcProviderList();
-    var first = (provs.length && provs[0].models.length) ? provs[0].models[0] : '';
-    fillMcModelOptions(first);
-    if (first) {
-      var b = document.getElementById('mcBase');
-      if (b && !b.value) b.value = provs[0].base || '';
-    }
+    // 新建：默认第一家服务商 + 它的第一个模型，地址一并带出
+    var list = mcProviderList();
+    var firstProv = list.length ? list[0] : null;
+    fillMcProviderOptions(firstProv ? firstProv.key : '');
+    fillMcModelOptions(firstProv && firstProv.models.length ? firstProv.models[0] : '');
+    var b = document.getElementById('mcBase');
+    if (b && !b.value && firstProv) b.value = firstProv.base || '';
   }
 }
+
 function closeModelChainEditor() {
   var ed = document.getElementById('mcEditor');
   if (ed) ed.style.display = 'none';
@@ -21360,7 +21395,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.15.5';
+var APP_VERSION = '3.15.6';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
