@@ -1684,6 +1684,12 @@ html[data-theme='light'] #anaSettings .field select:focus{
 .field label{font-size:12px;color:var(--sub);display:block;margin-bottom:6px;font-weight:590}
 .field input,.field textarea,.field select{width:100%;padding:10px 13px;border-radius:var(--r-md);background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:13px;transition:var(--dur-3) var(--ease)}
 .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--brand);background:transparent;outline:none}
+/* 2026-10-19：补 .invalid 的视觉反馈。N1 类定义检测抓到的真实缺口 ——
+   登录/注册校验失败时 JS 一直在加 `.invalid`（11 处 classList.add），但样式表里
+   从来没有这个类，于是「校验失败」只有下方文字提示、输入框本身毫无变化。
+   只影响出错状态的外观，不改任何行为；同时覆盖 .auth-box 里的输入框。 */
+.field input.invalid,.field textarea.invalid,.field select.invalid,.auth-box input.invalid{border-color:var(--danger);background:var(--fill)}
+.field input.invalid:focus,.field textarea.invalid:focus,.auth-box input.invalid:focus{border-color:var(--danger);outline:none}
 .field textarea{resize:vertical;min-height:70px}
 .mbox-foot{display:flex;justify-content:flex-end;gap:var(--sp-5);margin-top:8px}
 /* 危险操作主按钮：与普通「确定」在视觉上区分开，避免手快按错不可撤销的操作 */
@@ -1935,6 +1941,9 @@ html[data-theme='light'] #anaSettings .field select:focus{
 .line-chart .line{fill:none;stroke:url(#lineGrad);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 .line-chart .dot{fill:var(--brand)}
 .dist-list{display:flex;flex-direction:column;gap:var(--sp-6)}
+/* 2026-10-19：补 .empty-home-actions —— N1 类定义检测抓到的零样式类：
+   空状态页的两个按钮原本并排贴在一起（无间距、无居中），与其它操作行不一致。 */
+.empty-home-actions{display:flex;flex-wrap:wrap;gap:var(--sp-6);justify-content:center;margin-top:var(--sp-6)}
 .dist-item{display:flex;align-items:center;gap:var(--sp-5);font-size:12.5px}
 .dist-item .name{width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dist-bar{flex:1;height:6px;background:var(--fill);border-radius:var(--r-2xs);overflow:hidden}
@@ -21736,7 +21745,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.16.2';
+var APP_VERSION = '3.16.3';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
