@@ -3099,7 +3099,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2.2"/></svg></span> 备用模型链</span><span class="ssec-sub">主模型失败时按序切换</span><span class="ssec-badge" id="badge-chain" style="display:none">已配置</span>
   </div>
   <div class="ssec-body" id="sec-chain-body">
-    <div class="hint">主模型遇到 429 / 5xx / 网络故障时，按顺序自动切换下面的备用模型（401 / 403 等鉴权错误不切换——换了也白换）。留空则不启用，行为与本功能之前一致。降级发生的调用会在用量统计里单独计数（计费主体不同）。</div>
+    <div class="hint">主模型遇到 429 / 5xx / 网络故障时，按顺序自动切换下面的备用模型（401 / 403 等鉴权错误不切换——换了也白换）。留空则不启用，行为与本功能之前一致。降级发生的调用会在用量统计里单独计数（计费主体不同）。<br>添加时从下拉里选模型即可，接口地址会自动带出来；跨厂商备用（如主用 OpenAI、备用智谱）在列表里换一个厂商的模型就行。</div>
     <div id="mcList" class="dist-list" style="margin-top:10px"></div>
     <div id="mcEmpty" class="hint" style="display:none">还没有备用模型。主模型被限流时只能得到「演示回复」而不是真实回答。</div>
     <div style="display:flex;gap:8px;margin-top:10px">
@@ -3108,7 +3108,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div id="mcEditor" style="display:none;margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:12px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <label class="fld"><span>备注名</span><input id="mcName" class="ipt" maxlength="40" placeholder="如：智谱备用"></label>
-        <label class="fld"><span>模型</span><input id="mcModel" class="ipt" maxlength="120" placeholder="如：glm-4.7-flash"></label>
+        <label class="fld"><span>模型</span>
+          <select id="mcModelSel" class="ipt" onchange="onMcModelPick()"></select>
+          <input id="mcModel" class="ipt" maxlength="120" placeholder="手动输入模型名，如 glm-4.7-flash" style="display:none">
+          <span class="wh-fld-hint">选已知模型会自动填好接口地址；目录里没有就选「手动输入」</span>
+        </label>
       </div>
       <label class="fld" style="margin-top:10px"><span>接口地址（baseURL）</span><input id="mcBase" class="ipt" maxlength="300" placeholder="https://open.bigmodel.cn/api/paas/v4"></label>
       <label class="fld" style="margin-top:10px"><span>API Key（留空 = 免鉴权端点）</span><input id="mcKey" class="ipt" maxlength="300" placeholder="sk-..."></label>
@@ -20903,6 +20907,67 @@ function renderModelChainUI() {
       + '</div></div>';
   }).join('');
 }
+/* ============ 备用模型下拉（2026-10-19） ============
+   旧版「模型」是自由文本：既要记住准确模型名，又要自己拼对应的 baseURL，两处都容易错。
+   现在按内置服务商目录分组列出已知模型，选中即回填该厂商的接口地址；
+   目录里没有的模型仍可走「手动输入」，行为与旧版一致。
+   真实值仍写在 #mcModel 里，saveModelChainItem 的读取逻辑零改动。 */
+function mcProviderList() {
+  var provs = {};
+  try { provs = (typeof BotCraftAI !== 'undefined' && BotCraftAI.getProviders) ? BotCraftAI.getProviders() : {}; } catch (e) { }
+  var out = [];
+  for (var key in provs) {
+    if (!Object.prototype.hasOwnProperty.call(provs, key)) continue;
+    var p = provs[key] || {};
+    if (!p.models || !p.models.length) continue;   // custom 厂商没有内置模型，跳过
+    out.push({ key: key, label: p.label || key, base: p.base || '', models: p.models });
+  }
+  return out;
+}
+// 填充下拉：currentModel 能在目录里找到就选中它，否则落到「手动输入」
+function fillMcModelOptions(currentModel) {
+  var sel = document.getElementById('mcModelSel');
+  if (!sel) return;
+  var provs = mcProviderList();
+  var buf = [];
+  for (var i = 0; i < provs.length; i++) {
+    buf.push('<optgroup label="' + escapeAttr(provs[i].label) + '">');
+    for (var j = 0; j < provs[i].models.length; j++) {
+      var m = provs[i].models[j];
+      buf.push('<option value="' + escapeAttr(m) + '">' + escapeHtml(m) + '</option>');
+    }
+    buf.push('</optgroup>');
+  }
+  buf.push('<option value="__custom">— 手动输入 —</option>');
+  sel.innerHTML = buf.join('');
+  var hit = false;
+  for (var k = 0; k < provs.length && !hit; k++) {
+    if (provs[k].models.indexOf(currentModel) >= 0) { sel.value = currentModel; hit = true; }
+  }
+  if (!hit) sel.value = '__custom';
+  onMcModelPick(true);   // 静默同步（不回填 base，由调用方决定要不要覆盖）
+}
+// silent=true 只同步值/显隐；false（用户主动选）时回填该厂商 baseURL
+function onMcModelPick(silent) {
+  var sel = document.getElementById('mcModelSel');
+  var mdl = document.getElementById('mcModel');
+  var base = document.getElementById('mcBase');
+  if (!sel || !mdl) return;
+  var v = sel.value;
+  if (v === '__custom') {
+    mdl.style.display = '';
+    return;
+  }
+  mdl.style.display = 'none';
+  mdl.value = v;
+  if (silent) return;
+  var provs = mcProviderList(), prov = null;
+  for (var i = 0; i < provs.length; i++) {
+    if (provs[i].models.indexOf(v) >= 0) { prov = provs[i]; break; }
+  }
+  if (prov && prov.base && base) base.value = prov.base;
+}
+
 function openModelChainEditor(idx) {
   _mcEditing = (typeof idx === 'number') ? idx : -1;
   var ed = document.getElementById('mcEditor');
@@ -20914,6 +20979,18 @@ function openModelChainEditor(idx) {
   document.getElementById('mcModel').value = it ? it.model : '';
   document.getElementById('mcBase').value = it ? it.baseURL : '';
   document.getElementById('mcKey').value = it ? it.apiKey : '';
+  if (it) {
+    fillMcModelOptions(it.model);        // 编辑既有条目：反查选中，且不覆盖已存的地址
+  } else {
+    // 新建：预填目录里第一个模型并带出地址，省得从空白开始
+    var provs = mcProviderList();
+    var first = (provs.length && provs[0].models.length) ? provs[0].models[0] : '';
+    fillMcModelOptions(first);
+    if (first) {
+      var b = document.getElementById('mcBase');
+      if (b && !b.value) b.value = provs[0].base || '';
+    }
+  }
 }
 function closeModelChainEditor() {
   var ed = document.getElementById('mcEditor');
@@ -21283,7 +21360,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.15.4';
+var APP_VERSION = '3.15.5';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
