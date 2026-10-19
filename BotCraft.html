@@ -2149,6 +2149,28 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .bk-bar i{display:block;height:100%}
 .bk-dir{margin-top:8px;font-size:11px;color:var(--sub);word-break:break-all}
 
+/* ============ 入站 API 字段说明卡（2026-10-19） ============
+   使用者（外部系统对接人）在应用内就能查到完整字段参考，不用翻文档/猜机器码。 */
+.wh-doc{margin-top:12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card)}
+.wh-doc > summary{cursor:pointer;list-style:none;padding:11px 14px;font-size:13px;font-weight:600;
+  display:flex;align-items:center;gap:var(--sp-4);color:var(--txt)}
+.wh-doc > summary::-webkit-details-marker{display:none}
+.wh-doc > summary::after{content:"▾";margin-left:auto;color:var(--sub);font-weight:400}
+.wh-doc[open] > summary::after{transform:rotate(180deg)}
+.wh-doc:not([open]) .wh-doc-body{display:none}   /* 显式折叠：不依赖 UA 的 details 默认行为 */
+.wh-doc-body{padding:0 14px 14px;font-size:12.5px;color:var(--sub);line-height:1.65}
+.wh-doc-body h4{margin:14px 0 6px;font-size:12.5px;color:var(--txt)}
+.wh-doc-body h4:first-child{margin-top:4px}
+.wh-doc-body table{width:100%;border-collapse:collapse;margin:4px 0 2px;font-size:12px}
+.wh-doc-body th,.wh-doc-body td{border:1px solid var(--line);padding:var(--sp-2) var(--sp-4);text-align:left;vertical-align:top}
+.wh-doc-body th{background:var(--fill);color:var(--txt);font-weight:600;white-space:nowrap}
+.wh-doc-body code{background:var(--fill);padding:1px var(--sp-2);border-radius:var(--r-xs);font-size:11.5px;word-break:break-all}
+.wh-doc-body pre{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:var(--sp-3) var(--sp-4);overflow:auto;font-size:11.5px;line-height:1.6;margin:var(--sp-3) 0}
+.wh-doc-body pre code{background:none;padding:0}
+.wh-doc-body ul{margin:var(--sp-2) 0;padding-left:18px}
+.wh-fld-hint{font-size:11.5px;color:var(--sub);margin-top:var(--sp-1);line-height:1.5}
+
 /* ==================== 线性图标体系（替代 emoji 图标位） ====================
    规格与侧边栏既有 SVG 严格一致：24×24 viewBox、fill:none、stroke:currentColor、
    stroke-width:1.7、round cap/join —— 这样 .i 里的图标和 .side-item .ic svg
@@ -2270,6 +2292,7 @@ html[data-glass="off"] body .pub-card, html[data-glass="off"] body .set-nav{
    （#promptArea 的 resize、#snipTextInp 的内联 resize）已在原处改掉。
    各框原有的 min-height 一概保留，当高度下限。 */
 textarea[data-grow]{resize:none;box-sizing:border-box}
+
 </style>
 </head>
 <body>
@@ -3268,6 +3291,57 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 <div id="anaWebhook" style="display:none">
       <div class="hint">让外部系统（飞书 / 自建后台 / CI）把事件推给机器人：桌面版在 <code>127.0.0.1</code> 监听，按「地址 + token」路由到指定机器人并触发其工作流。<b>仅本机可访问</b>，必须带 token。浏览器版无本地服务，地址不会生效。</div>
 
+      <details class="wh-doc">
+        <summary><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 7.5h8M8 11h8M8 14.5h5"/></svg></span> 接口字段说明（给对接的人看）</summary>
+        <div class="wh-doc-body">
+          <h4>请求</h4>
+          <ul>
+            <li>方法 <code>POST</code>（<code>GET</code> 也可，但不带请求体），地址 <code>http://127.0.0.1:&lt;端口&gt;/wh/&lt;token&gt;</code></li>
+            <li>鉴权：推荐 <code>Authorization: Bearer &lt;token&gt;</code>（token 不进访问日志）；路径里的 token 继续兼容</li>
+            <li>请求体 <code>Content-Type: application/json</code>，上限 1MB</li>
+          </ul>
+          <h4>请求体字段（任选其一，按顺序取第一个非空值）</h4>
+          <table>
+            <tr><th>字段名</th><th>必填</th><th>说明</th></tr>
+            <tr><td><code>text</code></td><td>否</td><td>要发给机器人的文本，首选字段名</td></tr>
+            <tr><td><code>message</code></td><td>否</td><td>同上（常见写法，等价）</td></tr>
+            <tr><td><code>input</code></td><td>否</td><td>同上</td></tr>
+            <tr><td><code>content</code></td><td>否</td><td>同上</td></tr>
+            <tr><td><code>query</code></td><td>否</td><td>同上</td></tr>
+          </table>
+          <div>五个字段都没提供时：请求体是非空对象就整体作为文本发送；请求体为空则返回 <code>422</code>，<b>不会消耗模型调用</b>。</div>
+          <h4>响应字段</h4>
+          <table>
+            <tr><th>字段</th><th>说明</th></tr>
+            <tr><td><code>ok</code></td><td>是否成功（true/false）</td></tr>
+            <tr><td><code>reply</code></td><td>机器人的完整回复（仅成功）</td></tr>
+            <tr><td><code>finalLen</code></td><td>回复字符数（仅成功）</td></tr>
+            <tr><td><code>ms</code></td><td>本次触发耗时（毫秒，仅成功）</td></tr>
+            <tr><td><code>runId</code></td><td>运行历史编号，可在应用内「运行历史」里定位这一次触发</td></tr>
+            <tr><td><code>code</code></td><td>错误机器码（仅失败，脚本可判定）</td></tr>
+            <tr><td><code>msg</code></td><td>错误的中文说明（仅失败）</td></tr>
+            <tr><td><code>err</code></td><td>原始异常信息（仅工作流执行失败）</td></tr>
+          </table>
+          <h4>错误码与状态码</h4>
+          <table>
+            <tr><th>状态码</th><th>code</th><th>含义</th></tr>
+            <tr><td>200</td><td><code>ok</code></td><td>成功</td></tr>
+            <tr><td>404</td><td><code>not-found</code></td><td>token 不存在（可能已删除，重新保存一次 webhook 可恢复同步）</td></tr>
+            <tr><td>403</td><td><code>disabled</code></td><td>该 webhook 已停用</td></tr>
+            <tr><td>409</td><td><code>no-bot</code></td><td>路由指向的机器人已被删除</td></tr>
+            <tr><td>422</td><td><code>empty-input</code></td><td>没有可发送的文本</td></tr>
+            <tr><td>429</td><td><code>rate-limited</code></td><td>超过频率上限（每 token 每分钟 30 次）</td></tr>
+            <tr><td>500</td><td><code>run-error</code></td><td>机器人工作流执行失败</td></tr>
+            <tr><td>504</td><td><code>timeout</code></td><td>执行超时（110 秒；结果仍会写入运行历史）</td></tr>
+          </table>
+          <h4>调用示例</h4>
+          <pre><code>curl -X POST http://127.0.0.1:&lt;端口&gt;/wh/&lt;token&gt; \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -d '{"text":"你好，请总结今天的消息"}'</code></pre>
+        </div>
+      </details>
+
       <div class="chart-box" style="margin-top:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <h3 style="margin:0"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg></span> 入站 Webhook</h3>
@@ -3278,14 +3352,15 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
         <div id="whEditor" class="set-panels" style="display:none;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;padding:12px">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <label class="fld"><span>名称</span><input id="whName" class="ipt" maxlength="80" placeholder="如：飞书消息转发"></label>
-            <label class="fld"><span>机器人</span><select id="whBot" class="ipt"></select></label>
+            <label class="fld"><span>名称</span><input id="whName" class="ipt" maxlength="80" placeholder="如：飞书消息转发"><span class="wh-fld-hint">仅用于在列表里区分不同入口</span></label>
+            <label class="fld"><span>机器人</span><select id="whBot" class="ipt"></select><span class="wh-fld-hint">入站消息将触发这个机器人的完整工作流</span></label>
           </div>
           <label class="fld" style="margin-top:10px"><span>备注（可选）</span>
             <input id="whNote" class="ipt" maxlength="200" placeholder="这个 webhook 的用途">
           </label>
           <label style="display:inline-flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer"><span class="switch"><input type="checkbox" id="whEnabled" checked><span class="slider"></span></span><span>启用</span></label>
           <div class="sub" style="margin-top:8px">Token：<code id="whTokenView">（保存后生成）</code></div>
+          <div class="wh-fld-hint">保存后生成，是这条 webhook 的唯一凭证。放在请求地址里，或用 <code>Authorization: Bearer &lt;token&gt;</code> 头发送（推荐，不进访问日志）。</div>
           <div style="display:flex;gap:8px;margin-top:12px">
             <button class="btn btn-primary btn-sm" onclick="saveWebhook()">保存</button>
             <button class="btn btn-ghost btn-sm" onclick="closeWebhookEditor()">取消</button>
@@ -21208,7 +21283,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.15.3';
+var APP_VERSION = '3.15.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
