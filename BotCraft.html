@@ -1854,7 +1854,7 @@ html[data-theme='light'] #anaSettings .field select:focus{
 .channel{display:flex;align-items:center;gap:var(--sp-6);padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:8px;font-size:13px}
 .channel .sw{margin-left:auto;position:relative;width:51px;height:31px;background:var(--fill-strong);border-radius:var(--r-full);cursor:pointer;transition:background var(--dur-5) var(--ease);flex-shrink:0}
 .channel .sw::after{content:'';position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;transition:left var(--dur-5) var(--ease);box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16)}
-.channel .sw.on{background:#30d158}
+.channel .sw.on{background:var(--ok)}   /* 2026-10-19 修：原写死 #30d158，浅色主题不跟随令牌 */
 .channel .sw.on::after{left:22px}
 
 /* ============ 发布产物 ============ */
@@ -20245,6 +20245,48 @@ function pushRunHistory(entry) {
   return arr;
 }
 
+/* 跑一次机器人并记账（计划任务 / 入站触发共用，2026-10-19 抽出）。
+   这两条路径原本是逐行重复的同一段：取 final → 写运行历史 → 更新 lastRun/lastStatus/
+   lastError → 落盘 →（可选）刷新列表。差异只有「存哪个数组、刷哪个列表、返回什么形状」，
+   用 meta 注入，避免再复制一遍（改一处忘另一处是这类重复最常见的后果）。
+   meta: { id, name, target, persist(), after?() }
+   返回 { ok:true, final, finalLen, ms } 或 { ok:false, err }。 */
+async function runBotOnceBookkept(bot, input, meta) {
+  var t0 = Date.now();
+  var base = {
+    id: meta.id, schId: meta.id, schName: meta.name,
+    botId: bot.id, botName: bot.name || bot.n || ''
+  };
+  var done = function () { if (meta.after) { try { meta.after(); } catch (e) { } } };
+  try {
+    var r = await runWorkflow(bot, input, null, null, null, '', null, 0);
+    var final = (r && r.final) || '';
+    var ms = Date.now() - t0;
+    pushRunHistory(Object.assign({}, base, {
+      ts: Date.now(), ok: true, ms: ms, finalLen: final.length, preview: final.slice(0, 200)
+    }));
+    meta.target.lastRun = Date.now();
+    meta.target.lastStatus = 'ok';
+    meta.target.lastError = '';
+    meta.persist();
+    done();
+    return { ok: true, final: final, finalLen: final.length, ms: ms };
+  } catch (e) {
+    var msg = (e && e.message) || String(e);
+    var ms2 = Date.now() - t0;
+    pushRunHistory(Object.assign({}, base, {
+      ts: Date.now(), ok: false, ms: ms2, finalLen: 0, preview: '',
+      err: String(msg).slice(0, 300)
+    }));
+    meta.target.lastRun = Date.now();
+    meta.target.lastStatus = 'err';
+    meta.target.lastError = String(msg).slice(0, 300);
+    meta.persist();
+    done();
+    return { ok: false, err: msg };
+  }
+}
+
 // 立即跑一条计划（force 可绕过 enabled 开关，用于「立即运行」与 e2e）。结果记进运行历史。
 async function fireSchedule(id, opts) {
   opts = opts || {};
@@ -20260,23 +20302,14 @@ async function fireSchedule(id, opts) {
     var bot = null;
     for (var j = 0; j < (bots || []).length; j++) if (bots[j].id === sch.botId) { bot = bots[j]; break; }
     if (!bot) return { ok: false, reason: 'bot-not-found' };
-    var t0 = Date.now();
-    try {
-      var r = await runWorkflow(bot, sch.input || '', null, null, null, '', null, 0);
-      var final = (r && r.final) || '';
-      pushRunHistory({ id: uid(), schId: sch.id, schName: sch.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: true, ms: Date.now() - t0, finalLen: final.length, preview: final.slice(0, 200) });
-      sch.lastRun = Date.now(); sch.lastStatus = 'ok'; sch.lastError = '';
-      saveSchedules(arr);
-      try { renderScheduleUI(); } catch (e) {}
-      return { ok: true, finalLen: final.length, ms: Date.now() - t0 };
-    } catch (e) {
-      var msg = (e && e.message) || String(e);
-      pushRunHistory({ id: uid(), schId: sch.id, schName: sch.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: false, ms: Date.now() - t0, finalLen: 0, preview: '', err: String(msg).slice(0, 300) });
-      sch.lastRun = Date.now(); sch.lastStatus = 'err'; sch.lastError = String(msg).slice(0, 300);
-      saveSchedules(arr);
-      try { renderScheduleUI(); } catch (e2) {}
-      return { ok: false, reason: 'run-failed', err: msg };
-    }
+    var res = await runBotOnceBookkept(bot, sch.input || '', {
+      id: uid(), name: sch.name, target: sch,
+      persist: function () { saveSchedules(arr); },
+      after: function () { renderScheduleUI(); }
+    });
+    return res.ok
+      ? { ok: true, finalLen: res.finalLen, ms: res.ms }
+      : { ok: false, reason: 'run-failed', err: res.err };
   } finally {
     _firing[id] = false;
   }
@@ -20615,22 +20648,14 @@ async function bcWebhookTrigger(token, payload) {
   var bot = null;
   for (var j = 0; j < (bots || []).length; j++) if (bots[j].id === r.botId) { bot = bots[j]; break; }
   if (!bot) return { ok: false, code: 'no-bot' };
-  var t0 = Date.now();
   var rid = 'wh_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  try {
-    var rr = await runWorkflow(bot, input, null, null, null, '', null, 0);
-    var final = (rr && rr.final) || '';
-    pushRunHistory({ id: rid, schId: r.id, schName: r.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: true, ms: Date.now() - t0 });
-    r.lastRun = Date.now(); r.lastStatus = 'ok'; r.lastError = '';
-    saveWebhooks(routes);
-    return { ok: true, reply: final, finalLen: final.length, ms: Date.now() - t0, runId: rid };
-  } catch (e) {
-    var msg = (e && e.message) || String(e);
-    pushRunHistory({ id: rid, schId: r.id, schName: r.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: false, ms: Date.now() - t0 });
-    r.lastRun = Date.now(); r.lastStatus = 'err'; r.lastError = String(msg).slice(0, 300);
-    saveWebhooks(routes);
-    return { ok: false, code: 'run-error', err: msg };
-  }
+  var res = await runBotOnceBookkept(bot, input, {
+    id: rid, name: r.name, target: r,
+    persist: function () { saveWebhooks(routes); }
+  });
+  return res.ok
+    ? { ok: true, reply: res.final, finalLen: res.finalLen, ms: res.ms, runId: rid }
+    : { ok: false, code: 'run-error', err: res.err };
 }
 
 window.BotCraftWebhook = {
@@ -21395,7 +21420,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.15.6';
+var APP_VERSION = '3.15.7';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
