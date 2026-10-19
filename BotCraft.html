@@ -2737,7 +2737,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <div class="batch-actions" id="batchActions" style="display:none">
             <button class="btn btn-ghost btn-sm" onclick="exportBatch('csv')"><svg class="ic-btn" aria-hidden="true"><use href="#ic-download"/></svg>CSV</button>
             <button class="btn btn-ghost btn-sm" onclick="exportBatch('json')"><svg class="ic-btn" aria-hidden="true"><use href="#ic-download"/></svg>JSON</button>
-            <button class="btn btn-ghost btn-sm" onclick="exportBatch('md')"><svg class="ic-btn" aria-hidden="true"><use href="#ic-download"/></svg>Markdown</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportBatch('md')"><svg class="ic-btn" aria-hidden="true"><use href="#ic-download"/></svg>Markdown</button>            <button class="btn btn-ghost btn-sm" onclick="exportBatch('md')"><svg class="ic-btn" aria-hidden="true"><use href="#ic-download"/></svg>Markdown</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportBatch('docx')"><svg class="ic-btn" aria-hidden="true"><use href="#ic-download"/></svg> Word</button>
             <button class="btn btn-ghost btn-sm" onclick="clearBatchResults()"><svg class="ic-btn" aria-hidden="true"><use href="#ic-trash"/></svg>清空结果</button>
           </div>
           <div id="batchList" class="batch-list"></div>
@@ -9652,6 +9653,16 @@ window.exportBatch = function (fmt) {
     const head = ['序号', '状态', '输入', '输出'].map(esc).join(',');
     const rows = batchResults.map(function (r) { return [r.idx, batchStText(r.status), r.input, r.output].map(esc).join(','); });
     downloadFile('批量结果_' + safe + '_' + ts + '.csv', '﻿' + head + '\n' + rows.join('\n'), 'text/csv;charset=utf-8');
+  } else if (fmt === 'docx') {
+    /* 整批交付成一份 Word：代写场景里客户要的往往不是一个 csv，而是一份能直接
+       打开排版的稿子。标题层级由 exportMarkdownAsDocx 从 Markdown 结构还原。 */
+    const dl = ['# 批量运行结果：' + (bot.n || '机器人'), ''];
+    batchResults.forEach(function (r) {
+      dl.push('## #' + r.idx + ' · ' + batchStText(r.status) + (r.degraded ? '（演示回复，非模型输出）' : ''));
+      dl.push('**输入：** ' + r.input); dl.push(''); dl.push(r.output || (r.err || '(无输出)')); dl.push('');
+    });
+    exportMarkdownAsDocx(dl.join('\n'), '批量结果_' + safe + '_' + ts,
+      { title: '批量运行结果：' + (bot.n || '机器人'), author: bot.n || 'BotCraft' });
   } else {
     const lines = ['# 批量运行结果：' + (bot.n || '机器人'), '', '> 机器人：' + (bot.n || '-') + ' · 模型：' + (BotCraftAI.getConfig().model || '-') + ' · 时间：' + new Date().toLocaleString('zh-CN'), ''];
     batchResults.forEach(function (r) {
@@ -14089,6 +14100,303 @@ function msgPlainText(msg) {
   c.querySelectorAll('.who, .kb-cite').forEach(function (el) { el.remove(); });
   return c.textContent || '';
 }
+/* ==================== Word 导出（.docx，零依赖） ====================
+   为什么手写：.docx 本质是一个 ZIP，里面放几份 XML。本应用是单文件、无构建，
+   不能引第三方库；而「导出 Markdown 再让用户自己转 Word」在代写交付场景里
+   每天都要多做一步。这里实现一个 store（不压缩）的 ZIP 打包器 + 最小 docx 部件，
+   生成的 .docx 能被 Word / WPS / LibreOffice 正常打开。
+
+   边界（刻意不做）：不做分页/页眉页脚/目录/图片嵌入/复杂表格 —— 那是完整
+   docx 引擎的活。目标是「标题层级 + 正文 + 列表 + 引用 + 代码块」这几类
+   代写交付最常用的结构，样式用 Word 内置样式 ID，用户可在 Word 里继续排版。 */
+
+var _CRC_TABLE = null;
+function _crc32(bytes) {
+  if (!_CRC_TABLE) {
+    _CRC_TABLE = new Uint32Array(256);
+    for (var n = 0; n < 256; n++) {
+      var c = n;
+      for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      _CRC_TABLE[n] = c >>> 0;
+    }
+  }
+  var crc = 0xFFFFFFFF;
+  for (var i = 0; i < bytes.length; i++) crc = _CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function _utf8(str) {
+  if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(str);
+  // 兜底（老 WebView）：手工 UTF-8 编码
+  var out = [], i, c;
+  for (i = 0; i < str.length; i++) {
+    c = str.charCodeAt(i);
+    if (c < 0x80) out.push(c);
+    else if (c < 0x800) out.push(0xC0 | (c >> 6), 0x80 | (c & 63));
+    else if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.length) {
+      var c2 = str.charCodeAt(++i);
+      var cp = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00);
+      out.push(0xF0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+    } else out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+  }
+  return new Uint8Array(out);
+}
+
+/* ZIP（store，无压缩）。files: [{name, data(Uint8Array)}] → Blob */
+function _zipStore(files) {
+  var chunks = [], central = [], offset = 0;
+  function u16(v) { return [v & 0xFF, (v >> 8) & 0xFF]; }
+  function u32(v) { return [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >>> 24) & 0xFF]; }
+  files.forEach(function (f) {
+    var nameBytes = _utf8(f.name);
+    var crc = _crc32(f.data);
+    var local = [].concat(
+      u32(0x04034b50), u16(20), u16(0x0800),   // 0x0800 = 文件名 UTF-8
+      u16(0), u16(0), u16(0),                   // 时间/日期（置 0，Word 不关心）
+      u32(crc), u32(f.data.length), u32(f.data.length),
+      u16(nameBytes.length), u16(0)
+    );
+    chunks.push(new Uint8Array(local), nameBytes, f.data);
+    central.push({ name: nameBytes, crc: crc, size: f.data.length, offset: offset });
+    offset += local.length + nameBytes.length + f.data.length;
+  });
+  var cdStart = offset, cdSize = 0;
+  central.forEach(function (c) {
+    var hdr = [].concat(
+      u32(0x02014b50), u16(20), u16(20), u16(0x0800),
+      u16(0), u16(0), u16(0),
+      u32(c.crc), u32(c.size), u32(c.size),
+      u16(c.name.length), u16(0), u16(0), u16(0), u16(0),
+      u32(0), u32(c.offset)
+    );
+    chunks.push(new Uint8Array(hdr), c.name);
+    cdSize += hdr.length + c.name.length;
+  });
+  var eocd = [].concat(
+    u32(0x06054b50), u16(0), u16(0),
+    u16(central.length), u16(central.length),
+    u32(cdSize), u32(cdStart), u16(0)
+  );
+  chunks.push(new Uint8Array(eocd));
+  return new Blob(chunks, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+
+function _xmlEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+/* 行内标记 → w:r 序列（粗体 / 斜体 / 行内代码）。刻意只支持这三种：
+   代写交付里 99% 的行内格式就是它们，多支持一类就多一份出错面。 */
+function _runs(text, opts) {
+  opts = opts || {};
+  var out = [];
+  var re = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)/g;
+  var last = 0, m;
+  function plain(t) {
+    if (!t) return;
+    out.push('<w:r>' + (opts.rPr || '') + '<w:t xml:space="preserve">' + _xmlEsc(t) + '</w:t></w:r>');
+  }
+  while ((m = re.exec(text))) {
+    plain(text.slice(last, m.index));
+    if (m[2] != null) {
+      out.push('<w:r><w:rPr><w:b/>' + (opts.extra || '') + '</w:rPr><w:t xml:space="preserve">' + _xmlEsc(m[2]) + '</w:t></w:r>');
+    } else if (m[4] != null) {
+      out.push('<w:r><w:rPr><w:i/>' + (opts.extra || '') + '</w:rPr><w:t xml:space="preserve">' + _xmlEsc(m[4]) + '</w:t></w:r>');
+    } else if (m[6] != null) {
+      out.push('<w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="19"/>' + (opts.extra || '')
+        + '</w:rPr><w:t xml:space="preserve">' + _xmlEsc(m[6]) + '</w:t></w:r>');
+    }
+    last = m.index + m[0].length;
+  }
+  plain(text.slice(last));
+  return out.join('');
+}
+
+function _p(styleId, text, extraPr) {
+  var pPr = '<w:pPr>' + (styleId ? '<w:pStyle w:val="' + styleId + '"/>' : '') + (extraPr || '') + '</w:pPr>';
+  return '<w:p>' + pPr + _runs(text) + '</w:p>';
+}
+
+/* Markdown → word/document.xml 的 body 片段 */
+function _mdToDocxBody(md) {
+  var lines = String(md || '').replace(/\r\n?/g, '\n').split('\n');
+  var out = [], inCode = false, codeBuf = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (/^\s*```/.test(line)) {
+      if (inCode) {
+        // 代码块整体作为一个段落，逐行换行用 <w:br/>
+        var body = codeBuf.map(function (l) { return _xmlEsc(l); }).join('</w:t><w:br/><w:t xml:space="preserve">');
+        out.push('<w:p><w:pPr><w:pStyle w:val="CodeBlock"/></w:pPr><w:r><w:rPr>'
+          + '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/></w:rPr>'
+          + '<w:t xml:space="preserve">' + body + '</w:t></w:r></w:p>');
+        codeBuf = []; inCode = false;
+      } else { inCode = true; }
+      continue;
+    }
+    if (inCode) { codeBuf.push(line); continue; }
+    if (!line.trim()) continue;
+
+    var h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { out.push(_p('Heading' + Math.min(h[1].length, 3), h[2])); continue; }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { out.push(_p('', '')); continue; }
+    var q = line.match(/^\s*>\s?(.*)$/);
+    if (q) { out.push(_p('Quote', q[1])); continue; }
+    var ul = line.match(/^\s*[-*+]\s+(.*)$/);
+    if (ul) { out.push(_p('ListBullet', ul[1])); continue; }
+    var ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (ol) { out.push(_p('ListNumber', ol[1])); continue; }
+    out.push(_p('', line));
+  }
+  if (inCode && codeBuf.length) {
+    var body2 = codeBuf.map(function (l) { return _xmlEsc(l); }).join('</w:t><w:br/><w:t xml:space="preserve">');
+    out.push('<w:p><w:pPr><w:pStyle w:val="CodeBlock"/></w:pPr><w:r><w:t xml:space="preserve">' + body2 + '</w:t></w:r></w:p>');
+  }
+  return out.join('');
+}
+
+var _DOCX_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+
+function _docxFiles(md, meta) {
+  meta = meta || {};
+  var title = String(meta.title || '').trim();
+  /* 只有正文自己没以标题开头时才注入 Title 段：否则会出现「标题出现两次」
+     （元数据标题 + Markdown 的 # 标题）。实测 Word 里就是重复两行。 */
+  var mdStartsWithHeading = /^\s*#{1,6}\s+/.test(String(md || ''));
+  var head = (title && !mdStartsWithHeading) ? _p('Title', title) : '';
+  var body = head + _mdToDocxBody(md);
+
+  var contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    + '<Default Extension="xml" ContentType="application/xml"/>'
+    + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+    + '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+    + '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+    + '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
+    + '</Types>';
+
+  var rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+    + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
+    + '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
+    + '</Relationships>';
+
+  var docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+    + '</Relationships>';
+
+  /* 样式：中文优先微软雅黑，正文 10.5pt（21 半点），行距 1.5 倍；标题用内置 ID
+     以便用户在 Word 里直接套用「标题 1/2/3」大纲。 */
+  var fonts = '<w:rFonts w:ascii="Microsoft YaHei" w:hAnsi="Microsoft YaHei" w:eastAsia="Microsoft YaHei"/>';
+  var styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<w:styles ' + _DOCX_NS + '>'
+    + '<w:docDefaults><w:rPrDefault><w:rPr>' + fonts + '<w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr></w:rPrDefault>'
+    + '<w:pPrDefault><w:pPr><w:spacing w:line="360" w:lineRule="auto" w:after="120"/></w:pPr></w:pPrDefault></w:docDefaults>'
+    + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
+    + '<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/>'
+    + '<w:pPr><w:spacing w:before="240" w:after="240"/><w:jc w:val="center"/></w:pPr>'
+    + '<w:rPr><w:b/><w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr></w:style>'
+    + '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/>'
+    + '<w:pPr><w:spacing w:before="360" w:after="120"/><w:outlineLvl w:val="0"/></w:pPr>'
+    + '<w:rPr><w:b/><w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr></w:style>'
+    + '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/>'
+    + '<w:pPr><w:spacing w:before="280" w:after="100"/><w:outlineLvl w:val="1"/></w:pPr>'
+    + '<w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:style>'
+    + '<w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:qFormat/>'
+    + '<w:pPr><w:spacing w:before="240" w:after="80"/><w:outlineLvl w:val="2"/></w:pPr>'
+    + '<w:rPr><w:b/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr></w:style>'
+    + '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/>'
+    + '<w:pPr><w:ind w:left="420"/></w:pPr><w:rPr><w:i/><w:color w:val="555555"/></w:rPr></w:style>'
+    + '<w:style w:type="paragraph" w:styleId="CodeBlock"><w:name w:val="Code Block"/><w:basedOn w:val="Normal"/>'
+    + '<w:pPr><w:shd w:val="clear" w:color="auto" w:fill="F5F5F7"/><w:spacing w:line="264" w:lineRule="auto"/></w:pPr>'
+    + '<w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="19"/></w:rPr></w:style>'
+    + '<w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/><w:basedOn w:val="Normal"/>'
+    + '<w:pPr><w:ind w:left="420" w:hanging="210"/></w:pPr></w:style>'
+    + '<w:style w:type="paragraph" w:styleId="ListNumber"><w:name w:val="List Number"/><w:basedOn w:val="Normal"/>'
+    + '<w:pPr><w:ind w:left="420" w:hanging="210"/></w:pPr></w:style>'
+    + '</w:styles>';
+
+  var document = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<w:document ' + _DOCX_NS + '><w:body>' + body
+    + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'          // A4
+    + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="851" w:footer="992" w:gutter="0"/>'
+    + '</w:sectPr></w:body></w:document>';
+
+  var nowIso = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+  var core = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
+    + 'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" '
+    + 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+    + '<dc:title>' + _xmlEsc(meta.title || 'BotCraft 文稿') + '</dc:title>'
+    + '<dc:creator>' + _xmlEsc(meta.author || 'BotCraft') + '</dc:creator>'
+    + '<cp:lastModifiedBy>' + _xmlEsc(meta.author || 'BotCraft') + '</cp:lastModifiedBy>'
+    + '<dcterms:created xsi:type="dcterms:W3CDTF">' + nowIso + '</dcterms:created>'
+    + '<dcterms:modified xsi:type="dcterms:W3CDTF">' + nowIso + '</dcterms:modified>'
+    + '</cp:coreProperties>';
+
+  var app = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" '
+    + 'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
+    + '<Application>BotCraft</Application></Properties>';
+
+  return [
+    { name: '[Content_Types].xml', data: _utf8(contentTypes) },
+    { name: '_rels/.rels', data: _utf8(rels) },
+    { name: 'word/_rels/document.xml.rels', data: _utf8(docRels) },
+    { name: 'word/document.xml', data: _utf8(document) },
+    { name: 'word/styles.xml', data: _utf8(styles) },
+    { name: 'docProps/core.xml', data: _utf8(core) },
+    { name: 'docProps/app.xml', data: _utf8(app) }
+  ];
+}
+
+function _safeFileName(name, ext) {
+  var base = String(name || 'BotCraft 文稿')
+    .replace(/[\\/:*?"<>|\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ').trim().slice(0, 60) || 'BotCraft 文稿';
+  return base + (ext || '.docx');
+}
+
+/* 对外主入口：把一段 Markdown 存成 .docx */
+function exportMarkdownAsDocx(md, filename, meta) {
+  try {
+    var blob = _zipStore(_docxFiles(md, meta));
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = _safeFileName(filename);
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { try { URL.revokeObjectURL(a.href); } catch (e) { } a.remove(); }, 0);
+    toast('已导出 Word：' + a.download, 'ok');
+    return true;
+  } catch (e) {
+    toast('导出 Word 失败：' + ((e && e.message) || e), 'err');
+    return false;
+  }
+}
+window.exportMarkdownAsDocx = exportMarkdownAsDocx;
+
+/* 消息级导出：取该条消息的 Markdown 原文（不取渲染后的 HTML） */
+function exportMsgAsDocx(mi) {
+  var b = getBot(currentId);
+  if (!b || !b.history || !b.history[mi]) { toast('找不到这条回复', 'err'); return; }
+  var msg = b.history[mi];
+  var text = String(msg.text || '');
+  if (!text.trim()) { toast('这条消息没有正文', 'warn'); return; }
+  var firstLine = text.split('\n').filter(function (l) { return l.trim(); })[0] || '';
+  var title = firstLine.replace(/^#{1,6}\s*/, '').slice(0, 40);
+  var stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  exportMarkdownAsDocx(text, (b.name || b.n || '文稿') + '-' + stamp, {
+    title: title, author: b.name || b.n || 'BotCraft'
+  });
+}
+window.exportMsgAsDocx = exportMsgAsDocx;
+
 function attachCopyBtns() {
   var chat = document.getElementById('chat'); if (!chat) return;
   var _lastBot = _lastBotIndex(getBot(currentId));
@@ -14139,6 +14447,22 @@ function attachCopyBtns() {
   });
   chat.querySelectorAll('.msg.bot:not([data-copy-bound])').forEach(function (msg) {
     msg.setAttribute('data-copy-bound', '1');
+    /* 导出 Word（2026-10-19）：代写交付要的是 .docx，光有「复制」还得再粘一次。
+       与「重新生成」「评价」同样排除配图/错误气泡（它们没有可交付正文）。 */
+    if (msg.hasAttribute('data-mi')) {
+      var _wmi = +msg.getAttribute('data-mi');
+      var _wmsg = null;
+      try { _wmsg = (getBot(currentId).history[_wmi] || {}); } catch (e) { }
+      var _wSkip = msg.classList.contains('img-tip')
+        || /^!\[[^\]]*\]\([^)]*\)\s*$/.test(String((_wmsg && _wmsg.text) || ''));
+      if (!_wSkip) {
+        var wb = document.createElement('button');
+        wb.type = 'button'; wb.className = 'msg-act'; wb.textContent = '\u2B07 导出 Word';
+        wb.title = '把这条回复导出为 .docx（标题层级/列表/引用/代码块会保留）';
+        wb.onclick = function () { exportMsgAsDocx(_wmi); };
+        msg.appendChild(wb);
+      }
+    }
     // 重新生成：只给最后一条 AI 回复挂，挂在别处没有意义
     if (+msg.getAttribute('data-mi') === _lastBot && !msg.classList.contains('img-tip')) {
       var rg = document.createElement('button');
@@ -21829,7 +22153,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.16.5';
+var APP_VERSION = '3.17.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
