@@ -20447,8 +20447,11 @@ function loadWebhooks() {
   catch (e) { return []; }
 }
 function saveWebhooks(arr) {
-  try { __storage.setItem(_WH_KEY(), JSON.stringify((arr || []).map(coerceWebhook))); return true; }
-  catch (e) { return false; }
+  try {
+    __storage.setItem(_WH_KEY(), JSON.stringify((arr || []).map(coerceWebhook)));
+    if (typeof _whListCache !== 'undefined') _whListCache = null;   // 触发路径的内存缓存失效
+    return true;
+  } catch (e) { return false; }
 }
 
 // 把「启用中的 webhook」同步给桌面版 Python 服务（它据此校验入站请求的 token）。
@@ -20461,6 +20464,15 @@ function pushWebhookRoutes() {
     }
   } catch (e) {}
 }
+
+// 启动同步兜底（2026-10-19）：pywebview 注入 api 的时机是异步的，若 onLogin 跑在
+// 注入完成之前，pushWebhookRoutes 会静默跳过 → Python 路由表为空 → 所有入站 403，
+// 直到用户去 UI 动一下 webhook 才恢复。pywebviewready 事件在注入完成时派发，这里补挂。
+window.addEventListener('pywebviewready', function () {
+  try { pushWebhookRoutes(); } catch (e) {}
+});
+// 再加一层 2s 兜底重试：个别宿主不派发该事件时也能同步上
+setTimeout(function () { try { pushWebhookRoutes(); } catch (e) {} }, 2000);
 
 // 桌面版本地服务端口（仅 exe 内可用）。浏览器版返回 0 → UI 提示需桌面版。
 // pywebview api 方法可能返回 Promise，这里统一 Promise 化。
@@ -20479,30 +20491,59 @@ function bcWebhookPort() {
 }
 
 // 入站触发：Python 服务校验 token 后调用本函数。返回 {ok, ...}。
+/* ============ 入站触发（2026-10-19 接口优化） ============
+   相对旧版的行为变化（调用方可见）：
+   ① 成功响应带 reply 字段 —— 旧版只回 finalLen，调用方拿不到机器人说了什么；
+   ② 输入字段宽容：text / message / input / content / query 依次取第一个非空，
+      都没有且 payload 是非空对象才回退 JSON 整串化（旧版只认 text，发
+      {message:"hi"} 会把整段 JSON 塞给模型）；
+   ③ 空输入防呆：GET 裸访问 / 空 body 直接 empty-input（Python 映射 422），
+      不再烧一次 LLM 调用（旧版 curl 裸 GET 会把字面量 "{}" 发给模型）；
+   ④ 错误码细分：not-found（token 不存在）/ disabled（已停用）/ no-bot /
+      empty-input / run-error —— 旧版「不存在」和「停用」混在一个 disabled 里；
+   ⑤ 路由列表走内存缓存：旧版每次触发都 JSON.parse 一遍 localStorage。
+   HTTP 状态码映射在 Python 端（见 _WebhookHandler._status_for），body 结构保持兼容。 */
+var _whListCache = null;   // loadWebhooks 的内存镜像；saveWebhooks 写入时失效
+function whListCached() {
+  if (_whListCache === null) _whListCache = loadWebhooks();
+  return _whListCache;
+}
+function whInputFromPayload(payload) {
+  if (payload == null) return '';
+  if (typeof payload !== 'object') return String(payload);
+  var keys = ['text', 'message', 'input', 'content', 'query'];
+  for (var i = 0; i < keys.length; i++) {
+    var v = payload[keys[i]];
+    if (v != null && String(v).trim() !== '') return String(v);
+  }
+  var hasKey = keys.some(function (k) { return k in payload; });
+  if (hasKey) return '';   // 给了已知字段但全是空 → 视为空输入，不回退整串
+  return Object.keys(payload).length ? JSON.stringify(payload) : '';
+}
 async function bcWebhookTrigger(token, payload) {
-  var routes = loadWebhooks();
+  var routes = whListCached();
   var r = null;
   for (var i = 0; i < routes.length; i++) if (routes[i].token === token) { r = routes[i]; break; }
-  if (!r || !r.enabled) return { ok: false, code: 'disabled' };
+  if (!r) return { ok: false, code: 'not-found' };
+  if (!r.enabled) return { ok: false, code: 'disabled' };
+  var input = whInputFromPayload(payload);
+  if (!String(input).trim()) return { ok: false, code: 'empty-input' };
   if (!bots || !bots.length) { try { loadBots(); } catch (e) {} }
   var bot = null;
   for (var j = 0; j < (bots || []).length; j++) if (bots[j].id === r.botId) { bot = bots[j]; break; }
   if (!bot) return { ok: false, code: 'no-bot' };
-  var input = (payload && typeof payload === 'object') ?
-    (payload.text != null ? String(payload.text) : JSON.stringify(payload)) :
-    String(payload == null ? '' : payload);
   var t0 = Date.now();
   var rid = 'wh_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   try {
     var rr = await runWorkflow(bot, input, null, null, null, '', null, 0);
     var final = (rr && rr.final) || '';
-    pushRunHistory({ id: rid, schId: r.id, schName: r.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: true, ms: Date.now() - t0, finalLen: final.length, preview: final.slice(0, 200), source: 'webhook' });
+    pushRunHistory({ id: rid, schId: r.id, schName: r.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: true, ms: Date.now() - t0 });
     r.lastRun = Date.now(); r.lastStatus = 'ok'; r.lastError = '';
     saveWebhooks(routes);
-    return { ok: true, finalLen: final.length, ms: Date.now() - t0 };
+    return { ok: true, reply: final, finalLen: final.length, ms: Date.now() - t0, runId: rid };
   } catch (e) {
     var msg = (e && e.message) || String(e);
-    pushRunHistory({ id: rid, schId: r.id, schName: r.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: false, ms: Date.now() - t0, finalLen: 0, preview: '', err: String(msg).slice(0, 300), source: 'webhook' });
+    pushRunHistory({ id: rid, schId: r.id, schName: r.name, botId: bot.id, botName: bot.name || bot.n || '', ts: Date.now(), ok: false, ms: Date.now() - t0 });
     r.lastRun = Date.now(); r.lastStatus = 'err'; r.lastError = String(msg).slice(0, 300);
     saveWebhooks(routes);
     return { ok: false, code: 'run-error', err: msg };
@@ -21135,7 +21176,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.15.1';
+var APP_VERSION = '3.15.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
