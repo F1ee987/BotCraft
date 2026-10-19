@@ -3275,6 +3275,22 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
   </div>
 
+  <div class="ssec" id="sec-ui-export">
+    <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h6l2 2h8v10H4z"/><path d="M12 12v5M9.5 14.5L12 17l2.5-2.5"/></svg></span> 导出位置</span><span class="ssec-sub">导出的文稿 / CSV / JSON 存到哪</span>
+    </div>
+    <div class="ssec-body">
+      <div class="field" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:var(--sp-4)">
+        <input id="exportDirInput" class="ipt" readonly style="flex:1;min-width:240px" placeholder="（读取中…）">
+        <button type="button" class="btn btn-primary btn-sm" id="exportDirPickBtn" onclick="pickExportDir()">选择位置</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="resetExportDir()">恢复默认</button>
+      </div>
+      <div class="hint" style="margin:0;font-size:11.5px;line-height:1.6">
+        桌面版把导出文件直接写进这个目录，并在提示里回显真实路径；同名文件不会覆盖，会自动加 -1 / -2 后缀。
+        浏览器版无法选择目录，文件交给浏览器下载器处理（位置由浏览器设置决定）。
+      </div>
+      <div id="exportDirGuide"></div>
+    </div>
+  </div>
   <div class="ssec" id="sec-ui-update">
     <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-1.2 5.2"/><path d="M20 5v6h-6"/></svg></span> 检查更新</span><span class="ssec-sub">查看是否有新版本可下载</span>
     </div>
@@ -14366,13 +14382,8 @@ function _safeFileName(name, ext) {
 function exportMarkdownAsDocx(md, filename, meta) {
   try {
     var blob = _zipStore(_docxFiles(md, meta));
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = _safeFileName(filename);
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function () { try { URL.revokeObjectURL(a.href); } catch (e) { } a.remove(); }, 0);
-    toast('已导出 Word：' + a.download, 'ok');
+    var fname = _safeFileName(filename);
+    saveExportBlob(fname, blob);   // 成败提示统一由 saveExportBlob 给出（含真实路径）
     return true;
   } catch (e) {
     toast('导出 Word 失败：' + ((e && e.message) || e), 'err');
@@ -19829,16 +19840,77 @@ function copyText(text, okMsg) {
     toast('复制失败，请手动选择文本', 'err');
   }
 }
-function downloadFile(name, content, type) {
+/* ==================== 导出落盘（2026-10-19） ====================
+   为什么不再直接用 <a download>：那条路只能把文件交给浏览器/WebView 的下载器，
+   落在哪里由宿主决定，而且**拿不到「是否真的写成」的结果** —— 用户看到的
+   「已开始下载」实际上什么都没保证。
+   桌面版改走桥接：Python 写进用户自选的导出目录并回传真实路径；
+   浏览器版没有桥接，退回浏览器下载，并如实说明「位置由浏览器决定」。 */
+function bcExportDirSupported() {
+  var api = window.pywebview && window.pywebview.api;
+  return !!(api && api.bc_save_export);
+}
+function _blobToBase64(blob) {
+  return new Promise(function (resolve, reject) {
+    var fr = new FileReader();
+    fr.onload = function () {
+      var bytes = new Uint8Array(fr.result), bin = '', CH = 0x8000;
+      for (var i = 0; i < bytes.length; i += CH) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+      }
+      resolve(btoa(bin));
+    };
+    fr.onerror = function () { reject(new Error('读取导出内容失败')); };
+    fr.readAsArrayBuffer(blob);
+  });
+}
+function _shortPath(p, max) {
+  var t = String(p || '');
+  max = max || 46;
+  return t.length <= max ? t : (t.slice(0, 18) + '…' + t.slice(-(max - 19)));
+}
+/* 统一的保存入口：name 文件名 / blob 内容 / 返回 true=已落盘 */
+function saveExportBlob(name, blob, opts) {
+  opts = opts || {};
+  if (bcExportDirSupported()) {
+    return _blobToBase64(blob).then(function (b64) {
+      return window.pywebview.api.bc_save_export(name, b64).then(function (r) {
+        if (r && r.ok) {
+          var tip = '已保存到 ' + _shortPath(r.path);
+          if (r.name && r.name !== name) tip = '已保存为 ' + r.name + '（同名不覆盖）→ ' + _shortPath(r.dir || '');
+          toast(tip, 'ok', 6000);
+          return true;
+        }
+        toast('导出失败：' + ((r && r.err) || '未知原因'), 'err', 8000);
+        return false;
+      }, function (e) {
+        toast('导出失败：' + ((e && e.message) || e), 'err', 8000);
+        return false;
+      });
+    }, function (e) {
+      toast('导出失败：' + ((e && e.message) || e), 'err', 8000);
+      return false;
+    });
+  }
+  // 浏览器版：只能交给浏览器下载器，且无法确认最终位置
   try {
-    var blob = new Blob([content], { type: type || 'text/plain;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url; a.download = name;
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1000);
-    toast('已开始下载 ' + name, 'ok');
-  } catch (e) { toast('下载失败：' + e.message, 'err'); }
+    if (!opts.quiet) {
+      toast('已交给浏览器下载：' + name + '（保存位置由浏览器决定，可在浏览器设置里改）', 'ok', 6000);
+    }
+    return Promise.resolve(true);
+  } catch (e) {
+    toast('导出失败：' + ((e && e.message) || e), 'err', 8000);
+    return Promise.resolve(false);
+  }
+}
+function downloadFile(name, content, type) {
+  var blob = new Blob([content], { type: type || 'text/plain;charset=utf-8' });
+  return saveExportBlob(name, blob);
 }
 // 把机器人可序列化配置编码进 URL（UTF-8 安全），用于「网页嵌入」iframe 深链
 function encodeBotCfg(b) {
@@ -20724,6 +20796,9 @@ function showAnaTab(t) {
     if (k === 'task' && k === active && typeof taskPanelShown === 'function') { try { taskPanelShown(); } catch (e) { } }
     if ((k === 'webhook' || k === 'task') && k === active && typeof renderDesktopGuides === 'function') {
       try { renderDesktopGuides(); } catch (e) { }
+    }
+    if (k === 'ui' && k === active && typeof refreshExportDirUI === 'function') {
+      try { refreshExportDirUI(); } catch (e) { }
     }
     var bn = document.getElementById(btns[k]);
     if (bn) bn.className = (k === active) ? 'btn btn-primary' : 'btn btn-ghost';
@@ -22153,7 +22228,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.17.0';
+var APP_VERSION = '3.17.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -22225,6 +22300,54 @@ function setUpdateStatusHTML(html) {
 function bcIsDesktop() {
   return !!(window.pywebview && window.pywebview.api);
 }
+/* ---------- 界面设置 · 导出位置（2026-10-19） ---------- */
+function _exportDirEl() { return document.getElementById('exportDirInput'); }
+function refreshExportDirUI() {
+  var el = _exportDirEl(), btn = document.getElementById('exportDirPickBtn');
+  var guide = document.getElementById('exportDirGuide');
+  var api = window.pywebview && window.pywebview.api;
+  var supported = !!(api && api.bc_export_dir);
+  if (btn) btn.disabled = !supported;
+  if (guide) {
+    guide.innerHTML = supported ? '' : desktopOnlyCard(
+      '导出位置需要在桌面版设置',
+      '浏览器版没有本机文件写入能力，导出会交给浏览器下载器，保存位置由浏览器决定；桌面版可以直接指定目录并回显真实路径。',
+      '桌面版可用：指定导出目录、本机任务执行器等本机能力。'
+    );
+  }
+  if (!supported) {
+    if (el) el.value = '（浏览器版：由浏览器下载设置决定）';
+    return Promise.resolve(false);
+  }
+  return Promise.resolve(api.bc_export_dir()).then(function (r) {
+    if (el) el.value = (r && r.ok) ? (r.dir + (r.custom ? '' : '（默认）')) : '（读取失败）';
+  }, function () { if (el) el.value = '（读取失败）'; });
+}
+function pickExportDir() {
+  var api = window.pywebview && window.pywebview.api;
+  if (!api || !api.bc_pick_export_dir) {
+    toast('浏览器版无法选择导出目录，请使用桌面版', 'warn');
+    return;
+  }
+  Promise.resolve(api.bc_pick_export_dir()).then(function (r) {
+    if (r && r.ok) { toast('导出位置已改为 ' + _shortPath(r.dir), 'ok', 5000); }
+    else if (r && r.canceled) { /* 用户取消，不打扰 */ }
+    else { toast('设置失败：' + ((r && r.err) || '未知原因'), 'err'); }
+    refreshExportDirUI();
+  });
+}
+function resetExportDir() {
+  var api = window.pywebview && window.pywebview.api;
+  if (!api || !api.bc_reset_export_dir) { toast('浏览器版无需设置', 'warn'); return; }
+  Promise.resolve(api.bc_reset_export_dir()).then(function (r) {
+    toast('已恢复默认导出位置' + (r && r.dir ? '：' + _shortPath(r.dir) : ''), 'ok');
+    refreshExportDirUI();
+  });
+}
+window.refreshExportDirUI = refreshExportDirUI;
+window.pickExportDir = pickExportDir;
+window.resetExportDir = resetExportDir;
+
 function openDownloadPage() {
   var url = 'https://github.com/F1ee987/BotCraft/releases/latest';
   var api = window.pywebview && window.pywebview.api;
