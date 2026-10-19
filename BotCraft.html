@@ -20588,14 +20588,21 @@ function renderWebhookUI() {
       var statusTxt = w.lastStatus === 'ok' ? '<span style="color:var(--ok)">上次成功</span>'
         : w.lastStatus === 'err' ? '<span style="color:var(--danger)">上次失败</span>' : '<span style="color:var(--sub)">未触发</span>';
       var lastTxt = w.lastRun ? new Date(w.lastRun).toLocaleString() : '从未触发';
+      /* 2026-10-19：补报错展示。lastError 一直在存（触发失败时写 300 字），但列表
+         从来没渲染过它 —— 用户只看到「上次失败」四个字，具体为什么失败无从得知。 */
+      var errTxt = (w.lastStatus === 'err' && w.lastError)
+        ? '<div class="sub" style="margin-top:2px;color:var(--danger);word-break:break-all" title="' + escHtml(w.lastError) + '">原因：' + escHtml(String(w.lastError).slice(0, 120)) + '</div>'
+        : '';
       return '<div class="dist-row" style="align-items:flex-start">'
         + '<div style="flex:1">'
         + '<div style="font-weight:600">' + escHtml(w.name || '(未命名)') + ' · ' + escHtml(botName || '（机器人缺失）') + '</div>'
         + '<div class="sub" style="margin-top:2px">' + statusTxt + ' · 上次：' + escHtml(lastTxt) + '</div>'
+        + errTxt
         + '<div class="sub" style="margin-top:2px;word-break:break-all">Token：<code>' + escHtml(w.token) + '</code></div>'
         + '</div>'
         + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
         + '<button class="btn btn-ghost btn-sm" onclick="toggleWebhook(\'' + w.id + '\')">' + (w.enabled ? '停用' : '启用') + '</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="testWebhook(\'' + w.id + '\')">测试触发</button>'
         + '<button class="btn btn-ghost btn-sm" onclick="copyWebhookUrl(\'' + w.id + '\')">复制地址</button>'
         + '<button class="btn btn-ghost btn-sm" onclick="editWebhook(\'' + w.id + '\')">编辑</button>'
         + '<button class="btn btn-ghost btn-sm" onclick="deleteWebhook(\'' + w.id + '\')">删除</button>'
@@ -20657,10 +20664,12 @@ function saveWebhook() {
 
 function toggleWebhook(id) {
   var arr = loadWebhooks();
-  for (var i = 0; i < arr.length; i++) if (arr[i].id === id) { arr[i].enabled = !arr[i].enabled; break; }
+  var now = null;
+  for (var i = 0; i < arr.length; i++) if (arr[i].id === id) { arr[i].enabled = !arr[i].enabled; now = arr[i]; break; }
   saveWebhooks(arr);
   pushWebhookRoutes();
   renderWebhookUI();
+  if (now && window.toast) toast(now.enabled ? '已启用，本地服务路由已同步' : '已停用，入站请求将被拒绝', now.enabled ? 'ok' : 'warn');
 }
 
 function deleteWebhook(id) {
@@ -20668,6 +20677,29 @@ function deleteWebhook(id) {
     if (!ok) return;
     saveWebhooks(loadWebhooks().filter(function (x) { return x.id !== id; }));
     pushWebhookRoutes();
+    renderWebhookUI();
+  });
+}
+
+/* 测试触发：不走本地 HTTP 服务，直接调触发桥（与入站请求同一处理函数），
+   立即给出成败与回复预览 —— 旧版配好 webhook 后唯一验证方式是外部 curl，
+   失败时界面上得不到任何反馈。 */
+function testWebhook(id) {
+  var arr = loadWebhooks(), w = null;
+  for (var i = 0; i < arr.length; i++) if (arr[i].id === id) { w = arr[i]; break; }
+  if (!w) return;
+  if (window.toast) toast('测试触发中…', 'warn');
+  bcWebhookTrigger(w.token, { text: '入站 API 测试：请简短回复确认链路正常' }).then(function (res) {
+    if (res && res.ok) {
+      var reply = String(res.reply || '');
+      var tip = '触发成功（' + res.ms + 'ms）：' + (reply ? reply.slice(0, 80) : '（空回复）');
+      if (window.toast) toast(tip, 'ok');
+    } else {
+      var code = (res && res.code) || 'unknown';
+      var m = { 'not-found': 'token 不存在', 'disabled': '已停用', 'no-bot': '路由指向的机器人已删除',
+                'empty-input': '输入为空', 'run-error': '工作流执行失败' };
+      if (window.toast) toast('触发失败：' + (m[code] || code) + ((res && res.err) ? ' — ' + String(res.err).slice(0, 80) : ''), 'err');
+    }
     renderWebhookUI();
   });
 }
@@ -21176,7 +21208,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.15.2';
+var APP_VERSION = '3.15.3';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
