@@ -2172,6 +2172,16 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .draft-withdraw:hover{background:var(--fill-hover)}
 @media (prefers-reduced-motion:reduce){.draft-dot{animation:none}}
 
+/* ============ 桌面版引导卡（N3，2026-10-19） ============ */
+.dl-card{border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);
+  padding:var(--sp-6);margin:var(--sp-4) 0}
+.dl-card-h{display:flex;align-items:center;gap:var(--sp-3);font-size:13.5px;color:var(--txt);margin-bottom:var(--sp-3)}
+.dl-badge{font-size:11px;padding:1px var(--sp-3);border-radius:var(--r-full);
+  background:var(--brand-fill);color:#fff;font-weight:600}
+.dl-card-b{font-size:12.5px;color:var(--sub);line-height:1.65}
+.dl-card-how{margin-top:var(--sp-2)}
+.dl-card-acts{display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap;margin-top:var(--sp-4)}
+
 /* ============ 入站 API 字段说明卡（2026-10-19） ============
    使用者（外部系统对接人）在应用内就能查到完整字段参考，不用翻文档/猜机器码。 */
 .wh-doc{margin-top:12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card)}
@@ -3292,6 +3302,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <label style="display:inline-flex;gap:8px;align-items:center;cursor:pointer"><span class="switch"><input type="checkbox" id="taskEnabled" onchange="taskSetEnabled(this.checked)"><span class="slider"></span></span><span>启用</span></label>
     </div>
     <div id="taskStatus" class="sub" style="margin-bottom:10px"></div>
+    <div id="taskDesktopGuide"></div>
     <div class="sub" style="margin-bottom:6px">访问令牌（外部调用方需带 <code>Authorization: Bearer &lt;令牌&gt;</code>）</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <input id="taskToken" class="ipt" readonly style="flex:1;min-width:220px;font-family:var(--font-mono);font-size:11.5px">
@@ -3373,7 +3384,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
 
 <div id="anaWebhook" style="display:none">
-      <div class="hint">让外部系统（飞书 / 自建后台 / CI）把事件推给机器人：桌面版在 <code>127.0.0.1</code> 监听，按「地址 + token」路由到指定机器人并触发其工作流。<b>仅本机可访问</b>，必须带 token。浏览器版无本地服务，地址不会生效。</div>
+      <div class="hint">让外部系统（飞书 / 自建后台 / CI）把事件推给机器人：桌面版在 <code>127.0.0.1</code> 监听，按「地址 + token」路由到指定机器人并触发其工作流。<b>仅本机可访问</b>，必须带 token。</div>
+      <div id="whDesktopGuide"></div>
 
       <details class="wh-doc">
         <summary><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 7.5h8M8 11h8M8 14.5h5"/></svg></span> 接口字段说明（给对接的人看）</summary>
@@ -8180,13 +8192,16 @@ function coerceModelChain(arr) {
 /* ===== MODULE: core/runhist exports:filterRunHistory,runHistoryCsv,runHistoryCsvName ===== */
 // N5 运行历史可观测性：P0-3 的运行历史上限 100 条、无筛选——计划/Webhook 一多，
 // 「上周那个失败的日报」基本翻不到。过滤与 CSV 导出都是纯函数，镜像供单测。
-function filterRunHistory(hist, filter) {
+function filterRunHistory(hist, filter, botId) {
   if (!Array.isArray(hist)) return [];
   var f = filter || 'all';
+  var bid = botId || '';
   return hist.filter(function (e) {
-    if (f === 'fail') return e && e.ok === false;
-    if (f === 'schedule') return e && e.source !== 'webhook';
-    if (f === 'webhook') return e && e.source === 'webhook';
+    if (!e) return false;
+    if (bid && e.botId !== bid) return false;      // 2026-10-19 N5：按机器人收窄
+    if (f === 'fail') return e.ok === false;
+    if (f === 'schedule') return e.source !== 'webhook';
+    if (f === 'webhook') return e.source === 'webhook';
     return true;
   });
 }
@@ -20340,6 +20355,28 @@ function openSettings() {
   showAnaTab('settings');
   setupSettingsUI();
 }
+/* 浏览器版才显示引导卡；桌面版把容器清空（避免占位空白） */
+function renderDesktopGuides() {
+  var desktop = bcIsDesktop();
+  var wh = document.getElementById('whDesktopGuide');
+  if (wh) {
+    wh.innerHTML = desktop ? '' : desktopOnlyCard(
+      '入站 Webhook 需要桌面版',
+      '外部系统通过 127.0.0.1 的本地服务触发机器人，这项能力依赖桌面版内置的本机服务；浏览器版没有本地端口，生成的地址不会生效。',
+      '桌面版可用：入站 Webhook、本机任务执行器（电脑助手）、自动备份与本机数据落盘、Python 代码块运行。'
+    );
+  }
+  var tk = document.getElementById('taskDesktopGuide');
+  if (tk) {
+    tk.innerHTML = desktop ? '' : desktopOnlyCard(
+      '电脑助手需要桌面版',
+      '本机任务执行器（文件整理、目录操作、审计日志）要读写本机磁盘，只能在桌面版运行；浏览器版出于安全不提供文件操作能力。',
+      '桌面版可用：入站 Webhook、本机任务执行器（电脑助手）、自动备份与本机数据落盘、Python 代码块运行。'
+    );
+  }
+}
+window.renderDesktopGuides = renderDesktopGuides;
+
 function showAnaTab(t) {
   // 五个 Tab：用量分析 / 模型与插件设置 / 界面设置 / 运行计划（P0-3）/ 入站 API（P1-1）。映射表驱动。
   var panels = { usage: 'anaUsage', settings: 'anaSettings', ui: 'anaUI', schedule: 'anaSchedule', webhook: 'anaWebhook', task: 'anaTask' };
@@ -20361,6 +20398,9 @@ function showAnaTab(t) {
     var pn = document.getElementById(panels[k]);
     if (pn) pn.style.display = (k === active) ? '' : 'none';
     if (k === 'task' && k === active && typeof taskPanelShown === 'function') { try { taskPanelShown(); } catch (e) { } }
+    if ((k === 'webhook' || k === 'task') && k === active && typeof renderDesktopGuides === 'function') {
+      try { renderDesktopGuides(); } catch (e) { }
+    }
     var bn = document.getElementById(btns[k]);
     if (bn) bn.className = (k === active) ? 'btn btn-primary' : 'btn btn-ghost';
   });
@@ -20504,6 +20544,8 @@ window.bcGetRunHistory = getRunHistory;
 // ---- 计划 / 运行历史 UI ----
 // N5：运行历史过滤（全部 / 仅计划 / 仅 Webhook / 仅失败）+ CSV 导出。
 var _rhFilter = 'all';
+var _rhBot = '';        // 2026-10-19 N5：按机器人筛选（空 = 全部）
+var _rhOpen = {};       // 2026-10-19 N5：哪些记录展开了详情（按 runId/id）
 var _RH_FILTERS = [
   { k: 'all', label: '全部' },
   { k: 'schedule', label: '仅计划' },
@@ -20520,16 +20562,44 @@ function renderRunHistoryBar(total, shown) {
   }).join('');
   bar.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
     + chips
+    + _rhBotOptions()
     + '<span class="sub" style="margin-left:auto">' + shown + ' / ' + total + ' 条</span>'
     + '<button type="button" class="btn btn-ghost btn-sm" onclick="exportRunHistoryCsv()">导出 CSV</button>'
     + '</div>';
+}
+/* 只列出历史记录里真实出现过的机器人：机器人多时给全量清单反而难选 */
+function _rhBotOptions() {
+  var seen = {}, list = [];
+  getRunHistory().forEach(function (e) {
+    if (!e || !e.botId) return;
+    if (seen[e.botId]) return;
+    seen[e.botId] = 1;
+    list.push({ id: e.botId, name: e.botName || e.botId });
+  });
+  if (list.length < 2) return '';   // 只有一个机器人时这个下拉没有意义
+  var cur = _rhBot;
+  var opts = '<option value="">全部机器人</option>' + list.map(function (b) {
+    return '<option value="' + escAttr(b.id) + '"' + (b.id === cur ? ' selected' : '') + '>'
+      + escHtml(b.name) + '</option>';
+  }).join('');
+  return '<select class="ipt" style="width:auto;min-width:130px;padding:4px 8px;font-size:12px" '
+    + 'onchange="setRunHistoryBot(this.value)">' + opts + '</select>';
+}
+function setRunHistoryBot(id) {
+  _rhBot = id || '';
+  renderScheduleUI();
 }
 function setRunHistoryFilter(f) {
   _rhFilter = f;
   renderScheduleUI();
 }
+/* 单条详情展开：失败记录给完整错误，成功记录给完整产出预览与耗时构成 */
+function toggleRunDetail(key) {
+  _rhOpen[key] = !_rhOpen[key];
+  renderScheduleUI();
+}
 function exportRunHistoryCsv() {
-  var rows = filterRunHistory(getRunHistory(), _rhFilter);
+  var rows = filterRunHistory(getRunHistory(), _rhFilter, _rhBot);
   if (!rows.length) { toast('当前过滤条件下没有记录可导出', 'warn'); return; }
   var blob = new Blob([runHistoryCsv(rows)], { type: 'text/csv;charset=utf-8' });
   var a = document.createElement('a');
@@ -20541,6 +20611,8 @@ function exportRunHistoryCsv() {
   toast('已导出 ' + rows.length + ' 条运行历史', 'ok');
 }
 window.setRunHistoryFilter = setRunHistoryFilter;
+window.setRunHistoryBot = setRunHistoryBot;
+window.toggleRunDetail = toggleRunDetail;
 window.exportRunHistoryCsv = exportRunHistoryCsv;
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -20595,7 +20667,7 @@ function renderScheduleUI() {
   }
   if (hist) {
     var hAll = getRunHistory();
-    var h = filterRunHistory(hAll, _rhFilter);
+    var h = filterRunHistory(hAll, _rhFilter, _rhBot);
     if (!hAll.length) {
       hist.innerHTML = '<div class="hint">还没有运行记录。计划触发后会显示在这里。</div>';
     } else if (!h.length) {
@@ -20606,10 +20678,22 @@ function renderScheduleUI() {
         var st = e.ok ? '<span style="color:var(--ok)">成功</span>' : '<span style="color:var(--danger)">失败</span>';
         var srcTag = (e.source === 'webhook') ? ' <span class="sub" style="color:var(--brand)">· Webhook</span>' : '';
         var detail = e.ok ? ('产出 ' + e.finalLen + ' 字 · ' + e.ms + 'ms') : ('错误：' + escHtml(e.err || ''));
+        var key = String(e.runId || e.id || (e.ts + '_' + (e.schName || '')));
+        var open = !!_rhOpen[key];
+        var full = e.ok ? String(e.output || e.preview || '') : String(e.err || '');
+        var more = open
+          ? '<div class="sub" style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);white-space:pre-wrap;word-break:break-word">'
+            + escHtml(full || '（没有更多内容）')
+            + '<div style="margin-top:4px;opacity:.7">记录编号：' + escHtml(String(e.runId || e.id || '—'))
+            + ' · 来源：' + (e.source === 'webhook' ? 'Webhook' : '计划') + '</div></div>'
+          : '';
         return '<div class="sat-row" style="display:block">'
           + '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + escHtml(e.schName || '') + '</b>' + st + srcTag + '</div>'
-          + '<div class="sub">' + escHtml(t) + ' · ' + escHtml(e.botName || '') + ' · ' + detail + '</div>'
-          + (e.ok && e.preview ? '<div class="sub" style="margin-top:2px;opacity:.8">' + escHtml(e.preview) + '</div>' : '')
+          + '<div class="sub">' + escHtml(t) + ' · ' + escHtml(e.botName || '') + ' · ' + detail
+          + ' <button type="button" class="btn btn-ghost btn-sm" style="padding:0 6px;font-size:11px" '
+          + 'onclick="toggleRunDetail(\'' + escAttr(key) + '\')">' + (open ? '收起' : '详情') + '</button></div>'
+          + (e.ok && e.preview && !open ? '<div class="sub" style="margin-top:2px;opacity:.8">' + escHtml(e.preview) + '</div>' : '')
+          + more
           + '</div>';
       }).join('');
     }
@@ -20848,7 +20932,7 @@ function taskRefresh() {
   var api = taskBridge();
   if (!api || !api.bc_task_state) {
     var st = document.getElementById('taskStatus');
-    if (st) st.innerHTML = '<span style="color:var(--warn)">需桌面版（exe）运行；浏览器直开没有本机执行器。</span>';
+    if (st) st.innerHTML = '';   // 浏览器版由 renderDesktopGuides 的引导卡承担说明
     return;
   }
   Promise.resolve(api.bc_task_state()).then(function (s) {
@@ -21745,7 +21829,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.16.3';
+var APP_VERSION = '3.16.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -21809,6 +21893,42 @@ function setUpdateStatusHTML(html) {
   var el = document.getElementById('updateCheckStatus');
   if (el) el.innerHTML = html;   // 内容均为本文件拼接的固定文案 + hex 指纹，无外部输入
 }
+/* ============ N3：桌面版专属功能的降级引导（2026-10-19） ============
+   背景（新功能开发建议-2026-10-13 的 N3）：浏览器版遇到桌面专属能力（本地服务 /
+   本机执行器 / 本机备份 / Python 运行）时只显示一句「需桌面版」，那是死路 ——
+   用户不知道去哪拿、也不知道拿到之后能多出什么。这里统一成一张引导卡：
+   能力说明 + 怎么获得（下载桌面版）+ 已经装了桌面版时的辨认提示。 */
+function bcIsDesktop() {
+  return !!(window.pywebview && window.pywebview.api);
+}
+function openDownloadPage() {
+  var url = 'https://github.com/F1ee987/BotCraft/releases/latest';
+  var api = window.pywebview && window.pywebview.api;
+  if (api && api.bc_open_url) {
+    Promise.resolve(api.bc_open_url(url)).then(function (r) {
+      if (!(r && r.ok)) toast('打开浏览器失败，请手动访问 GitHub Releases', 'err');
+    }, function () { toast('打开浏览器失败，请手动访问 GitHub Releases', 'err'); });
+    return;
+  }
+  // 浏览器版：window.open 可用（桌面壳里不可靠，已在上面走桥接）
+  var w = window.open(url, '_blank', 'noopener');
+  if (!w) toast('浏览器拦截了弹窗，请手动访问 GitHub Releases', 'warn');
+}
+function desktopOnlyCard(title, what, how) {
+  return '<div class="dl-card">'
+    + '<div class="dl-card-h">' + svgIcon('download')
+    + '<b>' + escHtml(title) + '</b><span class="dl-badge">桌面版专属</span></div>'
+    + '<div class="dl-card-b">' + escHtml(what) + '</div>'
+    + (how ? '<div class="dl-card-b dl-card-how">' + escHtml(how) + '</div>' : '')
+    + '<div class="dl-card-acts">'
+    + '<button type="button" class="btn btn-primary btn-sm" onclick="openDownloadPage()">下载桌面版</button>'
+    + '<span class="sub">已装桌面版？用 BotCraft.exe 打开本应用即可解锁（同一份文件，双击 exe 启动）</span>'
+    + '</div></div>';
+}
+window.bcIsDesktop = bcIsDesktop;
+window.openDownloadPage = openDownloadPage;
+window.desktopOnlyCard = desktopOnlyCard;
+
 function openReleasePage() {
   // releases/latest 恒指向最新发布版；桌面壳内 window.open 不可靠，走后端系统浏览器
   var api = window.pywebview && window.pywebview.api;
