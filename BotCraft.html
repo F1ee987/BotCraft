@@ -4063,6 +4063,9 @@ function storeSet(key, val) {
   catch (e) { return false; }
 }
 /** 删存储。返回 true=成功。 */
+/* ⚠️ 2026-10-19 审计：定义了但全仓无调用点。它是存储入口家族
+   （storeGet / storeSet / storeGetRaw / storeDel）的一员，删掉会让接口不成套，
+   故保留并标注：**当前无使用者**。 */
 function storeDel(key) {
   try { __storage.removeItem(key); return true; } catch (e) { return false; }
 }
@@ -4150,7 +4153,25 @@ function escAttrJs(s) {
     } catch (e) {}
     return Object.assign({}, DEFAULT_CFG);
   }
-  function saveConfig() { try { __storage.setItem(LS_CFG, JSON.stringify(cfg)); } catch (e) {} }
+  /* 2026-10-19：原实现是 `catch (e) {}` —— 存储写满或被禁用时，AI 设置（Key/模型/
+     提示词）会**静默不落盘**：用户改完以为生效，重启后回到旧值，且没有任何痕迹。
+     这里对齐 saveBots 的既有约定（__bcRecordFault + 20 秒节流 toast），
+     只在失败路径新增提示，成功路径行为不变。 */
+  var _cfgWriteWarned = false;
+  function _cfgWriteFailed(e) {
+    try { if (window.__bcRecordFault) window.__bcRecordFault('AI 设置写盘失败', 'config'); } catch (eF) { }
+    if (_cfgWriteWarned) return;
+    _cfgWriteWarned = true;
+    setTimeout(function () { _cfgWriteWarned = false; }, 20000);
+    try {
+      toast('⚠️ AI 设置保存失败：' + ((e && e.message) || e)
+        + '。本次改动没有写入磁盘，重启后会回到旧值。', 'err', 12000);
+    } catch (eT) { }
+  }
+  function saveConfig() {
+    try { __storage.setItem(LS_CFG, JSON.stringify(cfg)); }
+    catch (e) { _cfgWriteFailed(e); }
+  }
   function getConfig() { return Object.assign({}, cfg); }
 
   // 内联媒体（图片/音频/视频的 base64）**绝不能进文本上下文**：
@@ -8322,6 +8343,9 @@ var FB_DIAG_MIN = 10;       // 总评价样本低于这个数，不下结论（�
 var FB_DIAG_LOW = 70;       // 整体好评率低于此视为偏低
 var FB_DIAG_BOT_LOW = 60;   // 单机器人/模型好评率低于此且样本足够，单独点名
 var FB_DIAG_FB_RATE = 0.3;  // 降级率（降级调用/总调用）高于此提示查主模型额度
+/* ⚠️ 2026-10-19 审计：定义了但**全仓无调用点**（标识符引用数 0）。
+   疑似早期玻璃饱和度调试的残留。保留不删 —— 本项目有「设计判据被误判成
+   死代码删除」的前科（见 isBotOnScreen 注释），删前需人工确认。 */
 function satPctOf(o) {
   var n = (o && ((o.up || 0) + (o.down || 0))) || 0;
   return n ? Math.round((o.up || 0) / n * 100) : null;
@@ -11538,6 +11562,8 @@ document.addEventListener('click', function (e) {
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeChMore(); });
 
 // 兼容旧入口：切换机器人
+/* ⚠️ 2026-10-19 审计：未接线的兼容封装 —— 全仓无调用点（openBot 已被直接调用）。
+   保留供外部脚本/旧链接调用，删前需确认没有外部依赖。 */
 window.switchBotManual = function (id) { if (id) openBot(id); };
 
 // ==================== 上下文用量带 & 详情面板 ====================
@@ -17503,11 +17529,14 @@ function openKbUrl() {
   setTimeout(function () { if (ta) try { ta.focus(); } catch (e) {} }, 60);
 }
 // 兼容旧调用名（工具栏曾分成两个入口，现已合并到同一个「导入内容」弹窗）
+/* ⚠️ 2026-10-19 审计：未接线的薄封装 —— 全仓无调用点，实际调用方都直接用
+   openKbUrl()。保留以维持对称（closeKbPaste 同）。 */
 function openKbPaste() { return openKbUrl(); }
 function closeKbUrl() {
   if (_kbUrlTimer) { clearTimeout(_kbUrlTimer); _kbUrlTimer = null; }
   var m = document.getElementById('kbPasteModal'); if (m) m.classList.remove('on');
 }
+/* ⚠️ 2026-10-19 审计：未接线（同上，实际调用方用 closeKbUrl）。 */
 function closeKbPaste() { return closeKbUrl(); }
 // 抓取网页 → 标题 / 摘要 / 核心正文（已过滤广告与导航，并做过结构美化）。
 // 桌面 exe 走 bc_http 后端代理（urllib 不受浏览器同源限制，任意公网域名可抓）；
@@ -21707,7 +21736,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.16.1';
+var APP_VERSION = '3.16.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
