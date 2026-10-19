@@ -7,6 +7,9 @@ var FB_DIAG_MIN = 10;       // 总评价样本低于这个数，不下结论（�
 var FB_DIAG_LOW = 70;       // 整体好评率低于此视为偏低
 var FB_DIAG_BOT_LOW = 60;   // 单机器人/模型好评率低于此且样本足够，单独点名
 var FB_DIAG_FB_RATE = 0.3;  // 降级率（降级调用/总调用）高于此提示查主模型额度
+/* ⚠️ 2026-10-19 审计：定义了但**全仓无调用点**（标识符引用数 0）。
+   疑似早期玻璃饱和度调试的残留。保留不删 —— 本项目有「设计判据被误判成
+   死代码删除」的前科（见 isBotOnScreen 注释），删前需人工确认。 */
 function satPctOf(o) {
   var n = (o && ((o.up || 0) + (o.down || 0))) || 0;
   return n ? Math.round((o.up || 0) / n * 100) : null;

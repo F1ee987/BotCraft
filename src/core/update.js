@@ -12,6 +12,90 @@ function setUpdateStatusHTML(html) {
   var el = document.getElementById('updateCheckStatus');
   if (el) el.innerHTML = html;   // 内容均为本文件拼接的固定文案 + hex 指纹，无外部输入
 }
+/* ============ N3：桌面版专属功能的降级引导（2026-10-19） ============
+   背景（新功能开发建议-2026-10-13 的 N3）：浏览器版遇到桌面专属能力（本地服务 /
+   本机执行器 / 本机备份 / Python 运行）时只显示一句「需桌面版」，那是死路 ——
+   用户不知道去哪拿、也不知道拿到之后能多出什么。这里统一成一张引导卡：
+   能力说明 + 怎么获得（下载桌面版）+ 已经装了桌面版时的辨认提示。 */
+function bcIsDesktop() {
+  return !!(window.pywebview && window.pywebview.api);
+}
+/* ---------- 界面设置 · 导出位置（2026-10-19） ---------- */
+function _exportDirEl() { return document.getElementById('exportDirInput'); }
+function refreshExportDirUI() {
+  var el = _exportDirEl(), btn = document.getElementById('exportDirPickBtn');
+  var guide = document.getElementById('exportDirGuide');
+  var api = window.pywebview && window.pywebview.api;
+  var supported = !!(api && api.bc_export_dir);
+  if (btn) btn.disabled = !supported;
+  if (guide) {
+    guide.innerHTML = supported ? '' : desktopOnlyCard(
+      '导出位置需要在桌面版设置',
+      '浏览器版没有本机文件写入能力，导出会交给浏览器下载器，保存位置由浏览器决定；桌面版可以直接指定目录并回显真实路径。',
+      '桌面版可用：指定导出目录、本机任务执行器等本机能力。'
+    );
+  }
+  if (!supported) {
+    if (el) el.value = '（浏览器版：由浏览器下载设置决定）';
+    return Promise.resolve(false);
+  }
+  return Promise.resolve(api.bc_export_dir()).then(function (r) {
+    if (el) el.value = (r && r.ok) ? (r.dir + (r.custom ? '' : '（默认）')) : '（读取失败）';
+  }, function () { if (el) el.value = '（读取失败）'; });
+}
+function pickExportDir() {
+  var api = window.pywebview && window.pywebview.api;
+  if (!api || !api.bc_pick_export_dir) {
+    toast('浏览器版无法选择导出目录，请使用桌面版', 'warn');
+    return;
+  }
+  Promise.resolve(api.bc_pick_export_dir()).then(function (r) {
+    if (r && r.ok) { toast('导出位置已改为 ' + _shortPath(r.dir), 'ok', 5000); }
+    else if (r && r.canceled) { /* 用户取消，不打扰 */ }
+    else { toast('设置失败：' + ((r && r.err) || '未知原因'), 'err'); }
+    refreshExportDirUI();
+  });
+}
+function resetExportDir() {
+  var api = window.pywebview && window.pywebview.api;
+  if (!api || !api.bc_reset_export_dir) { toast('浏览器版无需设置', 'warn'); return; }
+  Promise.resolve(api.bc_reset_export_dir()).then(function (r) {
+    toast('已恢复默认导出位置' + (r && r.dir ? '：' + _shortPath(r.dir) : ''), 'ok');
+    refreshExportDirUI();
+  });
+}
+window.refreshExportDirUI = refreshExportDirUI;
+window.pickExportDir = pickExportDir;
+window.resetExportDir = resetExportDir;
+
+function openDownloadPage() {
+  var url = 'https://github.com/F1ee987/BotCraft/releases/latest';
+  var api = window.pywebview && window.pywebview.api;
+  if (api && api.bc_open_url) {
+    Promise.resolve(api.bc_open_url(url)).then(function (r) {
+      if (!(r && r.ok)) toast('打开浏览器失败，请手动访问 GitHub Releases', 'err');
+    }, function () { toast('打开浏览器失败，请手动访问 GitHub Releases', 'err'); });
+    return;
+  }
+  // 浏览器版：window.open 可用（桌面壳里不可靠，已在上面走桥接）
+  var w = window.open(url, '_blank', 'noopener');
+  if (!w) toast('浏览器拦截了弹窗，请手动访问 GitHub Releases', 'warn');
+}
+function desktopOnlyCard(title, what, how) {
+  return '<div class="dl-card">'
+    + '<div class="dl-card-h">' + svgIcon('download')
+    + '<b>' + escHtml(title) + '</b><span class="dl-badge">桌面版专属</span></div>'
+    + '<div class="dl-card-b">' + escHtml(what) + '</div>'
+    + (how ? '<div class="dl-card-b dl-card-how">' + escHtml(how) + '</div>' : '')
+    + '<div class="dl-card-acts">'
+    + '<button type="button" class="btn btn-primary btn-sm" onclick="openDownloadPage()">下载桌面版</button>'
+    + '<span class="sub">已装桌面版？用 BotCraft.exe 打开本应用即可解锁（同一份文件，双击 exe 启动）</span>'
+    + '</div></div>';
+}
+window.bcIsDesktop = bcIsDesktop;
+window.openDownloadPage = openDownloadPage;
+window.desktopOnlyCard = desktopOnlyCard;
+
 function openReleasePage() {
   // releases/latest 恒指向最新发布版；桌面壳内 window.open 不可靠，走后端系统浏览器
   var api = window.pywebview && window.pywebview.api;

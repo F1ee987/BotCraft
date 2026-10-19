@@ -711,6 +711,17 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 /* 密码可见切换 */
 .auth-pass-wrap{position:relative}
 .auth-pass-wrap input{padding-right:44px}
+.auth-third{display:flex;align-items:center;justify-content:center;gap:var(--sp-4);width:100%;margin-top:8px;border:1px solid var(--line)}
+.auth-third-ic{width:18px;height:18px;flex:0 0 auto}
+.auth-third:disabled{opacity:.5;cursor:not-allowed}
+.auth-email-panel{margin-top:6px}
+.auth-code-row{display:flex;gap:var(--sp-4);align-items:stretch}
+.auth-code-row input{flex:1;min-width:0}
+.auth-code-row .btn{flex:0 0 auto;white-space:nowrap}
+.auth-divider{display:flex;align-items:center;gap:var(--sp-5);margin:16px 0 4px;color:var(--sub);font-size:12px}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line)}
+#ghFlowModal .mbox{padding:24px}
+#ghCode{user-select:all}
 .auth-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;background:transparent;color:var(--sub);cursor:pointer;border-radius:var(--r-sm);font-size:14px;line-height:1;padding:0}
 .auth-eye:hover{background:var(--fill);color:var(--txt)}
 /* 激活态用「品牌填充 + 白字」：单独 color:var(--brand) 在卡片底色上只有 3.4:1 / 4.2:1，
@@ -2503,7 +2514,31 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
     </form>
     <div class="auth-or">或</div>
-    <button type="button" class="btn btn-ghost" style="width:100%;margin-top:12px;border:1px solid var(--line)" onclick="closeAuth();enterGuestMode()">先试用，不登录</button>
+    <button id="authGuestBtn" type="button" class="btn btn-ghost" style="width:100%;margin-top:12px;border:1px solid var(--line)" onclick="closeAuth();enterGuestMode()">先试用，不登录</button>
+    <div class="auth-divider"><span>第三方登录</span></div>
+    <button id="authGithubBtn" type="button" class="btn btn-ghost auth-third" onclick="startGithubLogin()">
+      <svg class="auth-third-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.88-1.54-3.88-1.54-.53-1.34-1.29-1.7-1.29-1.7-1.06-.72.08-.71.08-.71 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.76.41-1.27.74-1.56-2.55-.29-5.23-1.28-5.23-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.69 5.41-5.25 5.69.42.36.8 1.08.8 2.18v3.23c0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5z"/></svg>
+      使用 GitHub 登录
+    </button>
+    <button id="authEmailBtn" type="button" class="btn btn-ghost auth-third" onclick="showEmailLogin()">
+      <svg class="auth-third-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm9 7.5 7-4H5l7 4zM4 7.7V17h16V7.7l-8 4.6-8-4.6z" fill="currentColor"/></svg>
+      邮箱验证码登录 / 注册
+    </button>
+    <div id="authThirdNote" class="hint" style="font-size:11px;margin-top:8px;color:var(--sub);display:none">第三方登录仅桌面版可用（浏览器直开不支持）</div>
+    <div id="authEmailPanel" class="auth-email-panel" style="display:none">
+      <div class="field"><label>邮箱</label><input id="auth-ev-email" type="email" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="field"><label>验证码</label>
+        <div class="auth-code-row">
+          <input id="auth-ev-code" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+          <button id="auth-ev-send" type="button" class="btn btn-ghost" onclick="emailSendCode()">发送验证码</button>
+        </div>
+      </div>
+      <div id="auth-ev-msg" class="hint" style="display:none"></div>
+      <div class="mbox-foot" style="margin-top:10px">
+        <button type="button" class="btn btn-ghost" onclick="hideEmailLogin()">返回</button>
+        <button id="auth-ev-submit" type="button" class="btn btn-primary" onclick="emailDoLogin()">登录 / 注册</button>
+      </div>
+    </div>
     <div class="hint" id="auth-switch-text" style="text-align:center;margin-top:14px"></div>
     <div class="hint" style="font-size:11px;margin-top:12px;opacity:.8;color:var(--sub)">
       🔒 密码经 PBKDF2-SHA256 加盐哈希后本地存储，绝不明文保存；演示用途，请勿用于真实敏感账号。
@@ -2511,6 +2546,20 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
   </div>
 </div>
+
+    <div class="modal" id="ghFlowModal">
+      <div class="mbox" style="max-width:420px;text-align:center">
+        <h2>在浏览器完成 GitHub 授权</h2>
+        <div class="hint" style="margin:10px 0">打开下方网址，输入此代码完成授权：</div>
+        <div id="ghCode" style="font-size:28px;font-weight:700;letter-spacing:2px;font-family:monospace;padding:12px;background:var(--fill);border-radius:12px;margin:8px 0"></div>
+        <div id="ghUri" class="hint" style="word-break:break-all;opacity:.8"></div>
+        <div id="ghStatus" class="hint" style="margin-top:12px">等待你在浏览器确认…</div>
+        <div class="mbox-foot" style="margin-top:16px">
+          <button class="btn btn-ghost" onclick="closeGithubFlow()">取消</button>
+          <button id="ghRetry" class="btn btn-primary" style="display:none" onclick="ghRetry()">重新发起</button>
+        </div>
+      </div>
+    </div>
 
 <div class="modal" id="kbModal">
   <div class="mbox" style="width:640px;max-width:92vw">
@@ -2899,6 +2948,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button class="btn btn-ghost" id="anaTabSchedule" onclick="showAnaTab('schedule')">运行计划</button>
         <button class="btn btn-ghost" id="anaTabWebhook" onclick="showAnaTab('webhook')">入站 API</button>
         <button class="btn btn-ghost" id="anaTabTask" onclick="showAnaTab('task')">电脑助手</button>
+        <button class="btn btn-ghost" id="anaTabAuth" onclick="showAnaTab('auth')">第三方登录</button>
       </div>
     </div>
     <div id="anaUsage">
@@ -3400,6 +3450,118 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
     </div>
 
+<div id="anaAuth" style="display:none">
+      <div class="set-head">
+        <div class="set-head-txt">
+          <h2>第三方登录</h2>
+          <p>配置 GitHub 授权登录与邮箱验证码登录。两项均为桌面版能力：服务端逻辑由本机 Python 壳执行，浏览器直开时不可用。配置仅保存在本机，不上传任何服务器。</p>
+        </div>
+      </div>
+      <div class="hint">两种方式都以「邮箱」作为账号关联主键：GitHub 授权返回的邮箱若已存在本地账号则自动绑定并登录，不会重复建号；邮箱验证码登录同理。详见登录弹窗内的说明。</div>
+
+      <div class="set-panels">
+
+        <div class="ssec open" id="sec-auth-gh">
+          <div class="ssec-head"><span>GitHub 授权登录</span><span class="ssec-sub">Device Flow · 无需回调地址</span></div>
+          <div class="ssec-body">
+            <label for="authGhEnabled" style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--txt);cursor:pointer;margin-bottom:10px">
+              <span class="switch"><input type="checkbox" id="authGhEnabled"><span class="slider"></span></span>
+              <span>启用 GitHub 登录</span>
+            </label>
+            <div class="field">
+              <label>Client ID <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+              <input id="authGhClientId" placeholder="例如 Iv1.xxxxxxxxxx">
+              <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">在 GitHub → Settings → Developer settings → OAuth Apps 新建应用，勾选「Device Flow」即可，<b>不需要填写回调地址（Callback URL）</b>——这是 Device Flow 相对 Authorization Code 的优势：桌面应用不会暴露本地端口，因此无需回调。</div>
+            </div>
+            <div class="field">
+              <label>Client Secret <span style="font-weight:400;color:var(--sub);font-size:11.5px">（可选）</span></label>
+              <input id="authGhClientSecret" type="password" placeholder="公开客户端可留空" autocomplete="off">
+              <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">公开客户端（如纯前端桌面应用）通常留空；若你的 OAuth App 配置为保密客户端，则填写此处。</div>
+            </div>
+            <div class="field" style="margin-top:4px">
+              <a class="btn btn-ghost btn-sm" href="https://github.com/settings/developers" target="_blank" rel="noopener">打开 GitHub 创建 OAuth App</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="ssec open" id="sec-auth-em">
+          <div class="ssec-head"><span>邮箱验证码登录</span><span class="ssec-sub">SMTP / HTTP API 二选一</span></div>
+          <div class="ssec-body">
+            <label for="authEmEnabled" style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--txt);cursor:pointer;margin-bottom:10px">
+              <span class="switch"><input type="checkbox" id="authEmEnabled"><span class="slider"></span></span>
+              <span>启用邮箱验证码登录</span>
+            </label>
+            <div class="field">
+              <label>邮件发送方式</label>
+              <select id="authEmProvider" onchange="authEmProviderChange()">
+                <option value="smtp">SMTP（自建 / 邮箱服务商）</option>
+                <option value="api">HTTP API（邮件发送服务）</option>
+              </select>
+            </div>
+
+            <div id="authEmSmtpBox">
+              <div class="field">
+                <label>SMTP 主机 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+                <input id="authEmSmtpHost" placeholder="例如 smtp.gmail.com">
+              </div>
+              <div class="field">
+                <label>端口</label>
+                <input id="authEmSmtpPort" placeholder="465（SSL） / 587（STARTTLS）" inputmode="numeric">
+              </div>
+              <div class="field">
+                <label>账号 / 用户名 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+                <input id="authEmSmtpUser" placeholder="your@email.com">
+              </div>
+              <div class="field">
+                <label>密码 / 授权码</label>
+                <input id="authEmSmtpPass" type="password" placeholder="邮箱授权码（非登录密码）" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>加密方式</label>
+                <select id="authEmSmtpTls">
+                  <option value="ssl">SSL/TLS（端口 465）</option>
+                  <option value="starttls">STARTTLS（端口 587）</option>
+                  <option value="none">不加密（端口 25，仅内网）</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="authEmApiBox" style="display:none">
+              <div class="field">
+                <label>API 地址 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+                <input id="authEmApiEndpoint" placeholder="https://api.example.com/v1/send">
+                <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">请求体固定为 <code>{"to","from","subject","text"}</code>，Authorization 头携带 Bearer Key。</div>
+              </div>
+              <div class="field">
+                <label>API Key <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+                <input id="authEmApiKey" type="password" placeholder="服务方提供的 Key" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="field">
+              <label>发件人地址 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（可选，留空用账号）</span></label>
+              <input id="authEmFrom" placeholder="no-reply@yourdomain.com">
+            </div>
+
+            <div class="hint" style="font-size:11.5px;line-height:1.6;margin:10px 0">
+              验证码规则：6 位数字；<b>有效期 10 分钟</b>；同一邮箱<b>60 秒内不可重复发送</b>，每小时最多 5 封；单次验证码校验最多 5 次，验证成功后立即作废（防重放）。
+            </div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+              <button class="btn btn-primary btn-sm" onclick="saveAuthSettings()">保存配置</button>
+              <span style="display:inline-flex;gap:6px;align-items:center">
+                <input id="authEmTestTo" placeholder="测试收件人邮箱" style="max-width:200px">
+                <button class="btn btn-ghost btn-sm" onclick="testEmailSend()">发送测试验证码</button>
+              </span>
+            </div>
+            <div id="authEmTestMsg" class="hint" style="display:none;margin-top:10px"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+
 <div id="anaWebhook" style="display:none">
       <div class="hint">让外部系统（飞书 / 自建后台 / CI）把事件推给机器人：桌面版在 <code>127.0.0.1</code> 监听，按「地址 + token」路由到指定机器人并触发其工作流。<b>仅本机可访问</b>，必须带 token。</div>
       <div id="whDesktopGuide"></div>
@@ -3485,7 +3647,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       </div>
     </div>
 
-  </main>
+    </main>
 <!-- ==================== 创建向导 ==================== -->
 <div class="modal" id="createModal">
   <div class="mbox">
@@ -9842,6 +10004,8 @@ async function register(username, email, password) {
   users.push({
     username: u, email: e, pwdHash: hash, salt, createdAt: Date.now(), lastLoginAt: Date.now(),
     displayName: '', avatar: { kind: 'letter', value: '', bg: 'violet' },
+    // 2026-10-20 第三方登录：记录该账号启用了哪些登录方式（老数据无此字段 → 兼容回落）
+    auth: { password: true, github: null, emailVerified: false },
   });
   saveUsers();
   migrateGuestDataTo(u);
@@ -9857,14 +10021,98 @@ async function login(username, password) {
   if (hash !== user.pwdHash) { return { ok: false, msg: '密码错误' }; }
   // 最近登录时间：账号信息面板的数据概览要用（老数据缺这个字段不影响登录）
   user.lastLoginAt = Date.now();
+  if (!user.auth) user.auth = { password: true, github: null, emailVerified: false };
   saveUsers();
-  currentUser = { username: user.username, email: user.email };
+  return finishLogin(user, '已登录：' + user.username);
+}
+
+// 三种登录（密码 / GitHub / 邮箱）共用的收尾：写 currentUser + 会话 + 记住本机 + 载入数据。
+// onLogin 包一层 try：历史上有过 onLogin 抛错把整条登录链路带崩的情况，不该因一个
+// 非致命的载入异常而让用户“登不进去”。
+function finishLogin(user, msg) {
+  currentUser = { username: user.username, email: user.email || '' };
   sessionToken = uidHex(18);
   saveSession({ username: user.username, token: sessionToken, loginAt: Date.now() });
-  rememberSession(user.username, user.email, sessionToken);
-  onLogin();
-  return { ok: true };
+  rememberSession(user.username, user.email || '', sessionToken);
+  try { onLogin(); } catch (e) { console.error('[finishLogin] onLogin', e); }
+  return { ok: true, msg: msg || '' };
 }
+window.finishLogin = finishLogin;
+
+// ============ 第三方登录：GitHub / 邮箱 ============
+// 两种新方式与密码登录共存的「账号关联逻辑」（以 email 为关联键）：
+//   · GitHub 身份里的 email 若命中已有账号 → 绑定 github 身份（关联，不新建重复账号）
+//   · 邮箱验证码登录若 email 已存在 → 直接登入该账号
+//   · 否则才新建账号（无密码，password=false），避免同一人凭不同方式产生多个账号
+async function githubLogin(identity) {
+  if (!identity || !identity.id) return { ok: false, msg: 'GitHub 身份无效' };
+  const ghId = String(identity.id);
+  const ghEmail = (identity.email || '').trim().toLowerCase();
+  let u = null;
+  // ① 已绑定该 GitHub id → 直接登入
+  for (const x of users) {
+    if (x.auth && x.auth.github && String(x.auth.github.id) === ghId) { u = x; break; }
+  }
+  // ② 否则按 email 命中已有账号 → 绑定（关联，不新建）
+  if (!u && ghEmail) {
+    u = users.find(function (x) { return (x.email || '').trim().toLowerCase() === ghEmail; }) || null;
+  }
+  if (u) {
+    if (!u.auth) u.auth = { password: !!u.pwdHash, github: null, emailVerified: false };
+    u.auth.github = { id: identity.id, login: identity.login, email: ghEmail, name: identity.name, avatar: identity.avatar };
+    if (ghEmail && !u.email) u.email = identity.email;
+    if (identity.name && !u.displayName) u.displayName = identity.name;
+    u.lastLoginAt = Date.now();
+    saveUsers();
+    return finishLogin(u, '已用 GitHub 登录：' + u.username);
+  }
+  // ③ 新建：用户名取自 GitHub login（净化），与现有用户名冲突则追加数字
+  const base = (identity.login || ('gh' + ghId)).replace(/[^a-zA-Z0-9_]/g, '_');
+  let uname = base, n = 1;
+  while (users.some(function (x) { return x.username.toLowerCase() === uname.toLowerCase(); })) {
+    uname = base + (++n);
+  }
+  users.push({
+    username: uname, email: identity.email || '',
+    pwdHash: '', salt: '', createdAt: Date.now(), lastLoginAt: Date.now(),
+    displayName: identity.name || '',
+    avatar: identity.avatar
+      ? { kind: 'image', value: identity.avatar, bg: 'violet' }
+      : { kind: 'letter', value: '', bg: 'violet' },
+    auth: { password: false, github: { id: identity.id, login: identity.login, email: ghEmail, name: identity.name, avatar: identity.avatar }, emailVerified: !!ghEmail },
+  });
+  saveUsers();
+  return finishLogin(users[users.length - 1], '已用 GitHub 创建账号：' + uname);
+}
+window.githubLogin = githubLogin;
+
+async function emailLogin(email) {
+  email = (email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, msg: '邮箱格式不正确' };
+  let u = users.find(function (x) { return (x.email || '').trim().toLowerCase() === email; }) || null;
+  if (u) {
+    if (!u.auth) u.auth = { password: !!u.pwdHash, github: null, emailVerified: false };
+    u.auth.emailVerified = true;
+    u.lastLoginAt = Date.now();
+    saveUsers();
+    return finishLogin(u, '已登录：' + u.username);
+  }
+  // 新建：用户名取自邮箱 local-part（净化），冲突追加数字
+  const base = (email.split('@')[0] || 'user').replace(/[^a-zA-Z0-9_]/g, '_');
+  let uname = base, n = 1;
+  while (users.some(function (x) { return x.username.toLowerCase() === uname.toLowerCase(); })) {
+    uname = base + (++n);
+  }
+  users.push({
+    username: uname, email: email,
+    pwdHash: '', salt: '', createdAt: Date.now(), lastLoginAt: Date.now(),
+    displayName: '', avatar: { kind: 'letter', value: '', bg: 'violet' },
+    auth: { password: false, github: null, emailVerified: true },
+  });
+  saveUsers();
+  return finishLogin(users[users.length - 1], '已用邮箱创建账号：' + uname);
+}
+window.emailLogin = emailLogin;
 function logout() {
   currentUser = null; sessionToken = '';
   storage.removeItem(LS_SESSION);
@@ -10178,6 +10426,7 @@ function openAuth(mode) {
   if (!modal) return;
   modal.classList.add('on');
   switchMode(mode || 'login');
+  refreshThirdPartyAvail();
   setTimeout(() => { const el = document.getElementById('auth-user'); if (el) el.focus(); }, 50);
 }
 window.openAuth = openAuth;
@@ -10195,6 +10444,7 @@ function closeAuth() {
   if (currentUser) hideAuthMask();
 }
 function switchMode(mode) {
+  try { hideEmailLogin(); } catch (e) {}
   const tabs = document.querySelectorAll('.auth-tab');
   tabs.forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
   document.getElementById('authForm').dataset.mode = mode;
@@ -10302,6 +10552,299 @@ async function submitAuth() {
     toast('出错了：' + (e && e.message || '请重试'), 'err');
   }
 }
+
+    // ==================== 第三方登录 UI 编排（桌面版；浏览器直开无桥 → 禁用并提示） ====================
+    function thirdPartySupported() {
+      return !!(window.pywebview && window.pywebview.api && typeof window.pywebview.api.bc_github_begin === 'function');
+    }
+    function refreshThirdPartyAvail() {
+      const supported = thirdPartySupported();
+      const gh = document.getElementById('authGithubBtn');
+      const em = document.getElementById('authEmailBtn');
+      const note = document.getElementById('authThirdNote');
+      if (gh) gh.disabled = !supported;
+      if (em) em.disabled = !supported;
+      if (note) note.style.display = supported ? 'none' : '';
+      return supported;
+    }
+    function getGithubCfg() {
+      try { return JSON.parse(storage.getItem('bc_oauth_github') || 'null') || {}; } catch (e) { return {}; }
+    }
+    function getEmailCfg() {
+      try { return JSON.parse(storage.getItem('bc_email_cfg') || 'null') || {}; } catch (e) { return {}; }
+    }
+    function cfgOk(cfg) {
+      if (!cfg) return false;
+      if (cfg.provider === 'smtp') return !!(cfg.host && cfg.user);
+      if (cfg.provider === 'api') return !!(cfg.endpoint && cfg.apiKey);
+      return false;
+    }
+
+    // ---------- 第三方登录：设置页读写 ----------
+    function loadAuthSettings() {
+      try {
+        var gh = getGithubCfg() || {};
+        var em = getEmailCfg() || {};
+        var g = function (id) { return document.getElementById(id); };
+        if (g('authGhEnabled')) g('authGhEnabled').checked = !!gh.enabled;
+        if (g('authGhClientId')) g('authGhClientId').value = gh.client_id || '';
+        if (g('authGhClientSecret')) g('authGhClientSecret').value = gh.client_secret || '';
+        if (g('authEmEnabled')) g('authEmEnabled').checked = !!em.enabled;
+        if (g('authEmProvider')) g('authEmProvider').value = em.provider || 'smtp';
+        if (g('authEmSmtpHost')) g('authEmSmtpHost').value = em.host || '';
+        if (g('authEmSmtpPort')) g('authEmSmtpPort').value = em.port || '';
+        if (g('authEmSmtpUser')) g('authEmSmtpUser').value = em.user || '';
+        if (g('authEmSmtpPass')) g('authEmSmtpPass').value = em.pass || '';
+        if (g('authEmSmtpTls')) g('authEmSmtpTls').value = em.tls || 'ssl';
+        if (g('authEmApiEndpoint')) g('authEmApiEndpoint').value = em.endpoint || '';
+        if (g('authEmApiKey')) g('authEmApiKey').value = em.apiKey || '';
+        if (g('authEmFrom')) g('authEmFrom').value = em.from || '';
+        if (typeof authEmProviderChange === 'function') authEmProviderChange();
+      } catch (e) {}
+    }
+    window.loadAuthSettings = loadAuthSettings;
+
+    function saveAuthSettings() {
+      try {
+        var g = function (id) { return document.getElementById(id); };
+        var gh = {
+          enabled: !!(g('authGhEnabled') && g('authGhEnabled').checked),
+          client_id: (g('authGhClientId') ? g('authGhClientId').value : '').trim(),
+          client_secret: (g('authGhClientSecret') ? g('authGhClientSecret').value : '').trim()
+        };
+        var em = {
+          enabled: !!(g('authEmEnabled') && g('authEmEnabled').checked),
+          provider: (g('authEmProvider') ? g('authEmProvider').value : 'smtp'),
+          host: (g('authEmSmtpHost') ? g('authEmSmtpHost').value : '').trim(),
+          port: (g('authEmSmtpPort') ? g('authEmSmtpPort').value : '').trim(),
+          user: (g('authEmSmtpUser') ? g('authEmSmtpUser').value : '').trim(),
+          pass: (g('authEmSmtpPass') ? g('authEmSmtpPass').value : '').trim(),
+          tls: (g('authEmSmtpTls') ? g('authEmSmtpTls').value : 'ssl'),
+          endpoint: (g('authEmApiEndpoint') ? g('authEmApiEndpoint').value : '').trim(),
+          apiKey: (g('authEmApiKey') ? g('authEmApiKey').value : '').trim(),
+          from: (g('authEmFrom') ? g('authEmFrom').value : '').trim()
+        };
+        storage.setItem('bc_oauth_github', JSON.stringify(gh));
+        storage.setItem('bc_email_cfg', JSON.stringify(em));
+        if (typeof refreshThirdPartyAvail === 'function') refreshThirdPartyAvail();
+        toast('第三方登录配置已保存', 'ok');
+      } catch (e) { toast('保存失败：' + (e && e.message || e), 'err'); }
+    }
+    window.saveAuthSettings = saveAuthSettings;
+
+    function authEmProviderChange() {
+      var p = document.getElementById('authEmProvider');
+      var smtp = document.getElementById('authEmSmtpBox');
+      var api = document.getElementById('authEmApiBox');
+      if (!p) return;
+      var v = p.value;
+      if (smtp) smtp.style.display = (v === 'smtp') ? '' : 'none';
+      if (api) api.style.display = (v === 'api') ? '' : 'none';
+    }
+    window.authEmProviderChange = authEmProviderChange;
+
+    function testEmailSend() {
+      var to = ((document.getElementById('authEmTestTo') || {}).value || '').trim();
+      var msg = document.getElementById('authEmTestMsg');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+        if (msg) { msg.style.display = ''; msg.style.color = 'var(--danger-text)'; msg.textContent = '请填写有效的测试收件人邮箱'; }
+        return;
+      }
+      var g = function (id) { return document.getElementById(id); };
+      var cfg = {
+        provider: (g('authEmProvider') ? g('authEmProvider').value : 'smtp'),
+        host: (g('authEmSmtpHost') ? g('authEmSmtpHost').value : '').trim(),
+        port: (g('authEmSmtpPort') ? g('authEmSmtpPort').value : '').trim(),
+        user: (g('authEmSmtpUser') ? g('authEmSmtpUser').value : '').trim(),
+        pass: (g('authEmSmtpPass') ? g('authEmSmtpPass').value : '').trim(),
+        tls: (g('authEmSmtpTls') ? g('authEmSmtpTls').value : 'ssl'),
+        endpoint: (g('authEmApiEndpoint') ? g('authEmApiEndpoint').value : '').trim(),
+        apiKey: (g('authEmApiKey') ? g('authEmApiKey').value : '').trim(),
+        from: (g('authEmFrom') ? g('authEmFrom').value : '').trim()
+      };
+      if (!cfgOk(cfg)) {
+        if (msg) { msg.style.display = ''; msg.style.color = 'var(--danger-text)'; msg.textContent = '当前邮件配置不完整，请先填好主机/账号（SMTP）或地址/Key（API）'; }
+        return;
+      }
+      if (!thirdPartySupported()) { toast('测试发送仅桌面版可用', 'err'); return; }
+      if (msg) { msg.style.display = ''; msg.style.color = 'var(--sub)'; msg.textContent = '正在发送测试验证码到 ' + to + ' …'; }
+      api.bc_email_send_code(to, cfg).then(function (r) {
+        if (!msg) return;
+        msg.style.display = '';
+        if (r && r.ok) { msg.style.color = 'var(--ok-text)'; msg.textContent = '已发送，请检查 ' + to + ' 的收件箱（若未收到，检查垃圾邮件箱或 SMTP 配置）。'; }
+        else { msg.style.color = 'var(--danger-text)'; msg.textContent = '发送失败：' + ((r && r.err) || '未知错误'); }
+      }).catch(function (e) {
+        if (!msg) return;
+        msg.style.display = ''; msg.style.color = 'var(--danger-text)'; msg.textContent = '发送出错：' + (e && e.message || e);
+      });
+    }
+    window.testEmailSend = testEmailSend;
+
+    // ---------- GitHub Device Flow ----------
+    var ghTimer = null, ghFlowId = null, ghDeadline = 0;
+    function startGithubLogin() {
+      if (!refreshThirdPartyAvail()) { toast('第三方登录仅桌面版可用', 'err'); return; }
+      const cfg = getGithubCfg();
+      if (!cfg || cfg.enabled === false || !cfg.client_id) { toast('请先在「设置 → 第三方登录」开启并填写 GitHub Client ID', 'err'); return; }
+      const btn = document.getElementById('authGithubBtn');
+      if (btn) btn.disabled = true;
+      api.bc_github_begin(cfg.client_id, cfg.client_secret || '').then(function (r) {
+        if (!r || !r.ok) { if (btn) btn.disabled = false; toast((r && r.err) || 'GitHub 登录启动失败', 'err'); return; }
+        ghFlowId = r.flow_id; ghDeadline = Date.now() + (r.expires_in * 1000);
+        showGithubFlow(r);
+        ghPoll();
+      }).catch(function (e) { if (btn) btn.disabled = false; toast('GitHub 登录出错：' + (e && e.message || e), 'err'); });
+    }
+    function showGithubFlow(r) {
+      const m = document.getElementById('ghFlowModal');
+      const codeEl = document.getElementById('ghCode');
+      const uriEl = document.getElementById('ghUri');
+      if (codeEl) codeEl.textContent = r.user_code || '';
+      const uri = r.verification_uri_complete || r.verification_uri || 'https://github.com/login/device';
+      if (uriEl) uriEl.textContent = uri;
+      const st = document.getElementById('ghStatus');
+      if (st) { st.textContent = '等待你在浏览器确认…'; st.className = 'hint'; st.style.color = ''; }
+      const rb = document.getElementById('ghRetry'); if (rb) rb.style.display = 'none';
+      if (m) m.classList.add('on');
+      if (thirdPartySupported() && typeof api.bc_open_url === 'function') {
+        try { api.bc_open_url(uri); } catch (e) {}
+      }
+    }
+    function ghPoll() {
+      if (!ghFlowId) return;
+      api.bc_github_poll(ghFlowId).then(function (r) {
+        if (!r) { ghSchedulePoll(3000); return; }
+        if (r.status === 'pending') { ghSchedulePoll(5000); return; }
+        if (r.status === 'slow_down') { ghSchedulePoll(8000); return; }
+        if (r.ok && r.status === 'authorized') {
+          clearTimeout(ghTimer); ghTimer = null;
+          githubLogin(r.identity).then(function (res) {
+            closeGithubFlow();
+            if (res && res.ok) { closeAuth(); toast(res.msg || '已登录', 'ok'); }
+            else toast((res && res.msg) || '登录失败', 'err');
+          });
+          return;
+        }
+        clearTimeout(ghTimer); ghTimer = null;
+        const st = document.getElementById('ghStatus');
+        if (st) { st.textContent = (r.err) || '登录失败，请重试'; st.className = 'hint'; st.style.color = 'var(--danger-text)'; }
+        const rb = document.getElementById('ghRetry'); if (rb) rb.style.display = '';
+      }).catch(function () { ghSchedulePoll(5000); });
+    }
+    function ghSchedulePoll(ms) {
+      if (Date.now() > ghDeadline) {
+        const st = document.getElementById('ghStatus');
+        if (st) { st.textContent = '登录已超时，请重新发起'; st.style.color = 'var(--danger-text)'; }
+        clearTimeout(ghTimer); ghTimer = null;
+        const rb = document.getElementById('ghRetry'); if (rb) rb.style.display = '';
+        return;
+      }
+      clearTimeout(ghTimer);
+      ghTimer = setTimeout(ghPoll, Math.min(ms, Math.max(1000, ghDeadline - Date.now())));
+    }
+    function closeGithubFlow() {
+      clearTimeout(ghTimer); ghTimer = null; ghFlowId = null;
+      const m = document.getElementById('ghFlowModal'); if (m) m.classList.remove('on');
+      const btn = document.getElementById('authGithubBtn'); if (btn) btn.disabled = false;
+    }
+    function ghRetry() { const rb = document.getElementById('ghRetry'); if (rb) rb.style.display = 'none'; startGithubLogin(); }
+
+    // ---------- 邮箱验证码 ----------
+    function showEmailLogin() {
+      if (!refreshThirdPartyAvail()) { toast('第三方登录仅桌面版可用', 'err'); return; }
+      const cfg = getEmailCfg();
+      if (!cfg || cfg.enabled === false || !cfgOk(cfg)) { toast('请先在「设置 → 第三方登录」开启并配置邮件服务', 'err'); return; }
+      const panel = document.getElementById('authEmailPanel');
+      const form = document.getElementById('authForm');
+      const guest = document.getElementById('authGuestBtn');
+      const stx = document.getElementById('auth-switch-text');
+      if (form) form.style.display = 'none';
+      if (guest) guest.style.display = 'none';
+      if (stx) stx.style.display = 'none';
+      if (panel) panel.style.display = '';
+      const emailEl = document.getElementById('auth-ev-email'); if (emailEl) emailEl.focus();
+    }
+    function hideEmailLogin() {
+      const panel = document.getElementById('authEmailPanel');
+      const form = document.getElementById('authForm');
+      const guest = document.getElementById('authGuestBtn');
+      const stx = document.getElementById('auth-switch-text');
+      if (panel) panel.style.display = 'none';
+      if (form) form.style.display = '';
+      if (guest) guest.style.display = '';
+      if (stx) stx.style.display = '';
+      resetEmailSendBtn();
+    }
+    var evSendTimer = null;
+    function emailSendCode() {
+      const emailEl = document.getElementById('auth-ev-email');
+      const email = (emailEl && emailEl.value || '').trim();
+      const msg = document.getElementById('auth-ev-msg');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = '请输入正确的邮箱'; msg.style.display = ''; } return; }
+      const cfg = getEmailCfg();
+      const btn = document.getElementById('auth-ev-send');
+      if (btn) btn.disabled = true;
+      api.bc_email_send_code(email, cfg).then(function (r) {
+        if (r && r.ok) {
+          if (msg) { msg.style.color = 'var(--txt)'; msg.textContent = '验证码已发送，10 分钟内有效'; msg.style.display = ''; }
+          startEmailCountdown(60);
+        } else {
+          if (btn) btn.disabled = false;
+          if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = (r && r.err) || '发送失败'; msg.style.display = ''; }
+        }
+      }).catch(function (e) {
+        if (btn) btn.disabled = false;
+        if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = '发送出错：' + (e && e.message || e); msg.style.display = ''; }
+      });
+    }
+    function startEmailCountdown(sec) {
+      const btn = document.getElementById('auth-ev-send');
+      let left = sec;
+      if (evSendTimer) clearInterval(evSendTimer);
+      if (btn) btn.disabled = true;
+      evSendTimer = setInterval(function () {
+        left--;
+        if (btn) btn.textContent = left + ' 秒后可重发';
+        if (left <= 0) resetEmailSendBtn();
+      }, 1000);
+    }
+    function resetEmailSendBtn() {
+      if (evSendTimer) { clearInterval(evSendTimer); evSendTimer = null; }
+      const btn = document.getElementById('auth-ev-send');
+      if (btn) { btn.disabled = false; btn.textContent = '发送验证码'; }
+    }
+    function emailDoLogin() {
+      const emailEl = document.getElementById('auth-ev-email');
+      const codeEl = document.getElementById('auth-ev-code');
+      const email = (emailEl && emailEl.value || '').trim();
+      const code = (codeEl && codeEl.value || '').trim();
+      const msg = document.getElementById('auth-ev-msg');
+      const btn = document.getElementById('auth-ev-submit');
+      if (!code) { if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = '请输入验证码'; msg.style.display = ''; } return; }
+      if (btn) btn.disabled = true;
+      api.bc_email_verify(email, code).then(function (r) {
+        if (!r || !r.ok) {
+          if (btn) btn.disabled = false;
+          if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = (r && r.err) || '验证失败'; msg.style.display = ''; }
+          return;
+        }
+        emailLogin(r.email).then(function (res) {
+          if (res && res.ok) { hideEmailLogin(); closeAuth(); toast(res.msg || '已登录', 'ok'); }
+          else { if (btn) btn.disabled = false; if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = (res && res.msg) || '登录失败'; msg.style.display = ''; } }
+        });
+      }).catch(function (e) {
+        if (btn) btn.disabled = false;
+        if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = '验证出错：' + (e && e.message || e); msg.style.display = ''; }
+      });
+    }
+    window.startGithubLogin = startGithubLogin;
+    window.showEmailLogin = showEmailLogin;
+    window.hideEmailLogin = hideEmailLogin;
+    window.emailSendCode = emailSendCode;
+    window.emailDoLogin = emailDoLogin;
+    window.closeGithubFlow = closeGithubFlow;
+    window.ghRetry = ghRetry;
+    window.refreshThirdPartyAvail = refreshThirdPartyAvail;
 
 // ==================== 账号信息：头像 / 昵称 / 资料 ====================
 // 账号表里除 username/pwdHash/salt/createdAt 外，新增三个「资料」字段：
@@ -20775,8 +21318,8 @@ window.renderDesktopGuides = renderDesktopGuides;
 
 function showAnaTab(t) {
   // 五个 Tab：用量分析 / 模型与插件设置 / 界面设置 / 运行计划（P0-3）/ 入站 API（P1-1）。映射表驱动。
-  var panels = { usage: 'anaUsage', settings: 'anaSettings', ui: 'anaUI', schedule: 'anaSchedule', webhook: 'anaWebhook', task: 'anaTask' };
-  var btns = { usage: 'anaTabUsage', settings: 'anaTabSettings', ui: 'anaTabUI', schedule: 'anaTabSchedule', webhook: 'anaTabWebhook', task: 'anaTabTask' };
+  var panels = { usage: 'anaUsage', settings: 'anaSettings', ui: 'anaUI', schedule: 'anaSchedule', webhook: 'anaWebhook', task: 'anaTask', auth: 'anaAuth' };
+  var btns = { usage: 'anaTabUsage', settings: 'anaTabSettings', ui: 'anaTabUI', schedule: 'anaTabSchedule', webhook: 'anaTabWebhook', task: 'anaTabTask', auth: 'anaTabAuth' };
   var keys = Object.keys(panels);
   var active = panels[t] ? t : 'usage';
   /* 切换窗口暂停背景光晕（与 go() 同一手段，理由见 CSS .pg-switch 注释）：
@@ -20815,6 +21358,7 @@ function showAnaTab(t) {
   storeSetRaw('botcraft.anaTab', active);
   if (active === 'schedule' && typeof renderScheduleUI === 'function') { try { renderScheduleUI(); } catch (e) {} }
   if (active === 'webhook' && typeof renderWebhookUI === 'function') { try { renderWebhookUI(); } catch (e) {} }
+  if (active === 'auth' && typeof loadAuthSettings === 'function') { try { loadAuthSettings(); } catch (e) {} }
 }
 window.showAnaTab = showAnaTab;
 // 初始化时恢复上次停留的 Tab
@@ -22228,7 +22772,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.17.1';
+var APP_VERSION = '3.18.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');

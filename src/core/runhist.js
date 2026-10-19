@@ -2,13 +2,16 @@
 // 单一真实源是 BotCraft.html 里 /* ===== MODULE: core/runhist ===== */ 标记的段落。
 // N5 运行历史可观测性：P0-3 的运行历史上限 100 条、无筛选——计划/Webhook 一多，
 // 「上周那个失败的日报」基本翻不到。过滤与 CSV 导出都是纯函数，镜像供单测。
-function filterRunHistory(hist, filter) {
+function filterRunHistory(hist, filter, botId) {
   if (!Array.isArray(hist)) return [];
   var f = filter || 'all';
+  var bid = botId || '';
   return hist.filter(function (e) {
-    if (f === 'fail') return e && e.ok === false;
-    if (f === 'schedule') return e && e.source !== 'webhook';
-    if (f === 'webhook') return e && e.source === 'webhook';
+    if (!e) return false;
+    if (bid && e.botId !== bid) return false;      // 2026-10-19 N5：按机器人收窄
+    if (f === 'fail') return e.ok === false;
+    if (f === 'schedule') return e.source !== 'webhook';
+    if (f === 'webhook') return e.source === 'webhook';
     return true;
   });
 }
