@@ -2149,6 +2149,20 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .bk-bar i{display:block;height:100%}
 .bk-dir{margin-top:8px;font-size:11px;color:var(--sub);word-break:break-all}
 
+/* ============ 待发消息提示条（2026-10-19） ============
+   非串行模式下，AI 回复期间按 Enter 不再「静默入队 + 清空输入框」——
+   那条消息留在输入框里（可继续编辑），上面挂一条提示 + 撤回按钮。
+   旧行为用户既看不见也改不了，等于把消息投进黑洞。 */
+.draft-hint{display:flex;align-items:center;gap:var(--sp-2);margin:0 0 var(--sp-2);
+  padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);font-size:11.5px;color:var(--warn-text);
+  background:var(--fill);border:1px solid var(--line)}
+.draft-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--warn);animation:draftPulse 1.4s ease-in-out infinite}
+@keyframes draftPulse{0%,100%{opacity:.35}50%{opacity:1}}
+.draft-withdraw{margin-left:auto;flex:none;background:none;border:1px solid var(--line);border-radius:var(--r-xs);
+  padding:1px var(--sp-2);font-size:11px;color:var(--txt);cursor:pointer}
+.draft-withdraw:hover{background:var(--fill-hover)}
+@media (prefers-reduced-motion:reduce){.draft-dot{animation:none}}
+
 /* ============ 入站 API 字段说明卡（2026-10-19） ============
    使用者（外部系统对接人）在应用内就能查到完整字段参考，不用翻文档/猜机器码。 */
 .wh-doc{margin-top:12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card)}
@@ -2778,6 +2792,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <div class="audio-preview" id="audioPreview"></div>
           <div class="video-preview" id="videoPreview"></div>
           <div class="slash-menu" id="slashMenu" style="display:none"></div>
+          <div class="draft-hint" id="draftHint" style="display:none">
+            <span class="draft-dot" aria-hidden="true"></span>
+            <span>这条将在本轮回复结束后自动发送，可继续修改</span>
+            <button type="button" class="draft-withdraw" onclick="draftWithdraw()">撤回</button>
+          </div>
           <textarea id="msgInput" data-grow data-grow-max="160" rows="1" placeholder="输入消息…（Enter 发送，Shift+Enter 换行；打 / 唤起提示词指令，可粘贴或拖入图片 / 视频）" onkeydown="return msgKeyDown(event)" oninput="onMsgInput()" onpaste="onImagePaste(event)" ondrop="onImageDrop(event)" ondragover="onImageDragOver(event)"></textarea>
         </div>
         <button id="sendBtn" onclick="sendMsg()">发送</button>
@@ -6774,10 +6793,19 @@ function msgKeyDown(e) {
     if (e.key === 'Enter') { e.preventDefault(); slashAccept(); return false; }
     if (e.key === 'Escape') { e.preventDefault(); slashClose(true); return false; }
   }
+  // Esc：有待发消息时撤回（避免用户在等回复期间误以为按 Esc 无效）
+  if (e.key === 'Escape' && _draftQueued) { e.preventDefault(); draftWithdraw(); return false; }
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); return false; }
   return true;
 }
-function onMsgInput() { autoGrowInput(); slashUpdate(); }
+function onMsgInput() {
+  autoGrowInput(); slashUpdate();
+  // 用户把待发内容删空 = 撤回；重新输入则保持待发状态
+  if (_draftQueued) {
+    var inp = document.getElementById('msgInput');
+    if (inp && !(inp.value || '').trim()) setDraftQueued(false);
+  }
+}
 
 function insertSnippetText(text, label) {
   var inp = document.getElementById('msgInput'); if (!inp) return;
@@ -7030,8 +7058,23 @@ function sanitizeBareImageDataUrls(text) {
 // 与代码块 / 行内代码的 \u0000CB / \u0000IC 是同一套机制（见 renderMarkdown）。
 var ICON_TOKEN_RE = /\u0000SVG:([A-Za-z0-9_-]+)\u0000/g;
 function iconToken(name) { return '\u0000SVG:' + String(name || '') + '\u0000'; }
+/* 2026-10-19：清掉正文里**已经变成原始 HTML 的图标**。
+   来源有两条，都不是新代码产生的：
+   ① 旧版本把图标哨兵换成了真 HTML 后写进历史（用户截图：气泡里整段 <span class="i">
+      <svg…> 裸露）；
+   ② 模型看到历史里的图标标记后照抄回来。
+   渲染前统一剥掉 —— 图标是渲染期装饰，正文里出现 HTML 只会被 escapeHtml 转义成字面量。
+   只匹配「span.i + 紧随其后的 svg」，不会误伤正文里正常的代码块内容。 */
+var ICON_HTML_RE = /<span\s+class="i"[^>]*>\s*<svg[\s\S]*?<\/svg>\s*<\/span>/gi;
+function stripIconMarkup(text) {
+  if (text == null) return '';
+  var t = String(text);
+  if (t.indexOf('<span class="i"') < 0) return t;   // 绝大多数消息直接短路
+  return t.replace(ICON_HTML_RE, '');
+}
 function renderMarkdown(text) {
   if (text == null) return '';
+  text = stripIconMarkup(String(text));   // 历史里残留的原始图标 HTML（见 stripIconMarkup 注释）
   text = sanitizeBareImageDataUrls(String(text));
   const codeBlocks = [];
   function pushCodeBlock(lang, code) {
@@ -14594,11 +14637,15 @@ async function sendMsg() {
   // 用独立的重入标记把「取输入 → 抽帧 → 交给 runReply」整段包成临界区。
   if (_sendLock) return;
   if (sending) {
-    // 非串行模式：AI 回复期间允许预输入，把当前输入框文本加入待发队列，回复完成后自动依次发送
+    /* 非串行模式：AI 回复期间允许预输入。
+       2026-10-19 改：不再「push 队列 + 清空输入框」—— 那样消息进了看不见的队列，
+       用户既不知道内容还在不在、也没法改或撤。现在**留在输入框里**（可继续编辑），
+       顶部挂一条「待发 + 撤回」提示，本轮回复结束后自动发送编辑后的内容。
+       （队列机制保留给多机器人场景：切走再切回时由 resumePendingQueue 消费。） */
     if (!getSerialInput()) {
       const inp = document.getElementById('msgInput');
       const v = (inp && (inp.value || '').trim()) || '';
-      if (v) { pendingQueue.push({ text: v, botId: currentId }); inp.value = ''; toast('已加入发送队列（' + pendingQueue.length + ' 条待发）', ''); }
+      if (v) { setDraftQueued(true); }
     }
     return;
   }
@@ -14956,6 +15003,18 @@ async function runReply(b, opt) {
     // 只消费**属于本机器人**的队首项：生成期间用户可能切到别的机器人，
     // 那时 sendMsg() 无参取的是 currentId，会把这条投给别人的机器人。
     // 遇到异属项就停下（不丢弃），用户切回去后再由下一次收尾或手动发送消费。
+    /* 待发草稿优先：用户编辑过输入框里的那条就按编辑后的发；已清空则视为撤回。 */
+    if (_draftQueued) {
+      const _inp = document.getElementById('msgInput');
+      const _txt = (_inp && (_inp.value || '').trim()) || '';
+      if (_txt && _draftBotId && _draftBotId !== b.id) {
+        // 生成期间用户切到了别的机器人：不发，草稿留着等切回去
+        if (window.toast) toast('待发消息属于上一个机器人，已保留；切回去后可继续发送', 'warn', 5000);
+      } else {
+        setDraftQueued(false);
+        if (_txt) { setTimeout(function () { try { sendMsg(); } catch (e) { } }, 80); }
+      }
+    }
     if (!getSerialInput() && pendingQueue.length) {
       const head = pendingQueue[0];
       const headId = (head && typeof head === 'object') ? head.botId : null;
@@ -20196,6 +20255,24 @@ let SERIAL_INPUT = storeGetRaw('botcraft.serialInput.v1', '1') !== '0';
 let pendingQueue = [];
 let pendingQueuePaused = false;   // 因队首异属而暂停消费；切回该机器人时恢复
 let _sendLock = false;           // sendMsg 临界区（取输入→抽帧→交给 runReply），防重复提交
+let _draftQueued = false;        // 非串行模式下「输入框里的这条 = 待发」标记
+/* 草稿必须绑机器人：生成期间用户可能切走（旧队列曾因此把 A 的问题投给 B，
+   2026-09 修过一轮）。切走后不自动发送，草稿与提示条保留，切回来再发。 */
+let _draftBotId = null;
+function setDraftQueued(on) {
+  _draftQueued = !!on;
+  if (_draftQueued) { _draftBotId = currentId; } else { _draftBotId = null; }
+  const hint = document.getElementById('draftHint');
+  if (hint) hint.style.display = _draftQueued ? '' : 'none';
+}
+// 撤回：清空输入框并取消待发（提示条上的按钮 / 用户手动清空 / Esc 都走这里）
+function draftWithdraw(silent) {
+  if (!_draftQueued) return;
+  const inp = document.getElementById('msgInput');
+  if (inp) { inp.value = ''; autoGrowInput(); }
+  setDraftQueued(false);
+  if (!silent && window.toast) toast('已撤回待发消息', 'warn');
+}
 // 暂停的队列在切回其所属机器人时继续消费。只在「空闲 + 非串行 + 队首属于当前机器人」
 // 三个条件同时满足时恢复，避免与正在进行的生成抢。
 function resumePendingQueue() {
@@ -21630,7 +21707,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.16.0';
+var APP_VERSION = '3.16.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
