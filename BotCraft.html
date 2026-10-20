@@ -457,6 +457,16 @@ body #page-home .grid, body #page-home .empty-home{animation:bcRise .6s var(--ea
    transform 动画不会劫持浮层定位；切页后若还有新 fixed 节点加进来，先查这条。 */
 body main.main > .page-head{animation:bcRise .5s var(--ease-out) backwards}
 body main.main > *:not(.page-head){animation:bcRise .54s var(--ease-out) .1s backwards}
+/* 标签面板不参与入场动画（2026-10-20）
+   上面那条给 .main 的每个直接子代都挂了 bcRise，而**分析页的七个标签面板都是直接子代**。
+   showAnaTab 用 display:none 切换，而 `display` 重新可见会**重启**子树里的 CSS 动画 ——
+   于是每次左右切标签，整块内容都从头淡入上浮一遍（实测四个面板 computed animationName
+   全是 bcRise / 0.54s），用户观感就是「液态玻璃和内容在重新刷新、加载」。
+   实测这几个面板内的玻璃面只有 1~2 个（usage 11 个），所以慢的主因是动画重放而不是模糊。
+   这样处理后：进页仍有 .page-head 的过渡；页内换标签即时切换，顺带省掉每次 0.54s 的合成。
+   ⚠️ 用 [id^="ana"] 前缀而不是枚举七个 id —— 以后加标签不会再漏（本项目踩过「写死清单」的坑）。
+   ⚠️ 特异性与上面那条相同（0,2,2），靠源顺序 + !important 双保险压住。 */
+body main.main > [id^="ana"]{animation:none !important}
 /* 逐块错峰：整页所有块「同一时刻一起亮」正是廉价感的来源。按 DOM 顺序 50ms 一档递增，
    到第 5 块收口 —— 再往后延会拖成「一个一个慢慢排队出现」，反而笨重。
    ⚠️ 这里只覆盖 animation-delay（长写法），动画本体仍由上面那条 shorthand 决定，
@@ -21963,11 +21973,21 @@ function showAnaTab(t) {
      schedule 5 个、ui/webhook 4 个 —— 从 settings 切到 usage 时有 9 个面要从零 blur。
      强机上这只占几毫秒（实测 p95 6.2ms 无感），弱机上正好超帧预算。
      这里没有交叉淡化、不存在「旧页每帧重滤镜」的问题，所以只暂停、不摘 blur。 */
-  document.documentElement.classList.add('pg-switch');
-  clearTimeout(window.__anaTabPauseT);
-  window.__anaTabPauseT = setTimeout(function () {
+  /* 2026-10-20：暂停改成**按目标面板**决定。
+     暂停不是免费的：动画停/续那一刻合成层要重新栅格一次，观感同样是「背景刷了一下」。
+     而实测各面板的玻璃面数量差距极大（usage 11 个，settings 2、ui/auth 各 1）——
+     对只有一两个玻璃面的标签，暂停省下的那点 blur 远不如「背景别跳」重要。
+     所以只有玻璃面多的标签才暂停；切到轻标签时顺手把任何残留的暂停摘掉。 */
+  if (active === 'usage') {
+    document.documentElement.classList.add('pg-switch');
+    clearTimeout(window.__anaTabPauseT);
+    window.__anaTabPauseT = setTimeout(function () {
+      document.documentElement.classList.remove('pg-switch');
+    }, 320);
+  } else {
+    clearTimeout(window.__anaTabPauseT);
     document.documentElement.classList.remove('pg-switch');
-  }, 320);
+  }
   keys.forEach(function (k) {
     var pn = document.getElementById(panels[k]);
     if (pn) pn.style.display = (k === active) ? '' : 'none';
@@ -23408,7 +23428,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.22.3';
+var APP_VERSION = '3.22.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
