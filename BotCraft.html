@@ -587,6 +587,31 @@ select{color-scheme:dark}
 [data-theme="light"] select{color-scheme:light}
 select option{background:#1f1f24;color:#f2f2f7}
 [data-theme="light"] select option{background:#ffffff;color:#111114}
+/* ============ 裸 input / textarea 的兜底外观（2026-10-20） ============
+   全站输入框的外观来自 .field input —— 绝大多数输入框都包在 .field 里。
+   但凡有一个没包（设置里「测试收件人邮箱」就在按钮行里），就没有任何规则命中：
+   退回浏览器原生控件，深色下是白底黑字，跟周围玻璃面割裂（用户截图反馈）。
+   这里给最低优先级兜底：只列文本类控件，`.field input` / `#authModal .field input`
+   都是同特异性但源顺序在后（第 1776 行起），照旧覆盖它们，既有输入框零影响。
+   ⚠️ 刻意**不**覆盖 checkbox / radio / range / file / color：它们是原生绘制，
+     套上背景和 padding 会变形（设置里的开关与滑杆就属于这类）。 */
+input:not([type]),input[type="text"],input[type="password"],input[type="email"],
+input[type="number"],input[type="search"],input[type="url"],input[type="tel"],textarea{
+  background:var(--fill);color:var(--txt);
+  border:1px solid transparent;border-radius:var(--r-md);
+  padding:var(--sp-4) var(--sp-6);
+}
+input::placeholder,textarea::placeholder{color:var(--sub);opacity:1}
+input:focus,textarea:focus{background:transparent;border-color:var(--brand);outline:none}
+/* 原生部件跟随主题：不声明时 WebView2 在暗色界面里仍画浅色的清除按钮 / 自动填充高亮
+   （select 的处理见上面第 586 行，同一思路） */
+input,textarea{color-scheme:dark}
+[data-theme="light"] input,[data-theme="light"] textarea{color-scheme:light}
+/* 滑杆 / 勾选框的强调色跟随品牌：不声明时 WebView2 用**系统强调色** —— 深色下是一抹亮蓝，
+   在紫色主题里非常跳（设置里「不透明度 / 背景模糊」两个滑杆最明显）。
+   全站原本只有 3 处复选框声明了 accent-color，滑杆一处都没有。
+   ⚠️ 自定义开关（.switch > .slider）是纯 CSS 画的，不受这条影响。 */
+input[type="range"],input[type="checkbox"],input[type="radio"]{accent-color:var(--brand)}
 
 /* ============ 顶部导航：悬浮圆角液态玻璃条（参考 Apple Liquid Glass 珠） ============
    通栏贴边矩形没有「珠」的感觉——留边距 + 大圆角 + 全套玻璃珠光影才立得住 */
@@ -897,6 +922,12 @@ body.embed-mode #wsName{font-size:15px}
    自己（见下面 .main > .page-head）——这是标题栏吸顶能贴住容器顶边的关键。 */
 .main{--mpx:20px;--mpt:16px;--ph-h:0px;flex:1;padding:0 var(--mpx) var(--mpt);min-width:0;
   overflow-x:hidden;overflow-y:auto;
+  /* 滚动条槽位恒定（2026-10-20 实测）：设置的七个标签内容高度不同，滚动条时有时无，
+     主区内容宽度在 1193↔1202 之间跳 9px（实测见 build_exe 探针）。后果不只是文字横向跳动：
+     `.main` 身上的 Bloom 是**百分比尺寸**的 radial-gradient，宽度一变就得整片重新栅格化，
+     观感就是「左右切标签时背景来回渲染」。固定槽位后宽度恒定，背景不再重画。
+     代价是常驻 11px 槽位（本来滚动时也占着），换来切换零跳动。 */
+  scrollbar-gutter:stable;
   margin:0 12px 12px 0;border-radius:var(--r-xl);background:var(--glass-bg-hover);border:1px solid var(--glass-border)}
 .page-head{display:flex;align-items:center;margin-bottom:18px;gap:var(--sp-6);flex-wrap:wrap}
 .page-head h1{font-size:28px;font-weight:700;letter-spacing:-.5px;font-family:var(--font-display)}
@@ -23377,7 +23408,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.22.2';
+var APP_VERSION = '3.22.3';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
