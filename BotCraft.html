@@ -4441,6 +4441,23 @@ function escAttrJs(s) {
 
 (function () {
   const LS_CFG = 'botcraft.ai.config.v1';
+  /* 2026-10-20：AI 配置原来是**全局键**，切账号后 API Key / 模型 / 提示词 / 三套子 Key
+     全都沿用上一个账号的 —— 而本项目其余用户数据（bots / 收藏 / 插件 / 知识库 /
+     用量 / 定时 / 运行历史 / Webhook）都走 userScopedKey()。这里是漏掉的一处。
+     改成 botcraft.ai.config.v1.<用户名>；未登录时仍用基础键。
+
+     ⚠️ cfgKey() 读 currentUser 必须 try/catch：`let cfg = loadConfig()` 在解析期执行，
+     而 `let currentUser = null` 在 7360 行才执行，那时是 TDZ —— `typeof currentUser`
+     对 TDZ 变量**会抛 ReferenceError**（与「未声明」返回 'undefined' 不同）。 */
+  const LS_CFG_OWNER = 'botcraft.ai.config.v1.__owner';
+  function cfgKey() {
+    var u = '';
+    try {
+      u = (typeof currentUser !== 'undefined' && currentUser && currentUser.username)
+        ? String(currentUser.username) : '';
+    } catch (e) { u = ''; }        // TDZ：解析期，尚未登录
+    return u ? (LS_CFG + '.' + u) : LS_CFG;
+  }
   const PROVIDERS = {
     openai:   { label: 'OpenAI',          base: 'https://api.openai.com/v1',              models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1-mini'] },
     // 顺序按「便宜/有免费额度」在前，付费旗舰 qwen3.8-max 后置：首位是设置面板最易选中的项，
@@ -4486,7 +4503,27 @@ function escAttrJs(s) {
 
   function loadConfig() {
     try {
-      const raw = __storage.getItem(LS_CFG);
+      var _ck = cfgKey();
+      var raw = __storage.getItem(_ck);
+      /* 一次性迁移：账号第一次读到「自己没有配置」时，把历史遗留的全局配置整体认领过来，
+         然后**删掉全局键**。不删的话下一个账号登录会再次认领同一份，隔离等于没做。
+         只在真正登录后（_ck 带用户名）才迁移：解析期没有账号，认领就等于认给「没人」。
+         __owner 标记是二次保险：万一 removeItem 失败，也不会被后来的账号重复认领。 */
+      if (!raw && _ck !== LS_CFG) {
+        var _legacy = null, _owner = null;
+        try {
+          _legacy = __storage.getItem(LS_CFG);
+          _owner = __storage.getItem(LS_CFG_OWNER);
+        } catch (e0) { _legacy = null; }
+        if (_legacy && !_owner) {
+          try {
+            __storage.setItem(_ck, _legacy);
+            __storage.setItem(LS_CFG_OWNER, String(currentUser.username));
+            __storage.removeItem(LS_CFG);
+          } catch (e1) { }
+          raw = _legacy;
+        }
+      }
       if (raw) {
         const c = Object.assign({}, DEFAULT_CFG, JSON.parse(raw));
         // 一次性迁移：800 是旧版本的出厂默认值，已被证实不够用——起草类节点会被
@@ -4514,7 +4551,8 @@ function escAttrJs(s) {
     } catch (eT) { }
   }
   function saveConfig() {
-    try { __storage.setItem(LS_CFG, JSON.stringify(cfg)); }
+    // 写本账号的键（与 loadConfig 的读口径必须一致，否则「读完改完存回全局」= 又泄漏一次）
+    try { __storage.setItem(cfgKey(), JSON.stringify(cfg)); }
     catch (e) { _cfgWriteFailed(e); }
   }
   function getConfig() { return Object.assign({}, cfg); }
@@ -6273,7 +6311,7 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     return new Promise(resolve => setTimeout(() => resolve(reply), 400 + Math.random() * 500));
   }
 
-  window.BotCraftAI = { chat, request, canCall, isNoAuthEndpoint, isVisionModel, getConfig, updateConfig, getProviders, composeSystemPrompt , getModelChain: function () { return coerceModelChain(cfg.modelChain); } };
+  window.BotCraftAI = { chat, request, canCall, isNoAuthEndpoint, isVisionModel, getConfig, updateConfig, reloadConfig: function () { cfg = loadConfig(); return Object.assign({}, cfg); }, getProviders, composeSystemPrompt , getModelChain: function () { return coerceModelChain(cfg.modelChain); } };
   // 品牌档案 / 模板导入导出：这三个函数此前只被内联事件属性调用，却没有导出。
   // 内联 on* 属性在**全局作用域**求值，而它们定义在本 IIFE 内 → 点击/输入时
   // 抛 ReferenceError，表现为「品牌信息改了不保存」「导出/导入模板点了没反应」。
@@ -10269,6 +10307,14 @@ async function emailLogin(email) {
 window.emailLogin = emailLogin;
 function logout() {
   currentUser = null; sessionToken = '';
+  /* 退出后必须重载：此时 cfgKey() 变回基础键（迁移时已删除，故为空配置），
+     否则「退出登录后设置页还显示上一个人的 Key」。 */
+  try {
+    if (window.BotCraftAI && BotCraftAI.reloadConfig) {
+      BotCraftAI.reloadConfig();
+      if (document.getElementById('set-key') && typeof setupSettingsUI === 'function') setupSettingsUI();
+    }
+  } catch (e) { console.error('[logout] reloadConfig', e); }
   storage.removeItem(LS_SESSION);
   bots = []; favorites = new Set(); currentId = null; ALL_KB = []; SNIPPETS = [];
   renderGrid(); updateStats(); updateFavPage();
@@ -10540,6 +10586,14 @@ function onLogin() {
   // 关键：先进入应用（关遮罩）。即便后续某面板在 file:// 下渲染异常，也绝不弹回登录遮罩，
   // 否则会出现「登录成功却一直停在遮罩、点了没反应」的死循环。
   hideAuthMask();
+  /* AI 配置按账号隔离 → 登录 / 一键切换账号后必须重载，否则设置页与真实调用仍用
+     上一个账号的 Key（这就是「切账号后 api-key 还是同一个」的根因）。 */
+  try {
+    if (window.BotCraftAI && BotCraftAI.reloadConfig) {
+      BotCraftAI.reloadConfig();
+      if (document.getElementById('set-key') && typeof setupSettingsUI === 'function') setupSettingsUI();
+    }
+  } catch (e) { console.error('[onLogin] reloadConfig', e); }
   try { loadBots(); } catch (e) { console.error('[onLogin] loadBots', e); }
   try { startScheduleLoop(); } catch (e) { console.error('[onLogin] startScheduleLoop', e); }
   try { if (typeof pushWebhookRoutes === 'function') pushWebhookRoutes(); } catch (e) { console.error('[onLogin] pushWebhookRoutes', e); }
@@ -23323,7 +23377,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.22.1';
+var APP_VERSION = '3.22.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
