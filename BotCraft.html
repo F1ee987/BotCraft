@@ -2606,6 +2606,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </button>
     <div id="authThirdNote" class="hint" style="font-size:11px;margin-top:8px;color:var(--sub);display:none">第三方登录仅桌面版可用（浏览器直开不支持）</div>
     <div id="authEmailPanel" class="auth-email-panel" style="display:none">
+      <div id="auth-ev-title" class="hint" style="font-weight:500;color:var(--txt);font-size:12.5px;margin-bottom:8px">邮箱验证码登录 / 注册</div>
       <div class="field"><label>邮箱</label><input id="auth-ev-email" type="email" placeholder="you@example.com" autocomplete="email"></div>
       <div class="field"><label>验证码</label>
         <div class="auth-code-row">
@@ -2613,10 +2614,19 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <button id="auth-ev-send" type="button" class="btn btn-ghost" onclick="emailSendCode()">发送验证码</button>
         </div>
       </div>
+      <div class="field" id="auth-ev-pwd-wrap" style="display:none">
+        <label>新密码</label>
+        <input id="auth-ev-pwd" type="password" placeholder="至少 6 位，将用新的随机盐重新哈希" autocomplete="new-password">
+      </div>
       <div id="auth-ev-msg" class="hint" style="display:none"></div>
       <div class="mbox-foot" style="margin-top:10px">
         <button type="button" class="btn btn-ghost" onclick="hideEmailLogin()">返回</button>
         <button id="auth-ev-submit" type="button" class="btn btn-primary" onclick="emailDoLogin()">登录 / 注册</button>
+      </div>
+      <div class="hint" id="auth-ev-modes" style="margin-top:10px;text-align:center;font-size:11.5px;line-height:1.9">
+        <a href="javascript:void(0)" onclick="startPasswordReset()">忘记密码？用邮箱重置</a>
+        <span style="opacity:.45"> · </span>
+        <a href="javascript:void(0)" onclick="startEmailVerify()">验证我的邮箱</a>
       </div>
     </div>
     <div class="hint" id="auth-switch-text" style="text-align:center;margin-top:14px"></div>
@@ -3578,7 +3588,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="set-panels">
 
         <div class="ssec open" id="sec-auth-gh">
-          <div class="ssec-head"><span>GitHub 授权登录</span><span class="ssec-sub">Device Flow · 无需回调地址</span></div>
+          <div class="ssec-head"><span>GitHub 授权登录</span><span class="ssec-sub">Device Flow 或授权码回调</span></div>
           <div class="ssec-body">
             <label for="authGhEnabled" style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--txt);cursor:pointer;margin-bottom:10px">
               <span class="switch"><input type="checkbox" id="authGhEnabled"><span class="slider"></span></span>
@@ -3590,6 +3600,23 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
               <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">在 GitHub → Settings → Developer settings → OAuth Apps 新建应用，勾选「Device Flow」即可，<b>不需要填写回调地址（Callback URL）</b>——这是 Device Flow 相对 Authorization Code 的优势：桌面应用不会暴露本地端口，因此无需回调。</div>
             </div>
             <div class="field">
+              <label>授权方式</label>
+              <select id="authGhFlow" onchange="onAuthGhFlowChange()">
+                <option value="device">Device Flow（推荐，无需回调地址）</option>
+                <option value="code">授权码回调（Authorization Code，需登记回调地址）</option>
+              </select>
+              <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">
+                <b>Device Flow</b>：桌面分发首选 —— 不占本机端口，不用在 GitHub 登记回调地址。
+                <b>授权码回调</b>：需要在 OAuth App 里登记一个固定回调地址（如 <code>http://127.0.0.1:52828/callback</code>），
+                登录时应用会在该端口临时起一个只接收一次回调的本机服务。
+              </div>
+            </div>
+            <div class="field" id="authGhRedirectWrap" style="display:none">
+              <label>回调地址 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（授权码方式必填）</span></label>
+              <input id="authGhRedirect" placeholder="http://127.0.0.1:52828/callback">
+              <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">必须与 GitHub OAuth App 里的 <b>Authorization callback URL</b> 逐字一致（含端口与路径）；只允许本机回环地址。</div>
+            </div>
+            <div class="field">
               <label>Client Secret <span style="font-weight:400;color:var(--sub);font-size:11.5px">（可选）</span></label>
               <input id="authGhClientSecret" type="password" placeholder="公开客户端可留空" autocomplete="off">
               <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">公开客户端（如纯前端桌面应用）通常留空；若你的 OAuth App 配置为保密客户端，则填写此处。</div>
@@ -3597,6 +3624,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
             <div class="field" style="margin-top:4px">
               <a class="btn btn-ghost btn-sm" href="https://github.com/settings/developers" target="_blank" rel="noopener">打开 GitHub 创建 OAuth App</a>
             </div>
+            <div class="hint" id="authGhEnvNote" style="display:none;margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--fill);font-size:11.5px;line-height:1.6"></div>
           </div>
         </div>
 
@@ -10114,6 +10142,15 @@ async function register(username, email, password) {
   if (u.length < 3) { toast('用户名至少 3 个字符', 'err'); return { ok: false, msg: '用户名至少 3 个字符' }; }
   if (!/^[a-zA-Z0-9_]+$/.test(u)) { toast('用户名仅支持字母、数字、下划线', 'err'); return { ok: false, msg: '非法用户名' }; }
   if (p.length < 6) { toast('密码至少 6 位', 'err'); return { ok: false, msg: '密码至少 6 位' }; }
+  // 邮箱校验（2026-10-20 补）：格式 + 唯一性。
+  // 邮箱是两种第三方登录的**关联键**（GitHub 身份按 email 绑到已有账号），
+  // 允许同一个邮箱挂两个账号会让「按邮箱绑定」变成随机挑一个 —— 必须唯一。
+  // 空邮箱仍允许（老数据与「只想本地用」的用户），但填了就必须合法且未被占用。
+  const el0 = e.toLowerCase();
+  if (e && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { toast('邮箱格式不正确', 'err'); return { ok: false, msg: '邮箱格式不正确' }; }
+  if (el0 && users.some(x => (x.email || '').trim().toLowerCase() === el0)) {
+    toast('该邮箱已被注册', 'err'); return { ok: false, msg: '该邮箱已被注册' };
+  }
   if (users.some(x => x.username.toLowerCase() === u.toLowerCase())) { return { ok: false, msg: '用户名已存在' }; }
   const { hash, salt } = await hashPassword(p);
   // displayName / avatar 为后续「账号信息」面板预留：老数据没有这两个字段时按默认渲染（见 avatarOf / displayNameOf）
@@ -10705,6 +10742,10 @@ async function submitAuth() {
         if (g('authGhEnabled')) g('authGhEnabled').checked = !!gh.enabled;
         if (g('authGhClientId')) g('authGhClientId').value = gh.client_id || '';
         if (g('authGhClientSecret')) g('authGhClientSecret').value = gh.client_secret || '';
+        if (g('authGhFlow')) g('authGhFlow').value = gh.flow || 'device';
+        if (g('authGhRedirect')) g('authGhRedirect').value = gh.redirect_uri || '';
+        if (typeof onAuthGhFlowChange === 'function') onAuthGhFlowChange();
+        if (typeof loadAuthEnvNote === 'function') loadAuthEnvNote();
         if (g('authEmEnabled')) g('authEmEnabled').checked = !!em.enabled;
         if (g('authEmProvider')) g('authEmProvider').value = em.provider || 'smtp';
         if (g('authEmSmtpHost')) g('authEmSmtpHost').value = em.host || '';
@@ -10726,7 +10767,9 @@ async function submitAuth() {
         var gh = {
           enabled: !!(g('authGhEnabled') && g('authGhEnabled').checked),
           client_id: (g('authGhClientId') ? g('authGhClientId').value : '').trim(),
-          client_secret: (g('authGhClientSecret') ? g('authGhClientSecret').value : '').trim()
+          client_secret: (g('authGhClientSecret') ? g('authGhClientSecret').value : '').trim(),
+          flow: (g('authGhFlow') ? g('authGhFlow').value : 'device'),
+          redirect_uri: (g('authGhRedirect') ? g('authGhRedirect').value : '').trim()
         };
         var em = {
           enabled: !!(g('authEmEnabled') && g('authEmEnabled').checked),
@@ -10747,6 +10790,32 @@ async function submitAuth() {
       } catch (e) { toast('保存失败：' + (e && e.message || e), 'err'); }
     }
     window.saveAuthSettings = saveAuthSettings;
+
+    // 授权方式切换时显隐回调地址（Device Flow 不需要它，留着容易让人以为必填）
+    function onAuthGhFlowChange() {
+      const sel = document.getElementById('authGhFlow');
+      const wrap = document.getElementById('authGhRedirectWrap');
+      if (sel && wrap) wrap.style.display = (sel.value === 'code') ? '' : 'none';
+    }
+    window.onAuthGhFlowChange = onAuthGhFlowChange;
+    // 环境变量提示：哪些配置项已被环境变量接管（密钥只回报有无，不回传值）
+    function loadAuthEnvNote() {
+      const el = document.getElementById('authGhEnvNote');
+      if (!el || typeof api === 'undefined' || !api || typeof api.bc_auth_env !== 'function') return;
+      Promise.resolve(api.bc_auth_env()).then(function (r) {
+        if (!r || !r.ok) { el.style.display = 'none'; return; }
+        const ghB = (r.github && r.github.bound) || [];
+        const emB = (r.email && r.email.bound) || [];
+        const all = ghB.concat(emB);
+        if (!all.length) { el.style.display = 'none'; return; }
+        const parts = [];
+        if (ghB.length) parts.push('GitHub：' + ghB.join('、'));
+        if (emB.length) parts.push('邮件：' + emB.join('、'));
+        el.innerHTML = '<b>环境变量已接管以下配置（优先级高于本页填写）</b><br>' + escapeHtml(parts.join(' ／ '));
+        el.style.display = '';
+      }).catch(function () { el.style.display = 'none'; });
+    }
+    window.loadAuthEnvNote = loadAuthEnvNote;
 
     function authEmProviderChange() {
       var p = document.getElementById('authEmProvider');
@@ -10798,8 +10867,14 @@ async function submitAuth() {
 
     // ---------- GitHub Device Flow ----------
     var ghTimer = null, ghFlowId = null, ghDeadline = 0;
+    // GitHub 登录两条路：
+    //   device（默认）—— Device Flow，无需回调端口，桌面分发最稳
+    //   code          —— 授权码流，需在 OAuth App 登记固定回调地址
+    // 前端只做分流，两条路最终都喂给同一个 githubLogin(identity)，账号关联逻辑完全一致。
     function startGithubLogin() {
       if (!refreshThirdPartyAvail()) { toast('第三方登录仅桌面版可用', 'err'); return; }
+      const cfg0 = getGithubCfg() || {};
+      if ((cfg0.flow || 'device') === 'code') { startGithubOAuth(); return; }
       const cfg = getGithubCfg();
       if (!cfg || cfg.enabled === false || !cfg.client_id) { toast('请先在「设置 → 第三方登录」开启并填写 GitHub Client ID', 'err'); return; }
       const btn = document.getElementById('authGithubBtn');
@@ -10810,6 +10885,66 @@ async function submitAuth() {
         showGithubFlow(r);
         ghPoll();
       }).catch(function (e) { if (btn) btn.disabled = false; toast('GitHub 登录出错：' + (e && e.message || e), 'err'); });
+    }
+    // ---------- GitHub 授权码回调流 ----------
+    var ghOAuthState = null, ghOAuthTimer = null, ghOAuthDeadline = 0;
+    function startGithubOAuth() {
+      const cfg = getGithubCfg() || {};
+      if (!cfg.client_id) { toast('请先在「设置 → 第三方登录」填写 GitHub Client ID', 'err'); return; }
+      if (!cfg.redirect_uri) { toast('授权码方式需要回调地址，请先在设置里填写（与 OAuth App 登记值一致）', 'err'); return; }
+      const btn = document.getElementById('authGithubBtn');
+      if (btn) btn.disabled = true;
+      api.bc_github_oauth_begin(cfg.client_id, cfg.client_secret || '', cfg.redirect_uri).then(function (r) {
+        if (!r || !r.ok) { if (btn) btn.disabled = false; toast((r && r.err) || '授权启动失败', 'err'); return; }
+        ghOAuthState = r.state;
+        ghOAuthDeadline = Date.now() + ((r.expires_in || 300) * 1000);
+        const m = document.getElementById('ghFlowModal');
+        const codeEl = document.getElementById('ghCode');
+        const uriEl = document.getElementById('ghUri');
+        const st = document.getElementById('ghStatus');
+        if (codeEl) codeEl.textContent = '授权码方式';
+        if (uriEl) uriEl.textContent = r.redirect_uri || '';
+        if (st) { st.textContent = '等待你在浏览器确认授权…'; st.className = 'hint'; st.style.color = ''; }
+        const rb = document.getElementById('ghRetry'); if (rb) rb.style.display = 'none';
+        if (m) m.classList.add('on');
+        // 由后端起好的本机回环服务接 code，这里只负责把浏览器打开
+        if (typeof api.bc_open_url === 'function') { try { api.bc_open_url(r.auth_url); } catch (e) {} }
+        ghOAuthPoll();
+      }).catch(function (e) { if (btn) btn.disabled = false; toast('授权启动出错：' + (e && e.message || e), 'err'); });
+    }
+    function ghOAuthPoll() {
+      if (!ghOAuthState) return;
+      if (ghOAuthTimer) { clearTimeout(ghOAuthTimer); ghOAuthTimer = null; }
+      if (Date.now() > ghOAuthDeadline) { finishGithubOAuth('授权已超时，请重试', true); return; }
+      api.bc_github_oauth_poll(ghOAuthState).then(function (r) {
+        if (!r) { finishGithubOAuth('授权失败', true); return; }
+        if (r.ok && r.status === 'pending') { ghOAuthTimer = setTimeout(ghOAuthPoll, 2000); return; }
+        if (r.ok && r.status === 'authorized') {
+          githubLogin(r.identity).then(function (res) {
+            if (res && res.ok) { finishGithubOAuth('', false, true); toast(res.msg || '已登录', 'ok'); }
+            else finishGithubOAuth((res && res.msg) || '登录失败', true);
+          });
+          return;
+        }
+        finishGithubOAuth((r && r.err) || '授权失败', true);
+      }).catch(function (e) { finishGithubOAuth('授权轮询出错：' + (e && e.message || e), true); });
+    }
+    function finishGithubOAuth(errText, isErr, success) {
+      if (ghOAuthTimer) { clearTimeout(ghOAuthTimer); ghOAuthTimer = null; }
+      ghOAuthState = null;
+      const st = document.getElementById('ghStatus');
+      const rb = document.getElementById('ghRetry');
+      const btn = document.getElementById('authGithubBtn');
+      if (success) {
+        const m = document.getElementById('ghFlowModal');
+        if (m) m.classList.remove('on');
+        closeAuth();
+        if (btn) btn.disabled = false;
+        return;
+      }
+      if (st) { st.textContent = errText || '授权失败'; st.className = 'hint'; st.style.color = 'var(--danger-text)'; }
+      if (rb) rb.style.display = '';
+      if (btn) btn.disabled = false;
     }
     function showGithubFlow(r) {
       const m = document.getElementById('ghFlowModal');
@@ -10866,10 +11001,22 @@ async function submitAuth() {
     function ghRetry() { const rb = document.getElementById('ghRetry'); if (rb) rb.style.display = 'none'; startGithubLogin(); }
 
     // ---------- 邮箱验证码 ----------
-    function showEmailLogin() {
+    function showEmailLogin(mode) {
       if (!refreshThirdPartyAvail()) { toast('第三方登录仅桌面版可用', 'err'); return; }
       const cfg = getEmailCfg();
       if (!cfg || cfg.enabled === false || !cfgOk(cfg)) { toast('请先在「设置 → 第三方登录」开启并配置邮件服务', 'err'); return; }
+      authEvMode = AUTH_EV_TEXT[mode] ? mode : 'login';
+      const t = AUTH_EV_TEXT[authEvMode];
+      const titleEl = document.getElementById('auth-ev-title');
+      const submitEl = document.getElementById('auth-ev-submit');
+      const pwdWrap = document.getElementById('auth-ev-pwd-wrap');
+      const pwdEl = document.getElementById('auth-ev-pwd');
+      if (titleEl) titleEl.textContent = t.title;
+      if (submitEl) submitEl.textContent = t.submit;
+      if (pwdWrap) pwdWrap.style.display = t.pwd ? '' : 'none';
+      if (pwdEl) pwdEl.value = '';
+      const msg0 = document.getElementById('auth-ev-msg'); if (msg0) { msg0.style.display = 'none'; msg0.textContent = ''; }
+      const code0 = document.getElementById('auth-ev-code'); if (code0) code0.value = '';
       const panel = document.getElementById('authEmailPanel');
       const form = document.getElementById('authForm');
       const guest = document.getElementById('authGuestBtn');
@@ -10890,8 +11037,24 @@ async function submitAuth() {
       if (guest) guest.style.display = '';
       if (stx) stx.style.display = '';
       resetEmailSendBtn();
+      // 关面板时把模式复位，避免下次从「忘记密码」入口进来时残留 reset 语义
+      authEvMode = 'login';
+      const pw = document.getElementById('auth-ev-pwd-wrap'); if (pw) pw.style.display = 'none';
+      const pe = document.getElementById('auth-ev-pwd'); if (pe) pe.value = '';
+      const msgx = document.getElementById('auth-ev-msg'); if (msgx) { msgx.style.display = 'none'; msgx.textContent = ''; }
     }
     var evSendTimer = null;
+    // 邮箱面板的三种用途。必须是模块级 var 而不是挂在函数里：
+    // 面板与三个流程函数共用这一份状态。
+    //   login  → 验证码登录 / 首次注册（原有行为）
+    //   verify → 验证当前邮箱归属（把 auth.emailVerified 置 true）
+    //   reset  → 校验邮箱归属后设置新密码
+    var authEvMode = 'login';
+    var AUTH_EV_TEXT = {
+      login:  { title: '邮箱验证码登录 / 注册', submit: '登录 / 注册', pwd: false },
+      verify: { title: '验证邮箱归属',         submit: '完成验证',    pwd: false },
+      reset:  { title: '重置密码',             submit: '重置密码',    pwd: true  }
+    };
     function emailSendCode() {
       const emailEl = document.getElementById('auth-ev-email');
       const email = (emailEl && emailEl.value || '').trim();
@@ -10900,9 +11063,14 @@ async function submitAuth() {
       const cfg = getEmailCfg();
       const btn = document.getElementById('auth-ev-send');
       if (btn) btn.disabled = true;
-      api.bc_email_send_code(email, cfg).then(function (r) {
+      api.bc_email_send_code(email, cfg, authEvMode).then(function (r) {
         if (r && r.ok) {
-          if (msg) { msg.style.color = 'var(--txt)'; msg.textContent = '验证码已发送，10 分钟内有效'; msg.style.display = ''; }
+          // 重置密码走「防枚举」口径：无论该邮箱是否注册过，文案都一样 ——
+          // 否则这个接口就变成了「查询某邮箱是否注册」的探测器。
+          const okText = authEvMode === 'reset'
+            ? '如果该邮箱已注册，验证码已发送（10 分钟内有效）'
+            : '验证码已发送，10 分钟内有效';
+          if (msg) { msg.style.color = 'var(--txt)'; msg.textContent = okText; msg.style.display = ''; }
           startEmailCountdown(60);
         } else {
           if (btn) btn.disabled = false;
@@ -10929,32 +11097,94 @@ async function submitAuth() {
       const btn = document.getElementById('auth-ev-send');
       if (btn) { btn.disabled = false; btn.textContent = '发送验证码'; }
     }
+    function evMsg(text, isErr) {
+      const msg = document.getElementById('auth-ev-msg');
+      if (!msg) return;
+      msg.style.color = isErr ? 'var(--danger-text)' : 'var(--txt)';
+      msg.textContent = text;
+      msg.style.display = '';
+    }
+    // 三种模式的统一入口：先本地校验（不产生副作用），再让后端验码，最后按模式落地。
     function emailDoLogin() {
       const emailEl = document.getElementById('auth-ev-email');
       const codeEl = document.getElementById('auth-ev-code');
+      const pwdEl = document.getElementById('auth-ev-pwd');
       const email = (emailEl && emailEl.value || '').trim();
       const code = (codeEl && codeEl.value || '').trim();
-      const msg = document.getElementById('auth-ev-msg');
       const btn = document.getElementById('auth-ev-submit');
-      if (!code) { if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = '请输入验证码'; msg.style.display = ''; } return; }
+      const mode = authEvMode;
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { evMsg('请输入正确的邮箱', true); return; }
+      if (!code) { evMsg('请输入验证码', true); return; }
+      if (mode === 'reset') {
+        const p = (pwdEl && pwdEl.value) || '';
+        if (p.length < 6) { evMsg('新密码至少 6 位', true); return; }
+      }
       if (btn) btn.disabled = true;
-      api.bc_email_verify(email, code).then(function (r) {
+      api.bc_email_verify(email, code, mode).then(function (r) {
         if (!r || !r.ok) {
           if (btn) btn.disabled = false;
-          if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = (r && r.err) || '验证失败'; msg.style.display = ''; }
+          evMsg((r && r.err) || '验证失败', true);
           return;
         }
-        emailLogin(r.email).then(function (res) {
-          if (res && res.ok) { hideEmailLogin(); closeAuth(); toast(res.msg || '已登录', 'ok'); }
-          else { if (btn) btn.disabled = false; if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = (res && res.msg) || '登录失败'; msg.style.display = ''; } }
+        if (mode === 'login') {
+          emailLogin(r.email).then(function (res) {
+            if (res && res.ok) { hideEmailLogin(); closeAuth(); toast(res.msg || '已登录', 'ok'); }
+            else { if (btn) btn.disabled = false; evMsg((res && res.msg) || '登录失败', true); }
+          });
+          return;
+        }
+        if (mode === 'verify') {
+          const res = markEmailVerified(r.email);
+          if (btn) btn.disabled = false;
+          if (res.ok) { hideEmailLogin(); toast(res.msg, 'ok'); } else { evMsg(res.msg, true); }
+          return;
+        }
+        // reset
+        resetPasswordNow(r.email, (pwdEl && pwdEl.value) || '').then(function (res) {
+          if (btn) btn.disabled = false;
+          if (res && res.ok) { hideEmailLogin(); toast(res.msg, 'ok'); }
+          else { evMsg((res && res.msg) || '重置失败', true); }
         });
       }).catch(function (e) {
         if (btn) btn.disabled = false;
-        if (msg) { msg.style.color = 'var(--danger-text)'; msg.textContent = '验证出错：' + (e && e.message || e); msg.style.display = ''; }
+        evMsg('验证出错：' + (e && e.message || e), true);
       });
     }
+    // 邮箱归属已由验证码证明 → 打上已验证标记（与 GitHub 登录的 emailVerified 同一语义）
+    function markEmailVerified(email) {
+      const el = (email || '').trim().toLowerCase();
+      const u = users.find(function (x) { return (x.email || '').trim().toLowerCase() === el; });
+      if (!u) return { ok: false, msg: '该邮箱未关联任何账号' };
+      if (!u.auth) u.auth = { password: !!u.pwdHash, github: null, emailVerified: false };
+      u.auth.emailVerified = true;
+      saveUsers();
+      return { ok: true, msg: '邮箱已验证：' + el };
+    }
+    // 重置密码：新密码在**本机**用新的随机盐重新哈希，密码本身不发往后端
+    async function resetPasswordNow(email, newPwd) {
+      const el = (email || '').trim().toLowerCase();
+      const p = String(newPwd || '');
+      if (p.length < 6) return { ok: false, msg: '新密码至少 6 位' };
+      const u = users.find(function (x) { return (x.email || '').trim().toLowerCase() === el; });
+      // 防枚举：邮箱不存在时也给同一句话（此时验证码本不该能拿到，走到这里说明是异常路径）
+      if (!u) return { ok: false, msg: '该邮箱未关联任何账号' };
+      const fresh = await hashPassword(p);          // 内部生成新随机盐
+      u.pwdHash = fresh.hash;
+      u.salt = fresh.salt;
+      if (!u.auth) u.auth = { password: true, github: null, emailVerified: false };
+      u.auth.password = true;
+      u.auth.emailVerified = true;                  // 能收到重置码 = 已证明邮箱归属
+      u.updatedAt = Date.now();
+      saveUsers();
+      return { ok: true, msg: '密码已重置，请用新密码登录' };
+    }
+    function startPasswordReset() { showEmailLogin('reset'); }
+    function startEmailVerify() { showEmailLogin('verify'); }
     window.startGithubLogin = startGithubLogin;
     window.showEmailLogin = showEmailLogin;
+    window.startPasswordReset = startPasswordReset;
+    window.startEmailVerify = startEmailVerify;
+    window.startGithubOAuth = startGithubOAuth;
     window.hideEmailLogin = hideEmailLogin;
     window.emailSendCode = emailSendCode;
     window.emailDoLogin = emailDoLogin;
@@ -22969,7 +23199,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.20.0';
+var APP_VERSION = '3.21.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
