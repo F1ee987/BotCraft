@@ -10734,6 +10734,57 @@ async function submitAuth() {
     }
 
     // ---------- 第三方登录：设置页读写 ----------
+    /* ==================== 登录预配置（随安装包内置）====================
+       安装包里可以带一份 _preconfig.json（由 build_exe.py 注入成 window.__BC_PRECONFIG__），
+       里面是 GitHub client_id 与邮件服务凭证。目标：**终端用户装完即用，一点不用填**。
+
+       口径（比「逐字段填空」更保守，是因为踩过一个坑）：
+         · **本地已有凭证 → 整体不动**。判据：GitHub 看 client_id，邮件看 host 或 endpoint。
+           用户配过的东西一律不碰 —— 既尊重用户，也避免把预配置里的 tuning 字段
+           （port / tls / flow）塞进别人的配置里，把本来能用的设置改坏。
+         · **本地没有凭证 → 整体套用预配置**（凭证 + tuning + 开关）。
+         · **预配置里没有凭证 → 一个字都不写**（连 enabled 也不写），
+           否则会出现「只有开关被打开、却没有凭证」的半配置状态。
+         · 失败一律静默：预配置坏了不该挡启动。 */
+    var PRECONFIG_APPLIED = 'botcraft.preconfig.applied';
+    function applyPreconfiguredLogin() {
+      var pre = (typeof window !== 'undefined') ? window.__BC_PRECONFIG__ : null;
+      if (!pre || typeof pre !== 'object') return false;
+      function nonEmpty(v) { return v !== undefined && v !== null && String(v).trim() !== ''; }
+      function hasCred(key, o) {
+        if (!o || typeof o !== 'object') return false;
+        if (key === 'bc_oauth_github') return nonEmpty(o.client_id);
+        return nonEmpty(o.host) || nonEmpty(o.endpoint);
+      }
+      function seed(key, incoming) {
+        if (!incoming || typeof incoming !== 'object') return false;
+        var cur = null;
+        try { cur = JSON.parse(storage.getItem(key) || 'null'); } catch (e) { cur = null; }
+        if (hasCred(key, cur)) return false;      // 本地已配好 → 完全不动
+        var credKeys = (key === 'bc_oauth_github')
+          ? ['client_id', 'client_secret']
+          : ['host', 'user', 'pass', 'endpoint', 'apiKey'];
+        var out = {}, gotCred = false;
+        for (var k in incoming) {
+          if (!Object.prototype.hasOwnProperty.call(incoming, k)) continue;
+          if (k === 'enabled') continue;
+          if (!nonEmpty(incoming[k])) continue;
+          out[k] = incoming[k];
+          if (credKeys.indexOf(k) >= 0) gotCred = true;
+        }
+        if (!gotCred) return false;               // 没凭证：一个字都不写
+        if (incoming.enabled === true) out.enabled = true;
+        try { storage.setItem(key, JSON.stringify(out)); } catch (e) { return false; }
+        return true;
+      }
+      var a = seed('bc_oauth_github', pre.github);
+      var b = seed('bc_email_cfg', pre.email);
+      var did = a || b;
+      if (did) { try { storage.setItem(PRECONFIG_APPLIED, String(Date.now())); } catch (e) {} }
+      return did;
+    }
+    window.applyPreconfiguredLogin = applyPreconfiguredLogin;
+
     function loadAuthSettings() {
       try {
         var gh = getGithubCfg() || {};
@@ -10802,18 +10853,34 @@ async function submitAuth() {
     function loadAuthEnvNote() {
       const el = document.getElementById('authGhEnvNote');
       if (!el || typeof api === 'undefined' || !api || typeof api.bc_auth_env !== 'function') return;
+      const pre = (typeof window !== 'undefined') ? window.__BC_PRECONFIG__ : null;
+      const preLine = (pre && typeof pre === 'object')
+        ? '<b>本安装包已内置登录配置</b>：' +
+          escapeHtml([].concat(
+            (pre.github && pre.github.client_id) ? ['GitHub Client ID'] : [],
+            (pre.email && (pre.email.host || pre.email.endpoint)) ? ['邮件服务'] : []
+          ).join('、') || '（无有效项）') +
+          ' —— 终端用户无需填写，直接点登录即可。<br>'
+        : '';
       Promise.resolve(api.bc_auth_env()).then(function (r) {
-        if (!r || !r.ok) { el.style.display = 'none'; return; }
-        const ghB = (r.github && r.github.bound) || [];
-        const emB = (r.email && r.email.bound) || [];
+        const ghB = ((r && r.github && r.github.bound) || []);
+        const emB = ((r && r.email && r.email.bound) || []);
         const all = ghB.concat(emB);
-        if (!all.length) { el.style.display = 'none'; return; }
+        if (!all.length) {
+          if (preLine) { el.innerHTML = preLine; el.style.display = ''; }
+          else el.style.display = 'none';
+          return;
+        }
         const parts = [];
         if (ghB.length) parts.push('GitHub：' + ghB.join('、'));
         if (emB.length) parts.push('邮件：' + emB.join('、'));
-        el.innerHTML = '<b>环境变量已接管以下配置（优先级高于本页填写）</b><br>' + escapeHtml(parts.join(' ／ '));
+        el.innerHTML = preLine + '<b>环境变量已接管以下配置（优先级高于本页填写）</b><br>'
+          + escapeHtml(parts.join(' ／ '));
         el.style.display = '';
-      }).catch(function () { el.style.display = 'none'; });
+      }).catch(function () {
+        if (preLine) { el.innerHTML = preLine; el.style.display = ''; }
+        else el.style.display = 'none';
+      });
     }
     window.loadAuthEnvNote = loadAuthEnvNote;
 
@@ -23199,7 +23266,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.21.0';
+var APP_VERSION = '3.22.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -23414,6 +23481,8 @@ window.manualCheckUpdate = manualCheckUpdate;
 
 function safeStart() {
   try { initTheme(); } catch (e) { console.error('initTheme failed', e); }
+  // 预配置必须在任何读取登录配置的动作之前落地（refreshThirdPartyAvail / loadAuthSettings 都会读）
+  try { applyPreconfiguredLogin(); } catch (e) { console.error('applyPreconfiguredLogin failed', e); }
   try { initLiquidGlass(); } catch (e) { console.error('initLiquidGlass failed', e); }
   try { initBg(); } catch (e) { console.error('initBg failed', e); }
   // 版本检查是设置弹窗底部的手动按钮（用户明确要求：启动不弹窗、不做自动检测）
