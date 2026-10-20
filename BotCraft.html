@@ -467,6 +467,14 @@ body main.main > *:not(.page-head){animation:bcRise .54s var(--ease-out) .1s bac
    ⚠️ 用 [id^="ana"] 前缀而不是枚举七个 id —— 以后加标签不会再漏（本项目踩过「写死清单」的坑）。
    ⚠️ 特异性与上面那条相同（0,2,2），靠源顺序 + !important 双保险压住。 */
 body main.main > [id^="ana"]{animation:none !important}
+/* 进分析页时标题栏也不再重放入场动画（2026-10-20）
+   页内切标签已经关掉了（上一条），但**进页**那一刻 .page-head 仍会从 opacity:0 淡入 0.5s，
+   与旧页 240ms 的淡出叠在一起 —— 合起来的观感就是「整页在重新加载」。
+   关掉后：进页时内容即时到位，只剩旧页淡出，是「换页」而不是「重建」。
+   ⚠️ 只针对分析页：#page-analytics 是 id，特异性高于上面那条通用规则，
+      其他页面（首页 / 工作台 / 收藏…）的进页过渡保持原样。
+   ⚠️ 不影响吸顶：syncStickyHead 量的是 offsetHeight，与动画无关。 */
+body #page-analytics > .page-head{animation:none !important}
 /* 逐块错峰：整页所有块「同一时刻一起亮」正是廉价感的来源。按 DOM 顺序 50ms 一档递增，
    到第 5 块收口 —— 再往后延会拖成「一个一个慢慢排队出现」，反而笨重。
    ⚠️ 这里只覆盖 animation-delay（长写法），动画本体仍由上面那条 shorthand 决定，
@@ -18436,7 +18444,7 @@ async function execCmdK(it) {
     case 'delbot':
       if (currentId) { deleteCurrentBot(); }
       break;
-    case 'reload': renderAnalytics(); toast('数据已刷新', 'ok'); break;
+    case 'reload': renderAnalytics(true); toast('数据已刷新', 'ok'); break;   /* 手动刷新：跳过指纹 */
   }
 }
 let _cmdkTimer = null;
@@ -21569,7 +21577,34 @@ async function resetUsage() {
   renderUsagePanel(); toast('已清空用量统计', 'ok');
 }
 
-function renderAnalytics() {
+/* 分析页渲染指纹（2026-10-20）
+   renderAnalytics 会在三处被调：进页（applyPage）、数据变更（实时刷新）、顶栏「刷新」。
+   它每次都要重写约 15 处容器，而其中的 .stat-card / .chart-box 是**带 backdrop-filter 的
+   玻璃面**（本页实测 11 个）：innerHTML 一写，旧元素销毁、新元素创建，玻璃就得从零 blur
+   一遍 —— 用户看到的「进页时液态玻璃重新加载」就是这么来的。
+   这里按「渲染输入」的指纹跳过无意义的重复渲染；数据真变了才重画。
+   指纹覆盖所有子渲染的输入：bots（id/名称/标签/历史条数/用量）、usage 汇总、
+   满意度计数，以及图表容器当前宽度（窗口尺寸变了必须重画）。
+   取不到数据时返回 'ERR'，调用方按「变了」处理 —— 宁可多画一次，不能显示旧数据。 */
+var _anaRenderSig = null;
+function anaRenderSig() {
+  try {
+    var u = getUsage(); var fb = collectFeedback();
+    var w = 0; try { w = (document.getElementById('lineChart') || {}).clientWidth || 0; } catch (e) { }
+    /* ⚠️ 不要读 b.u —— 那是**已废弃字段**（用量早就改走 getUsage() 了，
+       门禁 test_feedback 的 P1 就在守这条）。用 usage 的 totals + days 覆盖，
+       再用 history 长度 / 标签 / 模型名覆盖机器人与评价侧的变化。
+       评价本身（消息上的 fb）改动会同时改变 fb.up/fb.down，所以也被覆盖。 */
+    return JSON.stringify([
+      bots.map(function (b) { return [b.id, b.name || '', b.tag || '', (b.history || []).length, b.model || '']; }),
+      u && u.totals, u && u.days, fb.up, fb.down, w
+    ]);
+  } catch (e) { return 'ERR'; }
+}
+function renderAnalytics(force) {
+  var _sig = anaRenderSig();
+  if (!force && _sig !== 'ERR' && _sig === _anaRenderSig) return;   /* 输入没变 → 一个字都不动 */
+  _anaRenderSig = _sig;
   // 统计卡片（基于真实 bots 数据）
   // 累计调用：真实 usage 统计（旧写法 Σ bot.u 是种子写死的示例值，与同页 Token 面板口径冲突）
   const totalCalls = (function () { try { return getUsage().totals.calls || 0; } catch (e) { return 0; } })();
@@ -23428,7 +23463,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.22.4';
+var APP_VERSION = '3.22.5';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
