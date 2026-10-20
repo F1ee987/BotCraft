@@ -2645,6 +2645,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <div id="ghUri" class="hint" style="word-break:break-all;opacity:.8"></div>
         <div id="ghStatus" class="hint" style="margin-top:12px">等待你在浏览器确认…</div>
         <div class="mbox-foot" style="margin-top:16px">
+          <button class="btn btn-ghost" onclick="copyGithubCode()">复制设备码</button>
           <button class="btn btn-ghost" onclick="closeGithubFlow()">取消</button>
           <button id="ghRetry" class="btn btn-primary" style="display:none" onclick="ghRetry()">重新发起</button>
         </div>
@@ -10707,6 +10708,13 @@ async function submitAuth() {
 }
 
     // ==================== 第三方登录 UI 编排（桌面版；浏览器直开无桥 → 禁用并提示） ====================
+    // ---------- 桥接取值器（2026-10-20 修 P0）----------
+    // 这一整块原来直接裸用 `api`，而该作用域**从未声明过它** —— 桌面上一点登录就
+    // ReferenceError: api is not defined，弹窗不出现、浏览器不开、连提示都没有。
+    // 不能在块首写 var api = window.pywebview.api：脚本解析时桥还没注入，必须每次现取。
+    function authApi() {
+      return (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+    }
     function thirdPartySupported() {
       return !!(window.pywebview && window.pywebview.api && typeof window.pywebview.api.bc_github_begin === 'function');
     }
@@ -10852,7 +10860,8 @@ async function submitAuth() {
     // 环境变量提示：哪些配置项已被环境变量接管（密钥只回报有无，不回传值）
     function loadAuthEnvNote() {
       const el = document.getElementById('authGhEnvNote');
-      if (!el || typeof api === 'undefined' || !api || typeof api.bc_auth_env !== 'function') return;
+      const api = authApi();
+      if (!el || !api || typeof api.bc_auth_env !== 'function') return;
       const pre = (typeof window !== 'undefined') ? window.__BC_PRECONFIG__ : null;
       const preLine = (pre && typeof pre === 'object')
         ? '<b>本安装包已内置登录配置</b>：' +
@@ -10919,6 +10928,7 @@ async function submitAuth() {
         return;
       }
       if (!thirdPartySupported()) { toast('测试发送仅桌面版可用', 'err'); return; }
+      const api = authApi();
       if (msg) { msg.style.display = ''; msg.style.color = 'var(--sub)'; msg.textContent = '正在发送测试验证码到 ' + to + ' …'; }
       api.bc_email_send_code(to, cfg).then(function (r) {
         if (!msg) return;
@@ -10944,6 +10954,8 @@ async function submitAuth() {
       if ((cfg0.flow || 'device') === 'code') { startGithubOAuth(); return; }
       const cfg = getGithubCfg();
       if (!cfg || cfg.enabled === false || !cfg.client_id) { toast('请先在「设置 → 第三方登录」开启并填写 GitHub Client ID', 'err'); return; }
+      const api = authApi();
+      if (!api) { toast('第三方登录仅桌面版可用', 'err'); return; }
       const btn = document.getElementById('authGithubBtn');
       if (btn) btn.disabled = true;
       api.bc_github_begin(cfg.client_id, cfg.client_secret || '').then(function (r) {
@@ -10959,6 +10971,8 @@ async function submitAuth() {
       const cfg = getGithubCfg() || {};
       if (!cfg.client_id) { toast('请先在「设置 → 第三方登录」填写 GitHub Client ID', 'err'); return; }
       if (!cfg.redirect_uri) { toast('授权码方式需要回调地址，请先在设置里填写（与 OAuth App 登记值一致）', 'err'); return; }
+      const api = authApi();
+      if (!api) { toast('第三方登录仅桌面版可用', 'err'); return; }
       const btn = document.getElementById('authGithubBtn');
       if (btn) btn.disabled = true;
       api.bc_github_oauth_begin(cfg.client_id, cfg.client_secret || '', cfg.redirect_uri).then(function (r) {
@@ -10975,11 +10989,17 @@ async function submitAuth() {
         const rb = document.getElementById('ghRetry'); if (rb) rb.style.display = 'none';
         if (m) m.classList.add('on');
         // 由后端起好的本机回环服务接 code，这里只负责把浏览器打开
-        if (typeof api.bc_open_url === 'function') { try { api.bc_open_url(r.auth_url); } catch (e) {} }
+        if (typeof api.bc_open_url === 'function') {
+          Promise.resolve(api.bc_open_url(r.auth_url)).catch(function () {
+            if (st) { st.textContent = '浏览器没能自动打开，请手动访问 ' + r.auth_url; st.style.color = 'var(--danger-text)'; }
+          });
+        }
         ghOAuthPoll();
       }).catch(function (e) { if (btn) btn.disabled = false; toast('授权启动出错：' + (e && e.message || e), 'err'); });
     }
     function ghOAuthPoll() {
+      const api = authApi();
+      if (!api) return;
       if (!ghOAuthState) return;
       if (ghOAuthTimer) { clearTimeout(ghOAuthTimer); ghOAuthTimer = null; }
       if (Date.now() > ghOAuthDeadline) { finishGithubOAuth('授权已超时，请重试', true); return; }
@@ -11014,21 +11034,54 @@ async function submitAuth() {
       if (btn) btn.disabled = false;
     }
     function showGithubFlow(r) {
+      const api = authApi();
       const m = document.getElementById('ghFlowModal');
       const codeEl = document.getElementById('ghCode');
       const uriEl = document.getElementById('ghUri');
-      if (codeEl) codeEl.textContent = r.user_code || '';
+      const code = r.user_code || '';
+      if (codeEl) codeEl.textContent = code;
       const uri = r.verification_uri_complete || r.verification_uri || 'https://github.com/login/device';
       if (uriEl) uriEl.textContent = uri;
       const st = document.getElementById('ghStatus');
-      if (st) { st.textContent = '等待你在浏览器确认…'; st.className = 'hint'; st.style.color = ''; }
+      // ⚠️ 状态行必须写明「填设备码」：OAuth App 的 Device Flow **不返回**带码的直达链接
+      //    （verification_uri_complete 恒为 null），浏览器只会停在设备码输入页。
+      //    不少人看到那页以为「没跳转到 GitHub 登录」，其实是正常的下一步。
+      if (st) {
+        st.textContent = code ? ('已打开 GitHub，请把设备码 ' + code + ' 填进去并确认') : '已打开 GitHub，请按页面提示确认';
+        st.className = 'hint'; st.style.color = '';
+      }
       const rb = document.getElementById('ghRetry'); if (rb) rb.style.display = 'none';
       if (m) m.classList.add('on');
-      if (thirdPartySupported() && typeof api.bc_open_url === 'function') {
-        try { api.bc_open_url(uri); } catch (e) {}
+      // 自动把设备码放进剪贴板：用户到 GitHub 页面只要 Ctrl+V，不用对着屏幕抄 8 位。
+      // 复制失败不提示（按钮可手动再来一次）。
+      if (code && typeof copyText === 'function') { try { copyText(code, ''); } catch (e) {} }
+      // 打开系统浏览器。失败（没有默认浏览器 / 被策略拦）时明确提示手动访问 ——
+      // 之前这里 try/catch 静默吞掉，用户看到的就是「点了没反应」。
+      if (api && typeof api.bc_open_url === 'function') {
+        Promise.resolve(api.bc_open_url(uri)).then(function (res) {
+          if (!res || res.ok === false) {
+            if (st) { st.textContent = '浏览器没能自动打开，请手动访问 ' + uri + ' 并输入设备码 ' + code; st.style.color = 'var(--danger-text)'; }
+          }
+        }).catch(function () {
+          if (st) { st.textContent = '浏览器没能自动打开，请手动访问 ' + uri + ' 并输入设备码 ' + code; st.style.color = 'var(--danger-text)'; }
+        });
+      } else if (st) {
+        st.textContent = '浏览器没能自动打开，请手动访问 ' + uri + ' 并输入设备码 ' + code;
+        st.style.color = 'var(--danger-text)';
       }
     }
+    // 手动兜底：自动复制可能被 WebView 拦掉，用户点这里再复制一次
+    function copyGithubCode() {
+      const codeEl = document.getElementById('ghCode');
+      const code = codeEl ? (codeEl.textContent || '').trim() : '';
+      if (!code) { toast('还没有设备码', 'err'); return; }
+      if (typeof copyText === 'function') copyText(code, '设备码已复制');
+      else toast('复制失败，请手动选中', 'err');
+    }
+    window.copyGithubCode = copyGithubCode;
     function ghPoll() {
+      const api = authApi();
+      if (!api) return;
       if (!ghFlowId) return;
       api.bc_github_poll(ghFlowId).then(function (r) {
         if (!r) { ghSchedulePoll(3000); return; }
@@ -11123,6 +11176,8 @@ async function submitAuth() {
       reset:  { title: '重置密码',             submit: '重置密码',    pwd: true  }
     };
     function emailSendCode() {
+      const api = authApi();
+      if (!api) { toast('第三方登录仅桌面版可用', 'err'); return; }
       const emailEl = document.getElementById('auth-ev-email');
       const email = (emailEl && emailEl.value || '').trim();
       const msg = document.getElementById('auth-ev-msg');
@@ -11173,6 +11228,8 @@ async function submitAuth() {
     }
     // 三种模式的统一入口：先本地校验（不产生副作用），再让后端验码，最后按模式落地。
     function emailDoLogin() {
+      const api = authApi();
+      if (!api) { toast('第三方登录仅桌面版可用', 'err'); return; }
       const emailEl = document.getElementById('auth-ev-email');
       const codeEl = document.getElementById('auth-ev-code');
       const pwdEl = document.getElementById('auth-ev-pwd');
@@ -23266,7 +23323,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.22.0';
+var APP_VERSION = '3.22.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
