@@ -76,6 +76,21 @@
   --bg-glow-2:
     radial-gradient(80% 72% at 76% 18%, rgba(99,102,241,.26), transparent 72%),
     radial-gradient(88% 78% at 14% 96%, rgba(16,185,129,.20), transparent 72%);
+  /* ===== 背景层可独立控制（2026-10-20）=====
+     背景原本只是「液态玻璃的底」：光晕、颗粒全是为玻璃折射服务的，玻璃一关
+     背景就没意义了。现在把背景抽成独立资源 —— 玻璃管材质，背景管资源，正交。
+       --bg-opacity        背景层整体不透明度（0~1，1 = 与改前一致）
+       --bg-blur           背景层自身模糊强度（0px = 不虚化）
+       --bg-grain-opacity  颗粒层强度（深 .04 / 浅 .025）
+       --bg-z              背景层与内容的层级关系（默认 -1，在内容之下）
+     局部背景插槽（.bg-stack）另有 --bg-stack-* 三档，默认值与全局一致。 */
+  --bg-opacity:1;
+  --bg-blur:0px;
+  --bg-grain-opacity:.04;
+  --bg-z:-1;
+  --bg-stack-opacity:1;
+  --bg-stack-blur:0px;
+  --bg-stack-scale:1;
   --glass-blur:26px;
   --glass-sat:190%;
   --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
@@ -200,6 +215,7 @@
   --bg-glow-2:
     radial-gradient(64% 60% at 82% 20%, rgba(16,185,129,.14), transparent 68%),
     radial-gradient(72% 66% at 14% 92%, rgba(94,234,212,.11), transparent 68%);
+  --bg-grain-opacity:.025;          /* 浅色颗粒更淡（原为 html::after 硬值 .025） */
   --popover:#ffffff;                /* 弹出菜单（浅色）：纯白浮层 */
   --panel:rgba(255,255,255,.52);    /* 玻璃层（浅色玻璃是「白色提亮」而非变暗） */
   --panel2:rgba(255,255,255,.30);
@@ -296,14 +312,16 @@
    玻璃必须有东西可以透出来才成立。没有这层彩色光晕，全局玻璃背后全是纯色，
    看上去只是一堆灰色半透明块 —— 这是「液态玻璃」与「死灰玻璃」的分界。 */
 body::before{
-  content:'';position:fixed;inset:-24%;z-index:-1;pointer-events:none;
+  content:'';position:fixed;inset:-24%;z-index:var(--bg-z);pointer-events:none;
   background:var(--bg-glow-1);
+  opacity:var(--bg-opacity);
   animation:lgFlow 26s ease-in-out infinite;
 }
 /* 第二流动层：异色反向慢流，与第一层错速叠加出液体感 */
 body::after{
-  content:'';position:fixed;inset:-26%;z-index:-1;pointer-events:none;
+  content:'';position:fixed;inset:-26%;z-index:var(--bg-z);pointer-events:none;
   background:var(--bg-glow-2);
+  opacity:var(--bg-opacity);
   animation:lgFlow2 38s ease-in-out infinite;
 }
 /* 液体的缓慢流动：只动 transform，走 GPU 合成，不触发重排重绘 */
@@ -342,8 +360,8 @@ html.bg-hidden body::before, html.bg-hidden body::after{animation-play-state:pau
    ② 主内容区 / 工作台的居中 Bloom —— 参考图最具辨识度的一处（大白卡片中心一团绿）。
       用 background-image 叠加在 --lg-spec 之前，不新增元素、不碰布局；
       .main 本身是 60% 白玻璃，浓度给太高会发绿发脏，所以只给 .18 */
-[data-theme="light"] body::before{opacity:.7}
-[data-theme="light"] body::after{opacity:.5}
+[data-theme="light"] body::before{opacity:calc(var(--bg-opacity) * .7)}
+[data-theme="light"] body::after{opacity:calc(var(--bg-opacity) * .5)}
 [data-theme="light"] body .main,
 [data-theme="light"] body .workspace{
   background-image:
@@ -372,11 +390,51 @@ html.bg-hidden body::before, html.bg-hidden body::after{animation-play-state:pau
    z-index 取全站最高（现有最大 200 = .pop-menu），保证颗粒也盖在弹层之上。 */
 html::after{
   content:'';position:fixed;inset:0;z-index:99999;pointer-events:none;
-  opacity:.04;background-repeat:repeat;
+  opacity:var(--bg-grain-opacity);background-repeat:repeat;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-[data-theme="light"] html::after{opacity:.025}
 
+/* ============ 背景层：独立开关 + 局部插槽（2026-10-20）============
+   背景从「玻璃的附属品」升格为独立资源：
+   · 全局：html[data-bg="off"] 一键隐藏三层；--bg-opacity / --bg-blur /
+     --bg-grain-opacity / --bg-z 分别控制强度、虚化、颗粒与层级。
+   · 局部：任何容器里放一个 .bg-stack 插槽，就得到一份只属于它的背景
+     （光晕 + 颗粒），参数用 --bg-stack-* 覆盖。
+   · 容器级：data-bg="off" 让该容器内不显示任何背景（切断透出）；
+     data-bg="local" 让容器承载局部背景。
+   ⚠️ 与液态玻璃正交：data-glass 只管材质与滤镜，data-bg 只管背景资源 ——
+      关掉背景不会改 --glass-blur / --lg-* 任何一个值，玻璃的视觉与交互保持原样。
+   ⚠️ 背景模糊默认**不挂** filter：blur(0px) 仍会强制全屏图层合成，
+      纯浪费。改由 data-bg-blur 属性开关，JS 只在真的调了模糊时才挂上。
+   ⚠️ .bg-stack 用 z-index:-1，必须配合容器的 isolation:isolate ——
+      没有独立叠放上下文时它会跑到容器背景之下（看不见）或不折到内容之上（挡字）。 */
+html[data-bg="off"] body::before,
+html[data-bg="off"] body::after{opacity:0}
+html[data-bg="off"]::after{opacity:0}
+/* 主内容区自带的那团 Bloom（参考图特征）也是背景资源的一部分 —— 一起关掉，
+   但保留 --lg-spec 对角高光：那是玻璃材质（对角折射），不属于背景资源。
+   特异性 (0,2,2) 高于 [data-theme="dark"] body .main 的 (0,2,1)，压得住。 */
+html[data-bg="off"] body .main,
+html[data-bg="off"] body .workspace{background-image:var(--lg-spec)}
+html[data-bg-blur] body::before,
+html[data-bg-blur] body::after{filter:blur(var(--bg-blur))}
+.bg-stack{
+  position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
+  border-radius:inherit;opacity:var(--bg-stack-opacity);filter:blur(var(--bg-stack-blur));
+}
+.bg-stack__glow{
+  position:absolute;inset:-14%;background-repeat:no-repeat;background-size:cover;
+  transform:scale(var(--bg-stack-scale));
+}
+.bg-stack__glow--1{background-image:var(--bg-glow-1);animation:lgFlow 26s ease-in-out infinite}
+.bg-stack__glow--2{background-image:var(--bg-glow-2);animation:lgFlow2 38s ease-in-out infinite}
+.bg-stack__grain{
+  position:absolute;inset:0;background-repeat:repeat;opacity:var(--bg-grain-opacity);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+[data-bg="local"]{isolation:isolate;position:relative}
+[data-bg="off"] .bg-stack{display:none}
+[data-bg="off"]:not(html){background-color:var(--bg)}
 /* ============ 首屏入场序列 ============
    骨架按 60ms 一档错峰淡入：顶栏 → 侧栏 → 标题 → 工具条 → 卡片区。
    ⚠️ 只给「不含 position:fixed 后代」的容器加 transform：transform 会成为 fixed
@@ -3343,6 +3401,42 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
         开启：整界面的玻璃面走真实折射（更深的模糊与饱和度），并有一道高光缓慢流过。关闭：降级为实底平面，低端机上更省性能。
         勾选即时生效；选择随主题一样记住。系统开了「减弱动态效果」时，流动会自动停下、玻璃材质保留。
+      </div>
+    </div>
+  </div>
+
+  <div class="ssec" id="sec-ui-bg">
+    <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5"/></svg></span> 背景光效</span><span class="ssec-sub">独立于玻璃材质</span>
+    </div>
+    <div class="ssec-body">
+      <div class="field" style="display:flex;align-items:center;gap:8px">
+        <span class="switch"><input type="checkbox" id="set-bg" checked onchange="toggleBg()"><span class="slider"></span></span>
+        <label for="set-bg" style="margin:0;cursor:pointer">显示背景光效</label>
+      </div>
+      <div class="field" style="display:flex;align-items:center;gap:var(--sp-4);margin-top:var(--sp-4)">
+        <label for="set-bg-opacity" style="margin:0;width:72px;flex:none;font-size:12.5px">不透明度</label>
+        <input id="set-bg-opacity" type="range" min="0" max="100" step="5" value="100" style="flex:1" oninput="onBgParamInput()">
+        <span id="set-bg-opacity-val" style="width:44px;flex:none;text-align:right;font-size:12px;color:var(--sub)">100%</span>
+      </div>
+      <div class="field" style="display:flex;align-items:center;gap:var(--sp-4);margin-top:var(--sp-3)">
+        <label for="set-bg-blur" style="margin:0;width:72px;flex:none;font-size:12.5px">背景模糊</label>
+        <input id="set-bg-blur" type="range" min="0" max="40" step="2" value="0" style="flex:1" oninput="onBgParamInput()">
+        <span id="set-bg-blur-val" style="width:44px;flex:none;text-align:right;font-size:12px;color:var(--sub)">0px</span>
+      </div>
+      <div class="hint" style="margin:var(--sp-3) 0 0;font-size:11.5px;line-height:1.5">
+        背景光效（弥散光 + 颗粒）现在独立于玻璃材质：关掉它，玻璃的折射、模糊与交互保持原样，只是背后没有东西可透。
+        不透明度与模糊只作用于背景层本身，玻璃的模糊强度不受影响；背景模糊为 0 时不额外挂渲染开销。
+      </div>
+      <div data-bg="local" style="position:relative;overflow:hidden;border-radius:var(--r-lg);border:1px solid var(--line);padding:var(--sp-6);margin-top:var(--sp-5);min-height:92px">
+        <div class="bg-stack" aria-hidden="true">
+          <div class="bg-stack__glow bg-stack__glow--1"></div>
+          <div class="bg-stack__glow bg-stack__glow--2"></div>
+          <div class="bg-stack__grain"></div>
+        </div>
+        <div style="position:relative;z-index:1">
+          <div style="font-size:13.5px;font-weight:500">局部背景插槽</div>
+          <div style="font-size:12px;color:var(--sub);margin-top:4px">这段文字压在容器自己的背景层上 —— 背景只在这里出现，页面其余部分不受影响。</div>
+        </div>
       </div>
     </div>
   </div>
@@ -17755,6 +17849,86 @@ function initLiquidGlass() {
   try { saved = __storage.getItem(GLASS_KEY); } catch (e) {}
   applyLiquidGlass(saved !== 'off');   // 默认开启：玻璃本来就是这套界面的默认视觉语言
 }
+/* ==================== 背景层开关与参数（2026-10-20）===================
+   背景不再是玻璃的附属品：玻璃开关（botcraft.glass）管材质与滤镜，
+   背景开关（botcraft.bg）管背景资源本身 —— 两者正交，互不影响。
+   持久化沿用 botcraft.glass 同一套路（__storage + 明写 on/off，不删属性）。 */
+var BG_KEY = 'botcraft.bg';
+var BG_OPACITY_KEY = 'botcraft.bg.opacity';
+var BG_BLUR_KEY = 'botcraft.bg.blur';
+function isBgOn() { return document.documentElement.getAttribute('data-bg') !== 'off'; }
+function applyBgOn(on) {
+  document.documentElement.setAttribute('data-bg', on ? 'on' : 'off');
+  var cb = document.getElementById('set-bg');
+  if (cb) cb.checked = !!on;
+}
+function setBgOn(on, quiet) {
+  on = !!on;
+  applyBgOn(on);
+  try { __storage.setItem(BG_KEY, on ? 'on' : 'off'); } catch (e) {}
+  if (!quiet) toast(on ? '背景光效已开启' : '背景光效已关闭', 'ok');
+}
+function toggleBg() { setBgOn(!isBgOn()); }
+/* 不透明度 / 模糊强度：只写 CSS 变量与属性，不碰任何玻璃令牌。
+   模糊为 0 时不挂 data-bg-blur —— 免得为了 0 像素白挂一个全屏 filter。 */
+function applyBgParams(opacity, blur) {
+  var r = document.documentElement;
+  if (opacity !== undefined && opacity !== null && opacity !== '') {
+    var o = Math.max(0, Math.min(100, Number(opacity))) / 100;
+    if (isNaN(o)) o = 1;
+    r.style.setProperty('--bg-opacity', String(o));
+  }
+  if (blur !== undefined && blur !== null && blur !== '') {
+    var b = Math.max(0, Math.min(60, Number(blur)));
+    if (isNaN(b)) b = 0;
+    if (b > 0) {
+      r.style.setProperty('--bg-blur', b + 'px');
+      r.setAttribute('data-bg-blur', '');
+    } else {
+      r.style.removeProperty('--bg-blur');
+      r.removeAttribute('data-bg-blur');
+    }
+  }
+}
+function syncBgUI() {
+  var cb = document.getElementById('set-bg');
+  if (cb) cb.checked = isBgOn();
+  var so = '100', sb = '0';
+  try {
+    so = __storage.getItem(BG_OPACITY_KEY) || '100';
+    sb = __storage.getItem(BG_BLUR_KEY) || '0';
+  } catch (e) {}
+  var o = document.getElementById('set-bg-opacity');
+  var b = document.getElementById('set-bg-blur');
+  var ov = document.getElementById('set-bg-opacity-val');
+  var bv = document.getElementById('set-bg-blur-val');
+  if (o) o.value = so;
+  if (b) b.value = sb;
+  if (ov) ov.textContent = so + '%';
+  if (bv) bv.textContent = sb + 'px';
+}
+function onBgParamInput() {
+  var o = document.getElementById('set-bg-opacity');
+  var b = document.getElementById('set-bg-blur');
+  if (!o || !b) return;
+  applyBgParams(o.value, b.value);
+  try {
+    __storage.setItem(BG_OPACITY_KEY, String(o.value));
+    __storage.setItem(BG_BLUR_KEY, String(b.value));
+  } catch (e) {}
+  syncBgUI();
+}
+function initBg() {
+  var saved = null, o = null, b = null;
+  try {
+    saved = __storage.getItem(BG_KEY);
+    o = __storage.getItem(BG_OPACITY_KEY);
+    b = __storage.getItem(BG_BLUR_KEY);
+  } catch (e) {}
+  applyBgOn(saved !== 'off');   // 默认开启：背景本来就是这套界面的默认长相
+  applyBgParams(o, b);
+  syncBgUI();
+}
 function renderCmdK(kw) {
   const list = document.getElementById('cmdkList'); if (!list) return;
   const k = (kw || '').trim().toLowerCase();
@@ -22255,6 +22429,7 @@ function setupSettingsUI() {
   document.getElementById('set-direct').checked = !!cfg.directCall;
   document.getElementById('set-serial').checked = getSerialInput();
   document.getElementById('set-glass').checked = isLiquidGlassOn();
+  syncBgUI();   // 背景光效的开关与两个滑杆按真实状态回填
   // 主题三分段：按用户偏好回填（'system' 也要能选中 —— 它是默认值）
   var _tr = document.querySelector('input[name="set-theme"][value="' + themeMode() + '"]');
   if (_tr) _tr.checked = true;
@@ -22794,7 +22969,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.19.0';
+var APP_VERSION = '3.20.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -23010,6 +23185,7 @@ window.manualCheckUpdate = manualCheckUpdate;
 function safeStart() {
   try { initTheme(); } catch (e) { console.error('initTheme failed', e); }
   try { initLiquidGlass(); } catch (e) { console.error('initLiquidGlass failed', e); }
+  try { initBg(); } catch (e) { console.error('initBg failed', e); }
   // 版本检查是设置弹窗底部的手动按钮（用户明确要求：启动不弹窗、不做自动检测）
   // 启动本地提醒检查器（每 20s 检查到点提醒并弹通知；用户隔离）
   try { startReminderChecker(); } catch (e) { console.error('startReminderChecker failed', e); }
