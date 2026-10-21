@@ -1342,9 +1342,32 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg.bot li.md-task{list-style:none;margin-left:-18px;line-height:1.62}
 .msg.bot li.md-task input[type=checkbox]{margin-right:7px;vertical-align:middle;accent-color:var(--brand)}
 .msg.bot blockquote.md-quote{margin:7px 0;padding:7px 13px;border-left:3px solid var(--brand);background:var(--bg);border-radius:0 var(--r-md) var(--r-md) 0;color:var(--sub)}
-.msg.bot table.md-table{border-collapse:collapse;margin:9px 0;font-size:12.5px;width:100%;max-width:100%;overflow:hidden;border-radius:var(--r-md)}
-.msg.bot table.md-table th,.msg.bot table.md-table td{border:1px solid var(--line);padding:5px 9px;text-align:left;vertical-align:top}
-.msg.bot table.md-table th{background:var(--bg);font-weight:600;color:var(--txt)}
+/* ============ 聊天表格重设计（2026-10-21） ============
+   原来是一圈实线格子 + 5px 内边距：单元格里放不进代码（一长串就撑破），
+   整块也读不出行列关系。现在改成「卡片化」：
+     · 外框一圈 + 横向只留列分隔，纵向靠隔行底色区分，视觉重量从网格变成行；
+     · 表头沉底（--sunken）加粗、且不换行，方便一眼读列名；
+     · 单元格 word-break:break-word，长标识符不再溢出；
+     · 单元格内的行内代码允许换行（display:inline-block + white-space:normal），
+       配合行内 <br> 还原，多行样例代码才能在表格里正常读。
+   ⚠️ 不用 sticky 表头：sticky 与 overflow:hidden 互斥，而圆角依赖 overflow:hidden
+      裁剪单元格底色。聊天里的表格都不长，取舍上优先圆角整体感。 */
+.msg.bot table.md-table{
+  border-collapse:separate;border-spacing:0;
+  margin:10px 0;width:100%;max-width:100%;
+  font-size:var(--fs-sm);line-height:1.55;
+  border:1px solid var(--line);border-radius:var(--r-md);
+  background:var(--card);overflow:hidden}
+.msg.bot table.md-table th,.msg.bot table.md-table td{
+  padding:7px 10px;text-align:left;vertical-align:top;
+  border:0;border-bottom:1px solid var(--line);word-break:break-word}
+.msg.bot table.md-table th{background:var(--sunken);font-weight:600;color:var(--txt);white-space:nowrap}
+.msg.bot table.md-table tbody tr:nth-child(even) td{background:var(--fill)}
+.msg.bot table.md-table tbody tr:last-child td{border-bottom:0}
+.msg.bot table.md-table td+td,.msg.bot table.md-table th+th{border-left:1px solid var(--line)}
+.msg.bot table.md-table td code,.msg.bot table.md-table th code{
+  display:inline-block;max-width:100%;white-space:normal;word-break:break-word;
+  line-height:1.5;padding:2px 6px;text-align:left}
 .msg.bot hr.md-hr{border:none;border-top:1px solid var(--line);margin:11px 0}
 .msg.bot img.md-img{max-width:100%;max-height:420px;border-radius:var(--r-lg);margin:8px 0;display:block;background:var(--bg)}
 .msg.bot img.md-img.img-err{max-width:100%;padding:12px;border:1px dashed var(--line);border-radius:var(--r-md);background:var(--bg);color:var(--sub);font-size:12px}
@@ -7531,6 +7554,15 @@ function stripIconMarkup(text) {
   if (t.indexOf('<span class="i"') < 0) return t;   // 绝大多数消息直接短路
   return t.replace(ICON_HTML_RE, '');
 }
+/* 把**已转义**的 &lt;br&gt; / &lt;br/&gt; 还原成真实换行标签（仅供行内代码使用）。
+   ⚠️ 入参必须是 escapeHtml 之后的字符串：这样只会放行 br 这一个已知标签，
+      不存在「顺手放开了任意标签注入」的风险。二次转义也一并处理 ——
+      模型常把已经实体化的 &amp;lt;br&amp;gt; 再写一遍。 */
+function brToBreak(escaped) {
+  return String(escaped == null ? '' : escaped)
+    .replace(/&lt;br\s*\/?&gt;/gi, '<br>')
+    .replace(/&amp;lt;br\s*\/?&amp;gt;/gi, '<br>');
+}
 function renderMarkdown(text) {
   if (text == null) return '';
   text = stripIconMarkup(String(text));   // 历史里残留的原始图标 HTML（见 stripIconMarkup 注释）
@@ -7565,7 +7597,12 @@ function renderMarkdown(text) {
   const inlineCodes = [];
   src = src.replace(/`([^`\n]+)`/g, function (_, code) {
     const id = inlineCodes.length;
-    inlineCodes.push('<code>' + escapeHtml(code) + '</code>');
+    /* 2026-10-21：行内代码里的 <br> 还原成真换行。
+       依据：模型在**表格单元格里**写多行代码只能用 <br>（真换行会把表格切断），
+       而下面统一 escapeHtml 会把它转成 &lt;br&gt; 字面显示 —— 用户在聊天里看到的
+       就是一长串「python<br>def add(a,b)...」，既不能读也复制不出可用代码。
+       安全边界不变：只把**已转义**的 &lt;br&gt; 形态换回 <br>，其余标签保持转义。 */
+    inlineCodes.push('<code>' + brToBreak(escapeHtml(code)) + '</code>');
     return '\u0000IC' + id + '\u0000';
   });
   src = escapeHtml(src);
@@ -23548,7 +23585,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.23.0';
+var APP_VERSION = '3.23.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
