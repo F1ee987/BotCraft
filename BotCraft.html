@@ -199,6 +199,12 @@
      别铺到 18–19px 的中文上 —— Windows 的中文「展示字」实际只有宋体系，
      宋体在 UI 小字号下是「像 Word 文档」而不是优雅；28px 以上才谈得上气质。
      当前引用：.page-head h1 / .logo。 */
+  /* 正文 UI 字体（2026-10-21 抽出令牌）：原来是写死在 body 上的长串。
+     顺序考量：先 Latin 后 CJK —— Segoe UI 负责西文与数字（Windows 授权字体，
+     字形比雅黑更清晰），中文回落优先 Win11 的 Microsoft YaHei UI（比旧 YaHei
+     字面更紧凑），再退到 Noto Sans SC / PingFang SC 覆盖 Linux 与 macOS。
+     末尾补 emoji 字体：否则 emoji 会落到系统彩色字体上，与文字基线不齐。 */
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","SF Pro Text","SF Pro Display","Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans SC","Segoe UI Emoji","Apple Color Emoji",sans-serif;
   --font-display:"Noto Serif SC","Source Han Serif SC","Songti SC",STSong,SimSun,serif;
   --font-mono:'Source Code Pro','SF Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
@@ -584,7 +590,7 @@ body .mbox,body .cmdk-box,body .toast,body .cmd-panel{box-shadow:var(--lg-shadow
 [data-theme="light"] .node,[data-theme="light"] .brand-card{box-shadow:var(--card-ridge)}
 html,body{height:100%}
 body{
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","PingFang SC","Helvetica Neue","Segoe UI","Microsoft YaHei",sans-serif;
+  font-family:var(--font-ui);
   color:var(--txt);overflow:hidden;line-height:1.5;
   display:flex;flex-direction:column;
   position:relative;
@@ -2655,7 +2661,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </button>
     <div id="authThirdNote" class="hint" style="font-size:11px;margin-top:8px;color:var(--sub);display:none">第三方登录仅桌面版可用（浏览器直开不支持）</div>
     <div id="authEmailPanel" class="auth-email-panel" style="display:none">
-      <div id="auth-ev-title" class="hint" style="font-weight:500;color:var(--txt);font-size:12.5px;margin-bottom:8px">邮箱验证码登录 / 注册</div>
+      <div id="auth-ev-title" class="hint" style="font-weight:500;color:var(--txt);font-size:var(--fs-sm);margin-bottom:8px">邮箱验证码登录 / 注册</div>
       <div class="field"><label>邮箱</label><input id="auth-ev-email" type="email" placeholder="you@example.com" autocomplete="email"></div>
       <div class="field"><label>验证码</label>
         <div class="auth-code-row">
@@ -2672,7 +2678,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button type="button" class="btn btn-ghost" onclick="hideEmailLogin()">返回</button>
         <button id="auth-ev-submit" type="button" class="btn btn-primary" onclick="emailDoLogin()">登录 / 注册</button>
       </div>
-      <div class="hint" id="auth-ev-modes" style="margin-top:10px;text-align:center;font-size:11.5px;line-height:1.9">
+      <div class="hint" id="auth-ev-modes" style="margin-top:10px;text-align:center;font-size:var(--fs-xs);line-height:1.9">
         <a href="javascript:void(0)" onclick="startPasswordReset()">忘记密码？用邮箱重置</a>
         <span style="opacity:.45"> · </span>
         <a href="javascript:void(0)" onclick="startEmailVerify()">验证我的邮箱</a>
@@ -2690,7 +2696,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="mbox" style="max-width:420px;text-align:center">
         <h2>在浏览器完成 GitHub 授权</h2>
         <div class="hint" style="margin:10px 0">打开下方网址，输入此代码完成授权：</div>
-        <div id="ghCode" style="font-size:28px;font-weight:700;letter-spacing:2px;font-family:monospace;padding:12px;background:var(--fill);border-radius:12px;margin:8px 0"></div>
+        <div id="ghCode" style="font-size:28px;font-weight:700;letter-spacing:2px;font-family:monospace;padding:12px;background:var(--fill);border-radius:var(--r-lg);margin:8px 0"></div>
         <div id="ghUri" class="hint" style="word-break:break-all;opacity:.8"></div>
         <div id="ghStatus" class="hint" style="margin-top:12px">等待你在浏览器确认…</div>
         <div class="mbox-foot" style="margin-top:16px">
@@ -2712,8 +2718,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     </div>
     <div id="kbPrevBody" style="max-height:62vh;overflow:auto"></div>
     <div id="kbEditWrap" style="display:none">
-      <div class="hint" id="kbEditHint" style="margin:0 0 8px;font-size:11.5px"></div>
-      <textarea id="kbEditText" spellcheck="false" style="width:100%;height:52vh;box-sizing:border-box;padding:11px 13px;border-radius:12px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:13px;line-height:1.7;resize:vertical;font-family:inherit"></textarea>
+      <div class="hint" id="kbEditHint" style="margin:0 0 8px;font-size:var(--fs-xs)"></div>
+      <textarea id="kbEditText" spellcheck="false" style="width:100%;height:52vh;box-sizing:border-box;padding:11px 13px;border-radius:var(--r-lg);border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:13px;line-height:1.7;resize:vertical;font-family:inherit"></textarea>
       <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
         <button class="btn btn-ghost btn-sm" onclick="kbCancelEdit()">取消</button>
         <button class="btn btn-primary btn-sm" onclick="kbSaveEdit()">保存</button>
@@ -2728,11 +2734,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <h2 style="font-size:16px"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13.5a4 4 0 0 0 5.7 0l2.6-2.6a4 4 0 0 0-5.7-5.7l-1.3 1.3"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.6 2.6a4 4 0 0 0 5.7 5.7l1.3-1.3"/></svg></span> 导入内容</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">关闭</button>
     </div>
-    <div class="hint" style="font-size:11.5px;margin:0 0 9px">粘贴<b>网址</b>会自动抓取网页正文（过滤广告 / 导航 / 版权等无关内容，仅保留核心正文）并自动排版；粘贴<b>文字 / Markdown / 富文本</b>则直接解析排版后导入；粘贴 <b>CSDN 文章</b>（网页地址、复制的正文或导出的 Markdown）会自动识别，剥掉目录 / 评论区 / 关注栏 / 付费提示，保留标题层级、代码块、公式、表格与图片。</div>
+    <div class="hint" style="font-size:var(--fs-xs);margin:0 0 9px">粘贴<b>网址</b>会自动抓取网页正文（过滤广告 / 导航 / 版权等无关内容，仅保留核心正文）并自动排版；粘贴<b>文字 / Markdown / 富文本</b>则直接解析排版后导入；粘贴 <b>CSDN 文章</b>（网页地址、复制的正文或导出的 Markdown）会自动识别，剥掉目录 / 评论区 / 关注栏 / 付费提示，保留标题层级、代码块、公式、表格与图片。</div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:9px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="kbReadClipboard()" title="读取系统剪贴板内容"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></span> 读取剪贴板</button>
       <label style="font-size:12px;color:var(--sub);margin-left:auto;display:flex;align-items:center;gap:6px">格式
-        <select id="kbPasteFmt" onchange="kbUpdatePastePreview()" style="padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit">
+        <select id="kbPasteFmt" onchange="kbUpdatePastePreview()" style="padding:5px 8px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:var(--fs-sm);font-family:inherit">
           <option value="auto">自动识别</option>
           <option value="plain">纯文本</option>
           <option value="md">Markdown</option>
@@ -2740,13 +2746,13 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         </select>
       </label>
     </div>
-    <textarea id="kbPasteArea" spellcheck="false" placeholder="粘贴网址（自动抓取网页正文），或粘贴要导入的文字 / Markdown / 富文本（Ctrl+V）" oninput="kbUpdatePastePreview()" style="width:100%;box-sizing:border-box;height:160px;margin-top:2px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;line-height:1.65;resize:vertical;font-family:inherit"></textarea>
+    <textarea id="kbPasteArea" spellcheck="false" placeholder="粘贴网址（自动抓取网页正文），或粘贴要导入的文字 / Markdown / 富文本（Ctrl+V）" oninput="kbUpdatePastePreview()" style="width:100%;box-sizing:border-box;height:160px;margin-top:2px;padding:10px 12px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:var(--fs-sm);line-height:1.65;resize:vertical;font-family:inherit"></textarea>
     <div style="display:flex;align-items:center;gap:8px;margin:9px 0 4px">
       <span style="font-size:12px;color:var(--sub);flex:none">文档名</span>
-      <input id="kbPasteName" type="text" spellcheck="false" placeholder="留空则按首行自动命名" style="flex:1;box-sizing:border-box;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:12.5px;font-family:inherit">
+      <input id="kbPasteName" type="text" spellcheck="false" placeholder="留空则按首行自动命名" style="flex:1;box-sizing:border-box;padding:7px 10px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:var(--fs-sm);font-family:inherit">
       <span id="kbPasteFmtTag" style="font-size:11px;color:var(--brand-text);flex:none"></span>
     </div>
-    <div style="font-size:11.5px;color:var(--sub);margin:2px 0 6px">预览（导入后的解析与呈现效果，确认无误再导入；网址会先抓取正文再展示）：</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);margin:2px 0 6px">预览（导入后的解析与呈现效果，确认无误再导入；网址会先抓取正文再展示）：</div>
     <div id="kbPastePreview" class="kb-prev" style="max-height:32vh;overflow:auto;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);padding:12px 14px;font-size:13px;line-height:1.7;color:var(--txt);white-space:normal;word-break:break-word"></div>
     <div style="display:flex;gap:8px;margin-top:11px;justify-content:flex-end">
       <button class="btn btn-ghost btn-sm" onclick="closeKbUrl()">取消</button>
@@ -2761,7 +2767,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <h2 style="font-size:16px"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5l1.9 4.6 4.6 1.9-4.6 1.9L12 16.5l-1.9-4.6L5.5 10l4.6-1.9L12 3.5z"/></svg></span> 提示词库</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeSnipPanel()">关闭</button>
     </div>
-    <div class="hint" style="font-size:11.5px;margin:0 0 11px">点「插入」把指令写进输入框；在输入框里打 <b>/</b> 会唤起同一份清单，↑↓ 选择、Enter 插入。</div>
+    <div class="hint" style="font-size:var(--fs-xs);margin:0 0 11px">点「插入」把指令写进输入框；在输入框里打 <b>/</b> 会唤起同一份清单，↑↓ 选择、Enter 插入。</div>
     <div id="snipList" style="max-height:46vh;overflow:auto;display:flex;flex-direction:column;gap:6px"></div>
     <div style="margin-top:11px;display:flex;justify-content:flex-end">
       <button class="btn btn-primary btn-sm" onclick="snipNew()">＋ 新建指令</button>
@@ -2775,7 +2781,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <h2 id="exportTitle" style="font-size:16px">导出工作流</h2>
       <button class="btn btn-ghost" onclick="document.getElementById('exportModal').classList.remove('on')">关闭</button>
     </div>
-    <textarea id="exportText" style="width:100%;height:300px;resize:vertical;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px;font-family:var(--font-mono);font-size:12.5px;line-height:1.5"></textarea>
+    <textarea id="exportText" style="width:100%;height:300px;resize:vertical;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;font-family:var(--font-mono);font-size:var(--fs-sm);line-height:1.5"></textarea>
     <div class="mbox-foot" style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">
       <button class="btn btn-ghost" onclick="copyExportText()"><svg class="ic-btn" aria-hidden="true"><use href="#ic-copy"/></svg>复制</button>
       <button class="btn btn-primary" id="exportDownloadBtn"><svg class="ic-btn" aria-hidden="true"><use href="#ic-download"/></svg>下载文件</button>
@@ -2870,7 +2876,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div class="ws-body" id="wsFlowBody"></div>
       <div class="tab-panel" id="wsPromptBody" style="display:none">
         <div style="font-size:12px;color:var(--sub);margin-bottom:10px">定义机器人的人设与回复规则，支持变量如 {{user_input}}、{{user_name}}</div>
-        <div style="font-size:11.5px;color:var(--sub);margin-bottom:8px" id="specLine"></div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px" id="specLine"></div>
         <textarea id="promptArea" data-grow data-grow-max="560" placeholder="例如：你是一个智能客服，请用专业友好的语气回答…"></textarea>
         <div style="font-size:11px;color:var(--sub);margin-top:8px" id="promptCount">0 字</div>
         <div id="expertiseBox"></div>
@@ -2940,7 +2946,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <div class="ava" id="chatAva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></div>
         <div class="ch-id">
           <div id="chatBotName" style="font-weight:600;font-size:14px">机器人</div>
-          <div style="font-size:11.5px;color:var(--sub)" id="chatStatus">在线 · 响应 &lt; 1s</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub)" id="chatStatus">在线 · 响应 &lt; 1s</div>
         </div>
         <div style="flex:1;min-width:0"></div>
         <div class="bot-switch" id="botSwitch">
@@ -3099,7 +3105,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <h3><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4l-1.5 16M17 4l-1.5 16M4.5 9h15M3.5 15h15"/></svg></span> Token 用量与费用</h3>
       <div class="usage-cards" id="usageCards"></div>
       <div id="usageMix"></div>
-      <p style="font-size:11.5px;color:var(--sub);margin:10px 0 0" id="usageHint"></p>
+      <p style="font-size:var(--fs-xs);color:var(--sub);margin:10px 0 0" id="usageHint"></p>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="resetUsage()" title="清空本机记录的 Token 用量统计（只动统计，不动对话与配置）"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></svg></span> 清空用量统计</button>
       </div>
@@ -3141,9 +3147,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <div id="dataSummary" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px"></div>
       <div class="toolbar" id="dataFieldBar" style="display:none;margin-bottom:10px">
         <span style="font-size:12px;color:var(--sub)">分类(X)：</span>
-        <select id="dataX" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:4px 8px"></select>
+        <select id="dataX" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 8px"></select>
         <span style="font-size:12px;color:var(--sub);margin-left:10px">数值(Y)：</span>
-        <select id="dataY" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:4px 8px"></select>
+        <select id="dataY" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 8px"></select>
       </div>
       <svg class="chart-svg" id="dataChart" viewBox="0 0 600 260" style="width:100%;height:260px"></svg>
     </div>
@@ -3186,29 +3192,29 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <select id="set-provider" style="flex:1;min-width:0"></select>
         <button class="btn btn-ghost" type="button" onclick="applyFreePreset()" style="white-space:nowrap;flex:none" title="套用实测可达的免密钥公共接口（无需注册、无需 Key，仅建议试用）"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="9" width="17" height="11.5" rx="1.5"/><path d="M3.5 13.5h17M12 9v11.5"/><path d="M12 9S10.5 4.5 8 4.5a2.2 2.2 0 0 0 0 4.5M12 9s1.5-4.5 4-4.5a2.2 2.2 0 0 1 0 4.5"/></svg></span> 免 Key 试用</button>
       </div>
-      <div id="freeHint" style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.6"></div>
+      <div id="freeHint" style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px;line-height:1.6"></div>
     </div>
     <div class="field" id="field-key">
       <label>API Key</label>
       <input id="set-key" type="password" placeholder="sk-…（本地模型 / 免 Key 接口可留空）" autocomplete="off">
-      <div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">API Key 不能为空（自定义模式下 baseURL 也必填）</div>
+      <div class="err" style="color:var(--danger-text);font-size:var(--fs-xs);margin-top:5px;display:none">API Key 不能为空（自定义模式下 baseURL 也必填）</div>
       <label for="set-noauth" style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:12px;color:var(--txt);cursor:pointer">
         <span class="switch"><input type="checkbox" id="set-noauth"><span class="slider"></span></span>
         <span>该接口无需鉴权（免 Key 公共接口 / 本地模型，Key 留空也能调用）</span>
       </label>
-      <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">留空也能保存：本地模型（Ollama / LM Studio，地址填 http://localhost:11434/v1）与免 Key 公共接口不需要鉴权。</div>
+      <div class="hint" style="margin-top:6px;font-size:var(--fs-xs);line-height:1.5">留空也能保存：本地模型（Ollama / LM Studio，地址填 http://localhost:11434/v1）与免 Key 公共接口不需要鉴权。</div>
     </div>
     <div class="field" id="field-base">
       <label>接口地址（Base URL）</label>
       <input id="set-base" placeholder="https://api.openai.com/v1">
     </div>
     <div class="field">
-      <label>模型 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（可点「刷新」从接口拉取实时列表）</span></label>
+      <label>模型 <span style="font-weight:400;color:var(--sub);font-size:var(--fs-xs)">（可点「刷新」从接口拉取实时列表）</span></label>
       <div style="display:flex;gap:8px;align-items:center">
         <select id="set-model" style="flex:1;min-width:0"></select>
         <button class="btn btn-ghost" type="button" onclick="refreshModelList()" style="white-space:nowrap;flex:none"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-1.2 5.2"/><path d="M20 5v6h-6"/></svg></span> 刷新列表</button>
       </div>
-      <input id="set-model-custom" placeholder="或手动填写模型名，如 gpt-4o-mini" style="display:none;margin-top:8px;width:100%;padding:10px 13px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
+      <input id="set-model-custom" placeholder="或手动填写模型名，如 gpt-4o-mini" style="display:none;margin-top:8px;width:100%;padding:10px 13px;border-radius:var(--r-md);background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
     </div>
   </div>
 </div>
@@ -3236,12 +3242,12 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="field" style="display:flex;align-items:center;gap:8px">
       <span class="switch"><input type="checkbox" id="set-serial" checked><span class="slider"></span></span>
       <label for="set-serial" style="margin:0;cursor:pointer">串行输入（回复期间锁定输入框）</label>
-      <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">开启：必须等上一条完成才能发下一条。关闭：回复期间可预输入，消息自动排队依次发送。</div>
+      <div class="hint" style="margin:6px 0 0;font-size:var(--fs-xs);line-height:1.5">开启：必须等上一条完成才能发下一条。关闭：回复期间可预输入，消息自动排队依次发送。</div>
     </div>
     <div class="field">
       <label>代理地址（可选，生产环境推荐）</label>
       <input id="set-proxy" placeholder="https://your-domain.com/api/ai-proxy">
-      <div class="hint" style="margin-top:6px;font-size:11.5px;color:var(--sub)">代理用于隐藏 API Key，后端只需把请求原样转发到服务商并补签 Authorization 即可。</div>
+      <div class="hint" style="margin-top:6px;font-size:var(--fs-xs);color:var(--sub)">代理用于隐藏 API Key，后端只需把请求原样转发到服务商并补签 Authorization 即可。</div>
     </div>
   </div>
 </div>
@@ -3272,7 +3278,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <label>自定义检索地址</label>
         <input id="set-search-endpoint" placeholder="https://example.com/search?q={q}（没有 {q} 则自动在末尾追加关键词）">
       </div>
-      <div id="searchHint" style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.6"></div>
+      <div id="searchHint" style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px;line-height:1.6"></div>
   </div>
 </div>
 
@@ -3295,7 +3301,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <label>转写 API Key</label>
         <input id="set-stt-key" type="password" placeholder="留空则录音只作为音频附件发送，不转文字" autocomplete="off">
       </div>
-      <div class="hint" style="margin-top:6px;font-size:11.5px;color:var(--sub)">默认硅基流动（open.siliconflow.cn 注册后有免费额度）。识别结果自动填进输入框，可修改后再发送。</div>
+      <div class="hint" style="margin-top:6px;font-size:var(--fs-xs);color:var(--sub)">默认硅基流动（open.siliconflow.cn 注册后有免费额度）。识别结果自动填进输入框，可修改后再发送。</div>
   </div>
 </div>
 
@@ -3317,7 +3323,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <label>Embedding API Key</label>
         <input id="set-emb-key" type="password" placeholder="留空则无法调用，语义检索保持关闭" autocomplete="off">
       </div>
-      <div class="hint" style="margin-top:6px;font-size:11.5px;color:var(--sub);line-height:1.7">
+      <div class="hint" style="margin-top:6px;font-size:var(--fs-xs);color:var(--sub);line-height:1.7">
         填齐接口与模型即启用：知识库检索会同时走关键词（TF-IDF）与语义两路，分数归一化后加权融合。<br>
         解决的问题——纯 TF-IDF 只认词项重合，问「怎么退货」检索不到写「七天无理由退换货流程」的文档（词不重叠）。<br>
         三项全空则完全关闭，走纯 TF-IDF，与之前的行为没有任何差别。向量只在内存缓存、不落盘（体积太大，会撑爆 localStorage）。
@@ -3335,7 +3341,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div style="display:flex;gap:8px;margin-top:10px">
       <button type="button" class="btn btn-primary btn-sm" onclick="openModelChainEditor()">+ 添加备用模型</button>
     </div>
-    <div id="mcEditor" style="display:none;margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:12px">
+    <div id="mcEditor" style="display:none;margin-top:12px;border:1px solid var(--line);border-radius:var(--r-md);padding:12px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <label class="fld"><span>备注名</span><input id="mcName" class="ipt" maxlength="40" placeholder="如：智谱备用"></label>
         <label class="fld"><span>服务商</span>
@@ -3372,7 +3378,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <button type="button" class="btn btn-ghost" onclick="applyImagePreset('siliconflow')">硅基流动 Kolors（免费）</button>
           <button type="button" class="btn btn-ghost" onclick="applyImagePreset('pollinations')">海外免费兜底</button>
         </div>
-        <div id="imgPresetHint" style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.6">
+        <div id="imgPresetHint" style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px;line-height:1.6">
           智谱：open.bigmodel.cn 注册后在「API Keys」创建密钥，模型 cogview-3-flash 官方免费。<br>
           硅基流动：cloud.siliconflow.cn 注册后创建密钥，模型 Kwai-Kolors/Kolors 官方定价 ¥0。
         </div>
@@ -3443,7 +3449,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <label class="theme-opt"><input type="radio" name="set-theme" value="dark" onchange="setThemeMode('dark')"><span>深色</span></label>
           <label class="theme-opt"><input type="radio" name="set-theme" value="system" checked onchange="setThemeMode('system')"><span>跟随系统</span></label>
         </div>
-        <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
+        <div class="hint" style="margin:6px 0 0;font-size:var(--fs-xs);line-height:1.5">
           跟随系统：应用随系统的浅色/深色偏好<strong>实时</strong>切换（不是只在启动时读一次）。选浅色或深色则固定不变，不受系统影响。顶栏的圆球按钮也可以快速循环切换这三种模式。
         </div>
       </div>
@@ -3458,7 +3464,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <span class="switch"><input type="checkbox" id="set-glass" checked onchange="toggleLiquidGlass()"><span class="slider"></span></span>
         <label for="set-glass" style="margin:0;cursor:pointer">开启液态玻璃材质</label>
       </div>
-      <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
+      <div class="hint" style="margin:6px 0 0;font-size:var(--fs-xs);line-height:1.5">
         开启：整界面的玻璃面走真实折射（更深的模糊与饱和度），并有一道高光缓慢流过。关闭：降级为实底平面，低端机上更省性能。
         勾选即时生效；选择随主题一样记住。系统开了「减弱动态效果」时，流动会自动停下、玻璃材质保留。
       </div>
@@ -3474,16 +3480,16 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <label for="set-bg" style="margin:0;cursor:pointer">显示背景光效</label>
       </div>
       <div class="field" style="display:flex;align-items:center;gap:var(--sp-4);margin-top:var(--sp-4)">
-        <label for="set-bg-opacity" style="margin:0;width:72px;flex:none;font-size:12.5px">不透明度</label>
+        <label for="set-bg-opacity" style="margin:0;width:72px;flex:none;font-size:var(--fs-sm)">不透明度</label>
         <input id="set-bg-opacity" type="range" min="0" max="100" step="5" value="100" style="flex:1" oninput="onBgParamInput()">
         <span id="set-bg-opacity-val" style="width:44px;flex:none;text-align:right;font-size:12px;color:var(--sub)">100%</span>
       </div>
       <div class="field" style="display:flex;align-items:center;gap:var(--sp-4);margin-top:var(--sp-3)">
-        <label for="set-bg-blur" style="margin:0;width:72px;flex:none;font-size:12.5px">背景模糊</label>
+        <label for="set-bg-blur" style="margin:0;width:72px;flex:none;font-size:var(--fs-sm)">背景模糊</label>
         <input id="set-bg-blur" type="range" min="0" max="40" step="2" value="0" style="flex:1" oninput="onBgParamInput()">
         <span id="set-bg-blur-val" style="width:44px;flex:none;text-align:right;font-size:12px;color:var(--sub)">0px</span>
       </div>
-      <div class="hint" style="margin:var(--sp-3) 0 0;font-size:11.5px;line-height:1.5">
+      <div class="hint" style="margin:var(--sp-3) 0 0;font-size:var(--fs-xs);line-height:1.5">
         背景光效（弥散光 + 颗粒）现在独立于玻璃材质：关掉它，玻璃的折射、模糊与交互保持原样，只是背后没有东西可透。
         不透明度与模糊只作用于背景层本身，玻璃的模糊强度不受影响；背景模糊为 0 时不额外挂渲染开销。
       </div>
@@ -3494,7 +3500,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <div class="bg-stack__grain"></div>
         </div>
         <div style="position:relative;z-index:1">
-          <div style="font-size:13.5px;font-weight:500">局部背景插槽</div>
+          <div style="font-size:var(--fs-base);font-weight:500">局部背景插槽</div>
           <div style="font-size:12px;color:var(--sub);margin-top:4px">这段文字压在容器自己的背景层上 —— 背景只在这里出现，页面其余部分不受影响。</div>
         </div>
       </div>
@@ -3510,7 +3516,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button type="button" class="btn btn-primary btn-sm" id="exportDirPickBtn" onclick="pickExportDir()">选择位置</button>
         <button type="button" class="btn btn-ghost btn-sm" onclick="resetExportDir()">恢复默认</button>
       </div>
-      <div class="hint" style="margin:0;font-size:11.5px;line-height:1.6">
+      <div class="hint" style="margin:0;font-size:var(--fs-xs);line-height:1.6">
         桌面版把导出文件直接写进这个目录，并在提示里回显真实路径；同名文件不会覆盖，会自动加 -1 / -2 后缀。
         浏览器版无法选择目录，文件交给浏览器下载器处理（位置由浏览器设置决定）。
       </div>
@@ -3525,7 +3531,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button type="button" class="btn btn-ghost" onclick="manualCheckUpdate()">检查更新</button>
         <span id="updateCheckStatus"></span>
       </div>
-      <div class="hint" style="margin:6px 0 0;font-size:11.5px;line-height:1.5">
+      <div class="hint" style="margin:6px 0 0;font-size:var(--fs-xs);line-height:1.5">
         检查是否有新版本。应用不会自动检测或自动更新，只在你点这个按钮时查一次；结果只写在这里的状态文字里，不弹窗、不打断你。
       </div>
     </div>
@@ -3548,7 +3554,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div id="taskDesktopGuide"></div>
     <div class="sub" style="margin-bottom:6px">访问令牌（外部调用方需带 <code>Authorization: Bearer &lt;令牌&gt;</code>）</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <input id="taskToken" class="ipt" readonly style="flex:1;min-width:220px;font-family:var(--font-mono);font-size:11.5px">
+      <input id="taskToken" class="ipt" readonly style="flex:1;min-width:220px;font-family:var(--font-mono);font-size:var(--fs-xs)">
       <button class="btn btn-ghost btn-sm" onclick="taskCopyToken()">复制令牌</button>
     </div>
     <div class="wh-fld-hint" style="margin-top:6px">令牌在首次运行时自动生成，只存在本机；换掉它会立即让旧调用方失效。</div>
@@ -3589,7 +3595,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           <button class="btn btn-primary btn-sm" onclick="openScheduleEditor()">+ 新建计划</button>
         </div>
 
-        <div id="scheduleEditor" class="set-panels" style="display:none;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;padding:12px">
+        <div id="scheduleEditor" class="set-panels" style="display:none;margin-bottom:14px;border:1px solid var(--line);border-radius:var(--r-md);padding:12px">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <label class="fld"><span>计划名称</span><input id="schName" class="ipt" maxlength="80" placeholder="如：每日经营日报"></label>
             <label class="fld"><span>机器人</span><select id="schBot" class="ipt"></select></label>
@@ -3645,9 +3651,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
               <span>启用 GitHub 登录</span>
             </label>
             <div class="field">
-              <label>Client ID <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+              <label>Client ID <span style="font-weight:400;color:var(--sub);font-size:var(--fs-xs)">（必填）</span></label>
               <input id="authGhClientId" placeholder="例如 Iv1.xxxxxxxxxx">
-              <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">在 GitHub → Settings → Developer settings → OAuth Apps 新建应用，勾选「Device Flow」即可，<b>不需要填写回调地址（Callback URL）</b>——这是 Device Flow 相对 Authorization Code 的优势：桌面应用不会暴露本地端口，因此无需回调。</div>
+              <div class="hint" style="margin-top:6px;font-size:var(--fs-xs);line-height:1.5">在 GitHub → Settings → Developer settings → OAuth Apps 新建应用，勾选「Device Flow」即可，<b>不需要填写回调地址（Callback URL）</b>——这是 Device Flow 相对 Authorization Code 的优势：桌面应用不会暴露本地端口，因此无需回调。</div>
             </div>
             <div class="field">
               <label>授权方式</label>
@@ -3655,26 +3661,26 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
                 <option value="device">Device Flow（推荐，无需回调地址）</option>
                 <option value="code">授权码回调（Authorization Code，需登记回调地址）</option>
               </select>
-              <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">
+              <div class="hint" style="margin-top:6px;font-size:var(--fs-xs);line-height:1.5">
                 <b>Device Flow</b>：桌面分发首选 —— 不占本机端口，不用在 GitHub 登记回调地址。
                 <b>授权码回调</b>：需要在 OAuth App 里登记一个固定回调地址（如 <code>http://127.0.0.1:52828/callback</code>），
                 登录时应用会在该端口临时起一个只接收一次回调的本机服务。
               </div>
             </div>
             <div class="field" id="authGhRedirectWrap" style="display:none">
-              <label>回调地址 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（授权码方式必填）</span></label>
+              <label>回调地址 <span style="font-weight:400;color:var(--sub);font-size:var(--fs-xs)">（授权码方式必填）</span></label>
               <input id="authGhRedirect" placeholder="http://127.0.0.1:52828/callback">
-              <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">必须与 GitHub OAuth App 里的 <b>Authorization callback URL</b> 逐字一致（含端口与路径）；只允许本机回环地址。</div>
+              <div class="hint" style="margin-top:6px;font-size:var(--fs-xs);line-height:1.5">必须与 GitHub OAuth App 里的 <b>Authorization callback URL</b> 逐字一致（含端口与路径）；只允许本机回环地址。</div>
             </div>
             <div class="field">
-              <label>Client Secret <span style="font-weight:400;color:var(--sub);font-size:11.5px">（可选）</span></label>
+              <label>Client Secret <span style="font-weight:400;color:var(--sub);font-size:var(--fs-xs)">（可选）</span></label>
               <input id="authGhClientSecret" type="password" placeholder="公开客户端可留空" autocomplete="off">
-              <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">公开客户端（如纯前端桌面应用）通常留空；若你的 OAuth App 配置为保密客户端，则填写此处。</div>
+              <div class="hint" style="margin-top:6px;font-size:var(--fs-xs);line-height:1.5">公开客户端（如纯前端桌面应用）通常留空；若你的 OAuth App 配置为保密客户端，则填写此处。</div>
             </div>
             <div class="field" style="margin-top:4px">
               <a class="btn btn-ghost btn-sm" href="https://github.com/settings/developers" target="_blank" rel="noopener">打开 GitHub 创建 OAuth App</a>
             </div>
-            <div class="hint" id="authGhEnvNote" style="display:none;margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--fill);font-size:11.5px;line-height:1.6"></div>
+            <div class="hint" id="authGhEnvNote" style="display:none;margin-top:8px;padding:8px 10px;border-radius:var(--r-sm);background:var(--fill);font-size:var(--fs-xs);line-height:1.6"></div>
           </div>
         </div>
 
@@ -3695,7 +3701,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
             <div id="authEmSmtpBox">
               <div class="field">
-                <label>SMTP 主机 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+                <label>SMTP 主机 <span style="font-weight:400;color:var(--sub);font-size:var(--fs-xs)">（必填）</span></label>
                 <input id="authEmSmtpHost" placeholder="例如 smtp.gmail.com">
               </div>
               <div class="field">
@@ -3703,7 +3709,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
                 <input id="authEmSmtpPort" placeholder="465（SSL） / 587（STARTTLS）" inputmode="numeric">
               </div>
               <div class="field">
-                <label>账号 / 用户名 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+                <label>账号 / 用户名 <span style="font-weight:400;color:var(--sub);font-size:var(--fs-xs)">（必填）</span></label>
                 <input id="authEmSmtpUser" placeholder="your@email.com">
               </div>
               <div class="field">
@@ -3722,22 +3728,22 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
             <div id="authEmApiBox" style="display:none">
               <div class="field">
-                <label>API 地址 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+                <label>API 地址 <span style="font-weight:400;color:var(--sub);font-size:var(--fs-xs)">（必填）</span></label>
                 <input id="authEmApiEndpoint" placeholder="https://api.example.com/v1/send">
-                <div class="hint" style="margin-top:6px;font-size:11.5px;line-height:1.5">请求体固定为 <code>{"to","from","subject","text"}</code>，Authorization 头携带 Bearer Key。</div>
+                <div class="hint" style="margin-top:6px;font-size:var(--fs-xs);line-height:1.5">请求体固定为 <code>{"to","from","subject","text"}</code>，Authorization 头携带 Bearer Key。</div>
               </div>
               <div class="field">
-                <label>API Key <span style="font-weight:400;color:var(--sub);font-size:11.5px">（必填）</span></label>
+                <label>API Key <span style="font-weight:400;color:var(--sub);font-size:var(--fs-xs)">（必填）</span></label>
                 <input id="authEmApiKey" type="password" placeholder="服务方提供的 Key" autocomplete="off">
               </div>
             </div>
 
             <div class="field">
-              <label>发件人地址 <span style="font-weight:400;color:var(--sub);font-size:11.5px">（可选，留空用账号）</span></label>
+              <label>发件人地址 <span style="font-weight:400;color:var(--sub);font-size:var(--fs-xs)">（可选，留空用账号）</span></label>
               <input id="authEmFrom" placeholder="no-reply@yourdomain.com">
             </div>
 
-            <div class="hint" style="font-size:11.5px;line-height:1.6;margin:10px 0">
+            <div class="hint" style="font-size:var(--fs-xs);line-height:1.6;margin:10px 0">
               验证码规则：6 位数字；<b>有效期 10 分钟</b>；同一邮箱<b>60 秒内不可重复发送</b>，每小时最多 5 封；单次验证码校验最多 5 次，验证成功后立即作废（防重放）。
             </div>
 
@@ -3819,7 +3825,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
         <div id="whStatus" class="sub" style="margin-bottom:10px"></div>
 
-        <div id="whEditor" class="set-panels" style="display:none;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;padding:12px">
+        <div id="whEditor" class="set-panels" style="display:none;margin-bottom:14px;border:1px solid var(--line);border-radius:var(--r-md);padding:12px">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <label class="fld"><span>名称</span><input id="whName" class="ipt" maxlength="80" placeholder="如：飞书消息转发"><span class="wh-fld-hint">仅用于在列表里区分不同入口</span></label>
             <label class="fld"><span>机器人</span><select id="whBot" class="ipt"></select><span class="wh-fld-hint">入站消息将触发这个机器人的完整工作流</span></label>
@@ -3847,8 +3853,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <div class="mbox">
     <h2>创建机器人</h2>
     <div class="hint">填写基本信息，几分钟即可拥有一个智能助手</div>
-    <div class="field" id="field-name"><label>名称 <span style="color:var(--warn-text)">*</span></label><input id="f-name" placeholder="例如：我的客服助手" maxlength="30"><div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">请填写机器人名称（1-30 字）</div></div>
-    <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" data-grow data-grow-max="200" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
+    <div class="field" id="field-name"><label>名称 <span style="color:var(--warn-text)">*</span></label><input id="f-name" placeholder="例如：我的客服助手" maxlength="30"><div class="err" style="color:var(--danger-text);font-size:var(--fs-xs);margin-top:5px;display:none">请填写机器人名称（1-30 字）</div></div>
+    <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" data-grow data-grow-max="200" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:var(--danger-text);font-size:var(--fs-xs);margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
     <div class="field"><label>头像</label>
       <div class="color-pick" id="colors">
         <div class="c on" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)" data-c=""></div>
@@ -3862,8 +3868,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="field"><label>专精 <span style="font-size:11px;color:var(--sub);font-weight:400">（可选，选定后不可更改）</span></label>
       <div id="specPick" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       <div id="specCustomBox" style="display:none;margin-top:8px">
-        <input id="f-spec-name" placeholder="角色名称，如：旅行规划师（最多 20 字）" maxlength="20" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;margin-bottom:8px">
-        <textarea id="f-spec-prompt" placeholder="这个角色的人设提示词，例如：你是旅行规划师，根据用户偏好定制行程与预算…" maxlength="500" style="width:100%;box-sizing:border-box;min-height:72px;resize:vertical;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;line-height:1.5"></textarea>
+        <input id="f-spec-name" placeholder="角色名称，如：旅行规划师（最多 20 字）" maxlength="20" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);color:var(--txt);font-size:13px;margin-bottom:8px">
+        <textarea id="f-spec-prompt" placeholder="这个角色的人设提示词，例如：你是旅行规划师，根据用户偏好定制行程与预算…" maxlength="500" style="width:100%;box-sizing:border-box;min-height:72px;resize:vertical;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit;line-height:1.5"></textarea>
         <div style="font-size:11px;color:var(--sub);margin-top:4px">这里写的人设会成为机器人的起始提示词，之后仍可自由修改。</div>
       </div>
       <div style="font-size:11px;color:var(--sub);margin-top:6px">绑定机器人的默认人设方向；提示词文本之后仍可自由修改，但专精本身锁定。</div>
@@ -3879,7 +3885,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <span style="font-size:11px;color:var(--sub)">导入的模板会出现在下方「我的」中</span>
       </div>
       <div id="tplPick" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px"></div>
-      <div class="err" id="tplErr" style="color:var(--danger-text);font-size:11.5px;margin-top:5px;display:none">请选择一个模板</div>
+      <div class="err" id="tplErr" style="color:var(--danger-text);font-size:var(--fs-xs);margin-top:5px;display:none">请选择一个模板</div>
     </div>
     <div class="mbox-foot">
       <button class="btn btn-ghost" onclick="closeCreate()">取消</button>
@@ -3893,7 +3899,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <div class="mbox" style="width:560px">
     <h2 id="stylePreviewTitle">风格指令</h2>
     <div class="hint" style="margin-bottom:10px">应用后，这段指令会注入到机器人的「去AI腔」润色节点与常规对话提示词中。</div>
-    <textarea id="stylePreviewBody" readonly style="width:100%;min-height:180px;background:var(--bg);border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
+    <textarea id="stylePreviewBody" readonly style="width:100%;min-height:180px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
     <div class="mbox-foot" style="margin-top:12px">
       <button class="btn btn-ghost" onclick="document.getElementById('stylePreviewModal').classList.remove('on')">关闭</button>
       <button class="btn btn-primary" id="stylePreviewApply" onclick="stylePreviewApplyNow()">应用到当前机器人</button>
@@ -3906,11 +3912,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <div class="mbox" style="width:640px">
     <h2 id="humanApprovalTitle"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M6 8.5l-3 6.5h6l-3-6.5zM18 8.5l-3 6.5h6l-3-6.5z"/><path d="M6 8.5h12M8 19.5h8"/></svg></span>️ 审批</h2>
     <div class="hint" style="margin-bottom:10px">工作流已暂停在审批节点。可查看 / 修改下方草稿，确认后发出，或驳回重新执行整条工作流。</div>
-    <div id="humanApprovalNote" style="display:none;margin-bottom:10px;padding:9px 11px;border:1px dashed var(--glass-border);border-radius:9px;background:var(--glass-bg);font-size:12.5px;color:var(--txt);line-height:1.6"></div>
-    <textarea id="humanApprovalText" style="width:100%;min-height:200px;background:var(--bg);border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
+    <div id="humanApprovalNote" style="display:none;margin-bottom:10px;padding:9px 11px;border:1px dashed var(--glass-border);border-radius:var(--r-md);background:var(--glass-bg);font-size:var(--fs-sm);color:var(--txt);line-height:1.6"></div>
+    <textarea id="humanApprovalText" style="width:100%;min-height:200px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);color:var(--txt);font-size:13px;padding:10px;line-height:1.6"></textarea>
     <div id="humanApprovalPre" style="display:none;margin-top:10px">
       <div style="font-size:12px;color:var(--sub);font-weight:600;margin-bottom:5px">预审意见（复用质检逻辑）</div>
-      <div id="humanApprovalPreBody" style="white-space:pre-wrap;min-height:48px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:9px;font-size:12.5px;color:var(--txt);line-height:1.6"></div>
+      <div id="humanApprovalPreBody" style="white-space:pre-wrap;min-height:48px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);font-size:var(--fs-sm);color:var(--txt);line-height:1.6"></div>
     </div>
     <div class="mbox-foot" style="margin-top:12px;gap:10px">
       <button class="btn btn-primary" id="humanApprovalPass" style="background:linear-gradient(135deg,#30d158,#32ade6)"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.2 12.2l2.6 2.6 5-5.2"/></svg></span> 通过并继续</button>
@@ -3926,7 +3932,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="hint" style="margin-bottom:10px"><span class="plugin-cat" id="pluginDetailCat"></span></div>
     <p style="color:var(--sub);margin:0 0 12px;font-size:13px" id="pluginDetailDesc"></p>
     <div style="font-size:12px;color:var(--sub);margin-bottom:6px;font-weight:600">能力说明</div>
-    <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:13px;line-height:1.7" id="pluginDetailCap"></div>
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;font-size:13px;line-height:1.7" id="pluginDetailCap"></div>
     <div id="pluginDetailExtra"></div>
     <div class="mbox-foot" id="pluginDetailAct" style="margin-top:14px"></div>
   </div>
@@ -3982,11 +3988,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
       <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('botImportFile').click()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span> 导入单机器人（.bot.json）</button>
       <input id="botImportFile" type="file" accept="application/json,.json,.bot.json" style="display:none">
     </div>
-    <div class="hint" style="font-size:11.5px;color:var(--sub)">提示：① 导出请在「数据多的源」（如双击本地文件打开）操作；② <b style="color:var(--txt)">导入前先登录</b>（否则数据无法绑定到账号）；③ 再到目标源登录后导入。两端都是同一个源（都从 localhost 导出/导入）就会「没区别」。</div>
+    <div class="hint" style="font-size:var(--fs-xs);color:var(--sub)">提示：① 导出请在「数据多的源」（如双击本地文件打开）操作；② <b style="color:var(--txt)">导入前先登录</b>（否则数据无法绑定到账号）；③ 再到目标源登录后导入。两端都是同一个源（都从 localhost 导出/导入）就会「没区别」。</div>
 
     <div class="bk-sec" id="bkSec" style="display:none">
       <div class="bk-title"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5l7 2.6v5.6c0 4.3-3 7.5-7 8.8-4-1.3-7-4.5-7-8.8V6.1l7-2.6z"/></svg></span> 本机自动备份<span class="bk-sub" id="bkMeta"></span></div>
-      <div class="hint" style="font-size:11.5px;margin:2px 0 8px">每次写盘前自动快照一份，保留最近 <b id="bkKeep">7</b> 份（与后端 BACKUP_KEEP 一致；桌面版显示时由后端回填）。这是防 <b style="color:var(--txt)">data.json 写坏 / 误删</b>的本地兜底，与上面的「导出文件」互补。</div>
+      <div class="hint" style="font-size:var(--fs-xs);margin:2px 0 8px">每次写盘前自动快照一份，保留最近 <b id="bkKeep">7</b> 份（与后端 BACKUP_KEEP 一致；桌面版显示时由后端回填）。这是防 <b style="color:var(--txt)">data.json 写坏 / 误删</b>的本地兜底，与上面的「导出文件」互补。</div>
       <div class="bk-list" id="bkList"></div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" onclick="bkNow()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5l7 2.6v5.6c0 4.3-3 7.5-7 8.8-4-1.3-7-4.5-7-8.8V6.1l7-2.6z"/></svg></span> 立即备份</button>
@@ -3998,19 +4004,19 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="bk-sec">
       <div class="bk-title"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5l8 4v9l-8 4-8-4v-9l8-4z"/><path d="M4 7.5l8 4 8-4M12 11.5v9"/></svg></span> 存储占用<span class="bk-sub" id="bkUsageSum"></span></div>
       <div class="bk-list" id="bkUsageList"></div>
-      <div class="hint" id="bkUsageTip" style="font-size:11.5px;margin-top:8px"></div>
+      <div class="hint" id="bkUsageTip" style="font-size:var(--fs-xs);margin-top:8px"></div>
       <!-- 上面回答「哪里大」，这里回答「清哪里」—— 占用面板原先只有诊断这一半 -->
       <div class="bk-title" style="margin-top:12px"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15.5 3.5l5 5-7.5 7.5-5-5L15.5 3.5z"/><path d="M8 11L4 20h7l3.5-6"/></svg></span> 可清理的内联媒体</div>
       <div class="bk-list" id="bkTrimList"></div>
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" id="bkTrimAllBtn" onclick="trimAllMediaAsk()" title="把所有对话里的语音与配图 base64 换成文字占位；消息文字、时间、角色全部保留"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15.5 3.5l5 5-7.5 7.5-5-5L15.5 3.5z"/><path d="M8 11L4 20h7l3.5-6"/></svg></span> 清理全部内联媒体</button>
       </div>
-      <div class="hint" style="font-size:11.5px;margin-top:8px">清理只动<b style="color:var(--txt)">媒体本体</b>（语音音频、配图原图）：那条消息会显示为「（内联媒体已清理）」，文字内容一字不动。</div>
+      <div class="hint" style="font-size:var(--fs-xs);margin-top:8px">清理只动<b style="color:var(--txt)">媒体本体</b>（语音音频、配图原图）：那条消息会显示为「（内联媒体已清理）」，文字内容一字不动。</div>
     </div>
 
     <div class="bk-sec">
       <div class="bk-title"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4.5l8.5 15h-17L12 4.5z"/><path d="M12 10v4.2M12 17.2v.2"/></svg></span> 应急恢复</div>
-      <div class="hint" style="font-size:11.5px;margin:2px 0 8px">当数据损坏导致 <b style="color:var(--txt)">打不开 / 一直卡在登录页 / 界面空白</b> 时使用：清空本机全部数据并重启界面。清空前会自动留一份 <b style="color:var(--txt)">pre-emergency</b> 备份，可从上面的「本机自动备份」里找回。</div>
+      <div class="hint" style="font-size:var(--fs-xs);margin:2px 0 8px">当数据损坏导致 <b style="color:var(--txt)">打不开 / 一直卡在登录页 / 界面空白</b> 时使用：清空本机全部数据并重启界面。清空前会自动留一份 <b style="color:var(--txt)">pre-emergency</b> 备份，可从上面的「本机自动备份」里找回。</div>
       <button class="btn btn-ghost btn-sm" style="color:var(--danger-text)" onclick="emergencyReset()" title="清空本机全部数据并重启界面（清空前自动备份）"><span class="i i--danger" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4.5l8.5 15h-17L12 4.5z"/><path d="M12 10v4.2M12 17.2v.2"/></svg></span> 应急恢复（清空全部数据）</button>
     </div>
 
@@ -13017,7 +13023,7 @@ function flowNodeCfgHtml(b, nd, i) {
   const F = window.BotCraftFlow;
   const kind = F ? F.kindOf(nd) : 'llm';
   if (kind === 'llm' || kind === 'start' || kind === 'human' || kind === 'end') return '';
-  const inp = 'class="ne-cfg" data-i="' + i + '" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px"';
+  const inp = 'class="ne-cfg" data-i="' + i + '" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px"';
   const lab = 'style="font-size:11px;color:var(--sub);margin:6px 0 3px;font-weight:600"';
   const note = 'style="font-size:10px;color:var(--sub);margin:-2px 0 6px;line-height:1.5"';
   let h = '';
@@ -13026,15 +13032,15 @@ function flowNodeCfgHtml(b, nd, i) {
     h += '<div ' + lab + '>分支（自上而下判断，第一个成立的走它；条件留空 = 兜底）</div>';
     bs.forEach(function (br, k) {
       h += '<div style="display:flex;gap:5px;margin-bottom:5px">'
-        + '<input class="ne-cfg" data-i="' + i + '" data-f="branches" data-k="' + k + '" data-sub="label" value="' + escapeAttr(br.label || '') + '" placeholder="分支名" style="flex:0 0 76px;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 6px">'
-        + '<input class="ne-cfg" data-i="' + i + '" data-f="branches" data-k="' + k + '" data-sub="when" value="' + escapeAttr(br.when || '') + '" placeholder="如 {{n2.text}} contains 退款" style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 6px">'
+        + '<input class="ne-cfg" data-i="' + i + '" data-f="branches" data-k="' + k + '" data-sub="label" value="' + escapeAttr(br.label || '') + '" placeholder="分支名" style="flex:0 0 76px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:11px;padding:5px 6px">'
+        + '<input class="ne-cfg" data-i="' + i + '" data-f="branches" data-k="' + k + '" data-sub="when" value="' + escapeAttr(br.when || '') + '" placeholder="如 {{n2.text}} contains 退款" style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:11px;padding:5px 6px">'
         + '</div>';
     });
     h += '<div class="ne-bradd" data-i="' + i + '" style="font-size:11px;color:var(--txt);text-decoration:underline;cursor:pointer;margin:2px 0 6px">＋ 添加一路分支</div>';
     h += '<div ' + note + '>分支条件支持 == != &gt; &lt; &gt;= &lt;= 和 contains，也可以只写一个变量（有内容即算成立）。条件不做 eval，不会执行任何代码。</div>';
   } else if (kind === 'code') {
     h += '<div ' + lab + '>JS 代码</div>'
-      + '<textarea class="ne-cfg" data-i="' + i + '" data-f="code" placeholder="return params.text.split(/\n/);" style="width:100%;min-height:104px;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:6px 8px;resize:vertical">' + escapeHtml(nd.code || '') + '</textarea>'
+      + '<textarea class="ne-cfg" data-i="' + i + '" data-f="code" placeholder="return params.text.split(/\n/);" style="width:100%;min-height:104px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:11px;padding:6px 8px;resize:vertical">' + escapeHtml(nd.code || '') + '</textarea>'
       + '<div ' + note + '>在隔离沙箱里运行，读不到本机数据，也没有联网代理。用 <b>return</b> 交出结果；params 里是下面配的输入绑定。</div>';
   } else if (kind === 'tool') {
     const opts = [['kb', '知识库检索'], ['web', '联网检索'], ['weather', '天气查询'], ['image', '文生图']]
@@ -13085,7 +13091,7 @@ function flowNodeCfgHtml(b, nd, i) {
     h += '<div ' + lab + '>输入绑定（上游有更新时点右边插入）</div>'
       + '<div style="display:flex;gap:5px;margin-bottom:5px">'
       + '<input class="ne-cfg" data-i="' + i + '" data-f="infrom" value="' + escapeAttr(cur) + '" placeholder="{{n1.text}}">'
-      + '<select class="ne-varpick" data-i="' + i + '" style="flex:0 0 92px;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 4px"><option value="">插入变量</option>'
+      + '<select class="ne-varpick" data-i="' + i + '" style="flex:0 0 92px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:11px;padding:5px 4px"><option value="">插入变量</option>'
       + vars.map(function (v) { return '<option value="' + escapeAttr(v.name) + '">' + escapeHtml(v.label) + '</option>'; }).join('')
       + '</select></div>'
       + '<div ' + note + '>只列得出上游节点的输出 —— 引用还没执行的节点取不到值。</div>';
@@ -13503,10 +13509,10 @@ function cwBeginEdit(el, b, i) {
   const kindCfg = flowNodeCfgHtml(b, nd, i);
   el.innerHTML = `
     <span class="node-del" data-i="${i}" title="删除节点">✕</span>
-    <select class="ne-type" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px">
+    <select class="ne-type" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px">
       ${NODE_TYPES.map(t => `<option value="${t.lbl}" ${t.lbl === nd.lbl ? 'selected' : ''}>${t.lbl}</option>`).join('')}
     </select>
-    <select class="ne-bot" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px;display:${isHandoffType ? 'block' : 'none'}" ${botOpts ? '' : 'disabled'}>
+    <select class="ne-bot" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:11px;padding:5px 8px;margin-bottom:6px;display:${isHandoffType ? 'block' : 'none'}" ${botOpts ? '' : 'disabled'}>
       ${botOpts ? botOpts : '<option value="">（暂无其他机器人）</option>'}
     </select>
     <div class="ne-cap">标题 <span style="font-weight:400">（卡片上的大字）</span></div>
@@ -13517,7 +13523,7 @@ function cwBeginEdit(el, b, i) {
     ${isAprType ? `
     <div style="margin-top:6px">
       <div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>
-      <textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical">${escapeHtml(nd.note || '')}</textarea>
+      <textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical">${escapeHtml(nd.note || '')}</textarea>
       <label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)"><span class="switch"><input type="checkbox" class="ne-autoreview" ${nd.autoReview ? 'checked' : ''}><span class="slider"></span></span> 启用预审（复用质检逻辑，发出前先出质检意见）</label>
     </div>` : ''}
     <div class="node-edit-save">
@@ -13591,7 +13597,7 @@ function cwBeginEdit(el, b, i) {
       aprBox = document.createElement('div'); aprBox.className = 'apr-box';
       aprBox.style.marginTop = '6px';
       aprBox.innerHTML = '<div style="font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600">审批说明 / 规则</div>' +
-        '<textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical"></textarea>' +
+        '<textarea class="ne-note" placeholder="给审批人的确认要点，如：无违规承诺、符合品牌调性" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:12px;padding:6px 8px;min-height:42px;resize:vertical"></textarea>' +
         '<label style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--txt)">' + SW('class="ne-autoreview" checked') + ' 启用预审（复用质检逻辑，发出前先出质检意见）</label>';
       el.insertBefore(aprBox, el.querySelector('.node-edit-save'));
     }
@@ -14210,7 +14216,7 @@ async function aiPlotRun(refine) {
     v.nodes.forEach(function (n) { n.x = pos[n.id].x; n.y = pos[n.id].y; });
     window.__aiPlotResult = v;
     const rows = v.nodes.map(function (n) {
-      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12.5px">'
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:var(--fs-sm)">'
         + '<b style="flex-shrink:0">' + escapeHtml(n.lbl) + '</b>'
         + '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(n.h || '') + '</span>'
         + '<span style="margin-left:auto;color:var(--sub);font-size:11px;flex-shrink:0">' + escapeHtml(n.id) + '</span></div>';
@@ -14223,7 +14229,7 @@ async function aiPlotRun(refine) {
         + v.edges.map(function (e) {
           const f = byId[e.from] ? (byId[e.from].h || e.from) : e.from;
           const t = byId[e.to] ? (byId[e.to].h || e.to) : e.to;
-          return '<div style="font-size:11.5px;color:var(--sub);padding:2px 0">'
+          return '<div style="font-size:var(--fs-xs);color:var(--sub);padding:2px 0">'
             + escapeHtml(f) + ' <span style="color:var(--brand-text)">→</span> ' + escapeHtml(t)
             + (e.port > 0 ? ' <span style="color:var(--brand-text)">[分支' + (e.port + 1) + ']</span>' : '')
             + '</div>';
@@ -14242,7 +14248,7 @@ async function aiPlotRun(refine) {
       + '<button class="btn btn-primary" onclick="aiPlotApply(\'replace\')">替换画布</button></div>'
       + '<div style="display:flex;gap:8px;margin-top:10px">'
       + '<input id="aiPlotRefine" placeholder="想再调整？例：在最后加一个人工确认步骤" '
-      + 'style="flex:1;min-width:0;box-sizing:border-box;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--fill);color:var(--txt);padding:8px 10px;font-size:12.5px" '
+      + 'style="flex:1;min-width:0;box-sizing:border-box;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--fill);color:var(--txt);padding:8px 10px;font-size:var(--fs-sm)" '
       + 'onkeydown="if(event.key===\'Enter\')aiPlotRun(1)">'
       + '<button class="btn btn-ghost" onclick="aiPlotRun(1)" style="flex-shrink:0">继续调整</button></div>';
   } catch (e) {
@@ -14976,7 +14982,7 @@ function renderExpertisePanel(b) {
   var rows = EXP_FIELDS.map(function (f) {
     var val = e[f.k] || '';
     var head = '<div style="font-size:12px;color:var(--sub);margin-bottom:4px">' + escapeHtml(f.label) + '</div>';
-    var st = 'width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit';
+    var st = 'width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);color:var(--txt);font-size:13px;font-family:inherit';
     if (f.k === 'field') {
       return '<div style="margin-bottom:10px">' + head
         + '<input class="exp-in" data-exp="field" value="' + escapeAttr(val) + '" placeholder="' + escapeAttr(f.hint) + '" style="' + st + '">'
@@ -15017,7 +15023,7 @@ function renderGenParamsPanel(b) {
   var t = normBotTemp(b.temperature);
   var followed = (t === null);
   var rangeVal = followed ? (Number(cfg.temperature) || 0.7) : t;
-  var st = 'width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill);color:var(--txt);font-size:13px';
+  var st = 'width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--fill);color:var(--txt);font-size:13px';
   box.innerHTML = '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">'
     + '<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px">' + svgIcon('gear') + ' 运行参数</div>'
     + '<div style="font-size:11px;color:var(--sub);margin-bottom:10px">不选就跟随「设置」里的全局默认。给机器人的模型换服务商后会自动跟随，不会卡在旧模型名上。</div>'
@@ -18075,8 +18081,8 @@ function renderTplPick() {
     ...getUserTpls().map(t => ({ n: t.n, d: t.d, ic: t.ic, c: t.c, prompt: t.prompt || '', nodes: t.nodes || undefined, plugins: t.plugins || [], knowledges: t.knowledges || [], model: t.model || undefined, brand: t.brand || {}, src: '我的' })),
   ];
   box.innerHTML = list.map((t, i) => `<div class="tpl-card" data-i="${i}" style="display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;background:var(--glass-bg-hover);transition:var(--dur-2)">
-    <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:${t.c}">${botGlyph(t)}</div>
-    <div style="min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.n)}</div><div style="font-size:11.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml((t.d || '') + (t.src ? ' · ' + t.src : ''))}</div></div>
+    <div style="width:34px;height:34px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:${t.c}">${botGlyph(t)}</div>
+    <div style="min-width:0"><div style="font-size:var(--fs-base);font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.n)}</div><div style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml((t.d || '') + (t.src ? ' · ' + t.src : ''))}</div></div>
   </div>`).join('');
   box.querySelectorAll('.tpl-card').forEach(el => {
     el.onclick = () => {
@@ -18740,7 +18746,7 @@ function renderStyleWorkspacePanel(b) {
   const curName = curStyle ? ((getStyleById(curStyle) || {}).n || '') : '';
   let html = '';
   if (curName) {
-    html += `<div style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:var(--glass-bg);border:1px solid var(--glass-border);font-size:12px;color:var(--txt);display:flex;align-items:center;gap:10px">
+    html += `<div style="margin-bottom:12px;padding:10px 14px;border-radius:var(--r-md);background:var(--glass-bg);border:1px solid var(--glass-border);font-size:12px;color:var(--txt);display:flex;align-items:center;gap:10px">
       <span style="font-size:18px">${svgIcon('checkCircle','solo')}</span>
       <span>当前已应用：<b>${escapeHtml(curName)}</b>，发送消息时会按此风格输出</span>
       <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="clearStyle()">清除</button>
@@ -18957,7 +18963,7 @@ function kbRename(id) {
   var cur = h4.textContent || '';
   var inp = document.createElement('input');
   inp.type = 'text'; inp.value = cur;
-  inp.style.cssText = 'width:100%;box-sizing:border-box;padding:4px 8px;border-radius:8px;border:1px solid var(--brand);background:var(--fill);color:var(--txt);font-size:13px;font-weight:590;font-family:inherit';
+  inp.style.cssText = 'width:100%;box-sizing:border-box;padding:4px 8px;border-radius:var(--r-sm);border:1px solid var(--brand);background:var(--fill);color:var(--txt);font-size:13px;font-weight:590;font-family:inherit';
   h4.textContent = '';
   h4.appendChild(inp);
   inp.focus(); inp.select();
@@ -20398,14 +20404,14 @@ function parseRemindTime(s){
 function renderRemindersInModal(){
   const box = document.getElementById('remindListBox'); if(!box) return;
   const list = loadReminders().sort((a,b)=>a.time-b.time);
-  if(!list.length){ box.innerHTML = '<div class="empty-tip" style="padding:10px 4px;color:var(--sub);font-size:12.5px">还没有提醒。添加一条，或直接在对话中让机器人「提醒我明天 9:00 开会」。</div>'; return; }
+  if(!list.length){ box.innerHTML = '<div class="empty-tip" style="padding:10px 4px;color:var(--sub);font-size:var(--fs-sm)">还没有提醒。添加一条，或直接在对话中让机器人「提醒我明天 9:00 开会」。</div>'; return; }
   const now = Date.now();
   box.innerHTML = list.map(r=>{
     const past = r.time<=now;
-    return `<div class="remind-item" style="display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--glass-bg)">
+    return `<div class="remind-item" style="display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:8px;background:var(--glass-bg)">
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.title)}</div>
-        <div style="font-size:11.5px;color:var(--sub)">${fmtRemindTime(r.time)} ${past?'· 已到':'· 待触发'}</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub)">${fmtRemindTime(r.time)} ${past?'· 已到':'· 待触发'}</div>
       </div>
       <button class="mini-x" onclick="removeReminder('${escAttrJs(r.id)}')" title="删除">✕</button>
     </div>`;
@@ -20419,14 +20425,14 @@ function remindersExtraHTML(){
   var askBtnText = desk ? '发送测试通知' : '开启系统通知';
   return `<div style="margin-top:14px">
     <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:600">${svgIcon('calendar')} 我的提醒（本地存储，到点弹出通知）</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--glass-bg)">
-      <div id="notifyState" style="flex:1;min-width:0;font-size:11.5px;color:var(--sub);line-height:1.5">${escapeHtml(notifyStateText())}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--glass-bg)">
+      <div id="notifyState" style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--sub);line-height:1.5">${escapeHtml(notifyStateText())}</div>
       ${needAsk ? '<button class="btn btn-ghost btn-sm" onclick="askNotificationPermission()">'+askBtnText+'</button>' : ''}
     </div>
     <div id="remindListBox"></div>
     <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
-      <input id="remindTitle" placeholder="提醒内容，如：提交周报" style="flex:1;min-width:140px;padding:9px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
-      <input id="remindTime" type="datetime-local" style="padding:9px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
+      <input id="remindTitle" placeholder="提醒内容，如：提交周报" style="flex:1;min-width:140px;padding:9px 12px;border-radius:var(--r-md);background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
+      <input id="remindTime" type="datetime-local" style="padding:9px 10px;border-radius:var(--r-md);background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:13px">
       <button class="btn btn-primary btn-sm" onclick="addReminderFromUI()">添加</button>
     </div>
   </div>`;
@@ -20569,14 +20575,14 @@ function codeRunnerExtraHTML(){
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" id="codeLangJs" onclick="setCodeRunnerLang('js')">JavaScript</button>
       <button class="btn btn-ghost btn-sm" id="codeLangPy" onclick="setCodeRunnerLang('py')"${canPy ? '' : ' disabled title="Python 运行需要桌面版"'} style="${canPy ? '' : 'opacity:.5;cursor:not-allowed'}">Python${canPy ? '' : '（需桌面版）'}</button>
-      <span style="font-size:11.5px;color:var(--sub)" id="codeLangHint">${canPy ? '桌面版可用：JavaScript 走浏览器沙箱，Python 走后端白名单沙箱' : '浏览器直开只能跑 JavaScript；桌面版另支持 Python'}</span>
+      <span style="font-size:var(--fs-xs);color:var(--sub)" id="codeLangHint">${canPy ? '桌面版可用：JavaScript 走浏览器沙箱，Python 走后端白名单沙箱' : '浏览器直开只能跑 JavaScript；桌面版另支持 Python'}</span>
     </div>
-    <textarea id="codeRunnerInput" placeholder="// 在此输入 JavaScript 代码，点击运行查看输出&#10;console.log(1+2);" style="width:100%;height:120px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:12.5px;font-family:var(--font-mono);resize:vertical"></textarea>
+    <textarea id="codeRunnerInput" placeholder="// 在此输入 JavaScript 代码，点击运行查看输出&#10;console.log(1+2);" style="width:100%;height:120px;padding:10px 12px;border-radius:var(--r-md);background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:var(--fs-sm);font-family:var(--font-mono);resize:vertical"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn btn-primary btn-sm" onclick="runCodeInSandbox()">▶ 运行</button>
       <button class="btn btn-ghost btn-sm" onclick="if(document.getElementById('codeRunnerInput'))document.getElementById('codeRunnerInput').value=''">清空</button>
     </div>
-    <pre id="codeRunnerOut" style="margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--sub);font-size:12px;white-space:pre-wrap;min-height:20px"></pre>
+    <pre id="codeRunnerOut" style="margin-top:8px;padding:10px 12px;border-radius:var(--r-md);background:var(--bg);border:1px solid var(--line);color:var(--sub);font-size:12px;white-space:pre-wrap;min-height:20px"></pre>
   </div>`;
 }
 // 面板语言切换：按钮高亮 + 输入框占位与提示同步（示例代码只在空框时替换，不动用户已写的内容）
@@ -20831,7 +20837,7 @@ function extDetailHTML(id) {
   const doms = perm.domains || [];
   const tools = p.tools || [];
   let h = '<div style="font-size:12px;color:var(--sub);margin:12px 0 6px;font-weight:600">权限</div>'
-    + '<div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;line-height:1.8">'
+    + '<div style="background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;font-size:var(--fs-sm);line-height:1.8">'
     + '联网域名：' + (doms.length ? escapeHtml(doms.join('、')) : '（不联网）') + '<br>'
     + '读取当前对话：' + (perm.readChat ? '是' : '否') + '<br>'
     + '作者：' + escapeHtml(p.author || '未署名') + '<br>'
@@ -20842,7 +20848,7 @@ function extDetailHTML(id) {
       const nm = escapeAttr(String(t.name));
       h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
         + '<code style="font-size:12px">' + escapeHtml(String(t.name)) + '</code>'
-        + '<span style="font-size:11.5px;color:var(--sub);flex:1;min-width:120px">' + escapeHtml(String(t.description || '')) + '</span>'
+        + '<span style="font-size:var(--fs-xs);color:var(--sub);flex:1;min-width:120px">' + escapeHtml(String(t.description || '')) + '</span>'
         + '<button class="style-view-btn" onclick="event.stopPropagation();extTryTool(' + JSON.stringify(String(id)) + ',' + JSON.stringify(String(t.name)) + ')">试跑</button>'
         + '</div>'
         + '<textarea class="ext-arg" data-tool="' + nm + '" rows="2" style="width:100%;font-size:12px;margin-bottom:8px" placeholder=\'参数 JSON，例如 {"city":"上海"}\'></textarea>'
@@ -21298,7 +21304,7 @@ function renderPublishArtifacts(b) {
   if (on.indexOf('网页嵌入') >= 0) {
     var enc = encodeBotCfg(b);
     var embedH = (b.pubEmbed && b.pubEmbed.height) ? b.pubEmbed.height : 640;
-    var iframe = '<iframe src="BotCraft.html?botcfg=' + encodeURIComponent(enc) + '" width="100%" height="' + embedH + '" style="border:0;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.12)" allow="clipboard-write"></iframe>';
+    var iframe = '<iframe src="BotCraft.html?botcfg=' + encodeURIComponent(enc) + '" width="100%" height="' + embedH + '" style="border:0;border-radius:var(--r-xl);box-shadow:0 8px 30px rgba(0,0,0,.12)" allow="clipboard-write"></iframe>';
     html += '<div class="pub-card"><div class="pub-card-h">' + svgIcon('link') + ' 网页嵌入</div>'
       + '<div class="pub-note">把下面的 &lt;iframe&gt; 代码贴到你网站任意页面即可。需把本文件（<code>BotCraft.html</code>）与宿主页放同一目录或改为完整网址；并在托管副本的「设置」里配置 API Key（Key 不会随链接外泄）。</div>'
       + '<textarea class="pub-code" id="pubIframe" readonly>' + escapeHtml(iframe) + '</textarea>'
@@ -23542,7 +23548,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.22.6';
+var APP_VERSION = '3.23.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -25586,7 +25592,7 @@ function _kbIndexFor(bot) {
     if (document.getElementById('runLogPanel')) return;
     var panel = document.createElement('div');
     panel.id = 'runLogPanel';
-    panel.style.cssText = 'position:fixed;right:18px;bottom:18px;width:360px;max-height:60vh;overflow:auto;z-index:60;background:var(--log-bg);backdrop-filter:var(--glass-filter);-webkit-backdrop-filter:var(--glass-filter);border:1px solid var(--log-border);border-radius:14px;box-shadow:var(--glass-ridge),var(--log-shadow);color:var(--log-fg);font-size:12px;display:none';
+    panel.style.cssText = 'position:fixed;right:18px;bottom:18px;width:360px;max-height:60vh;overflow:auto;z-index:60;background:var(--log-bg);backdrop-filter:var(--glass-filter);-webkit-backdrop-filter:var(--glass-filter);border:1px solid var(--log-border);border-radius:var(--r-xl);box-shadow:var(--glass-ridge),var(--log-shadow);color:var(--log-fg);font-size:12px;display:none';
     panel.innerHTML = '<div id="runLogHead" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--log-border);font-weight:600;position:sticky;top:0;background:var(--log-head-bg);cursor:move;user-select:none;white-space:nowrap"><span class="rl-grip" title="拖动我" style="opacity:.55;margin-right:5px">⠿</span><span style="font-size:14px;line-height:1">' + svgIcon('empty','solo') + '</span><span class="rl-title" style="margin-left:6px">执行日志</span><span id="runLogMin" class="rl-min" style="cursor:pointer;opacity:.7;padding:0 6px;margin-left:auto" title="收起 / 展开">—</span><span id="runLogClose" class="rl-close" style="cursor:pointer;opacity:.7;padding:0 6px;margin-left:6px">✕</span></div><div id="runLogBody" style="padding:10px 14px"></div>';
     document.body.appendChild(panel);
     var close = document.getElementById('runLogClose');
@@ -25759,7 +25765,7 @@ function _kbIndexFor(bot) {
     body.innerHTML = (logs || []).map(function (l) {
       var o = (l.output || '').slice(0, 600);
       var _note = l.note ? '<div style="margin-top:6px;color:var(--warn-text);line-height:1.5">' + escapeHtml(l.note) + '</div>' : '';
-      return '<div style="margin-bottom:12px;padding:8px 10px;border:1px solid var(--log-item-border);border-radius:10px;background:var(--log-item-bg)">' +
+      return '<div style="margin-bottom:12px;padding:8px 10px;border:1px solid var(--log-item-border);border-radius:var(--r-md);background:var(--log-item-bg)">' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:4px;color:var(--log-item-fg)">#' + l.i + ' · ' + (roleLabel[l.role] || l.role) + ' · ' + escapeHtml(l.name || '') + ' <span style="color:var(--log-ms)">' + l.ms + 'ms</span></div>' +
         '<div style="white-space:pre-wrap;line-height:1.5;max-height:140px;overflow:auto">' + escapeHtml(o) + '</div>' + _note + '</div>';
     }).join('');
