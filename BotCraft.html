@@ -9228,7 +9228,42 @@ function aiPlotMakeUnique(nodes, edges, usedIds) {
 // 已验证可用。模型只负责**说**要做什么，能不能做由这里的校验器说了算 —— 它不认识
 // 的类型、指空的 id、成环的连线，一律拒绝并在回执里说明，绝不静默改坏画布。
 
+// 剥掉包裹的引号（协议允许 "带 空格 的值"，也容忍中文引号）
+function canvasStripQuotes(s) {
+  var t = String(s === null || s === undefined ? '' : s).trim();
+  if (t.length >= 2) {
+    var a = t.charAt(0), b = t.charAt(t.length - 1);
+    if ((a === '"' && b === '"') || (a === "'" && b === "'") || (a === '“' && b === '”') || (a === '「' && b === '」')) {
+      t = t.slice(1, -1).trim();
+    }
+  }
+  return t;
+}
+// 按空格分词，引号内的空格不切（k="带 空格 的值" 算一个 token）
+function canvasSplitLoose(body) {
+  var toks = [], cur = '', q = '', s = String(body || '');
+  for (var i = 0; i < s.length; i++) {
+    var ch = s.charAt(i);
+    if (q) { if (ch === q) { q = ''; } else { cur += ch; } continue; }
+    if (ch === '"' || ch === "'" || ch === '“' || ch === '「') {
+      q = (ch === '“') ? '”' : ((ch === '「') ? '」' : ch);
+      continue;
+    }
+    if (/\s/.test(ch)) { if (cur) { toks.push(cur); cur = ''; } continue; }
+    cur += ch;
+  }
+  if (cur) toks.push(cur);
+  return toks;
+}
 // 从句子里抠出所有 [CANVAS: ...] 指令行。容忍大小写、前后空白、行尾其他内容。
+/* 2026-10-21：**参数分隔容错**。协议文档写的是竖线分隔：
+     [CANVAS: add | 节点类型 | 标题 | 说明 | after=n3]
+   但模型最常写成空格分隔：
+     [CANVAS: add 节点类型 标题=验证 after=n3]
+   原实现只按竖线切，于是 seg[0] 变成整串、op 认不出来，整条指令被丢弃 ——
+   用户看到的就是「说了要改画布，画布没改：指令都不合法（不认识的指令「add ...」）」。
+   现在三种形态都能吃下：全竖线 / 全空格 / 混写（`add 代码 | 标题=验证`）。
+   注意 op 只取首段的**第一个 token**，其余 token 作为位置参数补齐。 */
 function canvasOpsParse(text) {
   var out = [];
   var re = /\[\s*CANVAS\s*:\s*([^\]\n]*)\]/gi, m;
@@ -9237,14 +9272,26 @@ function canvasOpsParse(text) {
     var body = String(m[1] || '').trim();
     if (!body) continue;
     var seg = body.split('|').map(function (x) { return x.trim(); });
-    if (!seg.length) continue;
-    var op = seg[0].toLowerCase();
-    var args = seg.slice(1), kv = {}, pos = [];
+    var first = seg.length ? seg[0] : '';
+    var opTok = first, extra = [];
+    if (seg.length <= 1) {
+      // 没有竖线 → 整体按空格分词
+      var loose = canvasSplitLoose(body);
+      opTok = loose[0] || '';
+      extra = loose.slice(1);
+    } else {
+      // 有竖线，但首段里可能还夹着位置参数（"add 代码 | 标题=验证"）
+      var sp = first.search(/\s/);
+      if (sp > 0) { opTok = first.slice(0, sp); extra = [first.slice(sp + 1).trim()]; }
+    }
+    var op = canvasStripQuotes(opTok).toLowerCase();
+    if (!op) continue;
+    var args = extra.concat(seg.slice(1)), kv = {}, pos = [];
     for (var i = 0; i < args.length; i++) {
-      var a = args[i];
+      var a = canvasStripQuotes(args[i]);
       if (!a) continue;
       var eq = a.indexOf('=');
-      if (eq > 0) kv[a.slice(0, eq).trim().toLowerCase()] = a.slice(eq + 1).trim();
+      if (eq > 0) kv[a.slice(0, eq).trim().toLowerCase()] = canvasStripQuotes(a.slice(eq + 1));
       else pos.push(a);
     }
     out.push({ op: op, pos: pos, kv: kv, raw: m[0] });
@@ -9428,7 +9475,7 @@ function canvasOpsValidate(ops, b, TYPES) {
       continue;
     }
     if (op === 'layout' || op === 'fit') { out.push({ op: op }); continue; }
-    warn('不认识的指令「' + String(o.op).slice(0, 12) + '」，已忽略');
+    warn('不认识的指令「' + String(o.op).slice(0, 12) + '」，已忽略（格式：[CANVAS: add | 节点类型 | 标题 | 说明 | after=节点id]）');
   }
   if (!out.length) { res.error = '指令都不合法（详见警告）'; res.warnings = res.warnings; return res; }
   res.list = out; res.ok = true;
@@ -16258,7 +16305,11 @@ async function runReply(b, opt) {
   // 若用户上一条本身就是生图请求，userWantsImage 照样命中，重做生图请求不受影响。
   const _retryPrompt = (!userWantsImage && !opt.regen && isImageRetryAsk(v) && recentImageContext(b.history))
     ? lastImagePromptInHistory(b.history) : '';
-  const wantsImage = userWantsImage || !!_retryPrompt;
+  /* 2026-10-21 修：**只有启用了「图片生成」插件才允许真的调文生图接口**。
+     原来这里完全不看插件（上一版注释还明写「无论是否启用插件」），于是用户随口一句
+     「画一张图」就会在没装插件的情况下偷偷调接口：既违背插件开关的语义，也会在用户
+     没配生图 Key 时冒出一个生图错误气泡。 */
+  const wantsImage = hasImagePlugin && (userWantsImage || !!_retryPrompt);
   // 提示词必须做上下文补足：用户常说「生成行程配图」这类指代句，只抽出「行程」两个字
   // 发给生图接口，出来的图必然与要求不符（2026-09-22 用户实测：要行程图，得到一张人像）。
   const imagePromptText = userWantsImage ? buildImagePrompt(v, b.history) : _retryPrompt;
@@ -16268,7 +16319,8 @@ async function runReply(b, opt) {
     const imgTip = document.createElement('div');
     imgTip.className = 'msg bot img-tip';
     imgTip.id = 'imgTip_' + b.history.length;
-    imgTip.innerHTML = _body(escapeHtml(activeBot.n), hasImagePlugin ? '🎨 已接收到配图需求，正在生成图片，请稍候…' : '🎨 检测到你想要图片，正在直接生成，请稍候…');
+    // wantsImage 已经蕴含 hasImagePlugin，原来的「未启用插件也生成」那条文案没有存在意义
+    imgTip.innerHTML = _body(escapeHtml(activeBot.n), '🎨 已接收到配图需求，正在生成图片，请稍候…');
     chat.appendChild(imgTip); _scrollChat();
   }
 
@@ -16336,7 +16388,7 @@ async function runReply(b, opt) {
             }
           } else if (_onScreen()) { appendImageError('未返回图片地址', activeBot.n); }
         } catch (e) { console.warn('[图片生成] 失败：', e); if (_onScreen()) appendImageError(e && e.message ? e.message : e, activeBot.n); }
-      } else if (!opt.regen && !hasImageMarkdown(result.final) && claimsImageGenerated(result.final)) {
+      } else if (hasImagePlugin && !opt.regen && !hasImageMarkdown(result.final) && claimsImageGenerated(result.final)) {
         // 模型谎报「已生成配图」：本轮没起生图任务、正文里也没有图 —— 代码负责兑现，
         // 用上下文里最近一次生图提示词真生成一张（「再试一次」这类追问最容易触发谎报）。
         // opt.regen 例外：用户点的是「重新生成」（重做这条回答），没要求生图。这时模型
@@ -16470,7 +16522,7 @@ async function runReply(b, opt) {
           }
         } else if (_onScreen()) { appendImageError('未返回图片地址', activeBot.n); }
       } catch (e) { console.warn('[图片生成] 失败：', e); if (_onScreen()) appendImageError(e && e.message ? e.message : e, activeBot.n); }
-    } else if (!opt.regen && !hasImageMarkdown(full) && claimsImageGenerated(full)) {
+    } else if (hasImagePlugin && !opt.regen && !hasImageMarkdown(full) && claimsImageGenerated(full)) {
       // 同上：模型声称生成了图但没真生成 → 用最近一次生图提示词兑现
       // （同样排除「重新生成」按钮：那条路径下用户要的是重做回答，不是补一张图）
       const _lp2 = lastImagePromptInHistory(b.history);
@@ -16756,11 +16808,14 @@ function stopGenerate() {
   if (chat) chat.querySelectorAll('.typing').forEach(t => t.remove());
 }
 // ==================== 消息操作：重新生成 / 编辑重发 ====================
-// DOM 里 .msg 的顺序与 b.history 一一对应（renderHistory 只渲染消息，typing / 进度气泡都是额外元素）
-function _msgEls() {
-  var chat = document.getElementById('chat');
-  return chat ? Array.prototype.slice.call(chat.querySelectorAll('.msg')) : [];
-}
+/* ⚠️ 不要为了「按下标取第 N 条气泡」再造一个类似 _msgEls 的辅助函数。
+   历史教训（2026-10-21）：曾经有 `_msgEls()` 返回所有 .msg，而 typing / img-tip /
+   gen-tmp（生图提示、工作流进度）也是 .msg 且**没有 data-mi**。regenLastReply /
+   confirmEditMsg / jumpToHit 都拿它的下标与 b.history 对位，结果：
+     · 点「重新生成」把用户自己那条气泡一起删掉（用户看到「我刚发的话没了」）
+     · 搜索跳转高亮到别的消息上
+   按历史条目定位，唯一正确的判据是 '.msg[data-mi="N"]'（renderHistory 与 appendMsg
+   都写了 data-mi）。_msgEls 已删除：三个调用点改完后它成了死代码，留着就是个陷阱。 */
 function _lastBotIndex(b) {
   var h = (b && b.history) || [];
   for (var i = h.length - 1; i >= 0; i--) { if (h[i].role === 'bot') return i; }
@@ -16774,8 +16829,22 @@ async function regenLastReply() {
   var idx = _lastBotIndex(b);
   if (idx < 0) { toast('还没有可重新生成的回复', ''); return; }
   b.history.splice(idx);
-  var els = _msgEls();
-  for (var i = idx; i < els.length; i++) els[i].remove();  // 同步清 DOM，避免整段重绘的闪动
+  /* 2026-10-21 修：这里原来按下标删 DOM ——
+       var els = _msgEls(); for (var i = idx; i < els.length; i++) els[i].remove();
+     而 _msgEls() 取的是所有 .msg，里面混着 typing / img-tip / gen-tmp 这些**没有 data-mi
+     的临时节点**（生图提示、工作流进度都算）。它们占位后，DOM 下标与 history 下标就错开了，
+     于是「从 idx 往后全删」会把用户自己那条气泡（以及更早的气泡）一起删掉 ——
+     表现就是「点重新生成，我刚才发的话没了」。
+     正确做法：气泡上都带 data-mi（renderHistory 与 appendMsg 都写了），按它精确匹配。 */
+  var _chat = document.getElementById('chat');
+  if (_chat) {
+    Array.prototype.forEach.call(_chat.querySelectorAll('.msg[data-mi]'), function (el) {
+      var mi = parseInt(el.getAttribute('data-mi'), 10);
+      if (!isNaN(mi) && mi >= idx) el.remove();
+    });
+    // 顺带清掉不属于任何历史条目的临时节点，避免残留「正在生成…」「已接收到配图需求」
+    _chat.querySelectorAll('.typing, .img-tip, .gen-tmp').forEach(function (el) { el.remove(); });
+  }
   b.updatedAt = Date.now(); saveBots();
   var lastMe = null;
   for (var j = b.history.length - 1; j >= 0; j--) { if (b.history[j].role === 'me') { lastMe = b.history[j]; break; } }
@@ -16815,8 +16884,16 @@ async function confirmEditMsg() {
   msg.text = txt; msg.t = Date.now(); msg.edited = true;
   // 这条消息之后的所有对话都作废——否则重发会把已经与旧内容绑定的回答再喂回模型
   b.history.splice(i + 1);
-  var els = _msgEls();
-  for (var k = i; k < els.length; k++) els[k].remove();
+  /* 2026-10-21：与 regenLastReply 同一处坑 —— 按下标删会连同更早的气泡一起误删
+     （_msgEls() 里混着没有 data-mi 的临时节点）。按 data-mi 精确删。 */
+  var _cChat = document.getElementById('chat');
+  if (_cChat) {
+    Array.prototype.forEach.call(_cChat.querySelectorAll('.msg[data-mi]'), function (el) {
+      var mi = parseInt(el.getAttribute('data-mi'), 10);
+      if (!isNaN(mi) && mi >= i) el.remove();
+    });
+    _cChat.querySelectorAll('.typing, .img-tip, .gen-tmp').forEach(function (el) { el.remove(); });
+  }
   closeEditMsg();
   b.updatedAt = Date.now(); saveBots();
   appendMsg(b, msg);
@@ -16976,7 +17053,9 @@ function jumpToHit(sid, mi) {
   if (b.activeSession !== sid) switchSession(sid, true);
   closeSessPanel();
   setTimeout(function () {
-    var el = _msgEls()[mi];
+    // 2026-10-21：这里原来是 _msgEls()[mi] —— 用历史下标去取 DOM 位置，
+    // 临时节点（typing / img-tip / gen-tmp）一占位就错位，跳转会高亮到别的消息上。
+    var el = document.querySelector('#chat .msg[data-mi="' + mi + '"]');
     if (!el) return;
     try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); }
     el.classList.add('hit');
@@ -23463,7 +23542,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.22.5';
+var APP_VERSION = '3.22.6';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
