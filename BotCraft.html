@@ -19828,8 +19828,23 @@ function _kbHighlightCode(lang, code) {
 function _kbFenceIndentedCode(text) {
   var lines = String(text || '').split('\n');
   var out = [], i = 0, n = lines.length;
+  /* 必须跟踪围栏状态（2026-10-22）
+     本函数只看「前一行是空行 + 当前行缩进 ≥4 空格」，于是**代码块内部**的
+     「空行 + 缩进行」（for 循环体就是这么写的）会被当成新的一段缩进代码，
+     在围栏内部再插一对 ```，把一段代码劈成几段 —— 渲染出来就是
+     「前几行在代码框里、后面几行变成正文」（用户截图实证）。
+     以前通用路径不产出围栏，这条缺陷碰不到；现在会产出，必须修。
+     _kbStripAds 早就用 inCode 做了同样的事，这里照抄。 */
+  var inFence = false, fenceMark = '';
   while (i < n) {
     var ln = lines[i];
+    var fm = /^\s*(\x60{3,}|~{3,})/.exec(ln);
+    if (fm) {
+      if (!inFence) { inFence = true; fenceMark = fm[1].charAt(0); }
+      else if (fm[1].charAt(0) === fenceMark) { inFence = false; }
+      out.push(ln); i++; continue;
+    }
+    if (inFence) { out.push(ln); i++; continue; }   // 围栏内原样保留，不再套围栏
     var prevBlank = (i === 0) || (lines[i - 1].trim() === '');
     var indented = /^( {4,}|\t)/.test(ln);
     if (prevBlank && indented) {
@@ -20084,6 +20099,16 @@ function _kbStripNoise(html) {
       var doc = new DOMParser().parseFromString('<div id="__kbNoiseRoot">' + s + '</div>', 'text/html');
       var root = doc.getElementById('__kbNoiseRoot');
       if (root) {
+        /* 删之前先算总文本量：清噪声不能把正文一起清掉（2026-10-22 回归）
+           真实站点很常见「布局容器名字含噪声词、内部装着正文」——洛谷 discuss 页
+           正文与侧栏同在一个 class="sidebar-container reverse layout" 里，
+           按名字判成噪声块整块删，正文就全没了（实测导入后正文 0 字）。
+           两道保护：
+             ① 节点内部含 pre / article / main 就不整体删（代码块与正文语义标签是强特征），
+                交给它的子节点各自判定 —— 遍历本来就是全后代，不会漏；
+             ② 按被删文本量从小到大处理，且始终保证剩余文本 ≥ 总量 45%。
+           原则是「宁可留一点噪声，也不能丢正文」——噪声用户能手动删，正文丢了找不回。 */
+        var totalLen = String(root.textContent || '').replace(/\s+/g, '').length;
         var all = root.querySelectorAll('*');
         var victims = [];
         for (var i = 0; i < all.length; i++) {
@@ -20091,12 +20116,25 @@ function _kbStripNoise(html) {
           var tag = String(el.tagName || '').toLowerCase();
           // 根容器与文档级标签不参与判定（大写的 HTML/BODY 由解析器给，别误删内容）
           if (tag === 'html' || tag === 'body') continue;
+          // 代码区（pre / code 内部）不参与噪声判定（2026-10-22）
+          // 语法高亮会把源码拆成一堆 span（类名形如 token、token comment、token keyword），
+          // 而 comment 正在噪声名单里 —— 不跳过的话，代码里的注释会被整段删掉
+          // （实测：`# 引入CYaRon的库` 直接消失，代码也不完整了）。
+          if (el.closest && el.closest('pre,code')) continue;
           var cls = el.getAttribute('class') || '';
           var idv = el.getAttribute('id') || '';
-          if ((cls && KW.test(cls)) || (idv && KW.test(idv))) victims.push(el);
+          if (!((cls && KW.test(cls)) || (idv && KW.test(idv)))) continue;
+          if (el.querySelector && el.querySelector('pre,article,main')) continue;   // 保护 ①
+          victims.push({ el: el, len: String(el.textContent || '').replace(/\s+/g, '').length });
         }
+        victims.sort(function (a, b) { return a.len - b.len; });   // 小的先删
+        var removedLen = 0;
         for (var k = 0; k < victims.length; k++) {
-          try { victims[k].parentNode && victims[k].parentNode.removeChild(victims[k]); } catch (e) {}
+          var it = victims[k];
+          if (totalLen > 0 && (totalLen - (removedLen + it.len)) < totalLen * 0.45) continue;  // 保护 ②
+          try {
+            if (it.el.parentNode) { it.el.parentNode.removeChild(it.el); removedLen += it.len; }
+          } catch (e) {}
         }
         return root.innerHTML;
       }
@@ -20593,6 +20631,13 @@ var _KB_BOILER_RES = [
   /^(?:GEO|SEO)(?:检测|优化|分析)?$/,
   /^(?:扫码|扫一扫|微信扫一扫|关注公众号|关注我们|打开APP|APP内打开|下载APP|立即下载|点击下载|阅读原文|原文链接)/,
   /^(?:↑|↓|←|→|回到顶部|返回顶部|点击查看|点此查看|展开全部|显示全部|展开|收起)$/,
+  // 评论区/分页元信息（2026-10-22）：论坛、博客的回复区几乎都有这几行，
+  // 与正文无任何关系。全部是「整行精确匹配」，不会误伤正文句子。
+  /^\d+\s*条(?:回复|评论|留言)$/,
+  /^共\s*\d+\s*页$/,
+  /^(?:默认排序|按时间排序|按热度排序|按最新排序|时间正序|时间倒序)$/,
+  /^(?:编辑|发表|写|发布|添加)(?:回复|评论|留言)$/,
+  /^(?:回复|评论|留言)\s*[:：]\s*\d+$/,
   /^[\d\s.,:;·|/\\+\-=()（）]+$/
 ];
 // 逐行过滤样板行，并去掉与标题重复的行、连续重复的行
@@ -20727,7 +20772,19 @@ function _htmlToText(html, baseUrl) {   // baseUrl：页面地址，用于把相
     var lm = /(?:language|lang)-([\w+#.-]+)/i.exec(attrs + ' ' + inner);
     var code = _decodeEntities(String(inner)
       .replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''));
-    code = code.replace(/\r\n?/g, '\n').replace(/^\n+/, '').replace(/\s+$/, '');
+    // 行尾空白一并去掉：语法高亮会在标签之间留空格（`* </span> <span>` → `* `），
+    // 复制出去就是一串看不见的尾随空格。
+    code = code.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '')
+      .replace(/^\n+/, '').replace(/\s+$/, '');
+    /* Vue/React 服务端渲染会在标签之间插入换行，`<pre>` 里就变成「每行后面多一个空行」。
+       判据：空行占比超过一半才压缩 —— 正常代码的空行是稀疏的（函数之间、逻辑分段），
+       不会触发；一旦触发说明这些空行是渲染噪声，压掉反而更接近源码原貌。
+       缩进已由围栏保护，这里只动空行。 */
+    var __cl = code.split('\n'), __blank = 0;
+    for (var __i = 0; __i < __cl.length; __i++) { if (!__cl[__i].trim()) __blank++; }
+    if (__cl.length > 3 && __blank / __cl.length > 0.5) {
+      code = code.replace(/\n{2,}/g, '\n');
+    }
     if (!code.trim()) return ' ';
     var fence = /```/.test(code) ? '~~~' : '```';
     return __hold('\n\n' + fence + (lm ? lm[1].toLowerCase() : '') + '\n' + code + '\n' + fence + '\n\n');
@@ -24221,7 +24278,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.26.1';
+var APP_VERSION = '3.26.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
