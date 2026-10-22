@@ -20640,6 +20640,18 @@ var _KB_BOILER_RES = [
   /^(?:回复|评论|留言)\s*[:：]\s*\d+$/,
   /^[\d\s.,:;·|/\\+\-=()（）]+$/
 ];
+/* markdown 表格的分隔行（2026-10-22）
+   形如 `| --- | :---: | ---: |` 或紧凑写法 `|---|---|`。
+   它只由 | : - 空格 组成，会被「纯符号行」类规则当成装饰线删掉 ——
+   而分隔行是 markdown 表格成立的**必要条件**，删了就退化成字面管道文本。
+   三条判据同时成立才算：含 |、含至少两个连续 -、只含 | : - 空白。
+   所以 `----------` 这种真装饰线（无 |）仍会被正常清掉。 */
+function _kbIsTableSep(ln) {
+  var t = String(ln == null ? '' : ln).trim();
+  if (!t || t.indexOf('|') < 0) return false;
+  if (t.indexOf('--') < 0) return false;
+  return /^[\s:|-]+$/.test(t);
+}
 // 逐行过滤样板行，并去掉与标题重复的行、连续重复的行
 function _kbStripBoiler(text, title) {
   var s = String(text || '');
@@ -20650,6 +20662,9 @@ function _kbStripBoiler(text, title) {
     var ln = lines[i];
     var key = ln.trim();
     if (key) {
+      // 表格分隔行必须原样保留（2026-10-22）：它会被下面的「纯符号行」规则吃掉，
+      // 而分隔行一旦缺失，markdown 表格就不成立 —— 渲染成字面管道文本。
+      if (_kbIsTableSep(key)) { out.push(ln); prev = key; continue; }
       if (t && key === t) continue;          // 与文档标题重复
       if (key === prev) continue;            // 连续重复行（转载站点很常见）
       var hit = false;
@@ -20687,7 +20702,8 @@ function _normText(s) {
       if (out.length && out[out.length - 1] !== '') out.push('');   // 保留一个空行当段落分隔
       continue;
     }
-    if (/^[-–—_=*·•|]+$/.test(ln)) continue;   // 纯分隔线，直接丢弃
+    // 纯分隔线丢弃 —— 但表格分隔行（含 | 与 --）要留着，否则表格渲染不出来
+    if (!_kbIsTableSep(ln) && /^[-–—_=*·•|]+$/.test(ln)) continue;
     out.push(ln);
   }
   while (out.length && out[out.length - 1] === '') out.pop();   // 去尾随空行
@@ -20851,9 +20867,23 @@ function _kbComposeDoc(url, text, title, desc) {
   if (url) head.push('来源：' + url);
   var d = String(desc || '').trim();
   if (!d) {
-    // 没有 meta 描述时，用清洗后的正文首段生成摘要
-    var firstPara = body.split(/\n{2,}/)[0] || body;
-    d = firstPara.replace(/\s+/g, ' ').trim().slice(0, 160);
+    /* 没有 meta 描述时，用清洗后的正文首段生成摘要。
+       但不能直接取第一段 —— 它常常是 markdown 标题（`### 3. 日常操作的差别`）、
+       代码块、表格行或纯图片行，落到「摘要：」后面就是一句带标记的怪话（截图实证）。
+       往下找第一段真正的正文：跳过标题 / 围栏 / 表格 / 引用 / 列表 / 纯图片行。 */
+    var __paras = body.split(/\n{2,}/);
+    for (var __pi = 0; __pi < __paras.length; __pi++) {
+      var __cand = String(__paras[__pi] || '').trim();
+      if (!__cand) continue;
+      if (/^#{1,6}\s/.test(__cand)) continue;
+      if (/^(?:\x60{3,}|~{3,})/.test(__cand)) continue;
+      if (/^\|/.test(__cand)) continue;
+      if (/^>\s?/.test(__cand)) continue;
+      if (/^[-*+]\s/.test(__cand)) continue;
+      if (/^!\[[^\]]*\]\([^)]*\)$/.test(__cand)) continue;
+      d = __cand.replace(/\s+/g, ' ').trim().slice(0, 160);
+      break;
+    }
   }
   if (d) head.push('摘要：' + d);
   var finalBody = head.length ? (head.join('\n') + '\n\n' + body) : body;
@@ -24278,7 +24308,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.26.2';
+var APP_VERSION = '3.26.3';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
