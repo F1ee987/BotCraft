@@ -845,6 +845,32 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 .theme-opt:hover span{color:var(--txt)}
 .theme-opt input:checked + span{background:var(--glass-bg-hover);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.22)}
 .theme-opt input:focus-visible + span{outline:2px solid var(--brand-text);outline-offset:1px}
+/* 分段选择器（温度三档）。视觉沿用 .theme-picker 的语言，但独立命名 ——
+   复用 theme-* 会让「主题外观」与「温度」两处样式互相牵连，改一处伤另一处。 */
+.seg-picker{display:flex;gap:var(--sp-2);padding:3px;border-radius:var(--r-md);
+  background:var(--sunken);margin-top:2px}
+.seg-opt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:var(--sp-1);
+  border:0;background:transparent;color:var(--sub);cursor:pointer;
+  padding:7px 6px;border-radius:var(--r-xs);line-height:1.3;
+  font-size:var(--fs-sm);font-weight:590;
+  transition:background var(--dur-3) var(--ease),color var(--dur-3) var(--ease),
+    box-shadow var(--dur-3) var(--ease)}
+.seg-opt span{font-size:var(--fs-2xs);font-weight:400;color:var(--sub);
+  font-variant-numeric:tabular-nums;opacity:.8}
+.seg-opt:hover{color:var(--txt)}
+.seg-opt.on{background:var(--glass-bg-hover);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.22)}
+.seg-opt.on span{color:var(--brand-text);opacity:1}
+.seg-opt:focus-visible{outline:2px solid var(--brand-text);outline-offset:1px}
+/* 自定义微调默认收起：三档已覆盖常见需求，展开是给要精确控制的人准备的 */
+.temp-adv{margin-top:var(--sp-4)}
+.temp-adv > summary{cursor:pointer;display:inline-flex;align-items:center;gap:var(--sp-2);
+  font-size:var(--fs-xs);color:var(--sub);list-style:none}
+.temp-adv > summary::-webkit-details-marker{display:none}
+.temp-adv > summary::before{content:'▸';font-size:10px;line-height:1;
+  transition:transform var(--dur-2) var(--ease)}
+.temp-adv[open] > summary::before{transform:rotate(90deg)}
+.temp-adv > summary:hover{color:var(--txt)}
+@media (prefers-reduced-motion:reduce){.seg-opt,.temp-adv > summary::before{transition:none}}
 /* 配色选择器（2026-10-22）。色块展示色按主题取档：深色用亮档、浅色用深档，
    与实际 --brand 的取值口径一致，避免「选色块时看到的颜色」和「应用后的颜色」不一致。
    选中徽标沿用 .swatch.on 的做法（右下角白底小圆 + 深色勾）——
@@ -3465,9 +3491,27 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg></span> 高级参数</span><span class="ssec-sub">温度 / 长度 / 代理 / 发送方式</span>
   </div>
   <div class="ssec-body" id="sec-adv-body">
-    <div class="field">
-      <label>温度（创造性）<span id="set-temp-val" style="float:right;color:var(--brand-text)">0.7</span></label>
-      <input id="set-temp" type="range" min="0" max="2" step="0.1" value="0.7" style="width:100%">
+    <div class="field" id="field-temp">
+      <label>温度（创造性）</label>
+      <div class="seg-picker" id="temp-presets" role="radiogroup" aria-label="温度预设">
+        <button type="button" class="seg-opt" data-temp="0.2" role="radio" aria-checked="false" onclick="setTempPreset(0.2)">精确<span>0.2</span></button>
+        <button type="button" class="seg-opt on" data-temp="0.7" role="radio" aria-checked="true" onclick="setTempPreset(0.7)">均衡<span>0.7</span></button>
+        <button type="button" class="seg-opt" data-temp="1" role="radio" aria-checked="false" onclick="setTempPreset(1)">发散<span>1.0</span></button>
+      </div>
+      <div class="hint" style="margin:var(--sp-3) 0 0;font-size:var(--fs-xs);line-height:1.55">
+        <b>精确</b> 答案稳定可复现 —— 客服问答、翻译、代码、知识库检索 · <b>均衡</b> 默认档，稳与活兼顾 · <b>发散</b> 更有创意 —— 文案、起名、头脑风暴。
+      </div>
+      <details class="temp-adv" id="temp-adv">
+        <summary>自定义数值</summary>
+        <div class="rng-row" style="margin-top:var(--sp-3)">
+          <label for="set-temp">微调</label>
+          <input id="set-temp" type="range" min="0" max="1.5" step="0.1" value="0.7">
+          <span id="set-temp-val" class="rng-val">0.7</span>
+        </div>
+        <div class="hint" style="margin:var(--sp-2) 0 0;font-size:var(--fs-xs);line-height:1.5">
+          0.0 几乎逐字复述；1.0 以上容易跑题。多数模型（Claude 系）的实际上限是 1.0，超出会自动钳制；推理模型（o1 / o3 / deepseek-reasoner 等）不接受该参数，本项目会自动不发。
+        </div>
+      </details>
     </div>
     <div class="field">
       <label>最大输出 tokens</label>
@@ -6376,6 +6420,17 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     if (!isFinite(_bt)) _bt = Number(cfg.temperature) || 0.7;
     // P1-4 端点化：主配置 + 备用模型链统一成端点列表。attemptOne 的一切输入
     //（url/headers/body）都从 ep 取，端点之间才能降级切换。
+    // 模型能力：哪些参数能发、上限多少。
+    // 依据：o1/o3/o4-mini/gpt-5 系推理模型拒绝 temperature 且要求 max_completion_tokens；
+    //      DeepSeek R1 / QwQ 这类推理模型 temperature 不生效（部分网关直接报错）；
+    //      Claude 系采样上限是 1（OpenAI 兼容网关可能更严），其余按 2 处理。
+    function modelFeatures(model) {
+      var m = String(model || '').toLowerCase();
+      var reasoning = /(^|\/)(o1|o3|o4-mini|gpt-5)/.test(m);
+      var noTemp = reasoning || /deepseek-reasoner|deepseek-r1|qwq|reasoning/.test(m);
+      var max = /claude|anthropic/.test(m) ? 1 : 2;
+      return { reasoning: reasoning, noTemp: noTemp, max: max };
+    }
     var _mkUrl = function (baseURL) {
       return (cfg.proxyURL && !cfg.directCall)
         ? cfg.proxyURL
@@ -6386,14 +6441,29 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
       if (apiKey) hd['Authorization'] = 'Bearer ' + apiKey;
       return hd;
     };
+    // 参数降级级别：0 = 完整；1 = 已剥离采样参数；2 = 已改用 max_completion_tokens。
+    // 服务端明确「不认这个参数」时逐级降级重试 —— 不同厂商对采样参数的支持差异很大，
+    // 不能假设「只要发 temperature 就对」（原实现就是这么假设的）。
+    var _degrade = 0;
+    // 模型能力预判。这是 A 方案的前半段（预防），后半段是 attemptEp 里的 400 降级（兜底）。
+    // 两层都要：模型名是用户可手填的，预判不可能穷尽，兜底必须存在；
+    // 但只靠兜底会白打一次请求，所以能预判的要预判。
     var _mkBody = function (model, url) {
+      var mf = modelFeatures(model);
+      var mt = Number(cfg.maxTokens) || 2048;
       var body = {
         model: model,
         messages: messages,
-        temperature: _bt,
-        max_tokens: Number(cfg.maxTokens) || 2048,
         stream: !!stream,
       };
+      // 采样参数：仅在模型支持时发送，并按该模型的上限钳制。
+      // 先钳制再发 —— 只靠「发错了再降级」会白白多一次往返。
+      if (!mf.noTemp && _degrade < 1) {
+        body.temperature = Math.min(Math.max(_bt, 0), mf.max);
+      }
+      // OpenAI 推理模型只认 max_completion_tokens；其余仍用 max_tokens。
+      if (mf.reasoning || _degrade >= 2) body.max_completion_tokens = mt;
+      else body.max_tokens = mt;
       // 思考型模型（GLM-5 / Qwen3 等）默认会把 max_tokens 大量甚至全部消耗在「思考过程」上，
       // 正式回答（content）因此为空、finish_reason='length'——表现为「工作流步骤跑完了，却没有输出」。
       // 实测同一任务：开启思考 670 completion tokens（其中 626 是思考）且正文为空；
@@ -6429,6 +6499,14 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
       if (!resp.ok) {
         let txt = '';
         try { txt = await resp.text(); } catch (err2) { txt = ''; }
+        /* 服务端明确说「不认这个参数」→ 降级后重试，别把参数不兼容暴露成用户故障。
+           这类 400 与「上下文超限」性质不同：换参数能救。而 isRetryable 本就不重试 4xx，
+           所以必须在这里自己决定重试，且要限次数（_degrade < 2，最多两次额外请求）。 */
+        if ((resp.status === 400 || resp.status === 422) && _degrade < 2
+            && /temperature|max_tokens|max_completion_tokens|unsupported|not supported|unrecognized|invalid[^.]{0,20}parameter/i.test(txt)) {
+          _degrade++;
+          return attemptEp(ep, ac);
+        }
         throw ApiError(resp.status, resp.statusText, txt.slice(0, 200));
       }
       return resp;
@@ -18694,6 +18772,44 @@ function setAccent(id, quiet) {
 }
 function initAccent() { applyAccent(accentId()); }
 
+/* ==================== 温度：语义预设 ↔ 自定义微调（2026-10-22）====================
+   三档与滑杆必须**双向**同步：
+     · 点档位 → 写滑杆值 + 重算 --rng-pct + 更新读数
+     · 拖滑杆 → 反推档位；不在任何档位上就三档全不选，并自动展开折叠区
+       （否则用户自定义了 0.4，面板上却看不出当前到底是哪档） */
+var TEMP_PRESETS = [0.2, 0.7, 1];
+function tempPresetOf(v) {
+  var t = Number(v);
+  if (!isFinite(t)) return null;
+  for (var i = 0; i < TEMP_PRESETS.length; i++) {
+    if (Math.abs(TEMP_PRESETS[i] - t) < 0.001) return TEMP_PRESETS[i];
+  }
+  return null;
+}
+function syncTempPresetUI() {
+  var el = document.getElementById('set-temp');
+  var hit = el ? tempPresetOf(el.value) : null;
+  var btns = document.querySelectorAll('.seg-opt[data-temp]');
+  Array.prototype.forEach.call(btns, function (b) {
+    var on = hit !== null && Math.abs(Number(b.getAttribute('data-temp')) - hit) < 0.001;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  var adv = document.getElementById('temp-adv');
+  if (adv && hit === null) adv.open = true;
+}
+function setTempPreset(v) {
+  var el = document.getElementById('set-temp');
+  if (!el) return;
+  el.value = String(v);
+  syncRangeFill(el);
+  var lab = document.getElementById('set-temp-val');
+  if (lab) lab.textContent = Number(v).toFixed(1);
+  syncTempPresetUI();
+  try { BotCraftAI.updateConfig({ temperature: Number(v) }); } catch (e) {}
+}
+
+
 /* ==================== 滑杆填充比例（2026-10-22）====================
    自定义 track 后，「已填充段」只能靠 CSS 变量 --rng-pct 表达，而它无法由 CSS 自己
    从 value 推出来（range 没有 :progress 之类的伪类）→ 必须由脚本在值变化时写入。
@@ -23391,10 +23507,15 @@ function setupSettingsUI() {
   if (_naEl) _naEl.checked = (cfg.noAuth === true) || (!cfg.apiKey && BotCraftAI.isNoAuthEndpoint && BotCraftAI.isNoAuthEndpoint(cfg.baseURL));
   document.getElementById('set-base').value = cfg.baseURL || '';
   var _tempEl = document.getElementById('set-temp');
-  _tempEl.value = cfg.temperature || 0.7;
+  // 0 是合法值（要最确定性的输出），不能用 || 兜底
+  var _tv = Number(cfg.temperature);
+  if (!isFinite(_tv)) _tv = 0.7;
+  _tempEl.value = String(_tv);
   // 直接赋值不触发 input 事件 → 填充比例不会自己更新，必须显式同步
   syncRangeFill(_tempEl);
-  document.getElementById('set-temp-val').textContent = (cfg.temperature || 0.7).toFixed(1);
+  var _tlab = document.getElementById('set-temp-val');
+  if (_tlab) _tlab.textContent = _tv.toFixed(1);
+  try { syncTempPresetUI(); } catch (e) {}
   document.getElementById('set-maxtokens').value = cfg.maxTokens || 2048;
   document.getElementById('set-direct').checked = !!cfg.directCall;
   document.getElementById('set-serial').checked = getSerialInput();
@@ -23715,6 +23836,8 @@ document.addEventListener('change', e => {
   }
   if (e.target && e.target.id === 'set-temp') {
     document.getElementById('set-temp-val').textContent = parseFloat(e.target.value).toFixed(1);
+    // 拖动后反推档位：落在 0.2/0.7/1.0 上就选中对应档，否则三档全灭
+    try { syncTempPresetUI(); } catch (e2) {}
   }
   if (e.target && e.target.id === 'set-base') {
     setConnStatus('已修改接口地址，点「刷新列表」拉取最新模型', '');
@@ -23765,7 +23888,10 @@ function saveSettings() {
   const modelSel = document.getElementById('set-model').value;
   const modelCustom = document.getElementById('set-model-custom').value.trim();
   const model = modelSel === '__custom' ? modelCustom : modelSel;
-  const temperature = parseFloat(document.getElementById('set-temp').value) || 0.7;
+  // ⚠️ 这里不能用 `|| 0.7`：parseFloat('0') 是 0（合法值），`0 || 0.7` 会变成 0.7，
+  // 于是「温度设为 0 = 最确定性输出」永远存不进去，静默退回默认（既有 bug，本次修掉）。
+  var _tempParsed = parseFloat(document.getElementById('set-temp').value);
+  const temperature = isFinite(_tempParsed) ? _tempParsed : 0.7;
   const maxTokens = parseInt(document.getElementById('set-maxtokens').value, 10) || 2048;
   const directCall = document.getElementById('set-direct').checked;
   const proxyURL = document.getElementById('set-proxy').value.trim();
@@ -23939,7 +24065,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.25.2';
+var APP_VERSION = '3.26.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -24226,6 +24352,7 @@ window.renderAcctHeader = renderAcctHeader; window.avatarHtml = avatarHtml;
 window.toggleTheme = toggleTheme; window.themeMode = themeMode; window.resolveTheme = resolveTheme;
 window.setAccent = setAccent; window.accentId = accentId; window.applyAccent = applyAccent;
 window.syncRangeFill = syncRangeFill; window.syncAllRanges = syncAllRanges;
+window.setTempPreset = setTempPreset; window.syncTempPresetUI = syncTempPresetUI;
 window.setThemeMode = setThemeMode; window.applyThemeMode = applyThemeMode; window.initTheme = initTheme;
 window.toggleLiquidGlass = toggleLiquidGlass; window.applyLiquidGlass = applyLiquidGlass; window.initLiquidGlass = initLiquidGlass;
 window.setLiquidGlass = setLiquidGlass; window.isLiquidGlassOn = isLiquidGlassOn;
