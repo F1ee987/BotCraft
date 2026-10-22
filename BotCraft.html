@@ -1760,6 +1760,20 @@ img.md-img{max-width:100%;height:auto}
 .kb-cite-more{margin-top:5px;border:0;background:none;color:var(--brand-text);font-size:11.5px;cursor:pointer;padding:0;font-family:inherit}
 .kb-cite-more:hover{text-decoration:underline}
 .kb-cite-empty{font-size:11.5px;color:var(--sub)}
+/* 提问气泡里的参考来源（2026-10-22）
+   .msg.me 是品牌色渐变底（--brand-fill → --brand2），通用的 --line / --fill
+   在上面几乎看不见，所以换一组白色半透明：描边、底色、文字都按深底重算。
+   文字一律用接近纯白（.94 以上），保证在渐变最深的一段也够清楚。 */
+.msg.me .kb-cite{border-top-color:rgba(255,255,255,.34)}
+.msg.me .kb-cite-head{border-color:rgba(255,255,255,.42);color:#fff;background:rgba(255,255,255,.14)}
+.msg.me .kb-cite-head:hover{background:rgba(255,255,255,.24);color:#fff;border-color:rgba(255,255,255,.62)}
+.msg.me .kb-cite-row{background:rgba(255,255,255,.14);border-color:transparent}
+.msg.me .kb-cite-row:hover{border-color:rgba(255,255,255,.40)}
+.msg.me .kb-cite-name{color:#fff}
+.msg.me .kb-cite-meta{color:rgba(255,255,255,.92)}
+.msg.me .kb-cite-text{color:rgba(255,255,255,.95)}
+.msg.me .kb-cite-text.full{color:#fff}
+.msg.me .kb-cite-more{color:#fff}
 /* 编辑消息弹窗 */
 .edit-msg-ta{width:100%;min-height:132px;resize:none;box-sizing:border-box;border-radius:var(--r-lg);padding:11px 13px;
   background:var(--fill);color:var(--txt);border:1px solid var(--line);font-size:13px;line-height:1.6;font-family:inherit}
@@ -15271,6 +15285,14 @@ function appendMsg(b, m, mi) {
     // 直到下次全量重绘才闪现出来。
     div.innerHTML = _body(escapeHtml(m.who || b.n), renderMarkdown(m.text)) + _kbCiteHtml(m.kbHits);
   }
+  /* 提问气泡也带上参考来源（2026-10-22）
+     这里主要服务「补画历史」（_finishGenAppend / 搜索跳转后重建）：
+     真实发送时提问先画、kbHits 后产生，那一刻取不到，靠 _kbCiteAttachAsk 补。 */
+  if (m.role === 'me') {
+    var _askIdx = (typeof mi === 'number' && mi >= 0) ? mi : Math.max(0, (b.history || []).length - 1);
+    var _askCite = _kbCiteHtml(_kbCiteForAsk(b, _askIdx));
+    if (_askCite) div.insertAdjacentHTML('beforeend', _askCite);
+  }
   chat.appendChild(div);
   // 让「编辑」按钮能定位到 history 里的这一条。mi 由增量收尾传入真实下标；
   // 不传（旧调用方）退回「当前最后一条」—— 单条追加时两者等价。
@@ -15297,6 +15319,7 @@ function _finishGenAppend(b) {
   }
   hydrateLazyMedia(chat);
   renderQuickBar();
+  _kbCiteAttachAsk(b);   // 回答落地后再把参考来源挂到提问气泡上
   scrollChatToBottom(true);
 }
 function renderHistory(b) {
@@ -15312,6 +15335,7 @@ function renderHistory(b) {
           + ((m.images && m.images.length) ? m.images.map(function (s) { return '<img class="msg-img" data-src="' + escapeAttr(s) + '" alt="图片">'; }).join('') : '')
           + ((m.audio && m.audio.length) ? m.audio.map(function (s) { return '<audio class="msg-audio" data-src="' + escapeAttr(s) + '" controls preload="none"></audio>'; }).join('') : '')
           + ((m.videos && m.videos.length) ? m.videos.map(function (it) { return '<video class="msg-video" data-src="' + escapeAttr((it && it.url) || '') + '" controls muted playsinline preload="none"' + ((m.frames && m.frames.length && String(m.frames[0]).length < LAZY_MEDIA_MIN) ? ' poster="' + escapeAttr(m.frames[0]) + '"' : '') + '></video>'; }).join('') : '')
+          + _kbCiteHtml(_kbCiteForAsk(b, i))   // 提问下方也显示参考来源
           + '</div>';
       }
       var bt = m.text || '';
@@ -15624,6 +15648,37 @@ function _kbCiteHtml(hits) {
     + '<button class="kb-cite-head" type="button" onclick="kbCiteToggle(this)">\uD83D\uDCDA 参考来源 · 命中 ' + hits.length + ' 处 <span class="kb-caret"><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 6 8 10.2 12.2 6"/></svg></span></button>'
     + '<div class="kb-cite-body" style="display:none">' + rows + '</div>'
     + '</div>';
+}
+/* 这条提问对应的回复命中了哪些知识库片段（2026-10-22）
+   用户要求参考来源「两边都显示」：提问下方也放一份，看资料时不必滚到回答末尾。
+   约定：一条提问对应它后面第一条 bot；先遇到下一条提问就说明本轮还没回复。 */
+function _kbCiteForAsk(b, mi) {
+  var hist = (b && b.history) || [];
+  for (var k = mi + 1; k < hist.length; k++) {
+    if (hist[k].role === 'me') return null;
+    if (hist[k].role === 'bot') return hist[k].kbHits || null;
+  }
+  return null;
+}
+/* 回答落地后，把参考来源补挂到对应提问气泡上（2026-10-22）
+   为什么不能只靠渲染时拼：真实发送时提问气泡先画、kbHits 后产生，
+   那一刻 _kbCiteForAsk 还取不到任何东西。这里在回答写入历史后补一次。
+   已有 .kb-cite 就不重复挂（全量重绘已经拼过的情况）。 */
+function _kbCiteAttachAsk(b) {
+  var chat = document.getElementById('chat'); if (!chat) return;
+  var hist = (b && b.history) || [];
+  for (var i = hist.length - 1; i >= 0; i--) {
+    if (hist[i].role !== 'bot') continue;
+    var hits = hist[i].kbHits;
+    if (!hits || !hits.length) return;
+    var askIdx = -1;
+    for (var k = i - 1; k >= 0; k--) { if (hist[k].role === 'me') { askIdx = k; break; } }
+    if (askIdx < 0) return;
+    var meEl = chat.querySelector('.msg.me[data-mi="' + askIdx + '"]');
+    if (!meEl || meEl.querySelector('.kb-cite')) return;
+    meEl.insertAdjacentHTML('beforeend', _kbCiteHtml(hits));
+    return;
+  }
 }
 function kbCiteToggle(btn) {
   if (!btn) return;
@@ -16906,6 +16961,7 @@ async function runReply(b, opt) {
     // 引用来源条：追加到气泡内容末尾（复制/重新生成按钮随后由 attachCopyBtns 追加）
     var _citeHtml = _kbCiteHtml(_kbSnap());
     if (_citeHtml) bubble.insertAdjacentHTML('beforeend', _citeHtml);
+    _kbCiteAttachAsk(activeBot);   // 同上：提问气泡此时才拿得到 kbHits
     activeBot.u = (activeBot.u || 0) + 1;
     activeBot.updatedAt = Date.now(); saveBots();
     if (_onScreen()) { attachCopyBtns(); renderQuickBar(); scheduleMemoryUpdate(b); _scrollChat(true); } // 复制按钮/快捷栏等所有 DOM 变更完成后再统一落底，避免分段跳动
@@ -24308,7 +24364,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.26.3';
+var APP_VERSION = '3.26.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
