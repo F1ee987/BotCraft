@@ -1774,6 +1774,53 @@ img.md-img{max-width:100%;height:auto}
 .msg.me .kb-cite-text{color:rgba(255,255,255,.95)}
 .msg.me .kb-cite-text.full{color:#fff}
 .msg.me .kb-cite-more{color:#fff}
+/* ===== 本次附带文档（2026-10-22 用户需求） =====
+   发送前手动勾选「这一问用哪几份知识库文档」，并在提问气泡下方显示「附带了 N 个文档」。
+   面板挂在 .chat-input 内（该容器本身 position:relative），absolute 定位不占 flex 空间。 */
+.chat-input .attach-btn{position:relative}
+.chat-input .attach-btn.doc-on{background:var(--brand-tint);border-color:var(--brand-tint-2);color:var(--brand-text)}
+.chat-input .attach-btn.doc-off{opacity:.55}
+.chat-input .attach-btn .dp-badge{position:absolute;top:2px;right:2px;min-width:15px;height:15px;padding:0 4px;box-sizing:border-box;
+  border-radius:var(--r-full);background:var(--brand-fill);color:#fff;font-size:9.5px;line-height:15px;text-align:center;font-weight:700}
+.doc-pick{position:absolute;left:14px;bottom:calc(100% + 10px);z-index:70;width:min(430px,calc(100vw - 56px));max-height:min(56vh,440px);
+  display:none;flex-direction:column;background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-lg);
+  box-shadow:var(--glass-shadow);overflow:hidden}
+.doc-pick.on{display:flex}
+.doc-pick-hd{display:flex;align-items:center;gap:var(--sp-4);padding:10px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--sub)}
+.doc-pick-hd b{color:var(--txt);font-weight:640;font-size:12.5px}
+.doc-pick-hd .dp-actions{margin-left:auto;display:flex;gap:var(--sp-3)}
+.doc-pick-hd button{padding:3px 9px;border-radius:var(--r-full);border:1px solid var(--line);background:var(--fill);color:var(--sub);font-size:11.5px;cursor:pointer}
+.doc-pick-hd button:hover{color:var(--brand-text);border-color:var(--brand)}
+.doc-pick-list{overflow-y:auto;padding:6px;flex:1 1 auto}
+.doc-pick-row{display:flex;align-items:flex-start;gap:var(--sp-4);padding:8px 9px;border-radius:var(--r-md);cursor:pointer}
+.doc-pick-row:hover{background:var(--fill)}
+.doc-pick-row input{accent-color:var(--brand);margin-top:2px;flex-shrink:0;cursor:pointer}
+.doc-pick-row>span:last-child{display:flex;flex-direction:column;min-width:0}
+.doc-pick-name{font-size:12.5px;color:var(--txt);line-height:1.45;word-break:break-all}
+.doc-pick-meta{font-size:11px;color:var(--sub);margin-top:2px}
+.doc-pick-ft{padding:8px 12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub)}
+.doc-pick-ft b{color:var(--brand-text)}
+.doc-pick-empty{padding:16px 14px;font-size:12px;color:var(--sub);line-height:1.75}
+.doc-preview{display:none;flex-wrap:wrap;gap:var(--sp-3);padding:0 0 6px}
+.doc-preview.on{display:flex}
+.doc-preview .dp-chip{display:inline-flex;align-items:center;gap:var(--sp-2);max-width:100%;padding:3px 4px 3px 9px;border-radius:var(--r-full);
+  background:var(--brand-tint);border:1px solid var(--brand-tint-2);color:var(--brand-text);font-size:11.5px}
+.doc-preview .dp-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
+.doc-preview .dp-chip i{font-style:normal;cursor:pointer;opacity:.65;padding:0 4px}
+.doc-preview .dp-chip i:hover{opacity:1}
+/* 提问气泡下方的「附带了 N 个文档」——与 .kb-cite 同族，me 气泡里改白色半透明 */
+.doc-chip{margin-top:7px;padding-top:6px;border-top:1px dashed var(--line)}
+.doc-chip-hd{display:inline-flex;align-items:center;gap:var(--sp-2);padding:3px 10px;border-radius:var(--r-full);border:1px solid var(--line);
+  background:var(--fill);color:var(--brand-text);font-size:11.5px;cursor:pointer;font-family:inherit}
+.doc-chip-hd:hover{background:var(--fill-strong);border-color:var(--brand)}
+.doc-chip-body{display:none;margin-top:6px;font-size:11.5px;line-height:1.75;color:var(--sub)}
+.doc-chip-body.on{display:block}
+.doc-chip-body div{word-break:break-all}
+.msg.me .doc-chip{border-top-color:rgba(255,255,255,.34)}
+.msg.me .doc-chip-hd{border-color:rgba(255,255,255,.42);background:rgba(255,255,255,.14);color:#fff}
+.msg.me .doc-chip-hd:hover{background:rgba(255,255,255,.24);border-color:rgba(255,255,255,.62)}
+.msg.me .doc-chip-body{color:rgba(255,255,255,.95)}
+
 /* 编辑消息弹窗 */
 .edit-msg-ta{width:100%;min-height:132px;resize:none;box-sizing:border-box;border-radius:var(--r-lg);padding:11px 13px;
   background:var(--fill);color:var(--txt);border:1px solid var(--line);font-size:13px;line-height:1.6;font-family:inherit}
@@ -3307,7 +3354,10 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <button class="attach-btn" id="vidBtn" type="button" title="发送视频（自动抽帧给视觉模型）" onclick="document.getElementById('vidInput').click()"><span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="M15 10.5l5-3v9l-5-3"/></svg></span></button>
         <input type="file" id="vidInput" accept="video/*" multiple style="display:none" onchange="onVideoSelect(event)">
         <button class="attach-btn" id="snippetBtn" type="button" title="提示词库（也可在输入框打 / 唤起）" onclick="openSnippetPanel()"><span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5l1.9 4.6 4.6 1.9-4.6 1.9L12 16.5l-1.9-4.6L5.5 10l4.6-1.9L12 3.5z"/></svg></span></button>
+        <button class="attach-btn" id="docBtn" type="button" title="本次附带的文档（手动指定这一问用哪几份知识库文档）" onclick="openDocPick()"><span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h6v14H5zM13 5h6v14h-6z"/><path d="M6.5 8.5h3M14.5 8.5h3M6.5 12h3M14.5 12h3"/></svg></span></button>
+        <div class="doc-pick" id="docPick"></div>
         <div class="input-wrap">
+          <div class="doc-preview" id="docPreview"></div>
           <div class="img-preview" id="imgPreview"></div>
           <div class="audio-preview" id="audioPreview"></div>
           <div class="video-preview" id="videoPreview"></div>
@@ -4995,8 +5045,21 @@ function escAttrJs(s) {
 
   // 构造 messages（含历史上下文 + 系统提示）
   // opts.preview=true 为纯预演：不累加记忆使用次数、不写盘，供上下文面板测算用量
+  /* 「这一问」的提问消息（2026-10-22 补）
+     为什么需要这个中转：chat() 把 history 作为**独立参数**传进 buildMessages，而往下传的
+     bot 是 toAIBot() 生成的临时对象 —— 它不含 history 字段。于是 buildCtxSections 里的
+     `bot.history` 恒为 undefined，「参考来源」那次检索从来没真正跑过：用户 20 条消息的
+     kbHits 全是空数组，就是这个原因。这里把「最后一条提问」显式接力下去，
+     附带文档的选择（m.docs）也挂在同一条消息上，一并可见。 */
+  var _ctxLastAskMsg = null;
   function buildMessages(bot, history, toolCtx, imagePrompt, opts) {
+    var _hs = history || [];
+    _ctxLastAskMsg = null;
+    for (var _hq = _hs.length - 1; _hq >= 0; _hq--) {
+      if (_hs[_hq] && _hs[_hq].role === 'me') { _ctxLastAskMsg = _hs[_hq]; break; }
+    }
     const sys = composeSystemPrompt(bot, toolCtx, imagePrompt, opts);
+    _ctxLastAskMsg = null;
     const msgs = [{ role: 'system', content: sys }];
     const turns = (history || []).slice();
     // 保留较多历史轮次（默认模型上下文足够大，正常聊天不会被截断）
@@ -5116,7 +5179,9 @@ function escAttrJs(s) {
     { k: 'flow', label: '工作流设定', prio: 2, color: 'var(--ctx9)' },
     { k: 'memory', label: '长期记忆', prio: 2, color: 'var(--ctx3)' },
     { k: 'tool', label: '工具结果', prio: 3, color: 'var(--ctx10)' },
-    { k: 'kb', label: '知识库', prio: 3, color: 'var(--ctx6)' }
+    { k: 'kb', label: '知识库', prio: 3, color: 'var(--ctx6)' },
+    // 用户本次显式指定的文档：丢了就等于白选，必须保护起来（prio 0）
+    { k: 'kbdocs', label: '附带文档', prio: 0, color: 'var(--ctx6)' }
   ];
   var CTX_META = {};
   CTX_SECTIONS.forEach(function (s) { CTX_META[s.k] = s; });
@@ -5538,45 +5603,106 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     pushSec('prompt', (bot && bot.prompt) || '你是一个有用的助手。');
     // 专精卡紧随人设：它比知识库/记忆更「属于这个机器人」
     pushSec('expertise', expertiseBlock(bot));
+    // 本次提问（buildMessages 接力进来的 _ctxLastAskMsg；退回 bot.history 兜底）：
+    // 附带文档的选择挂在它上面
+    var _lastAsk = _ctxLastAskMsg;
+    if (!_lastAsk) {
+      var _bh = (bot && bot.history) || [];
+      for (var _bi = _bh.length - 1; _bi >= 0; _bi--) { if (_bh[_bi].role === 'me') { _lastAsk = _bh[_bi]; break; } }
+    }
+    // Array = 用户本次显式指定（空数组 = 一份都不带）；null = 跟随挂载的全部文档
+    var _attDocs = (_lastAsk && Array.isArray(_lastAsk.docs)) ? _lastAsk.docs : null;
     if (bot && bot.knowledges && bot.knowledges.length) {
-      // 知识库整体截断：保留条目完整性，总长在 6000 字符以内，避免挂载大知识库后撑爆上下文。
-      // 流式累加而不是「先全量 join 再 slice」：原写法把挂载的所有文档正文拼成一个
-      // 巨串再丢掉尾巴 —— 挂 10 份 50KB 文档 = 每次建上下文都 concat 500KB，
-      // 而这个函数每个 keystroke 都会被 renderCtxBar 走一遍（见下方 input 监听）。
-      // 现在边累加边计数，到预算即停：拼接量从 O(全部文档) 降到 O(6000)。
-      // 语义保持不变：仍然按「先到先得」顺序取前 6000 字符，超出时照旧追加截断提示。
-      const MAX_KB_LEN = 6000;
-      const _recs = bot.knowledges.map(id => kbById(id)).filter(Boolean);
-      let kctx = '', kTrunc = false;
-      for (let _ki = 0; _ki < _recs.length; _ki++) {
-        const _rec = _recs[_ki];
-        const _one = '【' + _rec.name + '】\n' + String(_rec.content || '');
-        const _sep = kctx ? 2 : 0;              // 分隔符 '\n\n' 也要占预算
-        if (kctx.length + _sep + _one.length <= MAX_KB_LEN) {
-          kctx += (_sep ? '\n\n' : '') + _one;
-          continue;
+      if (_attDocs) {
+        /* 用户本次显式指定了文档（2026-10-22）：
+           ① 只带选中的，不再把挂载的全部塞进来；
+           ② 上限从 6000 放宽到 ATT_DOC_MAX_CHARS —— 6000 字对 39,000 字的文档只够开头；
+           ③ 独立区块 + prio 0，且预算另算（见 composeSystemPrompt），不会被当「可裁」丢掉；
+           ④ 明写「这一问的对象就是这些文档」，修「让他总结，他总结了上文对话」。 */
+        var _aRecs = _attDocs.map(function (d) { return (d && d.id) ? kbById(d.id) : null; }).filter(Boolean);
+        if (_aRecs.length) {
+          var _acc = '', _acut = false;
+          for (var _ai = 0; _ai < _aRecs.length; _ai++) {
+            var _ar = _aRecs[_ai];
+            var _aone = '【' + (_ar.name || '未命名文档') + '】\n' + String(_ar.content || '');
+            var _asep = _acc ? 2 : 0;
+            if (_acc.length + _asep + _aone.length <= ATT_DOC_MAX_CHARS) {
+              _acc += (_asep ? '\n\n' : '') + _aone;
+              continue;
+            }
+            var _aroom = ATT_DOC_MAX_CHARS - _acc.length - _asep;
+            if (_aroom > 0) _acc += (_asep ? '\n\n' : '') + _aone.slice(0, _aroom);
+            _acut = true; break;
+          }
+          if (_acc) {
+            var _asafe = _acut ? (_acc + '\n…（文档超出单次附带上限，已截断；需要更多内容请分段提问）') : _acc;
+            pushSec('kbdocs', '\n【本次附带的文档】用户这一次**明确指定**了下面 ' + _aRecs.length + ' 份文档作为回答依据：\n' + _asafe
+              + '\n\n必须遵守：'
+              + '① 用户这一问的对象就是这些文档 —— 用户只说「总结 / 概括 / 归纳 / 整理 / 梳理 / 提炼」时，'
+              + '指的是**总结这些文档**，不要总结上面的对话历史，也不要重复你之前给过的回答；'
+              + '② 只依据这些文档作答，文档里没有的内容不要编造，确实找不到就明说「文档中没有」；'
+              + '③ 不要向用户索要文件，也不要让他再上传或粘贴 —— 正文已经在这里了。'
+              + ((bot.nodes && bot.nodes.length) ? ' ④ 上面的「检索知识」指的就是这些文档，不要理解成向用户索取资料。' : ''));
+            if (!(opts && opts.preview)) {
+              // 显式附带的文档一律登记为引用来源，回答下方的「参考来源」就能标明依据
+              try {
+                window.kbPushHits(_aRecs.map(function (r) {
+                  return { text: String(r.content || '').slice(0, 400), score: 1, docId: r.id, docName: r.name, chunk: 1 };
+                }));
+              } catch (e) { }
+            }
+          }
         }
-        // 预算不够放完整一条：只取能放下的前缀，然后标记截断。
-        // 第一条也走这里 —— 「第一条无条件全收」会让「挂一份 9000 字文档」
-        // 仍然拼出 9000 字符，等于没截断（优化前是 join 完再 slice，内容对，
-        // 但拼接量没省；这里连内容也要一并钳住）。
-        const room = MAX_KB_LEN - kctx.length - _sep;
-        if (room > 0) kctx += (_sep ? '\n\n' : '') + _one.slice(0, room);
-        kTrunc = true; break;
-      }
-      const safeKctx = kTrunc ? (kctx.slice(0, MAX_KB_LEN) + '\n…（知识库内容过长已截断）') : kctx;
-      if (safeKctx) pushSec('kb', '\n【知识库】以下是已挂载知识库的完整正文，请直接作为回答依据：\n' + safeKctx + '\n\n注意：知识库内容已随本条系统提示一并提供，用户无需再次上传或粘贴相同内容；除非知识库确实为空，否则不要向用户索要文件或文本。');
-      // 走一次检索并登记命中片段，供回答下方标注引用来源。
-      // 注入内容仍是全量（保证回答质量不因改检索而退化），检索只用于「告诉用户依据在哪」。
-      // 预览/压缩预演不算真实生成，跳过以免污染引用记录。
-      // 这里刻意用同步版 searchKBHits 而不是混合检索：本函数是同步的，且这一路
-      // 只影响引用标注的呈现，不影响喂给模型的内容。真正喂模型的两个调用点
-      // （工作流检索节点）已迁到 searchKBHitsHybrid。
-      if (!(opts && opts.preview) && typeof window.searchKBHits === 'function') {
-        try {
-          var _lastMe = (bot.history || []).slice().reverse().find(function (m) { return m.role === 'me' && m.text; });
-          if (_lastMe && _lastMe.text) window.kbPushHits(window.searchKBHits(bot, _lastMe.text, 5));
-        } catch (e) { }
+      } else {
+        // 知识库整体截断：保留条目完整性，总长在 6000 字符以内，避免挂载大知识库后撑爆上下文。
+        // 流式累加而不是「先全量 join 再 slice」：原写法把挂载的所有文档正文拼成一个
+        // 巨串再丢掉尾巴 —— 挂 10 份 50KB 文档 = 每次建上下文都 concat 500KB，
+        // 而这个函数每个 keystroke 都会被 renderCtxBar 走一遍（见下方 input 监听）。
+        // 现在边累加边计数，到预算即停：拼接量从 O(全部文档) 降到 O(6000)。
+        // 语义保持不变：仍然按「先到先得」顺序取前 6000 字符，超出时照旧追加截断提示。
+        const MAX_KB_LEN = 6000;
+        const _recs = bot.knowledges.map(id => kbById(id)).filter(Boolean);
+        let kctx = '', kTrunc = false;
+        for (let _ki = 0; _ki < _recs.length; _ki++) {
+          const _rec = _recs[_ki];
+          const _one = '【' + _rec.name + '】\n' + String(_rec.content || '');
+          const _sep = kctx ? 2 : 0;              // 分隔符 '\n\n' 也要占预算
+          if (kctx.length + _sep + _one.length <= MAX_KB_LEN) {
+            kctx += (_sep ? '\n\n' : '') + _one;
+            continue;
+          }
+          // 预算不够放完整一条：只取能放下的前缀，然后标记截断。
+          // 第一条也走这里 —— 「第一条无条件全收」会让「挂一份 9000 字文档」
+          // 仍然拼出 9000 字符，等于没截断（优化前是 join 完再 slice，内容对，
+          // 但拼接量没省；这里连内容也要一并钳住）。
+          const room = MAX_KB_LEN - kctx.length - _sep;
+          if (room > 0) kctx += (_sep ? '\n\n' : '') + _one.slice(0, room);
+          kTrunc = true; break;
+        }
+        const safeKctx = kTrunc ? (kctx.slice(0, MAX_KB_LEN) + '\n…（知识库内容过长已截断）') : kctx;
+        if (safeKctx) {
+          // 短问句里的「总结一下」天然指代不明：模型会去总结上文对话而不是知识库文档
+          // （2026-10-22 实测）。这里把指代对象钉死，只在「很短且是总结类动词」时才加。
+          var _askTxt = String((_lastAsk && _lastAsk.text) || '').trim();
+          var _zongHint = (/^(请|帮我|麻烦|你)?\s*(总结|概括|归纳|整理|梳理|提炼|摘要)/.test(_askTxt) && _askTxt.length <= 30)
+            ? ('\n注意：用户这一句「' + _askTxt + '」的对象是**上面【知识库】里的文档全文**，不是上面的对话历史。'
+              + '请直接总结这些文档的要点，不要总结对话，也不要重复你之前的回答。')
+            : '';
+          pushSec('kb', '\n【知识库】以下是已挂载知识库的完整正文，请直接作为回答依据：\n' + safeKctx
+            + '\n\n注意：知识库内容已随本条系统提示一并提供，用户无需再次上传或粘贴相同内容；除非知识库确实为空，否则不要向用户索要文件或文本。'
+            + _zongHint);
+        }
+        // 走一次检索并登记命中片段，供回答下方标注引用来源。
+        // 注入内容仍是全量（保证回答质量不因改检索而退化），检索只用于「告诉用户依据在哪」。
+        // 预览/压缩预演不算真实生成，跳过以免污染引用记录。
+        // 这里刻意用同步版 searchKBHits 而不是混合检索：本函数是同步的，且这一路
+        // 只影响引用标注的呈现，不影响喂给模型的内容。真正喂模型的两个调用点
+        // （工作流检索节点）已迁到 searchKBHitsHybrid。
+        if (!(opts && opts.preview) && typeof window.searchKBHits === 'function') {
+          try {
+            if (_lastAsk && _lastAsk.text) window.kbPushHits(window.searchKBHits(bot, _lastAsk.text, 5));
+          } catch (e) { }
+        }
       }
     }
     if (bot && bot.plugins && bot.plugins.length) {
@@ -5643,7 +5769,13 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     const secs = buildCtxSections(bot, toolCtx, imagePrompt, opts);
     // 按优先级装箱分配预算：人设/品牌/固定收尾为保护区，其余从低优先级开始削减
     // 同样避开 || 陷阱：显式判断 null/undefined，0 是合法预算
-    const budget = (opts && opts.budget !== undefined && opts.budget !== null) ? opts.budget : SYS_BUDGET;
+    let budget = (opts && opts.budget !== undefined && opts.budget !== null) ? opts.budget : SYS_BUDGET;
+    /* 显式附带的文档按实际长度扩容预算（2026-10-22）。
+       不扩的话，一份 2~3 万字的文档会把记忆 / 插件说明 / 流程设定挤成 0 配额 ——
+       用户选了文档，结果别的区块集体消失，属于用新功能砸坏旧功能。 */
+    var _attSecLen = 0;
+    for (var _si = 0; _si < secs.length; _si++) { if (secs[_si].k === 'kbdocs') _attSecLen += secs[_si].text.length; }
+    if (_attSecLen) budget = Math.max(budget, SYS_BUDGET + Math.ceil(_attSecLen * 1.2));
     // 挂上预压缩文本（若缓存里有）。压缩本身是异步的，不可能在这里现压 ——
     // 这里只做同步取用；真正的压缩由 chat() 发送前调用 prepareCtxCompression 完成。
     // 必须传 budget：配额决定压缩目标长度，也就决定缓存 key，两侧口径必须一致。
@@ -13211,6 +13343,8 @@ function ctxPrioLabel(p) {
 // 聊天头部上下文条
 function renderCtxBar(b) {
   const el = document.getElementById('ctxBar'); if (!el || !b) return;
+  // 附带文档的按钮徽标跟着机器人走（切机器人 / 挂载变化都经这里刷新）
+  try { renderDocBadge(b); } catch (e) { }
   // ① 配置摘要（保留原有语义，作为次要信息）
   const kbNames = (b.knowledges || []).map(function (id) { var r = kbById(id); return r ? r.name : null; }).filter(Boolean);
   var summary = kbNames.length ? ('📚 知识库：' + escapeHtml(kbNames.join('、'))) : '📚 知识库：未挂载';
@@ -15289,6 +15423,7 @@ function appendMsg(b, m, mi) {
      这里主要服务「补画历史」（_finishGenAppend / 搜索跳转后重建）：
      真实发送时提问先画、kbHits 后产生，那一刻取不到，靠 _kbCiteAttachAsk 补。 */
   if (m.role === 'me') {
+    if (m.docs && m.docs.length) div.insertAdjacentHTML('beforeend', _docChipHtml(m.docs));
     var _askIdx = (typeof mi === 'number' && mi >= 0) ? mi : Math.max(0, (b.history || []).length - 1);
     var _askCite = _kbCiteHtml(_kbCiteForAsk(b, _askIdx));
     if (_askCite) div.insertAdjacentHTML('beforeend', _askCite);
@@ -15336,6 +15471,7 @@ function renderHistory(b) {
           + ((m.audio && m.audio.length) ? m.audio.map(function (s) { return '<audio class="msg-audio" data-src="' + escapeAttr(s) + '" controls preload="none"></audio>'; }).join('') : '')
           + ((m.videos && m.videos.length) ? m.videos.map(function (it) { return '<video class="msg-video" data-src="' + escapeAttr((it && it.url) || '') + '" controls muted playsinline preload="none"' + ((m.frames && m.frames.length && String(m.frames[0]).length < LAZY_MEDIA_MIN) ? ' poster="' + escapeAttr(m.frames[0]) + '"' : '') + '></video>'; }).join('') : '')
           + _kbCiteHtml(_kbCiteForAsk(b, i))   // 提问下方也显示参考来源
+          + _docChipHtml(m.docs)              // 提问下方显示「附带了 N 个文档」
           + '</div>';
       }
       var bt = m.text || '';
@@ -15730,7 +15866,7 @@ function msgPlainText(msg) {
   var body = msg.querySelector('.msg-body');
   if (!body) return msg.textContent || '';
   var c = body.cloneNode(true);
-  c.querySelectorAll('.who, .kb-cite').forEach(function (el) { el.remove(); });
+  c.querySelectorAll('.who, .kb-cite, .doc-chip').forEach(function (el) { el.remove(); });
   return c.textContent || '';
 }
 /* ==================== Word 导出（.docx，零依赖） ====================
@@ -16632,6 +16768,147 @@ function appendImageError(msg, botName) {
   c.appendChild(errDiv);
   scrollChatToBottom(true);
 }
+
+/* ==================== 本次附带文档（2026-10-22） ====================
+   用户诉求：① 手动指定这一问用哪几份知识库文档；② 提问气泡下方显示「附带了 X 个文档」。
+   为什么必须做（不只是便利）：
+     · 旧实现把所有挂载文档一律拼进系统提示，总量硬钳 6000 字。本例的文档有 39,045 字，
+       只有前 15% 进得去，而且截断点落在代码块中间；
+     · 用户一句「总结一下」脱离文档上下文后成了歧义指代，模型按上文话题（自动化测试）
+       作答 —— 2026-10-22 实测就是这个现象。
+   —— 指定之后：只带选中的文档、上限放宽到 ATT_DOC_MAX_CHARS、预算另算不吃别人的配额，
+      并在提示里明写「这一问的对象就是这些文档」。
+   状态存 _attDocsBy（内存），不落盘：文档 id 会随删除失效，旧选择留着只会带来「选了却没生效」。
+   null = 未自定义（跟随挂载的全部文档，与旧行为完全一致）；[] = 本次一份都不带。 */
+var _attDocsBy = {};
+var ATT_DOC_MAX_CHARS = 48000;   // 显式附带文档的单次总长上限（超出才截断）
+function _attDocsGet(b) {
+  if (!b || !b.id) return null;
+  var v = _attDocsBy[b.id];
+  return Array.isArray(v) ? v.slice() : null;
+}
+function _attDocUsable(b) {
+  return ((b && b.knowledges) || []).map(function (id) { return kbById(id); }).filter(Boolean);
+}
+function _attPlan(b) {
+  var avail = _attDocUsable(b);
+  if (!avail.length) return { avail: [], objs: [], custom: false };
+  var sel = _attDocsGet(b);
+  var custom = !!sel;
+  var objs = custom ? avail.filter(function (r) { return sel.indexOf(r.id) >= 0; }) : avail;
+  return { avail: avail, objs: objs, custom: custom };
+}
+function _attDocBrief(r) { return { id: r.id, n: r.name || '文档', c: String(r.content || '').length }; }
+/* 提问气泡下方的「附带了 N 个文档」。只认 m.docs —— 旧消息没有这个字段，
+   一律不显示，避免给历史消息凭空补一句并不成立的「附带」。 */
+function _docChipHtml(docs) {
+  if (!docs || !docs.length) return '';
+  var rows = docs.map(function (d) {
+    var nm = (d && d.n) || (((d && d.id) ? kbById(d.id) : null) || {}).name || '文档';
+    var c = (d && d.c) || 0;
+    return '<div>· 《' + escapeHtml(nm) + '》' + (c ? ' · ' + fmtCtxLen(c) + ' 字' : '') + '</div>';
+  }).join('');
+  return '<div class="doc-chip">'
+    + '<button class="doc-chip-hd" type="button" onclick="docChipToggle(this)">\uD83D\uDCCE 附带了 ' + docs.length + ' 个文档'
+    + ' <span class="kb-caret"><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 6 8 10.2 12.2 6"/></svg></span></button>'
+    + '<div class="doc-chip-body">' + rows + '</div></div>';
+}
+function docChipToggle(btn) {
+  var box = btn && btn.parentNode ? btn.parentNode.querySelector('.doc-chip-body') : null;
+  if (box) box.classList.toggle('on');
+}
+function renderDocBadge(b) {
+  var btn = document.getElementById('docBtn'); if (!btn) return;
+  b = b || getBot(currentId);
+  var plan = _attPlan(b);
+  var n = plan.objs.length;
+  btn.classList.toggle('doc-on', plan.custom && n > 0);
+  btn.classList.toggle('doc-off', plan.custom && n === 0);
+  btn.title = plan.avail.length
+    ? ('本次附带的文档：已选 ' + n + ' / 可挂载 ' + plan.avail.length + '（点开勾选，只对下一次提问生效）')
+    : '当前机器人还没有挂载知识库文档';
+  var badge = btn.querySelector('.dp-badge');
+  if (n) {
+    if (!badge) { badge = document.createElement('span'); badge.className = 'dp-badge'; btn.appendChild(badge); }
+    badge.textContent = n > 9 ? '9+' : String(n);
+  } else if (badge) badge.remove();
+  renderDocPreview(b, plan);
+}
+function renderDocPreview(b, plan) {
+  var box = document.getElementById('docPreview'); if (!box) return;
+  plan = plan || _attPlan(b);
+  if (!plan.custom || !plan.objs.length) { box.className = 'doc-preview'; box.innerHTML = ''; return; }
+  box.className = 'doc-preview on';
+  box.innerHTML = plan.objs.map(function (r) {
+    return '<span class="dp-chip" title="' + escapeAttr((r.name || '') + ' · ' + fmtCtxLen(String(r.content || '').length) + ' 字') + '">'
+      + '<span>' + escapeHtml(r.name || '文档') + '</span>'
+      + '<i onclick="docDetach(\'' + escapeAttr(r.id) + '\')" title="本次不带这份">\u2715</i></span>';
+  }).join('');
+}
+function openDocPick() {
+  var box = document.getElementById('docPick'); if (!box) return;
+  if (box.classList.contains('on')) { closeDocPick(); return; }
+  if (!window._docPickBound) {
+    // 点面板与按钮以外的地方关闭（懒绑定：只在真实用户手势里注册，避免顶层语句抛错连累整块）
+    window._docPickBound = 1;
+    document.addEventListener('click', function (e) {
+      var box2 = document.getElementById('docPick'); if (!box2 || !box2.classList.contains('on')) return;
+      var btn = document.getElementById('docBtn');
+      if (box2.contains(e.target) || (btn && btn.contains(e.target))) return;
+      closeDocPick();
+    }, true);
+  }
+  box.classList.add('on');
+  renderDocPick(getBot(currentId));
+}
+function closeDocPick() { var box = document.getElementById('docPick'); if (box) box.classList.remove('on'); }
+function renderDocPick(b) {
+  var box = document.getElementById('docPick'); if (!box) return;
+  b = b || getBot(currentId);
+  var plan = _attPlan(b);
+  var head = '<div class="doc-pick-hd"><b>本次附带文档</b><span>' + plan.objs.length + ' / ' + plan.avail.length + '</span>'
+    + '<span class="dp-actions"><button type="button" onclick="docPickAll(1)">全选</button>'
+    + '<button type="button" onclick="docPickAll(0)">全不选</button></span></div>';
+  if (!plan.avail.length) {
+    box.innerHTML = head + '<div class="doc-pick-empty">这个机器人还没有挂载知识库文档。<br>先在「知识库」页上传，'
+      + '再到工作台的「知识库」标签勾选挂载，这里就有可选项了。</div>';
+    return;
+  }
+  var rows = plan.avail.map(function (r) {
+    var on = plan.objs.some(function (x) { return x.id === r.id; });
+    var ch = String(r.content || '').length;
+    return '<label class="doc-pick-row"><input type="checkbox" data-doc="' + escapeAttr(r.id) + '"' + (on ? ' checked' : '')
+      + ' onchange="docPickToggle(this)"><span><span class="doc-pick-name">' + escapeHtml(r.name || '未命名文档') + '</span>'
+      + '<span class="doc-pick-meta">' + fmtCtxLen(ch) + ' 字'
+      + (ch > ATT_DOC_MAX_CHARS ? ' · 超过单次上限，末尾会被截断' : '') + '</span></span></label>';
+  }).join('');
+  var total = plan.objs.reduce(function (a, r) { return a + String(r.content || '').length; }, 0);
+  var foot = '<div class="doc-pick-ft">将附带 <b>' + plan.objs.length + '</b> 个文档 · 共 ' + fmtCtxLen(total) + ' 字'
+    + (total > ATT_DOC_MAX_CHARS ? '（上限 ' + fmtCtxLen(ATT_DOC_MAX_CHARS) + ' 字，末尾截断）' : '')
+    + '。只对下一次提问生效。</div>';
+  box.innerHTML = head + '<div class="doc-pick-list">' + rows + '</div>' + foot;
+}
+function docPickToggle(inp) {
+  var b = getBot(currentId); if (!b || !inp) return;
+  var cur = _attPlan(b).objs.map(function (r) { return r.id; });
+  var id = inp.getAttribute('data-doc');
+  var i = cur.indexOf(id);
+  if (inp.checked) { if (i < 0) cur.push(id); } else if (i >= 0) cur.splice(i, 1);
+  _attDocsBy[b.id] = cur;
+  renderDocPick(b); renderDocBadge(b);
+}
+function docPickAll(on) {
+  var b = getBot(currentId); if (!b) return;
+  _attDocsBy[b.id] = on ? _attDocUsable(b).map(function (r) { return r.id; }) : [];
+  renderDocPick(b); renderDocBadge(b);
+}
+function docDetach(id) {
+  var b = getBot(currentId); if (!b) return;
+  var cur = _attPlan(b).objs.map(function (r) { return r.id; }).filter(function (x) { return x !== id; });
+  _attDocsBy[b.id] = cur;
+  renderDocPick(b); renderDocBadge(b);
+}
+
 async function sendMsg() {
   // 发送锁：sending 要到 runReply 内部才置位，而本函数在推入历史之前有 await
   // （视频抽帧 sampleVideoFrames）。这段窗口里 sending 仍是 false，
@@ -16663,6 +16940,14 @@ async function sendMsg() {
   _sendLock = true;   // 临界区开始：从这里到 runReply 接管为止，不再接受第二次发送
   if (!Array.isArray(b.history)) b.history = [];
   const entry = { role: 'me', text: v, t: Date.now() };
+  /* 本次附带的文档落到消息上（2026-10-22）：buildCtxSections 只从「最后一条提问」取，
+     所以这份选择只作用于这一问，后续提问不会重复携带（省 token，也符合「这次用哪几份」的语义）。
+     custom 时即使是空数组也要写：空数组 = 用户明确说「这一问一份都不带」。 */
+  try {
+    var _dplan = _attPlan(b);
+    if (_dplan.custom || _dplan.objs.length) entry.docs = _dplan.objs.map(_attDocBrief);
+  } catch (eD) { }
+
   if (imgs.length) entry.images = imgs;
   if (auds.length) entry.audio = auds;
   if (vids.length) {
@@ -24364,7 +24649,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.26.4';
+var APP_VERSION = '3.27.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
