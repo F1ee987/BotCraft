@@ -1158,8 +1158,23 @@ body.embed-mode #wsName{font-size:15px}
 .bot-meta span{display:flex;align-items:center;gap:var(--sp-2)}
 .mini-x{margin-left:auto;border:none;background:transparent;color:var(--sub);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:var(--r-xs);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .mini-x:hover{background:var(--fill);color:var(--danger-text)}
-.style-view-btn{margin-left:auto;border:1px solid transparent;background:var(--glass-bg-active);color:var(--brand-text);cursor:pointer;font-size:12.5px;font-weight:590;padding:5px 15px;border-radius:var(--r-full);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
-.style-view-btn:hover{background:var(--brand-fill);color:#fff}
+/* 次要操作按钮（风格卡的「查看」）。2026-10-22 重做：
+   原先是 --brand-tint-2 填充 + --brand-text 文字 —— 同色系叠同色系，实测压不到 4.5:1，
+   字发虚；且 --r-full 胶囊与卡片（--r-xl）圆角语言不一致，在深色玻璃卡上像贴了块标签。
+   改为透明底 + 1px 品牌淡描边：文字直接压卡面，对比度回到 11.47:1（深色）/ 7.93:1（浅色），
+   既有「可点击」的形状识别，又不与卡片里的正文抢视觉重量。 */
+.style-view-btn{margin-left:auto;display:inline-flex;align-items:center;gap:var(--sp-2);
+  border:1px solid var(--brand-line);background:transparent;color:var(--brand-text);
+  cursor:pointer;font-size:var(--fs-xs);font-weight:590;line-height:1;padding:5px 10px;
+  border-radius:var(--r-sm);
+  transition:background var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
+/* 图标固定 13px：不用 .i 默认的 1.15em —— 那会随字号缩放，且自带 margin-right
+   与 flex 的 gap 叠加，间距会变成两倍。 */
+.style-view-btn .i{width:13px;height:13px;margin-right:0;vertical-align:0}
+.style-view-btn:hover{background:var(--brand-tint);border-color:var(--brand)}
+.style-view-btn:active{transform:scale(.96)}
+
 .chip-row{display:flex;gap:var(--sp-4);flex-wrap:wrap;margin:2px 0 6px}
 .plugin-cat{font-size:11px;color:var(--brand-text);background:var(--glass-bg-active);padding:2px 9px;border-radius:var(--r-full);white-space:nowrap}
 .plugin-badge{font-size:11.5px;color:var(--sub)}
@@ -23821,7 +23836,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.25.0';
+var APP_VERSION = '3.25.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
