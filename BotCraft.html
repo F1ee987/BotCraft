@@ -37,9 +37,9 @@
   --line:rgba(255,255,255,.10);     /* 玻璃上的分隔线用白色低透明，灰线会割裂玻璃层 */
   --txt:#ffffff;                    /* label */
   --sub:rgba(235,235,245,.62);      /* secondaryLabel */
-  --brand:#8b5cf6;                  /* violet-500：与 app 图标主色统一（图标渐变 #6366f1→#8b5cf6） */
-  --brand-hi:#a78bfa;               /* violet-400：渐变亮端（logo 等） */
-  --brand2:#6d28d9;                 /* violet-700：渐变深端 */
+  --brand:#22d3ee;                  /* cyan-400（188°）：与背景翡翠绿是邻近配色，压在 29° 色相差上；图标/描边/焦点用这个亮档 */
+  --brand-hi:#67e8f9;               /* cyan-300（187°）：渐变亮端（logo 等） */
+  --brand2:#0b4d5b;                 /* 深青（190°）：气泡渐变深端。青的亮度天然偏高，深端必须比紫方案压得更狠才留得住白字对比度 */
   --ok:#30d158; --warn:#ff9f0a; --danger:#ff453a;
   /* 圆角阶梯（2026-09-19 收敛为 8 档，由实际用值归纳）：
      2xs 徽章内块 / xs 小控件 / sm 控件 / md 控件主力 /
@@ -64,7 +64,7 @@
      玻璃必须有东西可以透出来才成立 —— 这是「液态玻璃」与「死灰玻璃」的分界。
      抽成两个令牌（每层一整套 4 束 radial）是为了让浅色主题整套换色而不必复制渐变文本：
      换色只改这两个值，body::before/after 的规则一动不动。
-     深色（默认，参考图 LightC 深色）＝ 翡翠/薄荷绿单色系 + 第二层一丝品牌靛调和。
+     深色（默认，参考图 LightC 深色）＝ 翡翠/薄荷绿单色系 + 第二层一丝品牌青调和（2026-10-22 品牌色由紫改青后，背景第二家族随之改为青，仍是 2 个色相家族）。
      2026-10-18 上调浓度（.26→.42 等）：实测深色首页背景只有 rgb(11,14,18)~rgb(27,28,41)，
      极光几乎看不见，而玻璃框因 saturate(280%) 会把背后色彩放大 2.8 倍 —— 于是
      「流动光效只在液态框里显示」，裸背景一片死黑。浓度调到能在裸背景上也读得出层次。
@@ -74,7 +74,7 @@
     radial-gradient(76% 68% at 100% 8%, rgba(52,211,153,.30), transparent 70%),
     radial-gradient(94% 82% at 48% 108%, rgba(5,150,105,.34), transparent 74%);
   --bg-glow-2:
-    radial-gradient(80% 72% at 76% 18%, rgba(99,102,241,.26), transparent 72%),
+    radial-gradient(80% 72% at 76% 18%, rgba(34,211,238,.20), transparent 72%),
     radial-gradient(88% 78% at 14% 96%, rgba(16,185,129,.20), transparent 72%);
   /* ===== 背景层可独立控制（2026-10-20）=====
      背景原本只是「液态玻璃的底」：光晕、颗粒全是为玻璃折射服务的，玻璃一关
@@ -120,7 +120,7 @@
   --log-bg:rgba(22,22,26,.62); --log-head-bg:rgba(22,22,26,.72);
   --log-border:rgba(255,255,255,.13); --log-fg:#f2f2f7;
   --log-item-bg:rgba(255,255,255,.07); --log-item-border:rgba(255,255,255,.10);
-  --log-item-fg:rgba(235,235,245,.62); --log-ms:#a78bfa; --log-shadow:0 14px 40px rgba(0,0,0,.50);
+  --log-item-fg:rgba(235,235,245,.62); --log-ms:#67e8f9; --log-shadow:0 14px 40px rgba(0,0,0,.50);
   /* Apple 标准进出场缓动 */
   --ease:cubic-bezier(.32,.72,0,1);
 
@@ -154,8 +154,8 @@
   /* ===== 主色拆成三态 =====
      原来只有一个 --brand，既当填充面又当文字色。它的填充面压不住白字（4.23:1），
      文字态压玻璃面也不够（3.45–4.30:1）—— 一个值不可能同时满足两种用途。 */
-  --brand-fill:#7c3aed;   /* 填充面：上面压白字（5.70:1） */
-  --brand-text:#b096fa;   /* 文字 / 链接 / 焦点：压玻璃面与紫底徽标（4.7:1） */
+  --brand-fill:#0e7490;   /* cyan-700（193°）填充面：上面压白字（5.36:1）。凡是「填充 + 白字」都用它，别让 --brand 兼任 */
+  --brand-text:#67e8f9;   /* cyan-300 文字 / 链接 / 焦点：压玻璃面 11.47:1（比原紫 4.7 更稳） */
   /* ===== 语义色拆成「文字态」与「底色态」 =====
      系统色是为大色块调的，拿来写 10–11px 小字必然不够：浅色主题下实测仅 1.6–2.6:1。 */
   --ok-text:#30d158; --warn-text:#ff9f0a; --danger-text:#ff5a51;
@@ -176,15 +176,15 @@
   --mem-4-bd:rgba(255,159,10,.40);  --mem-5-bd:rgba(255,69,58,.40);  --mem-6-bd:rgba(100,210,255,.40);
   --mem-7-bd:rgba(255,214,10,.45);  --mem-8-bd:rgba(50,173,230,.45); --mem-9-bd:rgba(196,103,243,.40);
   --mem-10-bd:rgba(142,142,147,.40);
-  /* 品牌色的浓度阶梯：组件里别再抄 rgba(139,92,246,.xx) —— 改品牌色时那些抄本不会跟着变。
+  /* 品牌色的浓度阶梯：组件里别再抄 rgba(34,211,238,.xx) —— 改品牌色时那些抄本不会跟着变。
      四档覆盖了全部真实用法：淡底 / 高亮 / 描边 / 辉光。 */
-  --brand-tint:rgba(139,92,246,.16);     /* 徽标底、记忆命中闪烁 */
-  --brand-tint-2:rgba(139,92,246,.26);   /* 高亮标记、文字选区、消息气泡辉光 */
-  --brand-line:rgba(139,92,246,.38);     /* 淡描边 */
+  --brand-tint:rgba(34,211,238,.16);     /* 徽标底、记忆命中闪烁 */
+  --brand-tint-2:rgba(34,211,238,.26);   /* 高亮标记、文字选区、消息气泡辉光 */
+  --brand-line:rgba(34,211,238,.38);     /* 淡描边 */
   /* 画布连线专用色：比淡描边浓得多 —— 连线是画布上最重要的结构信息，
      用 38% 的淡描边色根本看不清（用户反馈「线的颜色不够明显」）。 */
-  --cw-link:rgba(167,139,250,.92);
-  --brand-glow:rgba(139,92,246,.42);     /* 品牌辉光投影（激活图标、主按钮） */
+  --cw-link:rgba(103,232,249,.92);
+  --brand-glow:rgba(34,211,238,.42);     /* 品牌辉光投影（激活图标、主按钮） */
 
   /* 代码块语法高亮 token 色：压在 --sunken 凹陷底上，深主题用亮一档保证对比度 */
   --tok-kw:#ff7edb;     /* 关键字：亮粉 */
@@ -213,7 +213,7 @@
   --bg:#edf2ee;                     /* 窗口底：近白带一丝绿，参考图（LightC）的干净底子 */
   --scrim:rgba(0,0,0,.42);         /* 浅色下遮罩深一档：白底上需要更强的压暗才能突出模态 */
   /* 浅色背景弥散光：换成参考图的薄荷 / 翡翠绿单色系。刻意不放粉/橙 ——
-     参考图是单色系绿色，杂色一进来就脏。深色那套（品牌紫 + 青粉橙）见 :root。 */
+     参考图是单色系绿色，杂色一进来就脏。深色那套（品牌青 + 翠绿）见 :root。 */
   --bg-glow-1:
     radial-gradient(70% 64% at 2% 0%, rgba(52,211,153,.28), transparent 68%),
     radial-gradient(66% 62% at 100% 14%, rgba(16,185,129,.20), transparent 66%),
@@ -230,9 +230,9 @@
   --line:rgba(0,0,0,.10);           /* 浅色玻璃上的分隔线必须用暗色，否则看不见 */
   --txt:#1d1d1f;                    /* Apple label 近黑：纯黑在浅玻璃上太硬 */
   --sub:rgba(60,60,67,.78);
-  --brand:#7c3aed;                  /* violet-600：浅色底上加深一档，保证文字/图标对比度 */
-  --brand-hi:#8b5cf6;               /* violet-500：浅色主题的亮端也相应加深 */
-  --brand2:#6d28d9;
+  --brand:#0e7490;                  /* cyan-700（193°）：浅色底上 deepen 一档，压玻璃 5.02:1 */
+  --brand-hi:#0891b2;               /* cyan-600（192°）：浅色主题的亮端也相应加深 */
+  --brand2:#0a4b58;
   --ok:#34c759; --warn:#ff9500; --danger:#ff3b30;
   --fill:rgba(255,255,255,.60);
   --fill-strong:rgba(255,255,255,.85);
@@ -258,23 +258,23 @@
   --log-bg:rgba(255,255,255,.62); --log-head-bg:rgba(255,255,255,.72);
   --log-border:rgba(0,0,0,.10); --log-fg:#1c1c1e;
   --log-item-bg:rgba(255,255,255,.52); --log-item-border:rgba(0,0,0,.07);
-  --log-item-fg:rgba(60,60,67,.78); --log-ms:#7c3aed; --log-shadow:0 14px 40px rgba(31,41,71,.18);
+  --log-item-fg:rgba(60,60,67,.78); --log-ms:#0e7490; --log-shadow:0 14px 40px rgba(31,41,71,.18);
 
   /* 浅色主题的对应覆盖：语义色与类型色都要换深色变体，否则浅底上读不出来 */
-  --brand-fill:#6d28d9;   /* 白字在其上 7.30:1 */
-  --brand-text:#6517ea;   /* 浅色文字态：比 --brand 更深，压紫底徽标 4.6:1 */
+  --brand-fill:#0c6478;   /* 白字在其上 6.75:1 */
+  --brand-text:#0b5560;   /* 浅色文字态：比 --brand 更深，压青底 7.93:1 */
   --ok-text:#0f6b2c; --warn-text:#8a4b00; --danger-text:#a8221a;
   --ok-bg:rgba(48,209,88,.18); --warn-bg:rgba(255,159,10,.18); --danger-bg:rgba(255,69,58,.14);
   --danger-fill:#a8221a;   /* 白字在其上 7.22:1；与浅色 --danger-text 同值，视觉上是一家人 */
   --mem-1:#0a58b0;  --mem-2:#146026;  --mem-3:#4b48c9;  --mem-4:#8a5300;  --mem-5:#a8221a;
   --mem-6:#09688d;  --mem-7:#7a5c00;  --mem-8:#09638b;  --mem-9:#8a1fc4;  --mem-10:#55555b;
   /* 浅色下品牌淡底要更淡：同样的 alpha 压在浅底上会显得重得多。
-     取 --brand-fill 浅色值 #6d28d9 的 rgb(109,40,217)。 */
-  --brand-tint:rgba(109,40,217,.08);
-  --brand-tint-2:rgba(109,40,217,.14);
-  --brand-line:rgba(109,40,217,.26);
-  --cw-link:rgba(109,40,217,.82);
-  --brand-glow:rgba(109,40,217,.30);
+     取 --brand-fill 浅色值 #0c6478 的 rgb(12,100,120)。 */
+  --brand-tint:rgba(12,100,120,.08);
+  --brand-tint-2:rgba(12,100,120,.14);
+  --brand-line:rgba(12,100,120,.26);
+  --cw-link:rgba(12,100,120,.82);
+  --brand-glow:rgba(12,100,120,.30);
   /* 代码块语法高亮 token 色（浅主题压在浅灰凹陷底上，用深一档保证对比度）*/
   --tok-kw:#a21caf;     /* 关键字：品红紫 */
   --tok-str:#0a5c2e;    /* 字符串：深绿（对最暗浅色面 --sunken ≥4.5:1） */
@@ -709,7 +709,7 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 .theme-opt:hover span{color:var(--txt)}
 .theme-opt input:checked + span{background:var(--glass-bg-hover);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.22)}
 .theme-opt input:focus-visible + span{outline:2px solid var(--brand-text);outline-offset:1px}
-.avatar{border:1px solid transparent;height:32px;width:32px;border-radius:50%;background:linear-gradient(180deg,#5e5ce6,#4845d2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;color:#fff;transition:var(--dur-2) var(--ease)}
+.avatar{border:1px solid transparent;height:32px;width:32px;border-radius:50%;background:linear-gradient(180deg,#0e7490,#0b4d5b);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;color:#fff;transition:var(--dur-2) var(--ease)}
 .avatar:hover{filter:brightness(1.08)}
 #userMenuWrap{position:relative;display:flex;align-items:center}
 .pop-menu{position:fixed;z-index:200;border-radius:var(--r-lg);padding:5px;display:flex;flex-direction:column;min-width:160px;
@@ -773,7 +773,7 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
   background:conic-gradient(from 210deg,#8b5cf6,#ec4899,#f59e0b,#22d3ee,#8b5cf6);
   box-shadow:0 8px 24px rgba(0,0,0,.26);display:flex;align-items:center;justify-content:center}
 .acct-avatar-lg{width:82px;height:82px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-  font-size:32px;font-weight:600;color:#fff;background:linear-gradient(180deg,#5e5ce6,#4845d2);
+  font-size:32px;font-weight:600;color:#fff;background:linear-gradient(180deg,#0e7490,#0b4d5b);
   background-size:cover;background-position:center}
 .acct-hero-name{font-size:19px;font-weight:700;line-height:1.2;margin-top:6px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
@@ -841,14 +841,14 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 #auth-err{font-size:12px}
 /* —— 登录/注册左右分栏（2026-09-21 美化）：左插画面板 / 右内容栏 ——
    插画是内联 SVG：一个 symbol（#authArt）定义一次、启动页与弹窗两处 use 复用，
-   单文件零依赖；面板底色用品牌紫渐变，双主题都是同一块彩色面板，浮在卡片上。
+   单文件零依赖；面板底色用品牌青渐变，双主题都是同一块彩色面板，浮在卡片上。
    （注意：注释里别再写带 id 属性的标签字面量 —— lint_deep 的 id 扫描会把它
    当成第二处定义，报「id 重复」，这次就踩了一次。） */
 .auth-card{display:flex;width:940px;max-width:94vw;height:min(560px,86vh);border-radius:var(--r-2xl);overflow:hidden;
   background:var(--glass-bg-hover);border:1px solid var(--glass-border);box-shadow:0 32px 80px rgba(0,0,0,.42);
   -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);text-align:left}
 .auth-art{flex:0 0 47%;position:relative;overflow:hidden;
-  background:linear-gradient(158deg,#8b5cf6 0%,#6247d6 46%,#3a3496 100%);
+  background:linear-gradient(158deg,#0e7490 0%,#0a5f74 46%,#083b47 100%);
   display:flex;align-items:center;justify-content:center}
 /* 两团光晕：纯渐变太平，加一点纵深让插画浮起来 */
 .auth-art::before,.auth-art::after{content:'';position:absolute;border-radius:50%;pointer-events:none}
@@ -1290,7 +1290,11 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:pointer;z-index:1}
 .switch .slider{position:absolute;inset:0;background:var(--fill-strong);border:1px solid var(--line);border-radius:var(--r-full);pointer-events:none;transition:background var(--dur-5) var(--ease),border-color var(--dur-5) var(--ease)}
 .switch .slider::before{content:"";position:absolute;height:27px;width:27px;left:1px;top:1px;background:#fff;border-radius:50%;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform var(--dur-5) var(--ease)}
-.switch input:checked + .slider{background:var(--ok);border-color:transparent}
+/* 开启态用品牌色而不是 --ok 绿（2026-10-22）：
+   设置页里「开关键」和「不透明度/背景模糊滑杆」同屏并排，一绿一青看着像两个主色；
+   绿色退回「成功/已完成」语义。用 --brand-fill 而非 --brand：白滑块压在亮青上分不清边界，
+   深青填充才能让滑块轮廓清楚（深色主题 #0e7490 / 浅色 #0c6478）。 */
+.switch input:checked + .slider{background:var(--brand-fill);border-color:transparent}
 .switch input:checked + .slider::before{transform:translateX(20px)}
 .switch input:focus-visible + .slider{outline:2px solid var(--brand);outline-offset:2px}
 .switch input:disabled + .slider{opacity:.5}
@@ -1363,7 +1367,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .msg-video{max-width:240px;border-radius:var(--r-md);margin-top:6px;display:block}
 .msg{max-width:78%;padding:11px 15px;border-radius:var(--r-xl);font-size:13.5px;line-height:1.6;word-break:break-word}
 .msg.bot{background:var(--msg-bot-bg);border:1px solid transparent;align-self:flex-start;border-bottom-left-radius:6px;max-width:78%}
-.msg.me{background:linear-gradient(180deg,var(--brand),var(--brand2));align-self:flex-end;border-bottom-right-radius:6px;color:#fff}
+.msg.me{background:linear-gradient(180deg,var(--brand-fill),var(--brand2));align-self:flex-end;border-bottom-right-radius:6px;color:#fff}
 .msg .who{font-size:10.5px;color:var(--sub);margin-bottom:4px;font-weight:590;user-select:none;-webkit-user-select:none}
 .msg pre{background:var(--bg);border-radius:var(--r-md);padding:10px;margin:8px 0;overflow-x:auto;font-size:12px;font-family:var(--font-mono)}
 .msg code{background:var(--bg);padding:1px 5px;border-radius:var(--r-2xs);font-size:12px;font-family:var(--font-mono)}
@@ -2123,7 +2127,9 @@ html[data-theme='light'] #anaSettings .field select:focus{
 .fb-dx-ic{flex:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
 .fb-dx-warn .fb-dx-ic{background:rgba(245,158,11,.18);color:#f59e0b}
 .fb-dx-ok .fb-dx-ic{background:rgba(16,185,129,.18);color:#10b981}
-.fb-dx-info .fb-dx-ic{background:rgba(99,102,241,.18);color:#818cf8}
+/* info 语义色跟随品牌：原先硬编码靛蓝 rgba(99,102,241,.18)/#818cf8，
+   2026-10-22 品牌由紫改青后改走令牌（warn 橙 / ok 绿 / info 品牌青三色分布均衡）。 */
+.fb-dx-info .fb-dx-ic{background:var(--brand-tint);color:var(--brand-text)}
 .fb-dx-body{flex:1;min-width:0}
 .fb-dx-dim{font-size:11px;color:var(--sub);font-weight:600;margin-bottom:2px}
 .fb-dx-text{font-size:13px;color:var(--txt)}
@@ -2568,55 +2574,55 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <rect x="74" y="122" width="316" height="222" rx="20" fill="#ffffff" opacity="0.16"/>
     <!-- 工作流白板 -->
     <rect x="62" y="132" width="316" height="222" rx="20" fill="#ffffff" opacity="0.97"/>
-    <circle cx="86" cy="156" r="4.5" fill="#d9def7"/>
-    <circle cx="104" cy="156" r="4.5" fill="#d9def7"/>
-    <circle cx="122" cy="156" r="4.5" fill="#d9def7"/>
-    <rect x="288" y="318" width="74" height="7" rx="3.5" fill="#e6e9f7"/>
-    <circle cx="332" cy="334" r="4" fill="#d9def7"/>
-    <circle cx="346" cy="334" r="4" fill="#d9def7"/>
-    <circle cx="360" cy="334" r="4" fill="#d9def7"/>
+    <circle cx="86" cy="156" r="4.5" fill="#cfe9f5"/>
+    <circle cx="104" cy="156" r="4.5" fill="#cfe9f5"/>
+    <circle cx="122" cy="156" r="4.5" fill="#cfe9f5"/>
+    <rect x="288" y="318" width="74" height="7" rx="3.5" fill="#e0f0f7"/>
+    <circle cx="332" cy="334" r="4" fill="#cfe9f5"/>
+    <circle cx="346" cy="334" r="4" fill="#cfe9f5"/>
+    <circle cx="360" cy="334" r="4" fill="#cfe9f5"/>
     <!-- 连线：正交折线 + 端点圆点 -->
-    <path d="M212 199 L226 199" fill="none" stroke="#a5b4fc" stroke-width="3.5"/>
-    <circle cx="228" cy="199" r="4.5" fill="#a5b4fc"/>
-    <path d="M293 222 L293 265 L286 265" fill="none" stroke="#a5b4fc" stroke-width="3.5"/>
-    <circle cx="284" cy="265" r="4.5" fill="#a5b4fc"/>
-    <path d="M148 222 L148 265 L154 265" fill="none" stroke="#a5b4fc" stroke-width="3.5"/>
-    <circle cx="156" cy="265" r="4.5" fill="#a5b4fc"/>
+    <path d="M212 199 L226 199" fill="none" stroke="#7cc9e8" stroke-width="3.5"/>
+    <circle cx="228" cy="199" r="4.5" fill="#7cc9e8"/>
+    <path d="M293 222 L293 265 L286 265" fill="none" stroke="#7cc9e8" stroke-width="3.5"/>
+    <circle cx="284" cy="265" r="4.5" fill="#7cc9e8"/>
+    <path d="M148 222 L148 265 L154 265" fill="none" stroke="#7cc9e8" stroke-width="3.5"/>
+    <circle cx="156" cy="265" r="4.5" fill="#7cc9e8"/>
     <!-- 节点卡 A -->
-    <rect x="84" y="176" width="128" height="46" rx="12" fill="#eef1ff"/>
-    <circle cx="104" cy="199" r="9" fill="#8b5cf6"/>
-    <rect x="120" y="190" width="78" height="7" rx="3.5" fill="#c9cff2"/>
-    <rect x="120" y="203" width="52" height="7" rx="3.5" fill="#dfe3f8"/>
+    <rect x="84" y="176" width="128" height="46" rx="12" fill="#eaf6fb"/>
+    <circle cx="104" cy="199" r="9" fill="#0891b2"/>
+    <rect x="120" y="190" width="78" height="7" rx="3.5" fill="#bfdcea"/>
+    <rect x="120" y="203" width="52" height="7" rx="3.5" fill="#d6ecf5"/>
     <!-- 节点卡 B -->
-    <rect x="230" y="176" width="126" height="46" rx="12" fill="#eef1ff"/>
+    <rect x="230" y="176" width="126" height="46" rx="12" fill="#eaf6fb"/>
     <circle cx="250" cy="199" r="9" fill="#22c55e"/>
-    <rect x="266" y="190" width="76" height="7" rx="3.5" fill="#c9cff2"/>
-    <rect x="266" y="203" width="48" height="7" rx="3.5" fill="#dfe3f8"/>
+    <rect x="266" y="190" width="76" height="7" rx="3.5" fill="#bfdcea"/>
+    <rect x="266" y="203" width="48" height="7" rx="3.5" fill="#d6ecf5"/>
     <!-- 节点卡 C -->
-    <rect x="156" y="246" width="128" height="46" rx="12" fill="#eef1ff"/>
+    <rect x="156" y="246" width="128" height="46" rx="12" fill="#eaf6fb"/>
     <circle cx="176" cy="269" r="9" fill="#f59e0b"/>
-    <rect x="192" y="260" width="78" height="7" rx="3.5" fill="#c9cff2"/>
-    <rect x="192" y="273" width="52" height="7" rx="3.5" fill="#dfe3f8"/>
+    <rect x="192" y="260" width="78" height="7" rx="3.5" fill="#bfdcea"/>
+    <rect x="192" y="273" width="52" height="7" rx="3.5" fill="#d6ecf5"/>
     <!-- 散落的小卡片：填两人之间的空隙 -->
     <polygon points="206,438 250,430 256,472 212,480" fill="#ffffff" opacity="0.95"/>
-    <polygon points="206,438 250,430 251,440 207,448" fill="#a5b4fc" opacity="0.85"/>
-    <path d="M218 458 L242 454" stroke="#c9cff2" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <polygon points="206,438 250,430 251,440 207,448" fill="#7cc9e8" opacity="0.85"/>
+    <path d="M218 458 L242 454" stroke="#bfdcea" stroke-width="5" stroke-linecap="round" fill="none"/>
     <!-- 机器人（左下） -->
-    <ellipse cx="134" cy="504" rx="58" ry="11" fill="#231f52" opacity="0.45"/>
-    <rect x="106" y="462" width="20" height="44" rx="10" fill="#c7cdf5"/>
-    <rect x="142" y="462" width="20" height="44" rx="10" fill="#c7cdf5"/>
+    <ellipse cx="134" cy="504" rx="58" ry="11" fill="#0e2a33" opacity="0.45"/>
+    <rect x="106" y="462" width="20" height="44" rx="10" fill="#bcdde9"/>
+    <rect x="142" y="462" width="20" height="44" rx="10" fill="#bcdde9"/>
     <path d="M114 402 L92 376" stroke="#ffffff" stroke-width="12" stroke-linecap="round" fill="none"/>
     <circle cx="92" cy="376" r="8" fill="#ffffff"/>
     <path d="M162 408 L178 440" stroke="#ffffff" stroke-width="12" stroke-linecap="round" fill="none"/>
     <circle cx="178" cy="440" r="8" fill="#ffffff"/>
     <rect x="96" y="386" width="76" height="92" rx="26" fill="#ffffff"/>
-    <rect x="112" y="408" width="44" height="32" rx="9" fill="#e7e9ff"/>
-    <circle cx="126" cy="424" r="4.5" fill="#6b5cf6"/>
-    <circle cx="142" cy="424" r="4.5" fill="#6b5cf6"/>
+    <rect x="112" y="408" width="44" height="32" rx="9" fill="#e3f2f9"/>
+    <circle cx="126" cy="424" r="4.5" fill="#0e7490"/>
+    <circle cx="142" cy="424" r="4.5" fill="#0e7490"/>
     <path d="M134 386 L134 362" stroke="#ffffff" stroke-width="5" stroke-linecap="round" fill="none"/>
     <circle cx="134" cy="356" r="8" fill="#fbbf24"/>
     <!-- 人物（右下） -->
-    <ellipse cx="316" cy="504" rx="48" ry="10" fill="#231f52" opacity="0.45"/>
+    <ellipse cx="316" cy="504" rx="48" ry="10" fill="#0e2a33" opacity="0.45"/>
     <polygon points="296,420 336,420 350,498 282,498" fill="#fb923c"/>
     <rect x="296" y="416" width="40" height="7" rx="3.5" fill="#f97316"/>
     <path d="M302 396 L272 378" stroke="#f8d3b0" stroke-width="10" stroke-linecap="round" fill="none"/>
@@ -3914,12 +3920,12 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" data-grow data-grow-max="200" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:var(--danger-text);font-size:var(--fs-xs);margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
     <div class="field"><label>头像</label>
       <div class="color-pick" id="colors">
-        <div class="c on" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)" data-c=""></div>
+        <div class="c on" style="background:linear-gradient(135deg,#0e7490,#0b4d5b)" data-c=""></div>
         <div class="c" style="background:linear-gradient(135deg,#30d158,#32ade6)" data-c="📊"></div>
         <div class="c" style="background:linear-gradient(135deg,#ff8b6d,#ff6b9d)" data-c="🎨"></div>
         <div class="c" style="background:linear-gradient(135deg,#f5c542,#ff8b3d)" data-c="✍️"></div>
-        <div class="c" style="background:linear-gradient(135deg,#9b7bff,#6b8bff)" data-c="🎮"></div>
-        <div class="c" style="background:linear-gradient(135deg,#4dd0e1,#7c4dff)" data-c="✈️"></div>
+        <div class="c" style="background:linear-gradient(135deg,#84cc16,#4d7c0f)" data-c="🎮"></div>
+        <div class="c" style="background:linear-gradient(135deg,#22d3ee,#0c4a6e)" data-c="✈️"></div>
       </div>
     </div>
     <div class="field"><label>专精 <span style="font-size:11px;color:var(--sub);font-weight:400">（可选，选定后不可更改）</span></label>
@@ -6583,22 +6589,22 @@ const ORCH_BY_NAME = {
 };
 
 const SEED_BOTS = [
-  { n: '智能客服助手', d: '3C 家电的订单、售后与产品咨询应答，可转人工', ic: '', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', tag: '已发布', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['builtin_manual_v3', 'builtin_aftersale'], temperature: 0.3, expertise: { field: '订单状态、物流异常、退换货政策、产品参数咨询（3C 与家用电器为主）', method: '先确认身份与订单号，再判断问题类型；能查的按知识库原文答复，查不到的明说需要人工核实。一次只问一个必要信息，不要连珠炮追问', output: '先给结论或可执行动作（如「7 天内可以退」），再给依据；每段不超过 3 行；不堆敬语与客套', avoid: '不编造订单状态、物流单号、赔付金额与政策条款；不替客户承诺时限；不确定就转人工，不要猜' } },
+  { n: '智能客服助手', d: '3C 家电的订单、售后与产品咨询应答，可转人工', ic: '', c: 'linear-gradient(135deg,#f43f5e,#9f1239)', tag: '已发布', prompt: '你是智能客服，负责处理订单、售后与产品咨询，语气耐心专业。', nodes: ORCH_BY_NAME['智能客服助手'], plugins: ['网页搜索'], knowledges: ['builtin_manual_v3', 'builtin_aftersale'], temperature: 0.3, expertise: { field: '订单状态、物流异常、退换货政策、产品参数咨询（3C 与家用电器为主）', method: '先确认身份与订单号，再判断问题类型；能查的按知识库原文答复，查不到的明说需要人工核实。一次只问一个必要信息，不要连珠炮追问', output: '先给结论或可执行动作（如「7 天内可以退」），再给依据；每段不超过 3 行；不堆敬语与客套', avoid: '不编造订单状态、物流单号、赔付金额与政策条款；不替客户承诺时限；不确定就转人工，不要猜' } },
   { n: '产品文案生成器', d: '根据卖点生成小红书图文种草文案与标题', ic: '✍️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', tag: 'Pro', prompt: '你是文案专家，擅长小红书、抖音种草文案，风格活泼有网感。', nodes: ORCH_BY_NAME['产品文案生成器'], plugins: ['图片生成'], knowledges: [], temperature: 0.9, expertise: { field: '小红书等图文平台的种草文案、标题与卖点提炼', method: '先问清平台、人群、核心卖点、篇幅再动笔；用具体场景与具体感受代替形容词堆砌；标题给 3 个不同方向的备选', output: '标题候选 3 条 + 正文（短句分行，可用 emoji）+ 3-5 个话题标签；正文按平台常见长度控制（小红书 200-500 字）', avoid: '不写「最好」「第一」等绝对化用语与任何功效承诺；不虚构使用体验与他人评价；不写平台明令禁止的诱导话术' } },
   { n: '数据报表分析师', d: '上传 Excel 自动生成可视化图表与结论', ic: '📊', c: 'linear-gradient(135deg,#30d158,#32ade6)', tag: '已发布', prompt: '你是数据分析师，能解读数据并给出关键结论。', nodes: ORCH_BY_NAME['数据报表分析师'], plugins: ['代码执行器'], knowledges: [], temperature: 0.2, expertise: { field: '经营与表格数据的口径核对、指标计算、异常发现与结论提炼', method: '先确认字段口径与时间范围，再算指标，再找异常，最后给结论；严格区分「数据说了什么」与「我推测什么」', output: '结论先行（3 条以内）→ 关键指标表格 → 异常点与可能原因 → 下一步可执行动作', avoid: '不在口径不明时下结论；不把相关性说成因果；不编造未提供的数据；不为了结论好看而调整口径' } },
   { n: '英语口语陪练', d: '情景对话练口语，实时纠正语法与用词', ic: '🗣️', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', tag: '草稿', prompt: '你是英语口语陪练，用情景对话帮助练习，实时纠正错误。', nodes: ORCH_BY_NAME['英语口语陪练'], plugins: [], knowledges: [], temperature: 0.7, expertise: { field: '日常与职场情景英语口语（A1-B2 水平）', method: '用英语推进情景对话，保持角色与场景连贯；每轮只纠 1-2 个最重要的问题，避免打断表达流畅度', output: '① 用英语回应并延续情景 ② 用中文简短说明哪里不对、为什么 ③ 给一个更地道的替代表达', avoid: '不用中文代替英语对话；不一次纠正全部错误；不点评口音（纯文本场景无从判断）；不假装自己是真人老师' } },
-  { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', tag: '已发布', prompt: '你是资深工程师，擅长解释、调试、重构代码。', nodes: ORCH_BY_NAME['代码助手'], plugins: ['代码执行器', '网页搜索'], knowledges: [], temperature: 0.2, expertise: { field: 'Python / JavaScript / 前端与脚本类问题的解释、调试、重构', method: '先明确输入输出与完整报错信息，再定位最小复现，最后给可运行的完整片段；每处改动说明改在哪、为什么', output: '先给修复后的可运行代码，再解释原因；代码用代码块并标明语言；指出边界情况与潜在坑', avoid: '不臆测未提供的库版本与运行环境（需要时先问或明写假设）；不拿伪代码冒充可运行成品；不确定就说不确定' } },
-  { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#4dd0e1,#7c4dff)', tag: '草稿', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', nodes: ORCH_BY_NAME['旅行规划师'], plugins: ['天气查询', '网页搜索'], knowledges: [], temperature: 0.6, expertise: { field: '国内外自由行的行程编排、预算估算、交通与季节权衡', method: '先收齐目的地、天数、预算、同行人、节奏偏好；按地理邻近排天，避免来回穿越；每天留 1-2 小时机动时间', output: '行程表（按天：上午/下午/晚上 + 交通方式 + 预计耗时）+ 预算拆分（交通/住宿/餐饮/门票）+ 3 条注意事项', avoid: '不编造具体票价、班次与营业时间（未联网核实的一律标注「需核实」）；不推荐明显超出预算的方案；不隐瞒签证与季节风险' } },
+  { n: '代码助手', d: '解释、调试、重构代码，支持多语言', ic: '👨‍💻', c: 'linear-gradient(135deg,#84cc16,#4d7c0f)', tag: '已发布', prompt: '你是资深工程师，擅长解释、调试、重构代码。', nodes: ORCH_BY_NAME['代码助手'], plugins: ['代码执行器', '网页搜索'], knowledges: [], temperature: 0.2, expertise: { field: 'Python / JavaScript / 前端与脚本类问题的解释、调试、重构', method: '先明确输入输出与完整报错信息，再定位最小复现，最后给可运行的完整片段；每处改动说明改在哪、为什么', output: '先给修复后的可运行代码，再解释原因；代码用代码块并标明语言；指出边界情况与潜在坑', avoid: '不臆测未提供的库版本与运行环境（需要时先问或明写假设）；不拿伪代码冒充可运行成品；不确定就说不确定' } },
+  { n: '旅行规划师', d: '根据你的偏好定制行程与预算方案', ic: '✈️', c: 'linear-gradient(135deg,#22d3ee,#0c4a6e)', tag: '草稿', prompt: '你是旅行规划师，根据用户偏好定制行程与预算。', nodes: ORCH_BY_NAME['旅行规划师'], plugins: ['天气查询', '网页搜索'], knowledges: [], temperature: 0.6, expertise: { field: '国内外自由行的行程编排、预算估算、交通与季节权衡', method: '先收齐目的地、天数、预算、同行人、节奏偏好；按地理邻近排天，避免来回穿越；每天留 1-2 小时机动时间', output: '行程表（按天：上午/下午/晚上 + 交通方式 + 预计耗时）+ 预算拆分（交通/住宿/餐饮/门票）+ 3 条注意事项', avoid: '不编造具体票价、班次与营业时间（未联网核实的一律标注「需核实」）；不推荐明显超出预算的方案；不隐瞒签证与季节风险' } },
   { n: '会议纪要整理', d: '粘贴会议文字稿，自动提炼结论与待办', ic: '📝', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', tag: 'Pro', prompt: '你负责整理会议纪要，提炼结论与待办事项。', nodes: ORCH_BY_NAME['会议纪要整理'], plugins: [], knowledges: [], temperature: 0.2, expertise: { field: '会议记录转写稿的整理、决议与待办提炼', method: '先分清「讨论过程」与「结论」；每条待办必须绑到责任人与时间，识别不出就标「待确认」而不替人补', output: '① 结论与决议（编号）② 待办表（事项 / 责任人 / 时间）③ 待确认事项 ④ 风险与分歧意见', avoid: '不把讨论中的观点写成已定决议；不臆测责任人；不遗漏反对意见；不美化发言内容' } },
   { n: '求职简历优化', d: '基于 JD 智能改写简历，提升通过率', ic: '💼', c: 'linear-gradient(135deg,#a1887f,#795548)', tag: '已发布', prompt: '你帮用户基于 JD 优化简历，突出匹配亮点。', nodes: ORCH_BY_NAME['求职简历优化'], plugins: ['网页搜索'], knowledges: [], temperature: 0.4, expertise: { field: '简历与目标岗位 JD 的匹配度诊断、亮点提炼与经历改写', method: '先提取 JD 的硬性要求与关键词，对照简历找缺失与冗余，再用「动作 + 量化结果」重写相关经历', output: '① 匹配度诊断（符合 / 缺失 / 可强化）② 逐条改写建议（原文 → 改写后 → 改动依据）③ 需要用户补充的信息', avoid: '不编造经历、学历、数据与项目成果；不做美化到失真的改写；不替用户决定是否隐瞒某段经历' } },
 ];
 
 const tpls = [
-  { n: '电商智能客服', d: '店铺售前导购与促销优惠规则解答', ic: '🛒', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。', nodes: ORCH_BY_NAME['电商智能客服'], temperature: 0.3, expertise: { field: '店铺售前导购、商品推荐、促销与优惠规则解释', method: '先判断问题属于售前 / 售中 / 售后，再依据商品信息与店铺规则作答；需要多轮收集的信息一次只问一个', output: '直接给答案或动作，再补依据；附上下一步操作路径（如「在订单页点申请退货」）', avoid: '不承诺平台未承诺的赔付与时效；不编造库存、价格与优惠力度；不引导站外交易；不评价竞品' } },
+  { n: '电商智能客服', d: '店铺售前导购与促销优惠规则解答', ic: '🛒', c: 'linear-gradient(135deg,#f43f5e,#9f1239)', prompt: '你是电商客服，处理订单、退换货与商品推荐，热情高效。', nodes: ORCH_BY_NAME['电商智能客服'], temperature: 0.3, expertise: { field: '店铺售前导购、商品推荐、促销与优惠规则解释', method: '先判断问题属于售前 / 售中 / 售后，再依据商品信息与店铺规则作答；需要多轮收集的信息一次只问一个', output: '直接给答案或动作，再补依据；附上下一步操作路径（如「在订单页点申请退货」）', avoid: '不承诺平台未承诺的赔付与时效；不编造库存、价格与优惠力度；不引导站外交易；不评价竞品' } },
   { n: '知识库问答', d: '基于企业文档的 RAG 检索增强问答', ic: '📚', c: 'linear-gradient(135deg,#30d158,#32ade6)', prompt: '你是企业知识库助手，严格基于提供的文档作答。', nodes: ORCH_BY_NAME['知识库问答'], temperature: 0.2, expertise: { field: '企业文档、手册、规范类内容的检索与严谨作答', method: '只依据提供的知识库片段作答；先定位最相关的片段再组织语言；找不到依据就直说找不到', output: '答案 + 明确标注依据（哪份文档、哪一段）；信息不足时列出「还缺什么」而不是勉强作答', avoid: '不用通用常识补全文档里没有的内容；不把相邻主题的内容当答案；不编造条款编号与出处' } },
   { n: '短视频脚本生成', d: '输入主题自动产出分镜与台词', ic: '🎬', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', prompt: '你是短视频编导，产出吸睛的分镜脚本与台词。', nodes: ORCH_BY_NAME['短视频脚本生成'], temperature: 0.9, expertise: { field: '抖音 / 视频号 30-60 秒短视频的分镜脚本与口播台词', method: '前 3 秒必须给钩子；按「钩子 → 冲突或信息 → 转折 → 行动号召」结构推进；每一镜标注时长与画面', output: '分镜表（镜号 / 时长 / 画面 / 口播 / 字幕）+ 拍摄提示；各镜时长合计与目标时长一致', avoid: '不写无法实拍的画面（依赖大量特效或特殊场地）；不用绝对化与违规话术；不照搬已有热门脚本原句' } },
   { n: '邮件自动回复', d: '理解邮件意图并草拟专业回复', ic: '📧', c: 'linear-gradient(135deg,#f5c542,#ff8b3d)', prompt: '你是邮件助理，草拟得体、专业的邮件回复。', nodes: ORCH_BY_NAME['邮件自动回复'], temperature: 0.3, expertise: { field: '商务往来邮件的意图理解与得体回复草拟', method: '先判断对方诉求与期待动作，再确定回复姿态（接受 / 协商 / 婉拒 / 追问）；一封信只处理一个主题', output: '主题行 + 正文（称呼、开头一句直入主题、正文分点、明确下一步、落款）+ 发送前需你确认的事项', avoid: '不替用户做出未经授权的承诺（价格、交期、责任界定）；不用过度热情的营销腔；不臆测对方未说明的背景' } },
-  { n: '翻译官', d: '多语种互译，保留语气与文体风格', ic: '🌐', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。', nodes: ORCH_BY_NAME['翻译官'], temperature: 0.2, expertise: { field: '中英日韩等常见语种互译，含商务、技术、日常文体', method: '先判断语种与文体，再按目标语言的表达习惯翻译而非逐字直译；保留原文格式与专有名词', output: '译文；专有名词与把握不足处标注原文；必要时补一句「可替代译法」供选择', avoid: '不擅自增删内容或改变语气强度；数字、单位、代码与链接原样保留；不确定的术语要标注而不是猜一个' } },
+  { n: '翻译官', d: '多语种互译，保留语气与文体风格', ic: '🌐', c: 'linear-gradient(135deg,#84cc16,#4d7c0f)', prompt: '你是专业翻译，支持多语种互译并保留原文风格。', nodes: ORCH_BY_NAME['翻译官'], temperature: 0.2, expertise: { field: '中英日韩等常见语种互译，含商务、技术、日常文体', method: '先判断语种与文体，再按目标语言的表达习惯翻译而非逐字直译；保留原文格式与专有名词', output: '译文；专有名词与把握不足处标注原文；必要时补一句「可替代译法」供选择', avoid: '不擅自增删内容或改变语气强度；数字、单位、代码与链接原样保留；不确定的术语要标注而不是猜一个' } },
   { n: '情感陪伴助手', d: '温暖倾听，提供情绪价值与建议', ic: '💬', c: 'linear-gradient(135deg,#ffb74d,#ff7043)', prompt: '你是温暖的倾听者，给予情绪支持与实用建议。', nodes: ORCH_BY_NAME['情感陪伴助手'], temperature: 0.8, expertise: { field: '情绪倾诉陪伴、压力与关系困扰的倾听', method: '先接住情绪再谈事情；不急着给建议，对方明确要建议时才给；用对方的原话回述以确认理解', output: '共情回应（回述对方的处境与感受）→ 如需，给 1-2 个当下可做的小建议 → 一个开放的追问', avoid: '不诊断心理疾病、不推荐任何药物；不说「这没什么大不了」这类否定感受的话；不代替专业心理咨询；不追问对方不愿说的细节' } },
   // —— 出厂机器人（SEED_BOTS）整体并入模板：用户删掉出厂机器人后，还能从模板页 /
   //    创建对话框重新创建回来，其他用户也能以它们为起点。展开引用而非手抄 ——
@@ -6633,10 +6639,10 @@ function factoryExpertiseOf(name) {
 const plugins = [
   { n: '网页搜索', d: '实时联网获取最新信息', ic: '🔍', c: 'linear-gradient(135deg,#4dd0e1,#2bb5e8)', cat: '联网', cap: '让机器人查到最新资讯：启用后，工作流在需要外部事实的步骤会自动检索网页并注入摘要片段（带标题与站点，便于它引用来源）。检索源在「设置 → 联网检索」里选——默认博查 Bocha（国产、中文检索质量好、新用户有免费额度），也可选智谱 Web Search（与主模型共用一个 Key）／DuckDuckGo（免 Key 但国内通常不可达）／自定义接口；需要填对应平台的 API Key。没配 Key 时该插件会跳过联网并提示一次，其余功能不受影响。' },
   { n: '图片生成', d: '调用文生图模型创作配图', ic: '🖼️', c: 'linear-gradient(135deg,#ff8b6d,#ff6b9d)', cat: '内容', cap: '根据文本描述生成真实配图，适用于种草图文、海报、插画等场景。启用后，当用户请求配图/生图时，系统会自动调用文生图接口生成图片并直接展示在聊天中。接口可「设置 → 🖼️ 文生图设置」一键切换：智谱 CogView-3-Flash（官方免费）与硅基流动 Kwai-Kolors/Kolors（官方定价 ¥0）都已适配（各自端点、参数名与返回结构差异由程序处理），未配置时回退 pollinations.ai 免费图床（海外，部分网络不可达）。说「再试一次 / 换一张」会承接上一张的提示词继续生成。' },
-  { n: '天气查询', d: '获取全球城市实时天气', ic: '🌤️', c: 'linear-gradient(135deg,#7c4dff,#4dd0e1)', cat: '数据', cap: '调用天气接口，返回指定城市当前气温、天气、风力与未来预报，适合行程规划、生活助手类机器人。' },
+  { n: '天气查询', d: '获取全球城市实时天气', ic: '🌤️', c: 'linear-gradient(135deg,#10b981,#0f766e)', cat: '数据', cap: '调用天气接口，返回指定城市当前气温、天气、风力与未来预报，适合行程规划、生活助手类机器人。' },
   { n: '日历/提醒', d: '创建与管理日程提醒', ic: '📅', c: 'linear-gradient(135deg,#a1887f,#795548)', cat: '数据', cap: '创建提醒事项与日程，支持按时间触发，适合待办管理、日程助理类机器人。到点优先弹系统通知（应用最小化/切到后台也能收到），未授权或环境不支持时回退应用内提示；可在插件详情面板里一键开启系统通知并查看当前状态。也可以直接在对话里说「提醒我明天 9:00 开会」，模型会用 [REMINDER] 指令真实建提醒。' },
-  { n: '代码执行器', d: '安全沙盒中运行代码片段', ic: '⚙️', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)', cat: '开发', cap: '在隔离沙箱中试运行代码：JavaScript 走浏览器 iframe 沙箱（两端都可用），桌面版另支持 Python —— 由后端白名单执行（只放行 math/re/json/collections 等纯计算模块，无文件/网络/子进程能力，8 秒超时，输出行数封顶）。两个入口：聊天里的代码块点「▶ 运行」，或本插件详情面板里选语言试运行。注意：均需你手动触发，模型输出永不自动执行。' },
-  { n: '画布工具', d: '在聊天里直接增删改连工作流画布', ic: '🧩', c: 'linear-gradient(135deg,#8b5cf6,#32ade6)', cat: '开发', cap: '勾选后，你可以用聊天的方式让机器人改当前机器人的编排画布：加节点、连线、断线、改标题与说明、删节点、按执行次序排布。机器人会在回复末尾输出 [CANVAS: ...] 指令行（不会显示在聊天里），系统校验通过后立即应用到画布。一次回复里的所有改动算一步，Ctrl+Z 可整体撤销；类型与连线都会被校验（不认的类型、指空的 id、成环的连线一律拒绝并回报）。' },
+  { n: '代码执行器', d: '安全沙盒中运行代码片段', ic: '⚙️', c: 'linear-gradient(135deg,#84cc16,#4d7c0f)', cat: '开发', cap: '在隔离沙箱中试运行代码：JavaScript 走浏览器 iframe 沙箱（两端都可用），桌面版另支持 Python —— 由后端白名单执行（只放行 math/re/json/collections 等纯计算模块，无文件/网络/子进程能力，8 秒超时，输出行数封顶）。两个入口：聊天里的代码块点「▶ 运行」，或本插件详情面板里选语言试运行。注意：均需你手动触发，模型输出永不自动执行。' },
+  { n: '画布工具', d: '在聊天里直接增删改连工作流画布', ic: '🧩', c: 'linear-gradient(135deg,#dc2626,#7f1d1d)', cat: '开发', cap: '勾选后，你可以用聊天的方式让机器人改当前机器人的编排画布：加节点、连线、断线、改标题与说明、删节点、按执行次序排布。机器人会在回复末尾输出 [CANVAS: ...] 指令行（不会显示在聊天里），系统校验通过后立即应用到画布。一次回复里的所有改动算一步，Ctrl+Z 可整体撤销；类型与连线都会被校验（不认的类型、指空的 id、成环的连线一律拒绝并回报）。' },
 ];
 // 内置插件名单（由 plugins 派生，不手抄）：normalize 用它过滤已下架插件的幽灵声明
 const BUILTIN_PLUGIN_NAMES = plugins.map(function (p) { return p.n; });
@@ -7062,7 +7068,7 @@ const STYLE_TPLS = [
     style: '用知乎专业回答的风格输出：先给结论再展开；用「总-分-总」结构，分点清晰、有层级；引用数据/案例增强说服力；语言理性克制、避免情绪化与营销腔；可适当使用「谢邀」「先说结论」等知乎语境。' },
   { id: 'news', n: '新闻通稿风', d: '客观严谨、要素齐全、第三人称', ic: '📰', c: 'linear-gradient(135deg,#90a4ae,#607d8b)',
     style: '用新闻通稿的风格输出：标题凝练、导语概括核心；正文按「5W1H」交代要素；客观中立、第三人称、避免主观评价；用词规范准确，段落紧凑；结尾可附背景或展望。' },
-  { id: 'academic', n: '学术严谨风', d: '术语准确、论证严密、引证规范', ic: '🎓', c: 'linear-gradient(135deg,#9b7bff,#6b8bff)',
+  { id: 'academic', n: '学术严谨风', d: '术语准确、论证严密、引证规范', ic: '🎓', c: 'linear-gradient(135deg,#84cc16,#4d7c0f)',
     style: '用学术论文的风格输出：术语准确、定义清晰；论证严密、有假设-推导-结论的递进；避免口语与感叹；如涉及观点需标注「据…研究表明」；结构可用「引言-方法-结果-讨论」式逻辑。' },
   { id: 'spoken', n: '口语闲聊风', d: '自然大白话、像朋友聊天', ic: '💬', c: 'linear-gradient(135deg,#30d158,#32ade6)',
     style: '用日常口语聊天的风格输出：像朋友面对面说话，多用「咱/其实/说白了/你懂吧」等口语；句子短、自然停顿；可以加语气词（啊、嘛、呗）；不用书面语和套话，读起来顺口。' },
@@ -7072,7 +7078,7 @@ const STYLE_TPLS = [
     style: '用官方正式公文的风格输出：措辞稳妥、站位准确；多用「将/拟/予以/扎实推进」等规范表述；结构清晰、层级分明；客观庄重，不带个人情绪；避免网络化表达。' },
   { id: 'literary', n: '文艺抒情风', d: '意象丰富、细腻有画面感', ic: '🪶', c: 'linear-gradient(135deg,#b39ddb,#7e57c2)',
     style: '用文艺抒情的风格输出：多用意象、通感与比喻，画面感强；节奏舒缓、留白适当；情绪细腻含蓄；避免直白说教，让文字有呼吸感。' },
-  { id: 'sales', n: '电商卖货风', d: '痛点前置、利益点突出、强转化', ic: '🛒', c: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
+  { id: 'sales', n: '电商卖货风', d: '痛点前置、利益点突出、强转化', ic: '🛒', c: 'linear-gradient(135deg,#f43f5e,#9f1239)',
     style: '用电商卖货文案的风格输出：开头直击痛点/场景；中段讲清卖点与使用利益（而非参数）；用「限时/专属/手慢无」等稀缺感促单；结尾强引导行动（下单/加购）；语气热情有煽动性。' },
   { id: 'wechat', n: '微信公众号风', d: '标题党友好、叙事强、有共鸣', ic: '📣', c: 'linear-gradient(135deg,#ffb74d,#ff7043)',
     style: '用微信公众号文章的风格输出：标题有悬念或冲突感；开篇用故事/场景代入；正文叙事性强、有案例与情绪起伏；穿插小标题与金句；结尾升华并引导转发/关注。' },
@@ -11552,13 +11558,15 @@ async function submitAuth() {
 //   avatar       { kind:'letter'|'emoji'|'image', value, bg }
 // 老数据（升级前注册的账号）没有这些字段，一律走默认值渲染，不做破坏性迁移。
 const AVATAR_BGS = [
-  { id: 'violet', css: 'linear-gradient(180deg,#5e5ce6,#4845d2)' },
+  /* id 保留 'violet' 仅为兼容已注册账号的 avatar.bg 值 —— 色值已改品牌青。
+     不要因为「名叫 violet 却是青色」而改 id：老账号会回落到第一项，等于悄悄换掉用户头像。 */
+  { id: 'violet', css: 'linear-gradient(180deg,#0e7490,#0b4d5b)' },
   { id: 'blue',   css: 'linear-gradient(180deg,#4b9bff,#2f6fdb)' },
   { id: 'teal',   css: 'linear-gradient(180deg,#34d0c3,#1a9c92)' },
   { id: 'green',  css: 'linear-gradient(180deg,#3ddc84,#25a95f)' },
   { id: 'amber',  css: 'linear-gradient(180deg,#ffb340,#e08700)' },
   { id: 'rose',   css: 'linear-gradient(180deg,#ff6b8a,#e03d63)' },
-  { id: 'plum',   css: 'linear-gradient(180deg,#c07bff,#8b3fd1)' },
+  { id: 'plum',   css: 'linear-gradient(180deg,#ef4444,#b91c1c)' },
   { id: 'slate',  css: 'linear-gradient(180deg,#8e93a8,#5b6070)' },
 ];
 const AVATAR_EMOJIS = ['🐱', '🐼', '🦊', '🐧', '🐳', '🦉', '🚀', '🌱', '☕', '🎧'];
@@ -18655,7 +18663,7 @@ function submitCreate() {
   if (desc.length > 120) { toast('功能介绍不超过 120 字', 'err'); return; }
   const colorEl = document.querySelector('.color-pick .c.on');
   const icon = colorEl ? colorEl.dataset.c : '';
-  const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,#8b5cf6,#6d28d9)';
+  const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,#0e7490,#0b4d5b)';
   // 创建时选定的专精：写一次就锁（提示词 Tab 不显示按钮，spec 是纯数据标记）。
   // 「✏️ 自定义」= 用户自己定义角色：名称进 spec，人设文本成为起始提示词。
   const specEl = document.querySelector('#specPick .prompt-tpl.active');
@@ -21725,7 +21733,8 @@ function renderUsagePanel() {
     if (hint) hint.textContent = '';
     return;
   }
-  var COLORS = ['#8b5cf6', '#6366f1', '#30d358', '#f59e0b', '#ec4899'];
+  // 首色 = 品牌色（用量构成里排第一的通常是主要来源）；其余为区分色，保持原样
+  var COLORS = ['#0e7490', '#6366f1', '#30d358', '#f59e0b', '#ec4899'];
   var top = s.bots.slice(0, 5), rest = s.bots.slice(5).reduce(function (a, x) { return a + x.tokens; }, 0);
   var segs = top.map(function (x, i) { return { name: x.name, tokens: x.tokens, color: COLORS[i % COLORS.length] }; });
   if (rest) segs.push({ name: '其他机器人', tokens: rest, color: '#64748b' });
@@ -21845,7 +21854,7 @@ function renderLineChart() {
   const labels = [];
   for (let i = 0; i < data.length; i++) { const d = new Date(today); d.setDate(d.getDate() - (data.length - 1 - i)); labels.push((d.getMonth() + 1) + '/' + d.getDate()); }
   let html = `<defs><linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#6d28d9"/></linearGradient></defs>`;
+    <stop offset="0%" stop-color="#0e7490"/><stop offset="100%" stop-color="#0b4d5b"/></linearGradient></defs>`;
   // 网格线
   for (let g = 0; g <= 3; g++) {
     const y = pad.t + (ih / 3) * g;
@@ -22061,7 +22070,7 @@ function drawDataChart() {
   const bw = iw / keys.length;
   keys.forEach(function (k, i) {
     const v = groups[k]; const h = (v / max) * ih; const x = pad.l + i * bw + bw * 0.15; const w = bw * 0.7; const y = pad.t + ih - h;
-    html += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="#8b5cf6"/>';
+    html += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="#0e7490"/>';
     html += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" font-size="10" fill="var(--txt)" text-anchor="middle">' + v + '</text>';
     html += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (H - 42) + '" font-size="10" fill="var(--sub)" text-anchor="middle">' + escapeHtml(String(k).slice(0, 8)) + '</text>';
   });
@@ -23636,7 +23645,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.23.2';
+var APP_VERSION = '3.24.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
