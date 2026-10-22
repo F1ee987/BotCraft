@@ -184,7 +184,8 @@ def inject_favicon(ico_bytes):
 # 灯 0.052、脸放宽到 0.155~0.845，保证 DPR=1 下仍能读出「天线 + 扁头 + 两点眼」。
 # 几何对比与实尺寸排版观感见 build_exe/_dot_geom.png。
 #
-# 底色走 CSS 变量而非写死 #6366f1：浅色主题会把 --brand/--brand-hi 整体加深
+# 底色与信号灯都走 CSS 变量而非写死色值：浅色主题会把 --brand/--brand-hi 整体加深
+# （2026-10-22 起还支持用户自选配色，写死的话换到粉红/绿色时那颗灯仍是浅紫）。
 # （#8b5cf6→#7c3aed），写死会让 logo 在浅色底上过亮；而且 --brand-hi 目前唯一的
 # 使用点就是这里，写死等于把它变成零引用的死令牌 —— 正是前一轮刚清理过的那类问题。
 LOGO_VIEWBOX = 32                    # SVG 内部坐标系（取 8 的倍数，便于与 0~1 比例互转）
@@ -229,7 +230,7 @@ def logo_svg(gid):
         "</linearGradient></defs>"
         "<rect width='%d' height='%d' rx='%s' fill='url(#%s)'/>"
         "<path d='M%s %sV%s' stroke='#fff' stroke-width='%s'/>"
-        "<circle cx='%s' cy='%s' r='%s' fill='#c4b5fd'/>"
+        "<circle cx='%s' cy='%s' r='%s' fill='var(--brand-hi)'/>"
         "<rect x='%s' y='%s' width='%s' height='%s' rx='%s' fill='#fff'/>"
         "<circle cx='%s' cy='%s' r='%s' fill='#1e202e'/>"
         "<circle cx='%s' cy='%s' r='%s' fill='#1e202e'/>"
