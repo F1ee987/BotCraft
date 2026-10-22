@@ -1612,6 +1612,12 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   display:inline-block;max-width:100%;white-space:normal;word-break:break-word;
   line-height:1.5;padding:2px 6px;text-align:left}
 .msg.bot hr.md-hr{border:none;border-top:1px solid var(--line);margin:11px 0}
+/* 兜底（2026-10-22）：md 图片在任何容器里都不得超出容器宽度。
+   原来 md-img 的尺寸规则只写在 `.msg.bot` 作用域里，非聊天容器（知识库预览、
+   批量输出、导出预览）里的图完全不受约束 —— 网页导入的原图直接按原始像素铺开，
+   撑破布局。这里补一条最低限度的兜底：只限宽、等比缩，不设高度上限。
+   特异性 0,1,1 低于 `.msg.bot img.md-img`(0,2,2)，聊天气泡的 420px 上限照旧生效。 */
+img.md-img{max-width:100%;height:auto}
 .msg.bot img.md-img{max-width:100%;max-height:420px;border-radius:var(--r-lg);margin:8px 0;display:block;background:var(--bg)}
 .msg.bot img.md-img.img-err{max-width:100%;padding:12px;border:1px dashed var(--line);border-radius:var(--r-md);background:var(--bg);color:var(--sub);font-size:12px}
 .msg.bot.img-tip .msg-body{font-style:italic;color:var(--sub);background:var(--fill);border-left:3px solid var(--brand)}
@@ -1641,6 +1647,23 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 #kbPrevBody pre.md-code,.kb-prev pre.md-code{padding:12px 14px;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-md);overflow:auto;font-size:12.5px;line-height:1.62}
 #kbPrevBody pre.md-code code,.kb-prev pre.md-code code{background:none;padding:0}
 #kbPrevBody pre.md-code .md-copy,#kbPrevBody pre.md-code .md-run,.kb-prev pre.md-code .md-copy,.kb-prev pre.md-code .md-run{display:none}
+/* 正文图片（2026-10-22）
+   本段规则覆盖了 h/p/ul/ol/table/pre/code/a/hr/blockquote，**唯独漏了 img**。
+   renderMarkdown 给的 <img class="md-img"> 又只在 .msg.bot 下有约束，于是
+   网页导入的原图在 640px 预览弹窗里按原始像素渲染 → 溢出被裁 → 看图要左右拖。
+   口径与聊天一致（限宽 100%、等比缩），另针对阅读场景补三点：
+     · 居中 + 上下留白，与段落间距同量级；
+     · max-height 收一档（460px），长图不至于把正文挤到屏幕外；
+     · object-fit:contain 保证压缩后不变形。
+   .img-err 是 onImageError 加的类，预览容器原本没有对应样式 —— 加载失败会
+   露出裂图图标，这里改成虚线框占位。 */
+#kbPrevBody img,.kb-prev img{max-width:100%;height:auto;max-height:460px;object-fit:contain;
+  display:block;margin:12px auto;border-radius:var(--r-md);background:var(--bg)}
+#kbPrevBody img.img-err,.kb-prev img.img-err{max-height:none;padding:12px;border:1px dashed var(--line);
+  color:var(--sub);font-size:12.5px;line-height:1.6;text-align:center}
+/* 宽表格在窄容器里同样会撑破：允许单元格内断词，别让长串英文/URL 顶出去 */
+#kbPrevBody table.md-table td,#kbPrevBody table.md-table th,
+.kb-prev table.md-table td,.kb-prev table.md-table th{word-break:break-word;overflow-wrap:anywhere}
 /* 元信息（来源 / 摘要）徽标块 */
 #kbPrevBody .kb-meta,.kb-prev .kb-meta{margin:0 0 14px;padding:11px 14px;border:1px solid var(--glass-border);border-radius:var(--r-md);background:var(--glass-bg);display:flex;flex-direction:column;gap:var(--sp-3)}
 #kbPrevBody .kb-meta-row,.kb-prev .kb-meta-row{display:flex;gap:var(--sp-4);font-size:12.5px;line-height:1.65}
@@ -19689,7 +19712,7 @@ async function _kbFetchPage(url) {
   var title = tm ? _decodeEntities(tm[1]).replace(/\s+/g, ' ').trim() : '';
   if (_kbIsCsdnUrl(url)) title = _kbCsdnTitle(title);
   var desc = _metaContent(html, 'description') || _metaContent(html, 'og:description') || '';
-  var body = _htmlToText(html);
+  var body = _htmlToText(html, url);   // 传页面地址：相对图片/链接才能绝对化
   if (!body || body.length < 60) throw new Error('未能从该页面提取到有效正文（可能整页由脚本渲染）');
   return { url: url, title: title, desc: desc, body: body };
 }
@@ -20046,6 +20069,39 @@ function _metaContent(html, key) {
 function _kbStripNoise(html) {
   var s = String(html || '');
   var KW = /(^|[-_\s])(ad|ads|advert|advertise|sponsor|promo|banner|nav|navi|navigation|menu|sidebar|aside|footer|header|comment|recommend|related|share|social|toolbar|breadcrumb|pagination|pager|subscribe|newsletter|copyright|reward|donate|rank|hot|tags?|catalog|toc|anchor|qr|follow|float)([-_\s]|$)/i;
+  /* 用 DOMParser 逐节点判定（2026-10-22）
+     原实现是 `/<tag …>([\s\S]*?)<\/tag>/` 非贪婪扫一遍，**从最外层开始匹配**：
+     `<html>…</html>` 一旦被整体命中（class/id 不在名单里）就原样保留，
+     内部的 <div class="ad-placement"> / <div class="comment_box"> 再也轮不到 ——
+     replace 不重叠，外面套 4 轮循环也没用（每轮还是从同一个外层开始）。
+     这正是 CSDN 路径注释里写过的坑，通用路径一直没跟。
+     改成真正解析成 DOM：querySelectorAll('*') 拿到所有元素，逐个按 class/id 判定，
+     命中就 remove()，嵌套多深都能清掉。顺带把未闭合标签也补正了。
+     DOMParser 不可用时退回原来的正则路径（行为与修复前一致，不会更差）。 */
+  var canDom = (typeof DOMParser !== 'undefined');
+  if (canDom) {
+    try {
+      var doc = new DOMParser().parseFromString('<div id="__kbNoiseRoot">' + s + '</div>', 'text/html');
+      var root = doc.getElementById('__kbNoiseRoot');
+      if (root) {
+        var all = root.querySelectorAll('*');
+        var victims = [];
+        for (var i = 0; i < all.length; i++) {
+          var el = all[i];
+          var tag = String(el.tagName || '').toLowerCase();
+          // 根容器与文档级标签不参与判定（大写的 HTML/BODY 由解析器给，别误删内容）
+          if (tag === 'html' || tag === 'body') continue;
+          var cls = el.getAttribute('class') || '';
+          var idv = el.getAttribute('id') || '';
+          if ((cls && KW.test(cls)) || (idv && KW.test(idv))) victims.push(el);
+        }
+        for (var k = 0; k < victims.length; k++) {
+          try { victims[k].parentNode && victims[k].parentNode.removeChild(victims[k]); } catch (e) {}
+        }
+        return root.innerHTML;
+      }
+    } catch (e) { /* 落到下面的正则兜底 */ }
+  }
   var re = /<([a-z][a-z0-9]*)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
   // 多跑几轮：嵌套的噪声块要外层去掉后内层才暴露，一轮清不干净
   for (var pass = 0; pass < 4; pass++) {
@@ -20195,6 +20251,43 @@ function _kbCsdnPickContent(html) {
   return '';
 }
 // CSDN 图片 URL 带展示锚点（#pic_center 之类），带上它在部分环境直接裂图
+// ---------- 通用网页导入：URL 与图片提取（2026-10-22） ----------
+// 相对路径必须按页面 URL 绝对化：入库时只存文本，没有任何 base，
+// 相对 URL 在知识库里永远加载不出来（表现为一片裂图）。
+function _kbAbsUrl(u, base) {
+  var s = _decodeEntities(String(u || '').trim());
+  if (!s) return '';
+  if (/^(?:data|blob):/i.test(s)) return s;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return s;      // http/https/mailto 等已是绝对
+  if (!base) return s;
+  try { return new URL(s, base).href; } catch (e) { return s; }
+}
+// 取图片真实地址：优先懒加载属性（很多站点的 src 是 1px 占位图），
+// 再退回 srcset 的第一项，最后才是 src。装饰图（1px 占位 / spacer）直接不给。
+function _kbPickImgUrl(tag, base) {
+  function attr(nm) {
+    var m = new RegExp('\\b' + nm + '\\s*=\\s*["\']([^"\']*)["\']', 'i').exec(String(tag || ''));
+    return m ? m[1] : '';
+  }
+  var u = attr('data-src') || attr('data-original') || attr('data-lazy-src')
+        || attr('data-actualsrc') || attr('data-echo') || '';
+  if (!u) {
+    var ss = attr('srcset') || attr('data-srcset');
+    if (ss) {
+      var first = String(ss).split(',')[0].trim().split(/\s+/)[0];
+      if (first) u = first;
+    }
+  }
+  if (!u) u = attr('src');
+  if (!u) return '';
+  u = _kbAbsUrl(u, base);
+  if (!u) return '';
+  if (/^(?:javascript:|data:text\/html)/i.test(u)) return '';
+  // 装饰图：1px 占位 / spacer / 空白图 —— 留着只会在正文里插一堆看不见的空行
+  if (/spacer|blank\.(?:gif|png)|transparent\.(?:gif|png)|1x1\.(?:gif|png)/i.test(u)) return '';
+  if (/^data:image\//i.test(u) && u.length < 200) return '';   // 极短的 data 图基本是占位
+  return String(u).replace(/[()\s]/g, function (m) { return '%' + m.charCodeAt(0).toString(16).toUpperCase(); });
+}
 function _kbCsdnImgUrl(u) {
   var s = _decodeEntities(String(u || '').trim());
   s = s.replace(/#(?:pic_center|pic_right|pic_big|pic_middle|pic_small)\b.*$/i, '');
@@ -20526,6 +20619,16 @@ function _kbStripBoiler(text, title) {
 // 纯文本版的冗余清理（粘贴/抓取后的正文都过一遍，幂等）
 function _normText(s) {
   s = String(s || '');
+  /* 围栏代码块先摘出来（2026-10-22）
+     下面要把「连续空格压成一个」并逐行 trim —— 对正文是清理，对代码是毁容：
+     缩进一压平就再也还原不回来（Python/YAML 直接失去意义）。CSDN 路径同样受害。
+     整块摘成哨兵，归一化完再原样放回。 */
+  var __FENCES = [];
+  s = s.replace(/(^|\n)([ \t]*)(\x60{3,}|~{3,})[^\n]*\n[\s\S]*?\n\2\3[ \t]*(?=\n|$)/g,
+    function (all) {
+      __FENCES.push(all.replace(/^\n/, ''));
+      return '\n\uE000F' + (__FENCES.length - 1) + '\uE001\n';
+    });
   // 清掉控制字符、零宽字符、软连字符、BOM 等无效数据（用 \u 转义，避免源码里混入裸控制字节）
   s = s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u00ad\u200b-\u200f\u2028\u2029\ufeff]/g, '');
   // 统一空白：全角/不间断空格等都收成普通空格，多个压成一个（含跨行）
@@ -20545,6 +20648,8 @@ function _normText(s) {
   while (out.length && out[out.length - 1] === '') out.pop();   // 去尾随空行
   s = out.join('\n');
   s = s.replace(/\n{3,}/g, '\n\n');   // 兜底，杜绝任何残留的 3+ 连续空行
+  // 围栏代码块原样放回（位置不动，缩进保持）
+  s = s.replace(/\uE000F(\d+)\uE001/g, function (m, i) { return __FENCES[+i] || ''; });
   return s;
 }
 // 优先抽取核心内容区，去掉侧栏 / 页脚 / 导航 / 推荐位。
@@ -20590,9 +20695,15 @@ function _pickMainContent(html) {
   cands.sort(function (a, b) { return textLen(b) - textLen(a); });
   return cands[0];
 }
-function _htmlToText(html) {
+function _htmlToText(html, baseUrl) {   // baseUrl：页面地址，用于把相对图片/链接绝对化
   var s = String(html || '');
   s = s.replace(/<!--[\s\S]*?-->/g, '');
+  /* 先摘掉 head（2026-10-22）
+     DOMParser 会把 <head> 里的 <title> 当成普通元素留在正文里，序列化后
+     「页面标题」变成正文第一行裸文字，与下面真正的 H1 重复。
+     标题由 _kbFetchPage 单独从原始 html 里取，这里删掉不影响元信息。 */
+  s = s.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, ' ');
+  s = s.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, ' ');
   // CSDN 页面走专用转换：通用路径会丢图片、把表格压成一行、把代码混进正文。
   if (_kbIsCsdnText(s)) return _kbCsdnHtmlToMd(s);
   // 有核心内容区就只在里面取，避免把整页侧栏/页脚/推荐位噪声带进来
@@ -20603,6 +20714,49 @@ function _htmlToText(html) {
   // 整段删除无正文价值的标签（含自闭合/未闭合残留）
   s = s.replace(/<(script|style|noscript|svg|iframe|head|nav|footer|header|aside|form|button|menu|dialog|template|figure|figcaption|canvas)[^>]*>[\s\S]*?<\/\1>/gi, ' ');
   s = s.replace(/<(script|style|noscript|svg|iframe|canvas)[^>]*\/?>/gi, ' ');
+  /* 结构保留（2026-10-22）
+     原来此处直接进入「标题/列表转换 → `<[^>]+>` 剥掉所有标签」，于是
+     <img> / <table> / <pre><code> / <a> 被一次抹平：图片全丢、表格压成一行、
+     代码块混进正文、链接只剩文字。与 CSDN 路径的完整 Markdown 差距极大。
+     做法：先把这几类有语义的块摘成哨兵（剥完标签再还原），顺序不能反。 */
+  var __KEEP = [];
+  function __hold(md) { __KEEP.push(md); return '\uE000' + (__KEEP.length - 1) + '\uE001'; }
+
+  // ① 代码块 → 围栏（保留缩进与语言标记）
+  s = s.replace(/<pre\b([^>]*)>([\s\S]*?)<\/pre>/gi, function (all, attrs, inner) {
+    var lm = /(?:language|lang)-([\w+#.-]+)/i.exec(attrs + ' ' + inner);
+    var code = _decodeEntities(String(inner)
+      .replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''));
+    code = code.replace(/\r\n?/g, '\n').replace(/^\n+/, '').replace(/\s+$/, '');
+    if (!code.trim()) return ' ';
+    var fence = /```/.test(code) ? '~~~' : '```';
+    return __hold('\n\n' + fence + (lm ? lm[1].toLowerCase() : '') + '\n' + code + '\n' + fence + '\n\n');
+  });
+  // ② 表格 → markdown 表格（复用已验证的转换，它对 | 和换行都做过转义）
+  s = s.replace(/<table\b[^>]*>([\s\S]*?)<\/table>/gi, function (all, inner) {
+    var md = '';
+    try { md = _kbCsdnTableToMd(inner); } catch (e) { md = ''; }
+    return md ? __hold('\n\n' + md + '\n\n') : ' ';
+  });
+  // ③ 图片 → markdown（懒加载属性 + 相对路径绝对化 + 装饰图过滤）
+  s = s.replace(/<img\b[^>]*>/gi, function (tag) {
+    var u = _kbPickImgUrl(tag, baseUrl);
+    if (!u) return ' ';
+    var am = /\balt\s*=\s*["']([^"']*)["']/i.exec(tag);
+    var alt = am ? _decodeEntities(am[1]).replace(/[[\]]/g, ' ').trim() : '';
+    return __hold('\n\n![' + (alt || '图片') + '](' + u + ')\n\n');
+  });
+  // ④ 链接 → [文字](url)；不安全/无文字的链接只留文字
+  s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, function (all, attrs, inner) {
+    var txt = _kbCsdnStripTags(inner).replace(/\s+/g, ' ').trim();
+    if (!txt) return ' ';
+    var hm = /\bhref\s*=\s*["']([^"']+)["']/i.exec(attrs);
+    if (!hm) return txt;
+    var href = _kbAbsUrl(hm[1], baseUrl);
+    if (!href || !/^(?:https?:|mailto:)/i.test(href)) return txt;
+    return __hold('[' + txt.replace(/[[\]]/g, '') + '](' + href + ')');
+  });
+
   // 块级标签转换行；顺带把标题 / 列表转成 markdown 标记，让导入后的正文按结构排版。
   // 以前块级只转单换行，markdown 会把整段并成一个大段落，读起来就是「一坨」。
   s = s.replace(/<br\s*\/?>/gi, '\n');
@@ -20611,6 +20765,8 @@ function _htmlToText(html) {
   s = s.replace(/<\/(p|div|section|article|blockquote|tr|table|ul|ol|h[1-6]|dd|dt|main|header|footer|aside)[^>]*>/gi, '\n\n');
   s = s.replace(/<[^>]+>/g, '');
   s = _decodeEntities(s);
+  // 还原被摘下的代码块 / 表格 / 图片 / 链接
+  s = s.replace(/\uE000(\d+)\uE001/g, function (m, i) { return __KEEP[+i] || ''; });
   return _normText(s);
 }
 // 把「网址 / 标题 / 摘要 / 正文」组装成结构统一的入库内容：标题 + 来源 + 摘要 + 美化后的正文。
@@ -24065,7 +24221,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.26.0';
+var APP_VERSION = '3.26.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
