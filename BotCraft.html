@@ -49,6 +49,7 @@
   /* 填充层：玻璃上的控件用半透明白，与卡片保持同一套光学语义（提亮 = 抬高） */
   --fill:rgba(255,255,255,.09);
   --fill-strong:rgba(255,255,255,.16);
+  --rng-track:rgba(255,255,255,.14);  /* 滑杆未填充段：中性底，不能与已填充的品牌色抢 */
   --fill-hover:rgba(255,255,255,.13);
   /* ===== 液态玻璃材质 =====
      全局玻璃：结构面（顶栏/侧栏/面板/输入区/浮层/大卡片）用真 backdrop-filter，
@@ -236,6 +237,7 @@
   --ok:#34c759; --warn:#ff9500; --danger:#ff3b30;
   --fill:rgba(255,255,255,.60);
   --fill-strong:rgba(255,255,255,.85);
+  --rng-track:rgba(0,0,0,.10);  /* 浅色下用暗色底：白色半透明在浅玻璃上等于看不见 */
   --fill-hover:rgba(0,0,0,.055);    /* 浅色下悬浮=压暗一档（白上提白几乎不可见），Apple 同款手法 */
   --glass-bg:rgba(255,255,255,.50);
   --glass-bg-hover:rgba(255,255,255,.60);
@@ -715,7 +717,61 @@ input,textarea{color-scheme:dark}
    在紫色主题里非常跳（设置里「不透明度 / 背景模糊」两个滑杆最明显）。
    全站原本只有 3 处复选框声明了 accent-color，滑杆一处都没有。
    ⚠️ 自定义开关（.switch > .slider）是纯 CSS 画的，不受这条影响。 */
+/* accent-color 保留给 checkbox / radio（range 已完全自定义，这一条对它是无害兜底：
+   万一自定义规则被覆盖，至少还留有品牌色而不是系统蓝）。 */
 input[type="range"],input[type="checkbox"],input[type="radio"]{accent-color:var(--brand)}
+/* ==================== 滑杆（2026-10-22 重做）====================
+   原来只声明 accent-color，轨道与滑块都由浏览器原生绘制：细、颜色不受控、无法与
+   液态玻璃语言协调。现在自定义 track / thumb。
+   Chromium 系（WebView2 / Edge / Chrome）只需 -webkit- 前缀，本应用运行环境即此范围。
+
+   --rng-pct 由 syncRangeFill() 写入（见脚本区），用于画「已填充段」。
+   thumb 的居中靠 margin-top:(6-18)/2 = -6px —— 自定义 appearance 后 track 与 thumb
+   不再自动对齐，漏了这行滑块会贴在轨道上方。 */
+input[type="range"]{
+  -webkit-appearance:none;appearance:none;
+  width:100%;max-width:340px;   /* 不横穿整行：它是控件，不是分隔线 */
+  height:20px;margin:0;background:transparent;cursor:pointer;
+  --rng-pct:0%;
+}
+input[type="range"]::-webkit-slider-runnable-track{
+  height:6px;border-radius:var(--r-full);
+  background:linear-gradient(to right,
+    var(--brand) 0 var(--rng-pct),
+    var(--rng-track) var(--rng-pct) 100%);
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:18px;height:18px;margin-top:-6px;border-radius:var(--r-full);
+  background:#fff;border:2px solid var(--brand);
+  box-shadow:0 1px 3px rgba(0,0,0,.28),0 0 0 1px rgba(255,255,255,.18) inset;
+  transition:transform var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease);
+}
+input[type="range"]:hover::-webkit-slider-thumb{transform:scale(1.12)}
+input[type="range"]:active::-webkit-slider-thumb{
+  transform:scale(1.06);
+  box-shadow:0 1px 3px rgba(0,0,0,.28),0 0 0 5px var(--brand-tint-2);
+}
+input[type="range"]:focus-visible{outline:none}
+input[type="range"]:focus-visible::-webkit-slider-runnable-track{
+  box-shadow:0 0 0 3px var(--brand-tint-2);
+}
+input[type="range"]:disabled{opacity:.45;cursor:not-allowed}
+@media (prefers-reduced-motion:reduce){
+  input[type="range"]::-webkit-slider-thumb{transition:none}
+}
+
+/* 一行三段：标签 / 滑杆 / 读数。读数用等宽数字，拖动时数字不左右跳动。
+   底色用中性 --fill + 主文字色，不用品牌淡底压品牌字 ——
+   同色系叠同色系会把对比度压到 4.5:1 以下（风格卡「查看」按钮就栽在这）。 */
+.rng-row{display:flex;align-items:center;gap:var(--sp-4)}
+.rng-row > label{margin:0;flex:0 0 68px;font-size:var(--fs-sm);cursor:pointer}
+.rng-row > input[type="range"]{flex:1;min-width:0}
+.rng-val{flex:0 0 52px;text-align:center;font-size:var(--fs-xs);font-weight:590;
+  /* 底色用 --sunken（凹陷底）而不是 --fill：深色下 --fill 只有 9% 白，框几乎看不见；
+   --sunken 在深浅两套里都是「凹槽」语义，读数框才会有明确的边界。 */
+  color:var(--txt);background:var(--sunken);border-radius:var(--r-xs);padding:3px 0;
+  font-variant-numeric:tabular-nums;letter-spacing:.01em}
 
 /* ============ 顶部导航：悬浮圆角液态玻璃条（参考 Apple Liquid Glass 珠） ============
    通栏贴边矩形没有「珠」的感觉——留边距 + 大圆角 + 全套玻璃珠光影才立得住 */
@@ -3680,15 +3736,15 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <span class="switch"><input type="checkbox" id="set-bg" checked onchange="toggleBg()"><span class="slider"></span></span>
         <label for="set-bg" style="margin:0;cursor:pointer">显示背景光效</label>
       </div>
-      <div class="field" style="display:flex;align-items:center;gap:var(--sp-4);margin-top:var(--sp-4)">
-        <label for="set-bg-opacity" style="margin:0;width:72px;flex:none;font-size:var(--fs-sm)">不透明度</label>
-        <input id="set-bg-opacity" type="range" min="0" max="100" step="5" value="100" style="flex:1" oninput="onBgParamInput()">
-        <span id="set-bg-opacity-val" style="width:44px;flex:none;text-align:right;font-size:12px;color:var(--sub)">100%</span>
+      <div class="field rng-row" style="margin-top:var(--sp-4)">
+        <label for="set-bg-opacity">不透明度</label>
+        <input id="set-bg-opacity" type="range" min="0" max="100" step="5" value="100" oninput="onBgParamInput()">
+        <span id="set-bg-opacity-val" class="rng-val">100%</span>
       </div>
-      <div class="field" style="display:flex;align-items:center;gap:var(--sp-4);margin-top:var(--sp-3)">
-        <label for="set-bg-blur" style="margin:0;width:72px;flex:none;font-size:var(--fs-sm)">背景模糊</label>
-        <input id="set-bg-blur" type="range" min="0" max="40" step="2" value="0" style="flex:1" oninput="onBgParamInput()">
-        <span id="set-bg-blur-val" style="width:44px;flex:none;text-align:right;font-size:12px;color:var(--sub)">0px</span>
+      <div class="field rng-row" style="margin-top:var(--sp-3)">
+        <label for="set-bg-blur">背景模糊</label>
+        <input id="set-bg-blur" type="range" min="0" max="40" step="2" value="0" oninput="onBgParamInput()">
+        <span id="set-bg-blur-val" class="rng-val">0px</span>
       </div>
       <div class="hint" style="margin:var(--sp-3) 0 0;font-size:var(--fs-xs);line-height:1.5">
         背景光效（弥散光 + 颗粒）现在独立于玻璃材质：关掉它，玻璃的折射、模糊与交互保持原样，只是背后没有东西可透。
@@ -15281,6 +15337,8 @@ function renderGenParamsPanel(b) {
     toast(sel.value ? ('已指定模型：' + sel.value) : '已改为跟随全局默认模型', 'ok');
   };
   var rng = document.getElementById('botTempRange');
+    // 动态插入的滑杆：插入后才绑得上事件，这里立即同步一次填充比例
+    if (rng) { try { syncAllRanges(rng.parentNode); } catch (e) {} }
   var lbl = document.getElementById('botTempVal');
   // 拖动时只改文字，不重绘面板（重绘会让滑块失去拖拽焦点）
   if (rng) rng.oninput = function () { if (lbl) lbl.textContent = Number(rng.value).toFixed(2); };
@@ -18636,6 +18694,43 @@ function setAccent(id, quiet) {
 }
 function initAccent() { applyAccent(accentId()); }
 
+/* ==================== 滑杆填充比例（2026-10-22）====================
+   自定义 track 后，「已填充段」只能靠 CSS 变量 --rng-pct 表达，而它无法由 CSS 自己
+   从 value 推出来（range 没有 :progress 之类的伪类）→ 必须由脚本在值变化时写入。
+
+   ⚠️ 三个容易漏的点：
+   ① 拖动的 input 事件要绑；键盘调整走 change，也要绑；
+   ② 代码里**直接赋值** el.value 不触发任何事件 —— 本项目有 3 处（设置回填、
+      机器人温度弹窗），赋值后必须显式调一次 syncRangeFill，否则滑块位置与填充色脱节；
+   ③ 动态插入的滑杆（机器人温度弹窗）要在插入后才绑得上 —— 插入后调 syncAllRanges。
+*/
+function syncRangeFill(el) {
+  if (!el || el.type !== 'range') return;
+  var min = parseFloat(el.min);
+  if (isNaN(min)) min = 0;
+  var max = parseFloat(el.max);
+  if (isNaN(max) || max <= min) max = min + 100;
+  var v = parseFloat(el.value);
+  if (isNaN(v)) v = min;
+  var pct = ((v - min) / (max - min)) * 100;
+  if (pct < 0) pct = 0;
+  if (pct > 100) pct = 100;
+  el.style.setProperty('--rng-pct', pct.toFixed(2) + '%');
+}
+function syncAllRanges(root) {
+  var scope = root && root.querySelectorAll ? root : document;
+  var list = scope.querySelectorAll('input[type="range"]');
+  Array.prototype.forEach.call(list, function (el) {
+    syncRangeFill(el);
+    if (!el.__rngBound) {
+      el.__rngBound = 1;
+      el.addEventListener('input', function () { syncRangeFill(el); });
+      el.addEventListener('change', function () { syncRangeFill(el); });
+    }
+  });
+}
+
+
 /* 系统偏好变化时当场跟上。只认 change 事件，不轮询 —— 轮询是纯浪费。
    addListener 是老 Safari 的 deprecated API，留着做兜底。 */
 function _bindThemeMq() {
@@ -18732,6 +18827,11 @@ function syncBgUI() {
   if (b) b.value = sb;
   if (ov) ov.textContent = so + '%';
   if (bv) bv.textContent = sb + 'px';
+  /* 直接赋值 value 不触发 input 事件 → 滑杆的填充比例不会自己更新，
+     结果就是「滑块停在 65%、填充色却还是满格」（实测踩到过，浅色主题才暴露，
+     因为深色那轮恰好是初始值）。这里显式重算一次。 */
+  if (o) syncRangeFill(o);
+  if (b) syncRangeFill(b);
 }
 function onBgParamInput() {
   var o = document.getElementById('set-bg-opacity');
@@ -23290,7 +23390,10 @@ function setupSettingsUI() {
   var _naEl = document.getElementById('set-noauth');
   if (_naEl) _naEl.checked = (cfg.noAuth === true) || (!cfg.apiKey && BotCraftAI.isNoAuthEndpoint && BotCraftAI.isNoAuthEndpoint(cfg.baseURL));
   document.getElementById('set-base').value = cfg.baseURL || '';
-  document.getElementById('set-temp').value = cfg.temperature || 0.7;
+  var _tempEl = document.getElementById('set-temp');
+  _tempEl.value = cfg.temperature || 0.7;
+  // 直接赋值不触发 input 事件 → 填充比例不会自己更新，必须显式同步
+  syncRangeFill(_tempEl);
   document.getElementById('set-temp-val').textContent = (cfg.temperature || 0.7).toFixed(1);
   document.getElementById('set-maxtokens').value = cfg.maxTokens || 2048;
   document.getElementById('set-direct').checked = !!cfg.directCall;
@@ -23836,7 +23939,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.25.1';
+var APP_VERSION = '3.25.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -24052,6 +24155,7 @@ window.manualCheckUpdate = manualCheckUpdate;
 function safeStart() {
   try { initTheme(); } catch (e) { console.error('initTheme failed', e); }
   try { initAccent(); } catch (e) { console.error('initAccent failed', e); }
+  try { syncAllRanges(); } catch (e) { console.error('syncAllRanges failed', e); }
   // 预配置必须在任何读取登录配置的动作之前落地（refreshThirdPartyAvail / loadAuthSettings 都会读）
   try { applyPreconfiguredLogin(); } catch (e) { console.error('applyPreconfiguredLogin failed', e); }
   try { initLiquidGlass(); } catch (e) { console.error('initLiquidGlass failed', e); }
@@ -24121,6 +24225,7 @@ window.resetAccountAvatar = resetAccountAvatar; window.onAccountAvatarFile = onA
 window.renderAcctHeader = renderAcctHeader; window.avatarHtml = avatarHtml;
 window.toggleTheme = toggleTheme; window.themeMode = themeMode; window.resolveTheme = resolveTheme;
 window.setAccent = setAccent; window.accentId = accentId; window.applyAccent = applyAccent;
+window.syncRangeFill = syncRangeFill; window.syncAllRanges = syncAllRanges;
 window.setThemeMode = setThemeMode; window.applyThemeMode = applyThemeMode; window.initTheme = initTheme;
 window.toggleLiquidGlass = toggleLiquidGlass; window.applyLiquidGlass = applyLiquidGlass; window.initLiquidGlass = initLiquidGlass;
 window.setLiquidGlass = setLiquidGlass; window.isLiquidGlassOn = isLiquidGlassOn;
