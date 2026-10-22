@@ -281,6 +281,86 @@
   --tok-com:#5e5e66;    /* 注释：深灰（对最暗浅色面 --sunken ≥4.5:1） */
   --tok-num:#92400e;    /* 数字：赭橙（同上） */
 }
+/* ==================== 配色方案（accent，2026-10-22）====================
+   用户可在「界面设置 → 主题外观」里自选品牌配色。实现走 data-accent 属性维度，
+   与 data-theme / data-glass 同一机制：令牌值仍写在 CSS 里，静态门禁可解析。
+
+   ⚠️ 默认 cyan **故意不写组** —— 它的值就是上面 :root 与 [data-theme="light"] 里的青色令牌。
+      切到其它配色时挂属性，切回 cyan 时属性无匹配组 → 回落默认令牌。
+      这样 :root 改值不必再同步第二处（重复定义必然漂移）。
+
+   每套给 5 个语义令牌：
+     --brand       图标 / 描边 / 焦点（深色取亮档，保证压玻璃 ≥3:1）
+     --brand-hi    渐变亮端（logo）
+     --brand2      渐变深端（消息气泡）
+     --brand-fill  填充面 + 白字（必须 ≥4.5:1）
+     --brand-text  正文 / 链接（必须 ≥4.5:1）
+   外加 4 档浓度与画布连线色。全部取值经 build_exe/_accent_derive.py 实测验证：
+   气泡渐变中段白字 ≥7.2:1、fill 白字 ≥5.4:1、text 压玻璃 ≥8.9:1，均优于门槛。
+
+   色相避让（实测）：粉红 330° 避开 --danger(3°) 34°；宝蓝 213° 避开青蓝与靛蓝两档；
+   翠绿 158° 与背景同族 —— 这是「绿主题」的必然结果，靠明度差（深绿填充 vs 浅绿背景）
+   保证按钮可辨识，不是缺陷。 */
+html[data-accent="indigo"]{
+  --brand:#818cf8; --brand-hi:#a5b4fc; --brand2:#312e81; --brand-fill:#4338ca; --brand-text:#c7d2fe;
+  --brand-tint:rgba(129,140,248,.16); --brand-tint-2:rgba(129,140,248,.26);
+  --brand-line:rgba(129,140,248,.38); --brand-glow:rgba(129,140,248,.42);
+  --cw-link:rgba(165,180,252,.92);
+}
+html[data-accent="indigo"][data-theme="light"]{
+  --brand:#4338ca; --brand-hi:#6366f1; --brand2:#312e81; --brand-fill:#3730a3; --brand-text:#312e81;
+  --brand-tint:rgba(67,56,202,.08); --brand-tint-2:rgba(67,56,202,.14);
+  --brand-line:rgba(67,56,202,.26); --brand-glow:rgba(67,56,202,.30);
+  --cw-link:rgba(67,56,202,.82);
+}
+html[data-accent="violet"]{
+  --brand:#a78bfa; --brand-hi:#c4b5fd; --brand2:#4c1d95; --brand-fill:#6d28d9; --brand-text:#ddd6fe;
+  --brand-tint:rgba(167,139,250,.16); --brand-tint-2:rgba(167,139,250,.26);
+  --brand-line:rgba(167,139,250,.38); --brand-glow:rgba(167,139,250,.42);
+  --cw-link:rgba(196,181,253,.92);
+}
+html[data-accent="violet"][data-theme="light"]{
+  --brand:#6d28d9; --brand-hi:#7c3aed; --brand2:#5b21b6; --brand-fill:#5b21b6; --brand-text:#4c1d95;
+  --brand-tint:rgba(109,40,217,.08); --brand-tint-2:rgba(109,40,217,.14);
+  --brand-line:rgba(109,40,217,.26); --brand-glow:rgba(109,40,217,.30);
+  --cw-link:rgba(109,40,217,.82);
+}
+html[data-accent="rose"]{
+  --brand:#f472b6; --brand-hi:#f9a8d4; --brand2:#831843; --brand-fill:#be185d; --brand-text:#fbcfe8;
+  --brand-tint:rgba(244,114,182,.16); --brand-tint-2:rgba(244,114,182,.26);
+  --brand-line:rgba(244,114,182,.38); --brand-glow:rgba(244,114,182,.42);
+  --cw-link:rgba(249,168,212,.92);
+}
+html[data-accent="rose"][data-theme="light"]{
+  --brand:#be185d; --brand-hi:#db2777; --brand2:#831843; --brand-fill:#9d174d; --brand-text:#831843;
+  --brand-tint:rgba(190,24,93,.08); --brand-tint-2:rgba(190,24,93,.14);
+  --brand-line:rgba(190,24,93,.26); --brand-glow:rgba(190,24,93,.30);
+  --cw-link:rgba(190,24,93,.82);
+}
+html[data-accent="emerald"]{
+  --brand:#34d399; --brand-hi:#6ee7b7; --brand2:#064e3b; --brand-fill:#047857; --brand-text:#a7f3d0;
+  --brand-tint:rgba(52,211,153,.16); --brand-tint-2:rgba(52,211,153,.26);
+  --brand-line:rgba(52,211,153,.38); --brand-glow:rgba(52,211,153,.42);
+  --cw-link:rgba(110,231,183,.92);
+}
+html[data-accent="emerald"][data-theme="light"]{
+  --brand:#047857; --brand-hi:#059669; --brand2:#064e3b; --brand-fill:#065f46; --brand-text:#064e3b;
+  --brand-tint:rgba(4,120,87,.08); --brand-tint-2:rgba(4,120,87,.14);
+  --brand-line:rgba(4,120,87,.26); --brand-glow:rgba(4,120,87,.30);
+  --cw-link:rgba(4,120,87,.82);
+}
+html[data-accent="blue"]{
+  --brand:#60a5fa; --brand-hi:#93c5fd; --brand2:#1e3a8a; --brand-fill:#1d4ed8; --brand-text:#bfdbfe;
+  --brand-tint:rgba(96,165,250,.16); --brand-tint-2:rgba(96,165,250,.26);
+  --brand-line:rgba(96,165,250,.38); --brand-glow:rgba(96,165,250,.42);
+  --cw-link:rgba(147,197,253,.92);
+}
+html[data-accent="blue"][data-theme="light"]{
+  --brand:#1d4ed8; --brand-hi:#2563eb; --brand2:#1e3a8a; --brand-fill:#1e40af; --brand-text:#1e3a8a;
+  --brand-tint:rgba(29,78,216,.08); --brand-tint-2:rgba(29,78,216,.14);
+  --brand-line:rgba(29,78,216,.26); --brand-glow:rgba(29,78,216,.30);
+  --cw-link:rgba(29,78,216,.82);
+}
 /* 浅色主题下浮层的少量定向修正（分层用实色，不再叠渐变与内发光） */
 [data-theme="light"] .topbar{background:var(--glass-bg-hover);border-color:rgba(0,0,0,.10);box-shadow:var(--lg-shadow)}
 [data-theme="light"] .sidebar{background:var(--glass-bg-hover);border-color:rgba(0,0,0,.10);box-shadow:var(--lg-shadow)}
@@ -709,6 +789,34 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 .theme-opt:hover span{color:var(--txt)}
 .theme-opt input:checked + span{background:var(--glass-bg-hover);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.22)}
 .theme-opt input:focus-visible + span{outline:2px solid var(--brand-text);outline-offset:1px}
+/* 配色选择器（2026-10-22）。色块展示色按主题取档：深色用亮档、浅色用深档，
+   与实际 --brand 的取值口径一致，避免「选色块时看到的颜色」和「应用后的颜色」不一致。
+   选中徽标沿用 .swatch.on 的做法（右下角白底小圆 + 深色勾）——
+   把白勾直接放在透明伪元素上会被 verify_contrast 判成「白对白 1.00:1」。 */
+.accent-picker{display:flex;flex-wrap:wrap;gap:var(--sp-3);margin-top:2px}
+.accent-opt{position:relative;width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:var(--r-full);background:transparent;cursor:pointer;
+  transition:transform var(--dur-2) var(--ease),border-color var(--dur-3) var(--ease),box-shadow var(--dur-3) var(--ease)}
+.accent-opt i{display:block;width:22px;height:22px;border-radius:50%}
+.accent-opt:hover{transform:scale(1.08)}
+.accent-opt:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.accent-opt.on{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-tint-2)}
+.accent-opt.on::after{content:'✓';position:absolute;right:-3px;bottom:-3px;width:15px;height:15px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;
+  color:#111114;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.accent-opt[data-accent="cyan"] i{background:#22d3ee}
+.accent-opt[data-accent="indigo"] i{background:#818cf8}
+.accent-opt[data-accent="violet"] i{background:#a78bfa}
+.accent-opt[data-accent="rose"] i{background:#f472b6}
+.accent-opt[data-accent="emerald"] i{background:#34d399}
+.accent-opt[data-accent="blue"] i{background:#60a5fa}
+[data-theme="light"] .accent-opt[data-accent="cyan"] i{background:#0e7490}
+[data-theme="light"] .accent-opt[data-accent="indigo"] i{background:#4338ca}
+[data-theme="light"] .accent-opt[data-accent="violet"] i{background:#6d28d9}
+[data-theme="light"] .accent-opt[data-accent="rose"] i{background:#be185d}
+[data-theme="light"] .accent-opt[data-accent="emerald"] i{background:#047857}
+[data-theme="light"] .accent-opt[data-accent="blue"] i{background:#1d4ed8}
+@media (prefers-reduced-motion:reduce){.accent-opt{transition:none}}
 .avatar{border:1px solid transparent;height:32px;width:32px;border-radius:50%;background:linear-gradient(180deg,#0e7490,#0b4d5b);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;color:#fff;transition:var(--dur-2) var(--ease)}
 .avatar:hover{filter:brightness(1.08)}
 #userMenuWrap{position:relative;display:flex;align-items:center}
@@ -2541,7 +2649,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 
 <!-- ==================== 顶栏 ==================== -->
 <div class="topbar">
-  <div class="logo"><div class="dot"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' aria-hidden='true' focusable='false'><defs><linearGradient id='bcLogoG1' x1='0' y1='0' x2='1' y2='1'><stop offset='0' style='stop-color:var(--brand-hi)'/><stop offset='1' style='stop-color:var(--brand)'/></linearGradient></defs><rect width='32' height='32' rx='7.01' fill='url(#bcLogoG1)'/><path d='M16 5.44V10.24' stroke='#fff' stroke-width='2.18'/><circle cx='16' cy='3.9' r='1.66' fill='#c4b5fd'/><rect x='4.96' y='9.92' width='22.08' height='14.08' rx='4.96' fill='#fff'/><circle cx='12' cy='16.96' r='2.5' fill='#1e202e'/><circle cx='20' cy='16.96' r='2.5' fill='#1e202e'/></svg></div>BotCraft</div>
+  <div class="logo"><div class="dot"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' aria-hidden='true' focusable='false'><defs><linearGradient id='bcLogoG1' x1='0' y1='0' x2='1' y2='1'><stop offset='0' style='stop-color:var(--brand-hi)'/><stop offset='1' style='stop-color:var(--brand)'/></linearGradient></defs><rect width='32' height='32' rx='7.01' fill='url(#bcLogoG1)'/><path d='M16 5.44V10.24' stroke='#fff' stroke-width='2.18'/><circle cx='16' cy='3.9' r='1.66' fill='var(--brand-hi)'/><rect x='4.96' y='9.92' width='22.08' height='14.08' rx='4.96' fill='#fff'/><circle cx='12' cy='16.96' r='2.5' fill='#1e202e'/><circle cx='20' cy='16.96' r='2.5' fill='#1e202e'/></svg></div>BotCraft</div>
   <button class="hamburger" id="hamburger" onclick="toggleNav()" aria-label="菜单"><span class="i i--sol" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></button>
   <nav class="nav">
     <a href="#" class="active" data-page="home">首页</a>
@@ -2639,7 +2747,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <div class="auth-card">
     <div class="auth-art"><svg class="auth-art-svg" viewBox="0 0 440 560" role="img" aria-label="机器人与工作流画布插画"><use href="#authArt"/></svg></div>
     <div class="auth-panel">
-    <div class="logo" style="font-size:22px"><div class="dot"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' aria-hidden='true' focusable='false'><defs><linearGradient id='bcLogoG2' x1='0' y1='0' x2='1' y2='1'><stop offset='0' style='stop-color:var(--brand-hi)'/><stop offset='1' style='stop-color:var(--brand)'/></linearGradient></defs><rect width='32' height='32' rx='7.01' fill='url(#bcLogoG2)'/><path d='M16 5.44V10.24' stroke='#fff' stroke-width='2.18'/><circle cx='16' cy='3.9' r='1.66' fill='#c4b5fd'/><rect x='4.96' y='9.92' width='22.08' height='14.08' rx='4.96' fill='#fff'/><circle cx='12' cy='16.96' r='2.5' fill='#1e202e'/><circle cx='20' cy='16.96' r='2.5' fill='#1e202e'/></svg></div>BotCraft</div>
+    <div class="logo" style="font-size:22px"><div class="dot"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' aria-hidden='true' focusable='false'><defs><linearGradient id='bcLogoG2' x1='0' y1='0' x2='1' y2='1'><stop offset='0' style='stop-color:var(--brand-hi)'/><stop offset='1' style='stop-color:var(--brand)'/></linearGradient></defs><rect width='32' height='32' rx='7.01' fill='url(#bcLogoG2)'/><path d='M16 5.44V10.24' stroke='#fff' stroke-width='2.18'/><circle cx='16' cy='3.9' r='1.66' fill='var(--brand-hi)'/><rect x='4.96' y='9.92' width='22.08' height='14.08' rx='4.96' fill='#fff'/><circle cx='12' cy='16.96' r='2.5' fill='#1e202e'/><circle cx='20' cy='16.96' r='2.5' fill='#1e202e'/></svg></div>BotCraft</div>
     <h2>欢迎回来 👋</h2>
     <p class="auth-lede">用一句话搭一个能干活的工作流机器人 —— 编排画布、知识库、插件都在本机跑。账号与数据只存这台电脑，不上传服务器。</p>
     <div class="auth-entry">
@@ -3516,6 +3624,21 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           跟随系统：应用随系统的浅色/深色偏好<strong>实时</strong>切换（不是只在启动时读一次）。选浅色或深色则固定不变，不受系统影响。顶栏的圆球按钮也可以快速循环切换这三种模式。
         </div>
       </div>
+
+      <div class="field" style="margin-top:var(--sp-6)">
+        <label>配色方案</label>
+        <div class="accent-picker" role="radiogroup" aria-label="配色方案">
+          <button type="button" class="accent-opt on" data-accent="cyan" role="radio" aria-checked="true" aria-label="青蓝" title="青蓝（默认）" onclick="setAccent('cyan')"><i></i></button>
+          <button type="button" class="accent-opt" data-accent="indigo" role="radio" aria-checked="false" aria-label="靛蓝" title="靛蓝" onclick="setAccent('indigo')"><i></i></button>
+          <button type="button" class="accent-opt" data-accent="violet" role="radio" aria-checked="false" aria-label="紫罗兰" title="紫罗兰" onclick="setAccent('violet')"><i></i></button>
+          <button type="button" class="accent-opt" data-accent="rose" role="radio" aria-checked="false" aria-label="粉红" title="粉红" onclick="setAccent('rose')"><i></i></button>
+          <button type="button" class="accent-opt" data-accent="emerald" role="radio" aria-checked="false" aria-label="翠绿" title="翠绿" onclick="setAccent('emerald')"><i></i></button>
+          <button type="button" class="accent-opt" data-accent="blue" role="radio" aria-checked="false" aria-label="宝蓝" title="宝蓝" onclick="setAccent('blue')"><i></i></button>
+        </div>
+        <div class="hint" style="margin:6px 0 0;font-size:var(--fs-xs);line-height:1.5">
+          品牌色用于主按钮、侧栏激活项、滑杆与消息气泡。每套配色的对比度都已按 WCAG 校准（填充面压白字 ≥4.5:1），深浅主题各有一套取值，切换即时生效、随本机保存。
+        </div>
+      </div>
     </div>
   </div>
 
@@ -3920,7 +4043,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="field" id="field-desc"><label>功能介绍</label><textarea id="f-desc" data-grow data-grow-max="200" placeholder="描述这个机器人能做什么…" maxlength="120"></textarea><div class="err" style="color:var(--danger-text);font-size:var(--fs-xs);margin-top:5px;display:none">功能介绍不超过 120 字</div></div>
     <div class="field"><label>头像</label>
       <div class="color-pick" id="colors">
-        <div class="c on" style="background:linear-gradient(135deg,#0e7490,#0b4d5b)" data-c=""></div>
+        <div class="c on" style="background:linear-gradient(135deg,var(--brand-fill),var(--brand2))" data-c=""></div>
         <div class="c" style="background:linear-gradient(135deg,#30d158,#32ade6)" data-c="📊"></div>
         <div class="c" style="background:linear-gradient(135deg,#ff8b6d,#ff6b9d)" data-c="🎨"></div>
         <div class="c" style="background:linear-gradient(135deg,#f5c542,#ff8b3d)" data-c="✍️"></div>
@@ -18448,6 +18571,56 @@ function toggleTheme() {
   setThemeMode(THEME_MODES[(THEME_MODES.indexOf(cur) + 1) % THEME_MODES.length]);
 }
 function initTheme() { applyThemeMode(themeMode()); _bindThemeMq(); }
+
+/* ==================== 配色方案（accent）====================
+   用户自选品牌配色。与主题一样是**本机偏好**（不含个人信息，所以不按账号隔离，
+   与 botcraft.theme 同级）。存储值非法时回落到 cyan —— 宁可回到默认，也不要把
+   data-accent 设成脏值导致整套令牌失配（那样按钮会变成透明/无样式）。 */
+var ACCENT_KEY = 'botcraft.accent';
+/* 清单与 CSS 的 html[data-accent="X"] 组一一对应；cyan 没有 CSS 组（走 :root 默认令牌）。 */
+var ACCENTS = [
+  { id: 'cyan',    name: '青蓝' },
+  { id: 'indigo',  name: '靛蓝' },
+  { id: 'violet',  name: '紫罗兰' },
+  { id: 'rose',    name: '粉红' },
+  { id: 'emerald', name: '翠绿' },
+  { id: 'blue',    name: '宝蓝' }
+];
+function accentName(id) {
+  for (var i = 0; i < ACCENTS.length; i++) if (ACCENTS[i].id === id) return ACCENTS[i].name;
+  return '青蓝';
+}
+function accentId() {
+  var s = null;
+  try { s = __storage.getItem(ACCENT_KEY); } catch (e) {}
+  for (var i = 0; i < ACCENTS.length; i++) if (ACCENTS[i].id === s) return s;
+  return 'cyan';
+}
+function applyAccent(id) {
+  var known = false;
+  for (var i = 0; i < ACCENTS.length; i++) if (ACCENTS[i].id === id) known = true;
+  if (!known) id = 'cyan';
+  document.documentElement.setAttribute('data-accent', id);
+  // 面板是常驻页，元素一直在，关着也能同步选中态
+  var btns = document.querySelectorAll('.accent-opt');
+  Array.prototype.forEach.call(btns, function (b) {
+    var on = b.getAttribute('data-accent') === id;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+}
+function setAccent(id, quiet) {
+  applyAccent(id);
+  /* ⚠️ 必须写「切换后的实际值」，不能写 accentId()。
+     accentId() 是**从存储读回**的旧值 —— 首次为 null 会回落 'cyan'，
+     于是无论点哪套配色都存成 cyan，刷新后永远回到默认（实测踩到过）。
+     这里取 applyAccent 校验后写在 DOM 上的属性，非法输入已被它回落。 */
+  var real = document.documentElement.getAttribute('data-accent') || 'cyan';
+  try { __storage.setItem(ACCENT_KEY, real); } catch (e) {}
+  if (!quiet) toast('配色：' + accentName(real), 'ok');
+}
+function initAccent() { applyAccent(accentId()); }
+
 /* 系统偏好变化时当场跟上。只认 change 事件，不轮询 —— 轮询是纯浪费。
    addListener 是老 Safari 的 deprecated API，留着做兜底。 */
 function _bindThemeMq() {
@@ -18663,7 +18836,7 @@ function submitCreate() {
   if (desc.length > 120) { toast('功能介绍不超过 120 字', 'err'); return; }
   const colorEl = document.querySelector('.color-pick .c.on');
   const icon = colorEl ? colorEl.dataset.c : '';
-  const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,#0e7490,#0b4d5b)';
+  const bg = colorEl ? colorEl.style.background : 'linear-gradient(135deg,var(--brand-fill),var(--brand2))';
   // 创建时选定的专精：写一次就锁（提示词 Tab 不显示按钮，spec 是纯数据标记）。
   // 「✏️ 自定义」= 用户自己定义角色：名称进 spec，人设文本成为起始提示词。
   const specEl = document.querySelector('#specPick .prompt-tpl.active');
@@ -21734,7 +21907,10 @@ function renderUsagePanel() {
     return;
   }
   // 首色 = 品牌色（用量构成里排第一的通常是主要来源）；其余为区分色，保持原样
-  var COLORS = ['#0e7490', '#6366f1', '#30d358', '#f59e0b', '#ec4899'];
+  // 首色 = 品牌填充色，运行时读令牌 —— 用户换配色后图表首个系列要跟着变
+  var _bf = '';
+  try { _bf = getComputedStyle(document.documentElement).getPropertyValue('--brand-fill').trim(); } catch (e) {}
+  var COLORS = [_bf || '#0e7490', '#6366f1', '#30d358', '#f59e0b', '#ec4899'];
   var top = s.bots.slice(0, 5), rest = s.bots.slice(5).reduce(function (a, x) { return a + x.tokens; }, 0);
   var segs = top.map(function (x, i) { return { name: x.name, tokens: x.tokens, color: COLORS[i % COLORS.length] }; });
   if (rest) segs.push({ name: '其他机器人', tokens: rest, color: '#64748b' });
@@ -21854,7 +22030,7 @@ function renderLineChart() {
   const labels = [];
   for (let i = 0; i < data.length; i++) { const d = new Date(today); d.setDate(d.getDate() - (data.length - 1 - i)); labels.push((d.getMonth() + 1) + '/' + d.getDate()); }
   let html = `<defs><linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%" stop-color="#0e7490"/><stop offset="100%" stop-color="#0b4d5b"/></linearGradient></defs>`;
+    <stop offset="0%" style="stop-color:var(--brand-fill)"/><stop offset="100%" style="stop-color:var(--brand2)"/></linearGradient></defs>`;
   // 网格线
   for (let g = 0; g <= 3; g++) {
     const y = pad.t + (ih / 3) * g;
@@ -22070,7 +22246,7 @@ function drawDataChart() {
   const bw = iw / keys.length;
   keys.forEach(function (k, i) {
     const v = groups[k]; const h = (v / max) * ih; const x = pad.l + i * bw + bw * 0.15; const w = bw * 0.7; const y = pad.t + ih - h;
-    html += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="#0e7490"/>';
+    html += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="var(--brand-fill)"/>';
     html += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" font-size="10" fill="var(--txt)" text-anchor="middle">' + v + '</text>';
     html += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (H - 42) + '" font-size="10" fill="var(--sub)" text-anchor="middle">' + escapeHtml(String(k).slice(0, 8)) + '</text>';
   });
@@ -23645,7 +23821,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.24.0';
+var APP_VERSION = '3.25.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -23860,6 +24036,7 @@ window.manualCheckUpdate = manualCheckUpdate;
 
 function safeStart() {
   try { initTheme(); } catch (e) { console.error('initTheme failed', e); }
+  try { initAccent(); } catch (e) { console.error('initAccent failed', e); }
   // 预配置必须在任何读取登录配置的动作之前落地（refreshThirdPartyAvail / loadAuthSettings 都会读）
   try { applyPreconfiguredLogin(); } catch (e) { console.error('applyPreconfiguredLogin failed', e); }
   try { initLiquidGlass(); } catch (e) { console.error('initLiquidGlass failed', e); }
@@ -23928,6 +24105,7 @@ window.pickAvatarBg = pickAvatarBg; window.pickAvatarLetter = pickAvatarLetter; 
 window.resetAccountAvatar = resetAccountAvatar; window.onAccountAvatarFile = onAccountAvatarFile;
 window.renderAcctHeader = renderAcctHeader; window.avatarHtml = avatarHtml;
 window.toggleTheme = toggleTheme; window.themeMode = themeMode; window.resolveTheme = resolveTheme;
+window.setAccent = setAccent; window.accentId = accentId; window.applyAccent = applyAccent;
 window.setThemeMode = setThemeMode; window.applyThemeMode = applyThemeMode; window.initTheme = initTheme;
 window.toggleLiquidGlass = toggleLiquidGlass; window.applyLiquidGlass = applyLiquidGlass; window.initLiquidGlass = initLiquidGlass;
 window.setLiquidGlass = setLiquidGlass; window.isLiquidGlassOn = isLiquidGlassOn;
