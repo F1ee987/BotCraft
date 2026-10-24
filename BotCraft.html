@@ -1384,6 +1384,42 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-mid:hover{opacity:1;color:var(--brand-text);border-color:var(--brand)}
 .cw-marquee{position:absolute;border:1px solid var(--brand);background:var(--brand-tint);border-radius:var(--r-2xs);pointer-events:none;z-index:4}
 .cw-empty{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:var(--sp-6);color:var(--sub);font-size:var(--fs-sm);text-align:center;z-index:2}
+/* ==================== 画布全屏 + 问答侧栏（2026-10-24）====================
+   全屏为什么用「切一个 class + CSS 改 fixed 铺满」，而不是把画布 DOM 搬到覆盖层：
+   画布的全部状态（cwSt.root/stage/选中集/撤销栈/CW_VIEWS 视图位）都绑在现有节点与
+   闭包上，搬走 DOM 会丢事件绑定与视图位置。原地不动 + 只改定位，零风险；
+   尺寸变化由已有的 cwObserve（ResizeObserver）自动交给 cwPaint 重算。
+   侧栏与画布是兄弟层：画布 .cw-root 是全屏容器的 inset:0，全屏时给它让出右列宽度。 */
+:root{ --cw-qa-w:380px; }
+#wsFlowBody.cw-full{position:fixed;inset:0;z-index:300;width:100vw;height:100dvh;padding:0;
+  background:var(--sunken);border-radius:0;animation:none}
+#wsFlowBody.cw-full .cw-root{right:var(--cw-qa-w)}
+#wsFlowBody.cw-full.cw-qa-off .cw-root{right:0}
+.cw-qa{position:absolute;right:0;top:0;bottom:0;width:var(--cw-qa-w);z-index:9;display:none;
+  flex-direction:column;background:var(--panel);border-left:1px solid var(--line)}
+#wsFlowBody.cw-full:not(.cw-qa-off) .cw-qa{display:flex}
+.cw-qa-hd{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-5) var(--sp-6);
+  border-bottom:1px solid var(--line);flex:0 0 auto}
+.cw-qa-hd b{font-size:12.5px;color:var(--txt);font-weight:640}
+.cw-qa-n{font-size:11px;color:var(--sub)}
+.cw-qa-acts{margin-left:auto;display:flex;gap:var(--sp-3)}
+.cw-qa-acts button{padding:3px 9px;border-radius:var(--r-full);border:1px solid var(--line);
+  background:var(--fill);color:var(--sub);font-size:11.5px;cursor:pointer;font-family:inherit}
+.cw-qa-acts button:hover{color:var(--brand-text);border-color:var(--brand)}
+.cw-qa-body{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;padding:var(--sp-5) var(--sp-6);
+  display:flex;flex-direction:column;gap:var(--sp-5)}
+.cw-qa-item{display:flex;flex-direction:column;gap:var(--sp-1)}
+.cw-qa-who{font-size:10.5px;color:var(--sub)}
+.cw-qa-ask{padding:var(--sp-4) var(--sp-5);border-radius:var(--r-md);background:var(--brand-tint);
+  border:1px solid var(--brand-tint-2);color:var(--txt);font-size:12.5px;line-height:1.6;
+  white-space:pre-wrap;word-break:break-word}
+.cw-qa-ans{padding:var(--sp-4) var(--sp-5);border-radius:var(--r-md);background:var(--fill);
+  border:1px solid var(--line);color:var(--txt);font-size:12.5px;line-height:1.65;
+  word-break:break-word;content-visibility:auto;contain-intrinsic-size:auto 120px}
+.cw-qa-empty{padding:18px var(--sp-3);text-align:center;font-size:12px;color:var(--sub);line-height:1.8}
+.cw-qa-ft{flex:0 0 auto;padding:var(--sp-4) var(--sp-6);border-top:1px solid var(--line);
+  font-size:11px;color:var(--sub)}
+.cw-tbtn.cw-on{background:var(--brand-tint);border-color:var(--brand-tint-2);color:var(--brand-text)}
 .cw-hint{position:absolute;left:var(--sp-6);top:var(--sp-6);display:flex;flex-wrap:wrap;gap:var(--sp-5);max-width:calc(100% - 190px);font-size:var(--fs-2xs);color:var(--sub);pointer-events:none;z-index:2}
 .cw-hint span{display:inline-flex;align-items:center;gap:var(--sp-2)}
 .cw-hint kbd{background:var(--fill);border-radius:var(--r-2xs);padding:1px var(--sp-3);font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--txt)}
@@ -13066,6 +13102,10 @@ function dropLeaveEl() {
   el.style.display = 'none';
 }
 function go(p) {
+  // 全屏画布是 position:fixed 覆盖层，离开工作台必须收起（否则回到该页会莫名全屏）
+  if (p !== 'workspace' && typeof cwFullOn === 'function' && cwFullOn()) {
+    try { cwToggleFull(false); } catch (e) { }
+  }
   var _navEl = document.querySelector('.nav'); if (_navEl) _navEl.classList.remove('open');
   /* 侧栏 / 顶栏的选中态立刻更新：点击反馈必须即时，不该等动画 */
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === p));
@@ -13921,6 +13961,7 @@ function cwToolsHtml() {
     '<button class="cw-tbtn" data-act="zoomin" title="放大">＋</button>' +
     '<span class="cw-tsep"></span>' +
     '<button class="cw-tbtn" data-act="fit" title="适配视图，把所有节点框进来看（F）">' + svgIcon('expand','solo') + '</button>' +
+    '<button class="cw-tbtn" data-act="full" title="全屏查看编排与对话（Shift+F / Esc 退出）">' + svgIcon('expand','solo') + '</button>' +
     '<button class="cw-tbtn" data-act="layout" title="按执行次序（拓扑序）一字排开，有分支也不会把上下游错位">⠿</button>' +
     '<button class="cw-tbtn" data-act="aiplot" title="AI 编排：描述需求，自动生成整张流程图，或优化现有画布">' + svgIcon('wand','solo') + '</button>' +
     '<span class="cw-tsep"></span>' +
@@ -13939,12 +13980,116 @@ function cwHintHtml() {
     '<span><kbd>Ctrl</kbd>+滚轮 缩放</span>' +
     '<span><kbd>双击卡片</kbd>编辑 · <kbd>双击空白</kbd>/<kbd>右键</kbd>加节点</span>' +
     '<span><kbd>Del</kbd>删除 · <kbd>Ctrl+Z</kbd>撤销</span>' +
+    '<span><kbd>Shift+F</kbd>全屏（同时看提问与回答）</span>' +
     '</div>';
 }
 function cwEmptyHtml() {
   return '<div class="cw-empty"><div>这个机器人还没有工作流节点<br>引擎目前只会走一次直接对话</div>' +
     '<button class="btn btn-primary" data-act="addnode">＋ 添加第一个节点</button>' +
     '<div style="font-size:var(--fs-2xs)">双击 / 右键画布空白处，选一个类型开始（双击节点是编辑）</div></div>';
+}
+
+/* ==================== 画布全屏 + 问答侧栏（2026-10-24）====================
+   需求：画布支持全屏，并在画布内直接呈现提问与回答。
+   交互：工具栏「全屏」按钮 / Shift+F 进入，Esc、再点一次、或「收起」退出。
+   布局：左侧画布（自适应剩余宽度）+ 右侧只读问答栏（--cw-qa-w，可整体收起）。
+   为什么是「只读侧栏」而不是把气泡画到画布背景上：
+   画布是给「编排」用的，任何压在节点下的文字都会干扰连线与拖拽的视线；
+   而全屏的诉求恰恰是「一边看流程、一边看它实际怎么回答」——并排两列最直接。
+   数据源就是当前会话的 b.history，与聊天区同源，不引入第二份状态。 */
+var CW_QA_MAX = 40;          // 侧栏最多渲染多少条（历史很长时只取最近一段）
+function cwFullOn() {
+  var body = document.getElementById('wsFlowBody');
+  return !!(body && body.classList.contains('cw-full'));
+}
+function cwQAHtml(b, hist, start) {
+  var items = '';
+  for (var i = start; i < hist.length; i++) {
+    var m = hist[i] || {};
+    var txt = String(m.text || '');
+    var hasImg = !!(m.images && m.images.length);
+    if (!txt && !hasImg) continue;              // 纯媒体消息跳过，侧栏不做附件预览
+    var who = (m.role === 'me') ? '提问' : (m.who || b.n || '回答');
+    var card;
+    if (m.role === 'me') {
+      card = '<div class="cw-qa-ask">' + escapeHtml(txt)
+        + (hasImg ? '\n〔附图 ' + m.images.length + ' 张〕' : '')
+        + ((m.docs && m.docs.length) ? '\n〔附带 ' + m.docs.length + ' 个文档〕' : '')
+        + '</div>';
+    } else {
+      // kb-prev 是知识库预览用的 markdown 排版容器（纯排版、无底色），直接复用，
+      // 避免再抄一份 .md-* 样式（本项目踩过「新容器漏抄 img 规则」的坑）
+      card = '<div class="cw-qa-ans kb-prev">' + renderMarkdown(txt) + '</div>';
+    }
+    items += '<div class="cw-qa-item" data-mi="' + i + '"><div class="cw-qa-who">' + escapeHtml(who) + '</div>' + card + '</div>';
+  }
+  return items;
+}
+function cwRenderQA(b) {
+  var body = document.getElementById('wsFlowBody');
+  if (!body || !b) return;
+  var box = document.getElementById('cwQA');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'cw-qa'; box.id = 'cwQA';
+    body.appendChild(box);
+  }
+  var hist = (b.history || []);
+  var start = Math.max(0, hist.length - CW_QA_MAX);
+  var rounds = 0;
+  for (var i = 0; i < hist.length; i++) { if (hist[i] && hist[i].role === 'me') rounds++; }
+  var items = cwQAHtml(b, hist, start);
+  var tail = (start > 0) ? ('最近 ' + (hist.length - start) + ' 条') : ('共 ' + hist.length + ' 条');
+  box.innerHTML =
+    '<div class="cw-qa-hd"><b>提问与回答</b><span class="cw-qa-n">' + rounds + ' 轮 · ' + tail + '</span>'
+    + '<span class="cw-qa-acts"><button type="button" data-qa="bottom">滚到底</button>'
+    + '<button type="button" data-qa="hide">收起</button></span></div>'
+    + '<div class="cw-qa-body" id="cwQABody">'
+    + (items || '<div class="cw-qa-empty">当前会话还没有对话。<br>退出全屏到聊天区问一句，这里会同步显示。</div>')
+    + '</div><div class="cw-qa-ft">只读视图 · 与聊天区同源（当前会话）</div>';
+  // .cw-qa 是 append 到 #wsFlowBody 的兄弟层，不在 .cw-root 里，
+  // cwOnClick 的事件委托覆盖不到它 —— 必须自己绑一次（用 onclick 赋值，重渲染不累积）
+  box.onclick = function (e) {
+    var t = (e.target && e.target.closest) ? e.target.closest('[data-qa]') : null;
+    if (!t) return;
+    var act = t.getAttribute('data-qa');
+    if (act === 'bottom') cwQABottom();
+    else if (act === 'hide') cwToggleQA();
+  };
+  var sc = document.getElementById('cwQABody');
+  if (sc) sc.scrollTop = sc.scrollHeight;
+}
+function cwQABottom() { var s = document.getElementById('cwQABody'); if (s) s.scrollTop = s.scrollHeight; }
+function cwToggleQA() {
+  var body = document.getElementById('wsFlowBody'); if (!body) return;
+  body.classList.toggle('cw-qa-off');
+  cwPaintSoon(cwSt.bot);
+}
+function cwSyncFullBtn() {
+  var root = cwSt.root; if (!root) return;
+  var on = cwFullOn();
+  var btn = root.querySelector('[data-act="full"]');
+  if (btn) {
+    btn.classList.toggle('cw-on', on);
+    btn.setAttribute('title', on ? '退出全屏（Esc / Shift+F）' : '全屏查看编排与对话（Shift+F / Esc 退出）');
+  }
+}
+function cwToggleFull(force) {
+  var body = document.getElementById('wsFlowBody');
+  var b = cwSt.bot || getBot(currentId);
+  if (!body || !b) return;
+  var on = (force === undefined) ? !body.classList.contains('cw-full') : !!force;
+  if (on === body.classList.contains('cw-full')) return;     // 状态没变就不做事
+  body.classList.toggle('cw-full', on);
+  if (on) {
+    body.classList.remove('cw-qa-off');
+    try { cwRenderQA(b); } catch (e) { console.warn('[cw] 问答侧栏渲染失败：', e); }
+  }
+  cwSyncFullBtn();
+  /* 容器尺寸变了：ResizeObserver 也会触发，但它要等下一次布局；
+     这里主动补一次，避免「刚进全屏、节点还堆在左上角」的一帧抖动。 */
+  try { requestAnimationFrame(function () { if (cwSt.root) cwRefresh(); }); } catch (e) { cwRefresh(); }
+  toast(on ? '已进入全屏编排（Esc 退出）' : '已退出全屏', 'ok', 2200);
 }
 
 function renderNodes(b) {
@@ -14005,6 +14150,10 @@ function renderNodes(b) {
   if (cwSt.mode === 'pan') cwSt.root.classList.add('pan-mode');
   cwFitMini();
   cwObserve();
+  /* body.innerHTML 会连同 .cw-qa 一起清掉（它不是 innerHTML 的一部分而是 append 进来的），
+     所以每次重渲染都要在全屏态下重新挂回去；切换机器人/切换会话都会走到这里。 */
+  if (cwFullOn()) { try { cwRenderQA(b); } catch (e) { } }
+  cwSyncFullBtn();
 }
 
 // 节点类型：**每一项都必须在执行引擎里真的有对应行为**，否则用户加了个节点，
@@ -14676,6 +14825,7 @@ function cwToolAct(b, act) {
   if (act === 'zoomout') { cwZoomCenter(b, 1 / 1.2); return; }
   if (act === 'zoom100') { cwResetZoom(b); return; }
   if (act === 'fit') { cwFit(b); return; }
+  if (act === 'full') { cwToggleFull(); return; }
   if (act === 'layout') { cwAutoLayout(b); return; }
   if (act === 'aiplot') { openAiPlot(); return; }
   if (act === 'undo') { cwUndo(b); return; }
@@ -15282,9 +15432,19 @@ function cwOnKey(e) {
   if (mod && (k === 'c' || k === 'C')) { e.preventDefault(); cwCopy(b); return; }
   if (mod && (k === 'v' || k === 'V')) { e.preventDefault(); cwPaste(b); return; }
   if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); cwDelSel(b); return; }
-  if (k === 'Escape') { e.preventDefault(); cwSt.sel = []; cwCloseMenu(); cwPaintSel(b); return; }
+  if (k === 'Escape') {
+    e.preventDefault();
+    // 全屏时 Esc 的第一语义是「退出全屏」——先退全屏，再按一次才清空选中
+    if (cwFullOn()) { cwToggleFull(false); return; }
+    cwSt.sel = []; cwCloseMenu(); cwPaintSel(b); return;
+  }
   if (k === '0') { e.preventDefault(); cwResetZoom(b); return; }
-  if (k === 'f' || k === 'F') { e.preventDefault(); cwFit(b); return; }
+  if (k === 'f' || k === 'F') {
+    e.preventDefault();
+    // F 保持「适配视图」的老习惯不动（tooltip 里写着 F）；全屏让给 Shift+F
+    if (e.shiftKey) { cwToggleFull(); return; }
+    cwFit(b); return;
+  }
   if (k === '+' || k === '=') { e.preventDefault(); cwZoomCenter(b, 1.2); return; }
   if (k === '-' || k === '_') { e.preventDefault(); cwZoomCenter(b, 1 / 1.2); return; }
   if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') {
@@ -22063,6 +22223,8 @@ function switchWsTab(t) {
   } else {
     const tab = document.querySelector('.ws-tab[data-tab="' + t + '"]'); if (tab) tab.classList.add('active');
   }
+  // 全屏画布是覆盖层：切到别的标签就该收起，否则「切回来又突然全屏」很突然
+  if (t !== 'flow' && cwFullOn()) { try { cwToggleFull(false); } catch (e) { } }
   Object.values(TAB_MAP).forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
   const target = document.getElementById(TAB_MAP[t]); if (target) target.style.display = 'block';
   const b = getBot(currentId);
@@ -24723,7 +24885,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.27.4';
+var APP_VERSION = '3.28.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
