@@ -1384,20 +1384,46 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-mid:hover{opacity:1;color:var(--brand-text);border-color:var(--brand)}
 .cw-marquee{position:absolute;border:1px solid var(--brand);background:var(--brand-tint);border-radius:var(--r-2xs);pointer-events:none;z-index:4}
 .cw-empty{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:var(--sp-6);color:var(--sub);font-size:var(--fs-sm);text-align:center;z-index:2}
-/* ==================== 画布全屏 + 问答侧栏（2026-10-24）====================
-   全屏为什么用「切一个 class + CSS 改 fixed 铺满」，而不是把画布 DOM 搬到覆盖层：
-   画布的全部状态（cwSt.root/stage/选中集/撤销栈/CW_VIEWS 视图位）都绑在现有节点与
-   闭包上，搬走 DOM 会丢事件绑定与视图位置。原地不动 + 只改定位，零风险；
-   尺寸变化由已有的 cwObserve（ResizeObserver）自动交给 cwPaint 重算。
-   侧栏与画布是兄弟层：画布 .cw-root 是全屏容器的 inset:0，全屏时给它让出右列宽度。 */
-:root{ --cw-qa-w:380px; }
-#wsFlowBody.cw-full{position:fixed;inset:0;z-index:300;width:100vw;height:100dvh;padding:0;
-  background:var(--sunken);border-radius:0;animation:none}
-#wsFlowBody.cw-full .cw-root{right:var(--cw-qa-w)}
-#wsFlowBody.cw-full.cw-qa-off .cw-root{right:0}
-.cw-qa{position:absolute;right:0;top:0;bottom:0;width:var(--cw-qa-w);z-index:9;display:none;
-  flex-direction:column;background:var(--panel);border-left:1px solid var(--line)}
+/* ==================== 画布全屏 + 画布内问答浮层（2026-10-24 / v3.28.1 修正）====================
+   一、全屏为什么「切 class + CSS fixed」而不重建画布：
+     画布全部状态（cwSt.root/stage、选中集、撤销栈、CW_VIEWS 视图位）都绑在现有节点与闭包上，
+     替换节点会丢事件绑定与视图位。改定位零风险，尺寸交给已有的 ResizeObserver → cwPaint。
+
+   二、但**光切 class 不够**（v3.28.0 的真实缺陷，用 Edge 实测抓到的）：
+     祖先 .ws-side 上带 backdrop-filter（液态玻璃），而 backdrop-filter / filter / transform /
+     perspective / contain 都会创建**包含块** —— position:fixed 于是相对它定位而不是相对视口。
+     实测全屏后 #wsFlowBody 的 rect 是 (211,67,1170,618)：左侧侧栏、顶部导航照样露着，
+     画布右半边被裁到视口外，用户看到的就是「点了全屏，根本没全屏」。
+     所以 cwToggleFull 在切 class 的同时把节点**挂到 document.body 下**（portal），退出时插回原位。
+     节点被移动不会丢事件监听（监听绑在节点上），闭包里的引用也都还有效。
+
+   三、问答是**画布内的浮层**（absolute 叠在 .cw-root 之上），不再用 right:380px 把画布挤窄：
+     诉求是「提问和回答都出现在画布里」，而不是画布旁边再开一列把画布压成半屏。
+     浮层可收起，收起后右上角留一个胶囊可再展开（否则收起就再也打不开）。
+   四、浮层压在画布上，所以底色必须是近实色 --pop-veil（94~95%）+ 真模糊，不能用 --glass-bg-hover，
+     否则底下的节点与网格会透上来（v3.27.3 的教训）。 */
+:root{ --cw-qa-w:380px; --cw-qa-gap:12px; }
+/* 背景必须用不透明的 --bg：#wsFlowBody 与 .cw-root 原本都用 --sunken
+   （深 rgba(0,0,0,.24) / 浅 rgba(120,120,128,.13)，是给 300px 侧栏里「压暗一点」用的）。
+   全屏铺满时它就成了半透明蒙版 —— 底下的侧栏、顶栏、聊天区整片透上来，
+   实测截图里「创作 / 我的机器人 / 导出 Word」全都浮在画布上。 */
+#wsFlowBody.cw-full{position:fixed;inset:0;z-index:300;padding:0;width:auto;height:auto;
+  background:var(--bg);border-radius:0;animation:none;overflow:hidden}
+#wsFlowBody.cw-full .cw-root{right:0;background:var(--bg)}
+.cw-qa{position:absolute;right:var(--cw-qa-gap);top:var(--cw-qa-gap);bottom:var(--cw-qa-gap);
+  width:var(--cw-qa-w);max-width:calc(100% - var(--cw-qa-gap) * 2);z-index:9;display:none;flex-direction:column;
+  background:var(--pop-veil);background-image:var(--lg-spec);
+  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--lg-shadow);overflow:hidden}
 #wsFlowBody.cw-full:not(.cw-qa-off) .cw-qa{display:flex}
+/* 收起态的展开胶囊：浮层隐藏时必须留一个入口 */
+.cw-qa-tab{position:absolute;right:var(--cw-qa-gap);top:var(--cw-qa-gap);z-index:9;display:none;
+  align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-5);cursor:pointer;
+  border:1px solid var(--glass-border);border-radius:var(--r-full);font-family:inherit;
+  font-size:11.5px;color:var(--txt);background:var(--pop-veil);box-shadow:var(--lg-shadow)}
+.cw-qa-tab:hover{border-color:var(--brand);color:var(--brand-text)}
+.cw-qa-tab .i{width:13px;height:13px}
+#wsFlowBody.cw-full.cw-qa-off .cw-qa-tab{display:inline-flex}
 .cw-qa-hd{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-5) var(--sp-6);
   border-bottom:1px solid var(--line);flex:0 0 auto}
 .cw-qa-hd b{font-size:12.5px;color:var(--txt);font-weight:640}
@@ -13961,7 +13987,12 @@ function cwToolsHtml() {
     '<button class="cw-tbtn" data-act="zoomin" title="放大">＋</button>' +
     '<span class="cw-tsep"></span>' +
     '<button class="cw-tbtn" data-act="fit" title="适配视图，把所有节点框进来看（F）">' + svgIcon('expand','solo') + '</button>' +
-    '<button class="cw-tbtn" data-act="full" title="全屏查看编排与对话（Shift+F / Esc 退出）">' + svgIcon('expand','solo') + '</button>' +
+    /* 全屏按钮必须与「适配视图」用**不同**的图标：两者原来都是 svgIcon('expand')，
+     一模一样的两个方块并排，用户根本分不清点了哪个（v3.28.0 就被当成「点了全屏没反应」）。 */
+    '<button class="cw-tbtn cw-tbtn-full" data-act="full" title="全屏查看编排与对话（Shift+F / Esc 退出）">'
+      + '<span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24">'
+      + '<rect x="2.5" y="4" width="19" height="16" rx="2.5"/><rect x="8" y="8.5" width="8" height="7" rx="1.5"/>'
+      + '</svg></span></button>' +
     '<button class="cw-tbtn" data-act="layout" title="按执行次序（拓扑序）一字排开，有分支也不会把上下游错位">⠿</button>' +
     '<button class="cw-tbtn" data-act="aiplot" title="AI 编排：描述需求，自动生成整张流程图，或优化现有画布">' + svgIcon('wand','solo') + '</button>' +
     '<span class="cw-tsep"></span>' +
@@ -13998,6 +14029,17 @@ function cwEmptyHtml() {
    而全屏的诉求恰恰是「一边看流程、一边看它实际怎么回答」——并排两列最直接。
    数据源就是当前会话的 b.history，与聊天区同源，不引入第二份状态。 */
 var CW_QA_MAX = 40;          // 侧栏最多渲染多少条（历史很长时只取最近一段）
+/* 全屏且浮层展开时，画布右侧被浮层遮住多少（cwFit 要把这段扣掉） */
+function cwQAReserved() {
+  var body = document.getElementById('wsFlowBody');
+  if (!body || !body.classList.contains('cw-full')) return 0;
+  if (body.classList.contains('cw-qa-off')) return 0;
+  var cs = getComputedStyle(body);
+  var w = parseInt(cs.getPropertyValue('--cw-qa-w'), 10);
+  var gap = parseInt(cs.getPropertyValue('--cw-qa-gap'), 10);
+  // 宽度与两侧留白都从令牌读，别在 JS 里再硬编码一份（改了 CSS 就会对不上）
+  return (isFinite(w) ? w : 380) + (isFinite(gap) ? gap : 12) * 2;
+}
 function cwFullOn() {
   var body = document.getElementById('wsFlowBody');
   return !!(body && body.classList.contains('cw-full'));
@@ -14027,7 +14069,8 @@ function cwQAHtml(b, hist, start) {
 }
 function cwRenderQA(b) {
   var body = document.getElementById('wsFlowBody');
-  if (!body || !b) return;
+  if (!body) return;
+  b = b || { history: [] };          // 还没选机器人也要能画出空态，否则全屏后一片空
   var box = document.getElementById('cwQA');
   if (!box) {
     box = document.createElement('div');
@@ -14056,6 +14099,18 @@ function cwRenderQA(b) {
     if (act === 'bottom') cwQABottom();
     else if (act === 'hide') cwToggleQA();
   };
+  /* 收起态的展开胶囊：不放在 #cwQA 里面 —— 那个盒子收起时是 display:none，
+     放里面等于「收起就再也打不开」。它是 #wsFlowBody 的另一个直属子节点，
+     所以 renderNodes 清空 innerHTML 后同样要在本函数里重建。 */
+  var tab = document.getElementById('cwQATab');
+  if (!tab) {
+    tab = document.createElement('button');
+    tab.type = 'button'; tab.id = 'cwQATab'; tab.className = 'cw-qa-tab';
+    body.appendChild(tab);
+  }
+  tab.innerHTML = svgIcon('chat', 'solo') + '<span>对话 · ' + rounds + ' 轮</span>';
+  tab.title = '展开画布内的提问与回答';
+  tab.onclick = function () { cwToggleQA(); };
   var sc = document.getElementById('cwQABody');
   if (sc) sc.scrollTop = sc.scrollHeight;
 }
@@ -14063,7 +14118,7 @@ function cwQABottom() { var s = document.getElementById('cwQABody'); if (s) s.sc
 function cwToggleQA() {
   var body = document.getElementById('wsFlowBody'); if (!body) return;
   body.classList.toggle('cw-qa-off');
-  cwPaintSoon(cwSt.bot);
+  // 浮层是覆盖层、不挤占画布宽度，所以收起/展开不需要重绘画布（省一次全量重排）
 }
 function cwSyncFullBtn() {
   var root = cwSt.root; if (!root) return;
@@ -14077,18 +14132,45 @@ function cwSyncFullBtn() {
 function cwToggleFull(force) {
   var body = document.getElementById('wsFlowBody');
   var b = cwSt.bot || getBot(currentId);
-  if (!body || !b) return;
+  if (!body) return;
   var on = (force === undefined) ? !body.classList.contains('cw-full') : !!force;
   if (on === body.classList.contains('cw-full')) return;     // 状态没变就不做事
-  body.classList.toggle('cw-full', on);
   if (on) {
+    /* 关键：先记原位，再把节点挂到 <body> 下（portal）。
+       只切 class 是不够的 —— 祖先 .ws-side 有 backdrop-filter，它会创建包含块，
+       于是 position:fixed 相对 .ws-side 定位（实测 rect=(211,67,...)：左侧侧栏与顶部
+       导航照样露着、右半边被裁到视口外，看起来就是「没全屏」）。
+       移动节点不会丢事件监听（监听绑在节点上），闭包里的 cwSt.root 等引用也都还在。 */
+    body.__cwHome = { p: body.parentNode, n: body.nextSibling };
+    document.body.appendChild(body);
+    body.classList.add('cw-full');
     body.classList.remove('cw-qa-off');
-    try { cwRenderQA(b); } catch (e) { console.warn('[cw] 问答侧栏渲染失败：', e); }
+    try { cwRenderQA(b); } catch (e) { console.warn('[cw] 画布内问答渲染失败：', e); }
+  } else {
+    body.classList.remove('cw-full');
+    body.classList.remove('cw-qa-off');     // 收起状态是全屏专用的，别留到下次
+    var home = body.__cwHome;
+    body.__cwHome = null;
+    if (home && home.p) {
+      try { home.p.insertBefore(body, home.n); } catch (e) { home.p.appendChild(body); }
+    }
+    // 浮层与胶囊是全屏专用，退出时清掉（否则会跟着回到 300px 侧栏里）
+    var q = document.getElementById('cwQA'); if (q && q.parentNode) q.parentNode.removeChild(q);
+    var t = document.getElementById('cwQATab'); if (t && t.parentNode) t.parentNode.removeChild(t);
   }
   cwSyncFullBtn();
   /* 容器尺寸变了：ResizeObserver 也会触发，但它要等下一次布局；
      这里主动补一次，避免「刚进全屏、节点还堆在左上角」的一帧抖动。 */
-  try { requestAnimationFrame(function () { if (cwSt.root) cwRefresh(); }); } catch (e) { cwRefresh(); }
+  /* 尺寸变了要重新取景：进入全屏后空间大得多，不 fit 就还是原来 37% 缩在左上角
+     （用户点全屏就是为了「看清」，结果什么都没变大 = 白点）。
+     进入时把右侧浮层占用的宽度扣掉，让节点落在真正可见的区域里。 */
+  try {
+    requestAnimationFrame(function () {
+      if (!cwSt.root) return;
+      if (cwSt.bot && (cwSt.bot.nodes || []).length) cwFit(cwSt.bot, cwQAReserved());
+      else cwRefresh();
+    });
+  } catch (e) { cwRefresh(); }
   toast(on ? '已进入全屏编排（Esc 退出）' : '已退出全屏', 'ok', 2200);
 }
 
@@ -14529,12 +14611,14 @@ function cwZoomCenter(b, f) {
   const r = root.getBoundingClientRect();
   cwZoomAt(b, r.left + root.clientWidth / 2, r.top + root.clientHeight / 2, f);
 }
-function cwFit(b) {
+function cwFit(b, rightPad) {
   const root = cwSt.root;
   b = b || cwSt.bot;
   if (!root || !b || !b.nodes || !b.nodes.length) return;
   const v = cwView(b);
-  const W = root.clientWidth || 420, H = root.clientHeight || 320, pad = 40;
+  /* rightPad：右侧被遮挡的宽度（全屏时是问答浮层占的那一列）。
+     不扣掉它就会「fit 之后节点整体偏右、被浮层盖住一半」。 */
+  const W = Math.max(200, (root.clientWidth || 420) - (rightPad || 0)), H = root.clientHeight || 320, pad = 40;
   let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
   b.nodes.forEach(function (n, i) {
     const bx = cwBox(b, i);
@@ -14824,7 +14908,7 @@ function cwToolAct(b, act) {
   if (act === 'zoomin') { cwZoomCenter(b, 1.2); return; }
   if (act === 'zoomout') { cwZoomCenter(b, 1 / 1.2); return; }
   if (act === 'zoom100') { cwResetZoom(b); return; }
-  if (act === 'fit') { cwFit(b); return; }
+  if (act === 'fit') { cwFit(b, cwQAReserved()); return; }
   if (act === 'full') { cwToggleFull(); return; }
   if (act === 'layout') { cwAutoLayout(b); return; }
   if (act === 'aiplot') { openAiPlot(); return; }
@@ -15443,7 +15527,7 @@ function cwOnKey(e) {
     e.preventDefault();
     // F 保持「适配视图」的老习惯不动（tooltip 里写着 F）；全屏让给 Shift+F
     if (e.shiftKey) { cwToggleFull(); return; }
-    cwFit(b); return;
+    cwFit(b, cwQAReserved()); return;
   }
   if (k === '+' || k === '=') { e.preventDefault(); cwZoomCenter(b, 1.2); return; }
   if (k === '-' || k === '_') { e.preventDefault(); cwZoomCenter(b, 1 / 1.2); return; }
@@ -24885,7 +24969,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.28.0';
+var APP_VERSION = '3.28.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
