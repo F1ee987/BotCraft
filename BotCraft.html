@@ -1316,6 +1316,9 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .ws-more-menu{position:fixed;min-width:148px;background:var(--popover);border:1px solid var(--glass-border);border-radius:var(--r-lg);padding:6px;display:none;flex-direction:column;gap:var(--sp-1);z-index:80;box-shadow:var(--lg-shadow)}
 .ws-more-menu.open{display:flex}
 .ws-more-item{padding:9px 12px;border-radius:var(--r-sm);font-size:13px;color:var(--txt);cursor:pointer;white-space:nowrap;font-weight:590;transition:background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
+/* 分组小标题：菜单补到 9 项后不分组会一眼找不到；它不是菜单项，不参与点击与高亮 */
+.ws-more-sec{padding:7px 12px 4px;font-size:10.5px;letter-spacing:.8px;color:var(--sub);font-weight:600;text-transform:uppercase;cursor:default;white-space:nowrap}
+.ws-more-sec:first-child{padding-top:4px}
 .ws-more-item:hover{background:var(--fill)}
 .ws-more-item.active{background:var(--fill);color:var(--brand-text)}
 .ws-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:14px}
@@ -1477,6 +1480,15 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
    于是顶栏右侧被整片压掉、只在最左边露出 logo 与「BotCraft」的前两个字母（截图上的「Bo」），
    看起来像被硬切了一刀。全屏场景下页面切换走左侧图标栏，顶栏没有留存价值，整条收起最干净。 */
 body.cw-flow-full .topbar{display:none}
+/* 全屏画布期间把工作台那三块整片 visibility:hidden（工作区侧栏 / 拉手 / 聊天区）。
+   画布从 --cw-full-left 开始铺，理论上正好盖住它们的左缘；但 left 只要因为任何原因
+   大了几像素（窗口缩放、侧栏动画途中量到旧值、拖过 resizer、收起与重算不同步），
+   它们的左边缘就会在画布左侧露出一条 —— 就是「左边挂着半个标题 + 半排标签」那个
+   bug。visibility 不脱离文档流：占位照旧，left 的计算不受影响，撤销全屏即恢复。
+   注意不含 .sidebar —— 左侧图标栏是全屏下唯一要保留可用的入口。 */
+body.cw-flow-full #page-workspace .ws-side,
+body.cw-flow-full #page-workspace .ws-resizer,
+body.cw-flow-full #page-workspace .ws-main{visibility:hidden}
 /* ===== 全屏画布内的「更多 / 上下文」抽屉（2026-10-24） =====
    这两个入口原来只存在于 .ws-side 的标签栏和聊天区里，全屏画布一铺开就把它们盖住了；
    即便点到「更多」，switchWsTab 里那句「t !== 'flow' && cwFullOn() → cwToggleFull(false)」
@@ -3430,7 +3442,17 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <!-- ==================== 工作台 ==================== -->
   <!-- 更多 ▾ 菜单必须挂在 body 直属层级：原来在 .ws-side 里，而 .ws-side 有 backdrop-filter
        （会成为 fixed 后代的包含块）+ overflow-x:hidden（把菜单裁掉）——位置漂移且显示不全 -->
+  <!-- 2026-10-24 补全为「全部面板」+「二级面板」两组：
+       原来只有文体/记忆/版本/批量 4 项，工作区被拖窄或标签栏横向滚动后，「编排」会被
+       滚出可视区、谁也进不去。菜单是最后一道兜底，必须覆盖所有面板。 -->
   <div class="ws-more-menu" id="wsMoreMenu">
+    <div class="ws-more-sec">全部面板</div>
+    <div class="ws-more-item" data-tab="flow">编排</div>
+    <div class="ws-more-item" data-tab="prompt">提示词</div>
+    <div class="ws-more-item" data-tab="kb">知识库</div>
+    <div class="ws-more-item" data-tab="plugin">插件</div>
+    <div class="ws-more-item" data-tab="publish">发布</div>
+    <div class="ws-more-sec">更多</div>
     <div class="ws-more-item" data-tab="style">文体</div>
     <div class="ws-more-item" data-tab="memory">记忆</div>
     <div class="ws-more-item" data-tab="versions">版本</div>
@@ -14455,20 +14477,40 @@ function cwQAReserved() {
    为什么量 rect 而不是读 CSS 变量：侧栏宽度由 .sidebar{width:232px} 与
    .sidebar.collapsed{width:64px} 两处决定，还有 12px 左外边距、10px 右外边距，
    以及窄屏下的响应式隐藏 —— 硬编码任何一组数字都会在某个状态下错位。 */
+/* 取「工作台内容的左边界」而不是「左侧导航栏的右缘 + 外边距」：
+   画布的家乡就是 .ws-side，它的左缘就是画布该盖到的第一条像素。
+   用 .sidebar.right + marginRight 时，只要两者之间有 1px 边框/间隙差，就会在
+   画布左边留下一条细缝（侧栏折叠动画中途尤其明显）。
+   .ws-side 被收起（display:none）时回落到 .sidebar 的右缘 —— 此时工作台已让位，
+   画布应该铺到图标栏右边。 */
 function cwSyncFullLeft() {
   var body = document.getElementById('wsFlowBody');
   if (!body) return;
   var left = 0;
   if (body.classList.contains('cw-full')) {
+    var side = document.querySelector('.ws-side');
     var sb = document.querySelector('.sidebar');
-    if (sb) {
+    var pick = null;
+    if (side) {
+      try {
+        var cs2 = getComputedStyle(side);
+        if (cs2.display !== 'none' && side.getBoundingClientRect().width > 0) pick = side;
+      } catch (e) { }
+    }
+    if (!pick) pick = sb;
+    if (pick) {
       var cs = null;
-      try { cs = getComputedStyle(sb); } catch (e) { }
-      var r = sb.getBoundingClientRect();
+      try { cs = getComputedStyle(pick); } catch (e) { }
+      var r = pick.getBoundingClientRect();
       if ((!cs || cs.display !== 'none') && r.width > 0) {
-        var mr = 0;
-        try { mr = parseInt(cs.marginRight, 10) || 0; } catch (e) { }
-        left = Math.round(r.right) + mr;
+        if (pick === sb) {
+          // 回落到导航栏时仍按「右缘 + 外边距」，那是工作台让位后的真实起点
+          var mr = 0;
+          try { mr = parseInt(cs.marginRight, 10) || 0; } catch (e) { }
+          left = Math.round(r.right) + mr;
+        } else {
+          left = Math.round(r.left);
+        }
       }
     }
   }
@@ -14760,6 +14802,10 @@ function cwCloseTabPop() {
 }
 function cwOpenTab(t) {
   if (!cwFullOn()) { switchWsTab(t); return; }
+  /* 「编排」就是画布本身：TAB_MAP.flow 指向 #wsFlowBody。
+     把它搬进抽屉 = 从画布自己身上挖走画布，会瞬间空掉、退出全屏也无法还原。
+     菜单里点「编排」的正确语义是「关掉抽屉回到画布」。 */
+  if (t === 'flow') { cwCloseTabPop(); return; }
   var map = (typeof TAB_MAP !== 'undefined') ? TAB_MAP : {};
   var src = document.getElementById(map[t] || '');
   if (!src) { switchWsTab(t); return; }        // 不认识的标签交回原路径，别静默失败
@@ -23399,11 +23445,17 @@ function switchWsTab(t) {
   // 输入框就活在这些面板里，不在这里补一次，切过来时会停在旧高度上。
   growAllTAs();
 }
+/* 记住「这次菜单是从哪颗按钮弹出来的」。
+   bindOutsideClose 的 trigger 原先写死成 #wsTabMore：全屏画布上那颗「⋯」也复用
+   同一个菜单，于是从「⋯」打开时，点外部关闭的逻辑会把「⋯」本身当成「菜单外面」，
+   同一个 click 冒泡到 document 就把菜单关掉 —— 用户看到的就是「点了没反应」。 */
+var _wsMoreAnchor = null;
 function openWsMore(anchor) {
   const menu = document.getElementById('wsMoreMenu');
   // anchor：全屏画布工具条上那颗「⋯」也用同一个菜单，位置按传入按钮算
   const btn = anchor || document.getElementById('wsTabMore');
   if (!menu || !btn) return;
+  _wsMoreAnchor = btn;
   menu.classList.add('open');
   const r = btn.getBoundingClientRect();
   const mw = menu.offsetWidth, mh = menu.offsetHeight;
@@ -23416,7 +23468,7 @@ function openWsMore(anchor) {
   menu.style.top = top + 'px';
   menu.style.left = left + 'px';
 }
-function closeWsMore() { const menu = document.getElementById('wsMoreMenu'); if (menu) menu.classList.remove('open'); }
+function closeWsMore() { const menu = document.getElementById('wsMoreMenu'); if (menu) menu.classList.remove('open'); _wsMoreAnchor = null; }
 document.querySelectorAll('.ws-tab:not(.ws-tab-more)').forEach(tab => { tab.onclick = () => switchWsTab(tab.dataset.tab); });
 document.getElementById('wsTabMore').onclick = function (e) { e.stopPropagation(); const menu = document.getElementById('wsMoreMenu'); if (menu.classList.contains('open')) closeWsMore(); else openWsMore(); };
 document.querySelectorAll('.ws-more-item').forEach(it => { it.onclick = function (e) {
@@ -23432,7 +23484,8 @@ document.querySelectorAll('.ws-more-item').forEach(it => { it.onclick = function
 bindOutsideClose('wsMore', {
   getEl: function () { return document.getElementById('wsMoreMenu'); },
   isOpen: function (menu) { return menu.classList.contains('open'); },
-  trigger: function () { return document.getElementById('wsTabMore'); },
+  // 返回「这次是从哪颗按钮弹出来的」：标签栏的「更多 ▾」或全屏画布工具条的「⋯」
+  trigger: function () { return _wsMoreAnchor || document.getElementById('wsTabMore'); },
   close: function () { closeWsMore(); }
 });
 
@@ -23456,6 +23509,9 @@ bindOutsideClose('wsMore', {
   const collapsedNow = function () { return document.body.classList.contains('ws-side-collapsed'); };
   const applyCollapsed = function (c) {
     document.body.classList.toggle('ws-side-collapsed', c);
+    // 工作区收起/展开会改变画布该从哪儿起铺（.ws-side 的左缘 / 回落到侧栏右缘），
+    // 不同步就左移出一条缝或者多盖一截。跨块调用，运行时解析，函数声明在画布块里。
+    if (typeof cwSyncFullLeft === 'function') { try { cwSyncFullLeft(); } catch (e) { } }
   };
   let initC = storeGetRaw(CKEY, '') === '1';
   applyCollapsed(initC);
@@ -23480,11 +23536,15 @@ bindOutsideClose('wsMore', {
     if (!dragging) return;
     dragging = false; document.body.classList.remove('resizing');
     storeSetRaw(WKEY, String(parseInt(side.style.width, 10) || DEF_W));
+    // 拖完工作区宽度，全屏画布的起铺位置跟着变（.ws-side 的左缘没变，但保险起见重算一次；
+    // 真正会变的是回落路径：收起后再拖别处仍要对齐）
+    if (typeof cwSyncFullLeft === 'function') { try { cwSyncFullLeft(); } catch (e) { } }
   });
   rz.addEventListener('dblclick', function () {
     if (collapsedNow() || isColumn()) return;
     side.style.width = DEF_W + 'px';
     storeSetRaw(WKEY, String(DEF_W));
+    if (typeof cwSyncFullLeft === 'function') { try { cwSyncFullLeft(); } catch (e) { } }
   });
   if (tg) tg.addEventListener('click', function () {
     applyCollapsed(false);
@@ -26055,7 +26115,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.32.0';
+var APP_VERSION = '3.32.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
