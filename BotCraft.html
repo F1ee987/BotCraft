@@ -29,6 +29,10 @@
       压成纯黑（实测 rgb(2,12,12)），用户反馈「一片死黑」。淡一点才透得出光晕。 */
   --scrim:rgba(0,0,0,.30);
   --popover:#22222b;                /* 弹出菜单（更多 ▾ 等）：比窗口底抬亮一档，一眼可辨「浮在上面」 */
+  /* 液态玻璃浮层的基色（2026-10-24）：比 --popover 略透 6%，专供「背后要真模糊」的浮层。
+     不能用 --glass-bg-hover（只剩 56~60% 不透明）：无遮罩浮层直接压在正文上会把底下文字
+     整片透上来。94% 是「读得清」与「看得见背后光晕」的分界，--lg-spec 高光叠上去才有玻璃感。 */
+  --pop-veil:rgba(34,34,43,.94);
   --panel:rgba(28,28,33,.50);       /* 侧栏 / 面板：玻璃层 */
   --panel2:rgba(18,18,22,.26);      /* 聊天区 / 输入区底：更薄的玻璃 */
   --card:rgba(255,255,255,.10);     /* 卡片：10% 白半透底色 —— 6.5% 太薄，压不住高饱和背景，
@@ -224,6 +228,7 @@
     radial-gradient(72% 66% at 14% 92%, rgba(94,234,212,.11), transparent 68%);
   --bg-grain-opacity:.025;          /* 浅色颗粒更淡（原为 html::after 硬值 .025） */
   --popover:#ffffff;                /* 弹出菜单（浅色）：纯白浮层 */
+  --pop-veil:rgba(255,255,255,.95); /* 液态玻璃浮层基色（浅色）：留 5% 让背后的薄荷光晕透出来 */
   --panel:rgba(255,255,255,.52);    /* 玻璃层（浅色玻璃是「白色提亮」而非变暗） */
   --panel2:rgba(255,255,255,.30);
   --card:rgba(255,255,255,.72);
@@ -1791,6 +1796,33 @@ img.md-img{max-width:100%;height:auto}
   display:none;flex-direction:column;background:var(--popover);border:1px solid var(--glass-border);border-radius:var(--r-lg);
   box-shadow:var(--glass-shadow);overflow:hidden}
 .doc-pick.on{display:flex}
+
+/* ==================== 液态玻璃浮层（2026-10-24）====================
+   适用范围（**只有这四类**：压在内容之上、内部是列表的操作浮层）：
+     · .doc-pick        —— 聊天输入区「本次附带文档」
+     · .slash-menu      —— 输入框打 / 唤起的提示词指令菜单
+     · .ch-more-menu    —— 对话头部「⋯」更多操作
+     · .bot-switch-menu —— 头部切换机器人
+   刻意不纳入：.modal / .mbox（整屏弹窗，有暗场遮罩，走自己的实底规则）、
+   .toast（短句提示，已有独立的玻璃写法）、.ctx-edit-menu（右键菜单，只有 3 行，
+   实底更快更清楚）、画布工具条 .cw-tools/.cw-mini（不是列表，且常在缩放层里）。
+
+   视觉表现（四层，缺一层就只是「半透明色块」）：
+     ① 基色 var(--pop-veil)：94~95% 不透明 —— 保证正文不透上来（v3.27.3 的教训）；
+     ② 背后真模糊 var(--glass-filter)：基色留的那 4~6% 透光在这里被糊开，
+        观感是「浮在页面上的磨砂片」而不是「一块实心贴纸」；
+     ③ 折射高光 var(--lg-spec)：150° 斜向高光带，随 [data-glass="on"] 一起增强；
+     ④ 外阴影 + 内描边 var(--lg-shadow)：与全站其余 21 个玻璃面同一套四件套。
+   响应式：只覆盖颜色与材质，不碰 position / width / max-height —— 定位与尺寸仍由
+   各组件自己的规则决定，窄窗行为不变。
+   关闭态：html[data-glass="off"] 会把它们退回实色 --popover（见文件末尾降级清单）。 */
+.doc-pick, .slash-menu, .ch-more-menu, .bot-switch-menu{
+  background:var(--pop-veil);
+  background-image:var(--lg-spec);
+  -webkit-backdrop-filter:var(--glass-filter);
+  backdrop-filter:var(--glass-filter);
+  box-shadow:var(--lg-shadow),inset 0 0 0 1px var(--glass-border);
+}
 .doc-pick-hd{display:flex;align-items:center;gap:var(--sp-4);padding:10px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--sub)}
 .doc-pick-hd b{color:var(--txt);font-weight:640;font-size:12.5px}
 .doc-pick-hd .dp-actions{margin-left:auto;display:flex;gap:var(--sp-3)}
@@ -2801,6 +2833,7 @@ html[data-glass="off"] body .topbar, html[data-glass="off"] body .sidebar, html[
 html[data-glass="off"] body .mbox, html[data-glass="off"] body .toast, html[data-glass="off"] body .cmd-panel,
 html[data-glass="off"] body .pop-menu, html[data-glass="off"] body .ws-more-menu, html[data-glass="off"] body .bot-switch-menu,
 html[data-glass="off"] body .ch-more-menu, html[data-glass="off"] body .modal, html[data-glass="off"] body .modal-box,
+html[data-glass="off"] body .doc-pick, html[data-glass="off"] body .slash-menu,
 html[data-glass="off"] body .ctxp-box,
 html[data-glass="off"] body .stat-card, html[data-glass="off"] body .chart-box, html[data-glass="off"] body .brand-card,
 html[data-glass="off"] body .pub-card, html[data-glass="off"] body .batch-bar, html[data-glass="off"] body .main.scrolled > .page-head,
@@ -2814,6 +2847,7 @@ html[data-glass="off"] body .main, html[data-glass="off"] body .workspace,
 html[data-glass="off"] body .mbox, html[data-glass="off"] body .cmdk-box, html[data-glass="off"] body .toast,
 html[data-glass="off"] body .cmd-panel, html[data-glass="off"] body .pop-menu, html[data-glass="off"] body .ws-more-menu,
 html[data-glass="off"] body .bot-switch-menu, html[data-glass="off"] body .ch-more-menu, html[data-glass="off"] body .modal-box,
+html[data-glass="off"] body .doc-pick, html[data-glass="off"] body .slash-menu,
 html[data-glass="off"] body .ctxp-box, html[data-glass="off"] body .batch-bar,
 html[data-glass="off"] body .stat-card, html[data-glass="off"] body .chart-box, html[data-glass="off"] body .brand-card,
 html[data-glass="off"] body .pub-card, html[data-glass="off"] body .set-nav{
@@ -24689,7 +24723,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.27.3';
+var APP_VERSION = '3.27.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
