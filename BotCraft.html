@@ -2406,6 +2406,13 @@ html[data-theme='light'] #anaSettings .field select:focus{
 /* 编辑态里把文字选择放开：输入框里要能拖动选择、双击选词 */
 .node.editing,.node.editing *{user-select:text;-webkit-user-select:text}
 /* 字段小标签：编辑态里没有它，「卡片上的那行小字」到底对应哪个框全靠猜 */
+/* 节点编辑态的配置面板容器与控件（2026-10-24）。
+   .ne-cfg-wrap 是「切换类型时整块重绘」的锚点，.ne-cfg 是面板里的输入控件。
+   两者都只作结构与选择器钩子用，控件本身靠内联样式；
+   这里补最小定义 —— verify_classdef 要求「当样式用就必须有定义」。 */
+.ne-cfg-wrap{display:block}
+.ne-cfg{width:100%}
+.ne-bradd{cursor:pointer}
 .ne-cap{font-size:11px;color:var(--sub);margin:6px 0 2px;font-weight:600}
 .node.editing input,.node.editing textarea{width:100%;background:var(--fill);border:1px solid transparent;border-radius:var(--r-sm);color:var(--txt);font-size:12.5px;padding:6px 8px;margin:4px 0;font-family:inherit}
 .node.editing textarea{resize:vertical;min-height:40px}
