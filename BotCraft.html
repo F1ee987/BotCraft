@@ -1462,8 +1462,36 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-qa-ft{flex:0 0 auto;padding:var(--sp-4) var(--sp-6);border-top:1px solid var(--line);
   font-size:11px;color:var(--sub)}
 .cw-tbtn.cw-on{background:var(--brand-tint);border-color:var(--brand-tint-2);color:var(--brand-text)}
-.cw-hint{position:absolute;left:var(--sp-6);top:var(--sp-6);display:flex;flex-wrap:wrap;gap:var(--sp-5);max-width:calc(100% - 190px);font-size:var(--fs-2xs);color:var(--sub);pointer-events:none;z-index:2}
-.cw-hint span{display:inline-flex;align-items:center;gap:var(--sp-2)}
+/* 工具按钮的不可用态（2026-10-24）：栈空了还让按钮看起来可点，点了只弹一句 toast，
+   等于「先骗一下再解释」。直接灰掉更诚实；button[disabled] 本身也不会派发 click。 */
+.cw-tbtn:disabled{opacity:.34;cursor:default}
+.cw-tbtn:disabled:hover{background:transparent;color:var(--sub)}
+/* 卡片层级：选中/拖动中的卡要浮到同伴上面。没有这条时，拖一张被后渲染卡片压住的卡，
+   它自己会钻到别人底下（DOM 顺序决定层级），看起来像「拖着拖着卡被吞了」。 */
+.cw-card.sel{z-index:3}
+.cw-card.dragging{z-index:6;cursor:grabbing}
+/* 快捷键提示可收起：8 段文字常显在窄画布里会折成三四行，压住画布左上角 */
+.cw-hint.cw-hint-off{display:none}
+.cw-hint-btn{position:absolute;right:var(--sp-6);top:var(--sp-6);z-index:3;width:22px;height:22px;
+  padding:0;border-radius:var(--r-full);border:1px solid var(--line);background:var(--fill);
+  color:var(--sub);font-size:12px;font-family:inherit;cursor:pointer;line-height:1}
+.cw-hint-btn:hover{color:var(--brand-text);border-color:var(--brand)}
+.cw-hint-btn.on{background:var(--brand-tint);border-color:var(--brand-tint-2);color:var(--brand-text)}
+/* 右键菜单里的对齐组用两列网格：8 项竖排会把菜单拉到 28 行，一屏都放不下 */
+.cw-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-1);padding:var(--sp-1)}
+.cw-mgrid .cw-mi{padding:5px 8px;font-size:var(--fs-2xs);white-space:nowrap}
+/* 提示条的宽度不能按「画布宽 - 190px」算（2026-10-24 实测截图）：
+   画布被拖窄到 ~200px 时这个值只剩 10px，8 段文字全部折成竖排，
+   纵向铺满整个画布、把节点全遮住 —— 看起来像画布坏了。
+   改成只让出左右边距，并加高度上限；画布再窄就整条自动收起（见 .cw-narrow）。 */
+.cw-hint{position:absolute;left:var(--sp-6);top:var(--sp-6);display:flex;flex-wrap:wrap;gap:var(--sp-3);
+  max-width:calc(100% - var(--sp-8) * 2);max-height:calc(100% - 56px);overflow:hidden;
+  font-size:var(--fs-2xs);color:var(--sub);pointer-events:none;z-index:2}
+/* 画布窄到放不下这些提示时自动收起，只留右上角 ? ；用户主动点 ? 则本次会话内展开
+   （cw-hint-force 只在本次会话有效，不进存储 —— 存储里记的是「宽画布下要不要显示」）。 */
+.cw-root.cw-narrow:not(.cw-hint-force) .cw-hint{display:none}
+.cw-root.cw-narrow .cw-hint{max-height:calc(100% - 64px)}
+.cw-hint span{display:inline-flex;align-items:center;gap:var(--sp-2);white-space:nowrap}
 .cw-hint kbd{background:var(--fill);border-radius:var(--r-2xs);padding:1px var(--sp-3);font-family:var(--font-mono);font-size:var(--fs-2xs);color:var(--txt)}
 /* flex-wrap + 限宽：画布比工具条还窄（<≈371px）时宁可折成两行，也别让右端被画布的
    overflow:hidden 切掉 —— 那会连最右那颗「平移模式」按钮都点不到（同属「显示不全」）。
@@ -13296,7 +13324,8 @@ function refreshWorkspace() {
   renderSessUsageTag();
   const b = getBot(currentId); if (!b) return;
   document.getElementById('wsName').textContent = b.n;
-  document.getElementById('wsFlow').textContent = `工作流 · ${b.tag} · ${BotCraftAI.getConfig().model || 'gpt-4o-mini'}`;
+  // b.tag 多数机器人没有（只在模板/草稿路径写），直接插值会在标题上显示「工作流 · undefined」
+  document.getElementById('wsFlow').textContent = `工作流 · ${b.tag || '草稿'} · ${BotCraftAI.getConfig().model || 'gpt-4o-mini'}`;
   const ava = document.getElementById('chatAva'); ava.textContent = botGlyph(b); ava.style.background = b.c;
   const chatName = document.getElementById('chatBotName'); if (chatName) chatName.textContent = b.n;
   const st = document.getElementById('chatStatus');
@@ -13997,37 +14026,61 @@ function cwBranchCount(nd) {
 }
 
 function cwToolsHtml() {
+  /* 每个按钮都带 aria-label：此前只有 title，读屏与自动化都拿不到名字
+     （体检时 10 个按钮的 aria-label 命中数是 0）。
+     2026-10-24 补两个入口：添加节点（原来只能双击/右键空白）、删除选中（原来只能 Del
+     或卡片上那颗小 ✕）。这两件事都不该只有隐藏手势能触发。 */
   return '<div class="cw-tools">' +
-    '<button class="cw-tbtn" data-act="zoomout" title="缩小（Ctrl/⌘+滚轮 也可以）">−</button>' +
-    '<button class="cw-tbtn cw-zval" data-act="zoom100" title="恢复到 1:1">100%</button>' +
-    '<button class="cw-tbtn" data-act="zoomin" title="放大">＋</button>' +
+    '<button class="cw-tbtn" data-act="zoomout" aria-label="缩小" title="缩小（Ctrl/⌘+滚轮 也可以）">−</button>' +
+    '<button class="cw-tbtn cw-zval" data-act="zoom100" aria-label="缩放到百分之百" title="恢复到 1:1（0）">100%</button>' +
+    '<button class="cw-tbtn" data-act="zoomin" aria-label="放大" title="放大">＋</button>' +
     '<span class="cw-tsep"></span>' +
-    '<button class="cw-tbtn" data-act="fit" title="适配视图，把所有节点框进来看（F）">' + svgIcon('expand','solo') + '</button>' +
+    '<button class="cw-tbtn" data-act="fit" aria-label="适配视图" title="适配视图，把所有节点框进来看（F）">' + svgIcon('expand','solo') + '</button>' +
     /* 全屏按钮必须与「适配视图」用**不同**的图标：两者原来都是 svgIcon('expand')，
      一模一样的两个方块并排，用户根本分不清点了哪个（v3.28.0 就被当成「点了全屏没反应」）。 */
-    '<button class="cw-tbtn" data-act="full" title="全屏查看编排与对话（Shift+F / Esc 退出）">'
+    '<button class="cw-tbtn" data-act="full" aria-label="全屏" title="全屏查看编排与对话（Shift+F / Esc 退出）">'
       + '<span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24">'
       + '<rect x="2.5" y="4" width="19" height="16" rx="2.5"/><rect x="8" y="8.5" width="8" height="7" rx="1.5"/>'
       + '</svg></span></button>' +
-    '<button class="cw-tbtn" data-act="layout" title="按执行次序（拓扑序）一字排开，有分支也不会把上下游错位">⠿</button>' +
-    '<button class="cw-tbtn" data-act="aiplot" title="AI 编排：描述需求，自动生成整张流程图，或优化现有画布">' + svgIcon('wand','solo') + '</button>' +
+    '<button class="cw-tbtn" data-act="layout" aria-label="按执行次序排列" title="按执行次序（拓扑序）一字排开，有分支也不会把上下游错位">⠿</button>' +
+    '<button class="cw-tbtn" data-act="addnode" aria-label="添加节点" title="添加节点（也可以双击 / 右键画布空白处）">' + svgIcon('plus','solo') + '</button>' +
+    '<button class="cw-tbtn" data-act="aiplot" aria-label="AI 编排" title="AI 编排：描述需求，自动生成整张流程图，或优化现有画布">' + svgIcon('wand','solo') + '</button>' +
     '<span class="cw-tsep"></span>' +
-    '<button class="cw-tbtn" data-act="undo" title="撤销（Ctrl+Z）">↶</button>' +
-    '<button class="cw-tbtn" data-act="redo" title="重做（Ctrl+Shift+Z）">↷</button>' +
+    '<button class="cw-tbtn" data-act="undo" aria-label="撤销" title="撤销（Ctrl+Z）">↶</button>' +
+    '<button class="cw-tbtn" data-act="redo" aria-label="重做" title="重做（Ctrl+Shift+Z）">↷</button>' +
+    '<button class="cw-tbtn" data-act="del" aria-label="删除选中" title="删除选中的节点（Del）">' + svgIcon('trash','solo') + '</button>' +
     '<span class="cw-tsep"></span>' +
-    '<button class="cw-tbtn" data-act="mode" title="切换：选择模式 / 平移模式（按住空格可临时平移）">' + svgIcon('user','solo') + '</button>' +
+    '<button class="cw-tbtn" data-act="mode" aria-label="切换选择/平移模式" title="切换：选择模式 / 平移模式（按住空格可临时平移）">' + svgIcon('user','solo') + '</button>' +
     '</div>';
 }
+function cwHintOff() {
+  try { return __storage.getItem('botcraft.cwhint') === '0'; } catch (e) { return false; }
+}
+function cwToggleHint() {
+  var on = !cwHintOff();
+  try { __storage.setItem('botcraft.cwhint', on ? '0' : '1'); } catch (e) { }
+  var h = document.getElementById('cwHint'), btn = document.getElementById('cwHintBtn');
+  if (h) h.classList.toggle('cw-hint-off', on);
+  // 窄画布下「自动收起」会盖过用户意图，所以要另记一个本次会话内的强制展开标记
+  var rt = cwSt.root;
+  if (rt) rt.classList.toggle('cw-hint-force', !on);
+  if (btn) { btn.classList.toggle('on', !on); btn.setAttribute('aria-expanded', on ? 'false' : 'true'); }
+  toast(on ? '已收起快捷键提示，点 ? 可再看' : '已显示快捷键提示', 'ok');
+}
 function cwHintHtml() {
-  return '<div class="cw-hint">' +
+  var off = cwHintOff();
+  return '<button class="cw-hint-btn' + (off ? '' : ' on') + '" id="cwHintBtn" type="button"'
+    + ' data-act="hint" aria-label="显示或隐藏快捷键提示" aria-expanded="' + (off ? 'false' : 'true') + '"'
+    + ' title="显示 / 隐藏快捷键提示">?</button>'
+    + '<div class="cw-hint' + (off ? ' cw-hint-off' : '') + '" id="cwHint"'
+    /* 只留 5 条最常用的（2026-10-24）：原来 8 段常显，默认 299px 画布里要折 4~5 行、
+       压住画布上沿一块；而「空格平移 / Ctrl+滚轮 / Del / Ctrl+Z」这些在对应按钮的
+       tooltip 里都有，堆在这里反成噪音。 */
+    + ' title="空格/中键 平移 · Ctrl+滚轮 缩放 · Del 删除 · Ctrl+Z 撤销 · Ctrl+C/V 复制粘贴">' +
     '<span><kbd>拖卡片</kbd>摆位置</span>' +
     '<span><kbd>拖圆点</kbd>连边</span>' +
     '<span><kbd>Shift</kbd>+拖 框选</span>' +
-    '<span><kbd>空格</kbd>/中键 平移</span>' +
-    '<span><kbd>Ctrl</kbd>+滚轮 缩放</span>' +
-    '<span><kbd>双击卡片</kbd>编辑 · <kbd>双击空白</kbd>/<kbd>右键</kbd>加节点</span>' +
-    '<span><kbd>Del</kbd>删除 · <kbd>Ctrl+Z</kbd>撤销</span>' +
-    '<span><kbd>Shift+F</kbd>全屏（同时看提问与回答）</span>' +
+    '<span><kbd>Shift+F</kbd> 全屏</span>' +
     '</div>';
 }
 function cwEmptyHtml() {
@@ -14604,6 +14657,7 @@ function cwPaint(b) {
   }
   const zv = root.querySelector('.cw-zval');
   if (zv) zv.textContent = Math.round(v.s * 100) + '%';
+  cwSyncToolBtns(b);
   cwPaintMini(b, v, W, H);
 }
 
@@ -14674,6 +14728,7 @@ function cwPaintMini(b, v, W, H) {  const mini = cwSt.mini, kids = cwSt.miniKids
 function cwPaintSel(b) {
   const kids = cwSt.stage ? cwSt.stage.children : [];
   for (let i = 0; i < kids.length; i++) kids[i].classList.toggle('sel', cwSt.sel.indexOf(i) >= 0);
+  cwSyncToolBtns(b);      // 选中数变了，「删除选中」的可用性要跟着变
   cwPaintMini(b, cwView(b), (cwSt.root && cwSt.root.clientWidth) || 0, (cwSt.root && cwSt.root.clientHeight) || 0);
 }
 
@@ -14691,7 +14746,19 @@ function cwZoomAt(b, cx, cy, f) {
   const r = root.getBoundingClientRect();
   const px = cx - r.left, py = cy - r.top;
   const ns = Math.min(CW_ZOOM_MAX, Math.max(CW_ZOOM_MIN, v.s * f));
-  if (Math.abs(ns - v.s) < 1e-4) return;
+  if (Math.abs(ns - v.s) < 1e-4) {
+    /* 已经贴到边界：原来这里直接 return，用户连点「放大 / 缩小」什么都不发生，
+       看起来就是按钮坏了（体检时 30% 再点缩小、界面毫无反应）。
+       给一次提示 —— 同一边界连续点不刷屏，缩放回去后自动复位。 */
+    var side = (v.s >= CW_ZOOM_MAX - 1e-4) ? 'max' : ((v.s <= CW_ZOOM_MIN + 1e-4) ? 'min' : '');
+    if (side && cwSt.zoomTip !== side) {
+      cwSt.zoomTip = side;
+      toast(side === 'max' ? '已到最大缩放 250%' : '已到最小缩放 30%', 'warn');
+    }
+    cwSyncToolBtns(b);
+    return;
+  }
+  cwSt.zoomTip = '';
   // 光标下的那个世界点保持不动：wx = (px - v.x) / v.s
   v.x = px - ((px - v.x) / v.s) * ns;
   v.y = py - ((py - v.y) / v.s) * ns;
@@ -14757,6 +14824,12 @@ function cwFitMini() {
   if (!tools) return;
   const bw = root.clientWidth;
   if (!bw) return;                                  // 面板还没显示，量不到就别动
+  /* 窄画布标记：提示条靠它自动收起（放这里是因为它每帧都量一次画布宽，
+     拖动分隔线改宽度时能立刻跟上，不用另建 ResizeObserver）。
+     阈值 260：默认工作台里画布只有 ≈299px（.ws-side 300 减内边距），
+     设成 420 会把「默认状态」也判成窄、提示条永远不出现；
+     260 以下每段文字就开始一字一行了（实测 219px 时 8 段要折十几行）。 */
+  root.classList.toggle('cw-narrow', bw < 260);
   const sp6 = parseFloat(getComputedStyle(root).getPropertyValue('--sp-6')) || 12;
   // 防抖（拖动分隔线时小地图/工具条「抽搐」的根因）：必须先摘掉 cw-cramped 再量
   // 工具条宽度。否则 cramped 折行后 offsetWidth 变小，need>have 判定跟着翻转 ——
@@ -14971,15 +15044,24 @@ function cwAutoLayout(b) {
   const F = window.BotCraftFlow;
   let order = null;
   if (F) { try { F.ensure(b); F.edges(b); order = F.plan(b).order; } catch (e) { } }
+  /* 排布方向按画布的宽高比自适应（2026-10-24）：
+     默认工作台里的画布只有 ≈300×510（窄高型），把 3 个节点一字横排要 930px 宽，
+     cwFit 会一路缩到最小缩放 30%，卡片只剩 30px 高、字完全看不清。
+     窄高型改成纵向排，节点按列铺开，fit 后每张卡能保持接近 1:1 的可读尺寸。 */
+  const _root = cwSt.root;
+  const portrait = !!(_root && _root.clientHeight > _root.clientWidth * 1.1);
+  const DX = CW_LAYOUT_X, DY = 170;      // 纵向步长：卡片高约 100~130，留出行距
   if (order && order.length === b.nodes.length) {
     // 按真实执行次序（拓扑序）铺开，不是数组顺序 —— 有分支时两者并不一样
     order.forEach(function (id, k) {
       const nd = F.byId(b, id);
-      if (nd) { nd.x = k * CW_LAYOUT_X; nd.y = 0; }
+      if (nd) { nd.x = portrait ? 0 : k * DX; nd.y = portrait ? k * DY : 0; }
     });
   } else {
-    b.nodes.forEach(function (n, i) { n.x = i * CW_LAYOUT_X; n.y = 0; });
+    b.nodes.forEach(function (n, i) { n.x = portrait ? 0 : i * DX; n.y = portrait ? i * DY : 0; });
   }
+  // 纵向排布时把提醒说清楚：用户点「按执行次序排成一行」，看到的却是竖着的一列
+  if (portrait) toast('画布偏窄，已按纵向排布（把画布拖宽或按 Shift+F 全屏可横排）', 'ok');
   b.updatedAt = Date.now(); saveBots(); renderNodes(b);
   cwFit(b);
   toast('已按执行次序排成一行', 'ok');
@@ -14996,6 +15078,86 @@ function cwEnsureVisible(b, i) {
   if (sy + bx.h * v.s > H - pad) v.y -= (sy + bx.h * v.s) - (H - pad);
   cwPaint(b);
 }
+/* 工具按钮的可用性（2026-10-24）：撤销/重做/删除/缩放四类按钮随状态灰掉。
+   用签名比较，值没变就不碰 DOM —— cwPaint 每帧都会调它，不能在这里做重活。 */
+function cwSyncToolBtns(b) {
+  var root = cwSt.root;
+  if (!root) return;
+  b = b || cwSt.bot;
+  if (!b) return;
+  var v = cwView(b);
+  var st = {
+    undo: cwUL(b).length > 0,
+    redo: cwRL(b).length > 0,
+    del: (cwSt.sel || []).length > 0,
+    zoomout: v.s > CW_ZOOM_MIN + 1e-4,
+    zoomin: v.s < CW_ZOOM_MAX - 1e-4
+  };
+  var sig = (st.undo ? '1' : '0') + (st.redo ? '1' : '0') + (st.del ? '1' : '0')
+    + (st.zoomout ? '1' : '0') + (st.zoomin ? '1' : '0');
+  /* renderNodes 会重建整块画布 DOM（含 .cw-tools），新按钮的 disabled 默认是 false，
+     而状态签名没变的话下面会直接 return —— 于是刚重建出来的按钮全都「看起来可点」，
+     点下去才发现栈是空的（实测：重建后 zoomout 在 30% 时仍不灰）。
+     所以按钮宿主变了就把缓存作废，强制重新写一遍。 */
+  if (cwSt.btnHost !== root) { cwSt.btnHost = root; cwSt.btnsig = ''; }
+  if (sig === cwSt.btnsig) return;
+  cwSt.btnsig = sig;
+  Object.keys(st).forEach(function (k) {
+    var el = root.querySelector('.cw-tools [data-act="' + k + '"]');
+    if (!el) return;
+    el.disabled = !st[k];
+    el.setAttribute('aria-disabled', st[k] ? 'false' : 'true');
+  });
+}
+
+/* 多选后的对齐 / 分布（2026-10-24）。选中 < 2 个时不做任何事并说明原因，
+   不静默 —— 否则用户点完只看到「什么都没变」。 */
+function cwAlign(kind) {
+  var b = cwSt.bot;
+  if (!b) return;
+  var sel = (cwSt.sel || []).slice();
+  if (sel.length < 2) { toast('先在画布上选中至少 2 个节点再对齐', 'warn'); return; }
+  var items = [];
+  sel.forEach(function (i) {
+    var bx = cwBox(b, i), nd = b.nodes[i];
+    if (bx && nd) items.push({ nd: nd, x: bx.x, y: bx.y, w: bx.w, h: bx.h });
+  });
+  if (items.length < 2) { toast('选中的节点数据异常，无法对齐', 'err'); return; }
+  var minX = Math.min.apply(null, items.map(function (o) { return o.x; }));
+  var maxX = Math.max.apply(null, items.map(function (o) { return o.x + o.w; }));
+  var minY = Math.min.apply(null, items.map(function (o) { return o.y; }));
+  var maxY = Math.max.apply(null, items.map(function (o) { return o.y + o.h; }));
+  var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  cwPushUndo(b);
+  if (kind === 'left') items.forEach(function (o) { o.nd.x = Math.round(cwNum(o.nd.x, 0) + (minX - o.x)); });
+  else if (kind === 'right') items.forEach(function (o) { o.nd.x = Math.round(cwNum(o.nd.x, 0) + (maxX - (o.x + o.w))); });
+  else if (kind === 'top') items.forEach(function (o) { o.nd.y = Math.round(cwNum(o.nd.y, 0) + (minY - o.y)); });
+  else if (kind === 'bottom') items.forEach(function (o) { o.nd.y = Math.round(cwNum(o.nd.y, 0) + (maxY - (o.y + o.h))); });
+  else if (kind === 'hcenter') items.forEach(function (o) { o.nd.x = Math.round(cwNum(o.nd.x, 0) + (cx - (o.x + o.w / 2))); });
+  else if (kind === 'vcenter') items.forEach(function (o) { o.nd.y = Math.round(cwNum(o.nd.y, 0) + (cy - (o.y + o.h / 2))); });
+  else if (kind === 'disth' || kind === 'distv') {
+    var hor = (kind === 'disth');
+    var arr = items.slice().sort(function (p, q) {
+      return hor ? (p.x + p.w / 2) - (q.x + q.w / 2) : (p.y + p.h / 2) - (q.y + q.h / 2);
+    });
+    // 首尾钉住不动，中间的按中心线等间距重新摆
+    var c0 = hor ? (arr[0].x + arr[0].w / 2) : (arr[0].y + arr[0].h / 2);
+    var cl = hor ? (arr[arr.length - 1].x + arr[arr.length - 1].w / 2) : (arr[arr.length - 1].y + arr[arr.length - 1].h / 2);
+    var step = (cl - c0) / (arr.length - 1);
+    arr.forEach(function (o, k) {
+      if (k === 0 || k === arr.length - 1) return;
+      var target = c0 + step * k;
+      if (hor) o.nd.x = Math.round(cwNum(o.nd.x, 0) + (target - (o.x + o.w / 2)));
+      else o.nd.y = Math.round(cwNum(o.nd.y, 0) + (target - (o.y + o.h / 2)));
+    });
+  } else return;
+  var LBL = { left: '左对齐', right: '右对齐', top: '顶对齐', bottom: '底对齐',
+    hcenter: '水平居中', vcenter: '垂直居中', disth: '水平等距分布', distv: '垂直等距分布' };
+  b.updatedAt = Date.now(); saveBots();
+  cwPaint(b);
+  toast('已' + (LBL[kind] || '对齐') + '（' + items.length + ' 个节点）', 'ok');
+}
+
 function cwToolAct(b, act) {
   if (!act) return;
   const root = cwSt.root;
@@ -15009,6 +15171,11 @@ function cwToolAct(b, act) {
   if (act === 'undo') { cwUndo(b); return; }
   if (act === 'redo') { cwRedo(b); return; }
   if (act === 'addnode') { addNodeAtCenter(b); return; }
+  if (act === 'del') { cwDelSel(b); return; }
+  if (act === 'copy') { cwCopy(b); return; }
+  if (act === 'paste') { cwPaste(b); return; }
+  if (act === 'hint') { cwToggleHint(); return; }
+  if (act.indexOf('al-') === 0) { cwAlign(act.slice(3)); return; }
   if (act === 'mode') {
     cwSt.mode = cwSt.mode === 'pan' ? 'select' : 'pan';
     if (root) root.classList.toggle('pan-mode', cwSt.mode === 'pan');
@@ -15246,7 +15413,25 @@ function cwOpenMenu(b, cx, cy) {
     '<div class="cw-mi" data-act="all">全选（' + (b.nodes || []).length + ' 个节点）</div>' +
     '<div class="cw-msep"></div>' +
     '<div class="cw-mi" data-act="undo">↶ 撤销</div>' +
-    '<div class="cw-mi" data-act="redo">↷ 重做</div>';
+    '<div class="cw-mi" data-act="redo">↷ 重做</div>' +
+    /* 选中操作与对齐：这两个能力此前只有快捷键（Ctrl+C/V、Del）或纯手动拖拽，
+       画布上看不到入口（体检确认：工具条里没有删除、没有对齐）。 */
+    '<div class="cw-msep"></div>' +
+    '<div class="cw-mtitle">选中的 ' + (cwSt.sel || []).length + ' 个节点</div>' +
+    '<div class="cw-mi" data-act="copy">⧉ 复制（Ctrl+C）</div>' +
+    '<div class="cw-mi" data-act="paste">⇩ 粘贴（Ctrl+V）</div>' +
+    '<div class="cw-mi" data-act="del">✕ 删除选中（Del）</div>' +
+    '<div class="cw-mtitle">对齐 / 分布（需选中 ≥2 个）</div>' +
+    '<div class="cw-mgrid">' +
+      '<div class="cw-mi" data-act="al-left">⇤ 左对齐</div>' +
+      '<div class="cw-mi" data-act="al-top">⇧ 顶对齐</div>' +
+      '<div class="cw-mi" data-act="al-right">⇥ 右对齐</div>' +
+      '<div class="cw-mi" data-act="al-bottom">⇩ 底对齐</div>' +
+      '<div class="cw-mi" data-act="al-hcenter">↔ 水平居中</div>' +
+      '<div class="cw-mi" data-act="al-vcenter">↕ 垂直居中</div>' +
+      '<div class="cw-mi" data-act="al-disth">⇹ 水平等距</div>' +
+      '<div class="cw-mi" data-act="al-distv">⇳ 垂直等距</div>' +
+    '</div>';
   const m = document.createElement('div');
   m.className = 'cw-menu';
   m.innerHTML = html;
@@ -15412,6 +15597,14 @@ function cwOnMove(e) {
       const el = cwSt.stage.children[o.i];
       if (el) el.style.transform = 'translate(' + nd.x + 'px,' + nd.y + 'px)';
     });
+    // 拖动中的卡提到最上层：否则拖一张被后续卡片压住的卡，它会钻到别人底下
+    if (!d.marked) {
+      d.marked = true;
+      cwSt.sel.forEach(function (k) {
+        const el = cwSt.stage.children[k];
+        if (el) el.classList.add('dragging');
+      });
+    }
     cwPaintSoon(b);
     return;
   }
@@ -15470,6 +15663,9 @@ function cwOnUp(e) {
   }
   cwSt.grabId = 0;
   if (d.mode === 'node') {
+    if (cwSt.stage) {
+      for (let i = 0; i < cwSt.stage.children.length; i++) cwSt.stage.children[i].classList.remove('dragging');
+    }
     if (d.moved) { b.updatedAt = Date.now(); saveBots(); }
     else {
       // 只点选没拖动：把刚才那一步空快照收回来，别让 Ctrl+Z 白跳一下
@@ -15568,6 +15764,7 @@ function cwOnClick(e) {
   if (mid) { cwInsertBetween(b, +mid.getAttribute('data-mid')); return; }
   const tbtn = e.target.closest('.cw-tbtn');
   if (tbtn) { cwToolAct(b, tbtn.getAttribute('data-act')); return; }
+  if (e.target.closest('.cw-hint-btn')) { cwToolAct(b, 'hint'); return; }
   if (e.target.closest('.cw-empty')) {
     const btn = e.target.closest('[data-act=addnode]');
     if (btn) { addNodeAtCenter(b); return; }
@@ -25063,7 +25260,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.28.2';
+var APP_VERSION = '3.29.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
