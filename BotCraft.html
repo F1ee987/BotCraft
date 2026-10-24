@@ -13098,7 +13098,11 @@ function openBot(id) {
   const b = getBot(id); if (!b) return;
   currentId = id;
   // 模板替换是「整批换节点」：id 全变，旧边全成悬空边，必须一并丢掉
-  if (!b.nodes || !b.nodes.length) { b.nodes = DEFAULT_NODES.slice(); dropFlowEdges(b); }
+  if (!b.nodes || !b.nodes.length) { b.nodes = DEFAULT_NODES.slice(); flowDropEdges(b); }
+  // ↑ 2026-10-24 修：原来这里把函数名写成了 dropFlowEdges —— 全文件没有它，
+  // 节点为空的机器人一被打开就 ReferenceError，整个 openBot 中断（工作台打不开）。
+  // 同语义的实现在本文件里叫 flowDropEdges（8747 行，删边 + 删 flowV，
+  // 让 flowEnsure 按新数组顺序重建链）。
   if (!Array.isArray(b.history)) b.history = [];
   _initSessions(b);  // 幂等：补齐会话结构，并把 b.history 对齐到当前会话
   if (!b.channels) b.channels = ['网页嵌入', 'API 接口'];
@@ -24649,7 +24653,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.27.0';
+var APP_VERSION = '3.27.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -24896,11 +24900,26 @@ function safeStart() {
   // 登录/注册入口按钮改用内联 onclick="openAuth(...)"（在全局作用域执行，不依赖事件委托，
   // 彻底避免「file:// / 严格模式 / 作用域隔离」下点击无响应），见 422/423 行。
 }
-safeStart();
-(function syncModel() {
-  // 模型为全局配置：仅在全局 model 为空时用首个有模型记录的机器人初始化一次，不随机器人切换而变化
-  const cfg = BotCraftAI.getConfig();
-  if (cfg && !cfg.model) { const any = bots.find(x => x.model); if (any) BotCraftAI.updateConfig({ model: any.model }); }
+/* 启动初始化必须排到「所有同步脚本都执行完」之后（2026-10-24 修）。
+   safeStart → onLogin → loadBots → normalize 会调 getNodeRole，而 getNodeRole 是**本块之后**
+   的 block4（工作流升级 IIFE）才 window 导出的。原来在本块尾部同步调用 safeStart，
+   登录链路抢在导出之前：每次启动 normalize 都 ReferenceError → 逐条机器人全走
+   salvageBot 挽救路径（nodes 副本不再独立、编排兜底不生效）；首次使用更直接崩在
+   SEED_BOTS.map(normalize) 上，登录后一片空白。setupSettingsUI 同样因
+   loadSearchSettings 未导出而中断（那边靠轮询等待兜着，这条路没人兜）。
+   只加 window.getNodeRole 导出是必要条件，不是充分条件 —— 顺序才是根因。
+   DOMContentLoaded 在所有同步 script 之后触发，顺序有保证。
+   syncModel 必须仍紧跟 safeStart（它读 loadBots 刚填好的 bots），所以一起排进来，
+   两者的相对顺序与语义完全不变。 */
+(function bootAll() {
+  function syncModel() {
+    // 模型为全局配置：仅在全局 model 为空时用首个有模型记录的机器人初始化一次，不随机器人切换而变化
+    const cfg = BotCraftAI.getConfig();
+    if (cfg && !cfg.model) { const any = bots.find(x => x.model); if (any) BotCraftAI.updateConfig({ model: any.model }); }
+  }
+  function boot() { safeStart(); syncModel(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();   // 理论上同步脚本阶段必为 loading；兜底防未来结构调整
 })();
 window.addEventListener('beforeunload', () => { if (currentUser) saveBots(); });
 
