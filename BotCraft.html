@@ -16794,13 +16794,19 @@ function _attDocsGet(b) {
 function _attDocUsable(b) {
   return ((b && b.knowledges) || []).map(function (id) { return kbById(id); }).filter(Boolean);
 }
+/* 候选项（avail）必须是**本机全部知识库**，不能是「已挂载」的那几份。
+   2026-10-24 踩过：avail 取已挂载集合时，用户取消一份文档，那份立刻从面板消失，
+   想勾回来只能跑去工作台重新挂载 —— 与「全选可逆」的诉求自相矛盾。
+   附带集（objs）= 勾选中的；未自定义（_attDocsBy 为 null）时跟随已挂载，
+   与 v3.27.0 之前「挂载即附带」的旧行为一致。 */
 function _attPlan(b) {
-  var avail = _attDocUsable(b);
-  if (!avail.length) return { avail: [], objs: [], custom: false };
+  var avail = (typeof ALL_KB !== 'undefined' && ALL_KB) ? ALL_KB.slice() : [];
   var sel = _attDocsGet(b);
   var custom = !!sel;
-  var objs = custom ? avail.filter(function (r) { return sel.indexOf(r.id) >= 0; }) : avail;
-  return { avail: avail, objs: objs, custom: custom };
+  var objs = custom
+    ? sel.map(function (id) { return kbById(id); }).filter(Boolean)
+    : _attDocUsable(b);
+  return { avail: avail, objs: objs, custom: custom, mounted: _attDocUsable(b) };
 }
 function _attDocBrief(r) { return { id: r.id, n: r.name || '文档', c: String(r.content || '').length }; }
 /* 提问气泡下方的「附带了 N 个文档」。只认 m.docs —— 旧消息没有这个字段，
@@ -16870,12 +16876,12 @@ function renderDocPick(b) {
   var box = document.getElementById('docPick'); if (!box) return;
   b = b || getBot(currentId);
   var plan = _attPlan(b);
-  var head = '<div class="doc-pick-hd"><b>本次附带文档</b><span>' + plan.objs.length + ' / ' + plan.avail.length + '</span>'
+  var head = '<div class="doc-pick-hd"><b>本次附带文档</b><span>已选 ' + plan.objs.length + ' / 共 ' + plan.avail.length + ' 份</span>'
     + '<span class="dp-actions"><button type="button" onclick="docPickAll(1)">全选</button>'
     + '<button type="button" onclick="docPickAll(0)">全不选</button></span></div>';
   if (!plan.avail.length) {
-    box.innerHTML = head + '<div class="doc-pick-empty">这个机器人还没有挂载知识库文档。<br>先在「知识库」页上传，'
-      + '再到工作台的「知识库」标签勾选挂载，这里就有可选项了。</div>';
+    box.innerHTML = head + '<div class="doc-pick-empty">本机还没有任何知识库文档。<br>'
+      + '先到「知识库」页上传 TXT / Markdown / CSV / JSON，这里就有可选项了。</div>';
     return;
   }
   var rows = plan.avail.map(function (r) {
@@ -16889,8 +16895,32 @@ function renderDocPick(b) {
   var total = plan.objs.reduce(function (a, r) { return a + String(r.content || '').length; }, 0);
   var foot = '<div class="doc-pick-ft">将附带 <b>' + plan.objs.length + '</b> 个文档 · 共 ' + fmtCtxLen(total) + ' 字'
     + (total > ATT_DOC_MAX_CHARS ? '（上限 ' + fmtCtxLen(ATT_DOC_MAX_CHARS) + ' 字，末尾截断）' : '')
-    + '。只对下一次提问生效。</div>';
+    + '。勾选状态即知识库挂载状态，会同步到工作台的知识库标签。</div>';
   box.innerHTML = head + '<div class="doc-pick-list">' + rows + '</div>' + foot;
+}
+/* 文档选中的唯一真源是 b.knowledges（2026-10-24 修）。
+   原先这三个操作只改内存里的 _attDocsBy：点「全不选」后聊天面板变成 0，而工作台
+   「知识库」标签的勾选与「已挂载」文字、ctxBar 的「📚 知识库：《…》」都仍按
+   b.knowledges 渲染 —— 同一份数据三处显示对不上，用户看到的就是「没联动 / 显示错误」。
+   何况选择不落盘，刷新或重启后回到「全部挂载」，设了等于没设。
+   现在每个操作都同时写 b.knowledges + saveBots()，并联动刷新四个 UI：
+   文档面板 / 按钮徽标 / 工作台知识库列表(#kbBody) / 上下文摘要(ctxBar)。
+   _attDocsBy 退化为「本次显式指定」的同步镜像，只用于让 entry.docs 按选中集注入。 */
+function _attApply(b, ids, note) {
+  if (!b) return;
+  var uniq = [];
+  (ids || []).forEach(function (id) { if (id && uniq.indexOf(id) < 0) uniq.push(id); });
+  b.knowledges = uniq;
+  b.updatedAt = Date.now();
+  // 立即落盘而不是 saveBots() 的 200ms 防抖：这是用户明确的设置动作，
+  // 「点了全不选、紧接着刷新」不该把设置丢掉（防抖只适合连续编辑场景）。
+  try { flushBots(); } catch (e) { }
+  _attDocsBy[b.id] = uniq.slice();
+  renderDocPick(b); renderDocBadge(b);
+  // 左侧知识库列表与上下文摘要必须跟着刷：它们读的是 b.knowledges，不刷就是旧勾选
+  try { renderKbPanel(b); } catch (e) { }
+  try { renderCtxBar(b); } catch (e) { }
+  if (note) toast(note, 'ok');
 }
 function docPickToggle(inp) {
   var b = getBot(currentId); if (!b || !inp) return;
@@ -16898,19 +16928,20 @@ function docPickToggle(inp) {
   var id = inp.getAttribute('data-doc');
   var i = cur.indexOf(id);
   if (inp.checked) { if (i < 0) cur.push(id); } else if (i >= 0) cur.splice(i, 1);
-  _attDocsBy[b.id] = cur;
-  renderDocPick(b); renderDocBadge(b);
+  _attApply(b, cur);
 }
 function docPickAll(on) {
   var b = getBot(currentId); if (!b) return;
-  _attDocsBy[b.id] = on ? _attDocUsable(b).map(function (r) { return r.id; }) : [];
-  renderDocPick(b); renderDocBadge(b);
+  /* 全选 = 挂载本机全部知识库（含内置文档），而不是只在「当前已挂载」里挑。
+     只在 avail 里全选的话，全不选之后 avail 为空、全选再也点不回来，
+     用户就被困在空状态里，只能跑去工作台重新挂载。 */
+  var ids = on ? (ALL_KB || []).map(function (r) { return r.id; }) : [];
+  _attApply(b, ids, on ? ('已挂载并附带全部 ' + ids.length + ' 份文档') : '已取消全部知识库挂载');
 }
 function docDetach(id) {
   var b = getBot(currentId); if (!b) return;
   var cur = _attPlan(b).objs.map(function (r) { return r.id; }).filter(function (x) { return x !== id; });
-  _attDocsBy[b.id] = cur;
-  renderDocPick(b); renderDocBadge(b);
+  _attApply(b, cur);
 }
 
 async function sendMsg() {
@@ -24653,7 +24684,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.27.1';
+var APP_VERSION = '3.27.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
