@@ -1477,6 +1477,36 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
    于是顶栏右侧被整片压掉、只在最左边露出 logo 与「BotCraft」的前两个字母（截图上的「Bo」），
    看起来像被硬切了一刀。全屏场景下页面切换走左侧图标栏，顶栏没有留存价值，整条收起最干净。 */
 body.cw-flow-full .topbar{display:none}
+/* ===== 全屏画布内的「更多 / 上下文」抽屉（2026-10-24） =====
+   这两个入口原来只存在于 .ws-side 的标签栏和聊天区里，全屏画布一铺开就把它们盖住了；
+   即便点到「更多」，switchWsTab 里那句「t !== 'flow' && cwFullOn() → cwToggleFull(false)」
+   也会当场退掉全屏、切到别的界面 —— 用户看到的就是「跳转 + 闪一下 + 画布没了」。
+   做法：全屏时在画布工具条补两个入口；抽屉挂 body 级而不是 #wsFlowBody 里，
+   因为 renderNodes 会整体重写 body.innerHTML（.cw-qa 就是这么被清掉再重建的），
+   挂进去的抽屉会被连根拔掉、搬进去的面板也跟着丢。面板 DOM 原地搬进搬出，
+   画布本身不重绘、不重新 fit，所以内容与视图状态全程连续。 */
+.cw-tabpop{position:fixed;top:var(--cw-qa-gap);right:var(--cw-qa-gap);bottom:var(--cw-qa-gap);
+  width:min(380px,86vw);display:none;flex-direction:column;z-index:67;
+  border:1px solid var(--glass-border);border-radius:var(--r-xl);
+  background:var(--pop-veil);background-image:var(--lg-spec);
+  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  box-shadow:var(--lg-shadow);overflow:hidden}
+.cw-tabpop.open{display:flex}
+.cw-tabpop-hd{flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-4);
+  padding:var(--sp-5) var(--sp-6);border-bottom:1px solid var(--line)}
+.cw-tabpop-hd b{font-size:12.5px;font-weight:640;color:var(--txt)}
+.cw-tabpop-x{margin-left:auto;width:22px;height:22px;padding:0;display:flex;align-items:center;justify-content:center;
+  border:none;border-radius:var(--r-full);background:transparent;color:var(--sub);
+  font-family:inherit;font-size:13px;cursor:pointer;line-height:1}
+.cw-tabpop-x:hover{background:var(--fill);color:var(--txt)}
+.cw-tabpop-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0}
+/* 面板自身带 padding:16px 和 overflow-y:auto（它是 .ws-side 的 flex 子项）。
+   搬进抽屉后会变成「内外两条滚动条 + 32px 双重内边距」，所以在这里把它的滚动交出去、
+   撑开成自然高度，由抽屉统一滚。padding 沿用面板自己的，不在抽屉这层再写一份。 */
+.cw-tabpop-body>.tab-panel{flex:none;overflow:visible;min-height:auto}
+/* 入口按钮只在全屏出现：非全屏时标签栏就在画布正上方，不必在画布上再重复一份 */
+#wsFlowBody:not(.cw-full) .cw-tbtn[data-act="cwmore"],
+#wsFlowBody:not(.cw-full) .cw-tbtn[data-act="cwctx"]{display:none}
 .cw-qa-hd{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-5) var(--sp-6);
   border-bottom:1px solid var(--line);flex:0 0 auto}
 .cw-qa-hd b{font-size:12.5px;color:var(--txt);font-weight:640}
@@ -14357,6 +14387,11 @@ function cwToolsHtml() {
     '<button class="cw-tbtn" data-act="redo" aria-label="重做" title="重做（Ctrl+Shift+Z）">↷</button>' +
     '<button class="cw-tbtn" data-act="del" aria-label="删除选中" title="删除选中的节点（Del）">' + svgIcon('trash','solo') + '</button>' +
     '<span class="cw-tsep"></span>' +
+    /* 这两个只在全屏出现（CSS 里 :not(.cw-full) 隐藏）：非全屏时标签栏、上下文条就在旁边。
+       全屏下它们是唯一入口 —— 否则「文体/记忆/版本/批量」和上下文详情在全屏里彻底不可达。 */
+    '<button class="cw-tbtn" data-act="cwmore" aria-label="更多面板" title="更多：文体 / 记忆 / 版本 / 批量（在画布内展开，不离开全屏）">⋯</button>' +
+    '<button class="cw-tbtn" data-act="cwctx" aria-label="上下文详情" title="上下文详情：系统 / 历史 / 本会话占用（在画布内展开）">' + svgIcon('puzzle', 'solo') + '</button>' +
+    '<span class="cw-tsep"></span>' +
     '<button class="cw-tbtn" data-act="mode" aria-label="切换选择/平移模式" title="切换：选择模式 / 平移模式（按住空格可临时平移）">' + svgIcon('user','solo') + '</button>' +
     '</div>';
 }
@@ -14643,6 +14678,9 @@ function cwToggleFull(force) {
     try { cwQAWatchStart(); } catch (e) { }
   } else {
     body.classList.remove('cw-full');
+    /* 抽屉必须在画布插回原位之前收掉：搬进去的面板要放回 .ws-side，
+       否则它永久住在抽屉里，回到普通模式点「记忆」只会看到一片空白。 */
+    try { cwCloseTabPop(); } catch (e) { }
     body.classList.remove('cw-qa-off');     // 收起状态是全屏专用的，别留到下次
     document.body.classList.remove('cw-flow-full');   // 顶栏回来
     cwSyncFullLeft();                      // 退出后把变量清回 0（position 已不是 fixed）
@@ -14671,6 +14709,82 @@ function cwToggleFull(force) {
     });
   } catch (e) { cwRefresh(); }
   toast(on ? '已进入全屏编排（Esc 退出）' : '已退出全屏', 'ok');
+}
+/* ===== 全屏画布内的「更多」抽屉（2026-10-24） =====
+   普通模式下「更多 → 文体 / 记忆 / 版本 / 批量」是切换 .ws-side 里的标签面板；
+   全屏画布下没法这么干 —— switchWsTab 里带「t !== 'flow' && cwFullOn() → 退全屏」，
+   一调用画布就没了，用户看到的是整页跳转。这里改成：把目标面板**原地搬进**
+   画布右侧的抽屉里渲染，关闭时按记下的 home 插回原位。
+   为什么搬 DOM 而不是复制一份：这些面板里全是表单与运行时状态（textarea 的草稿、
+   勾选、批量进度条），复制出来的是没有监听、没有数据的空壳；搬运保留状态与监听，
+   来回开关内容不丢，画布也不会重绘（只动这一个节点，不碰 renderNodes）。 */
+var CW_TABPOP_TITLE = {
+  flow: '编排', prompt: '提示词', kb: '知识库', plugin: '插件', publish: '发布',
+  style: '文体', memory: '记忆', versions: '版本', batch: '批量'
+};
+function cwTabPopEl() {
+  var dw = document.getElementById('cwTabPop');
+  if (dw) return dw;
+  dw = document.createElement('div');
+  dw.className = 'cw-tabpop';
+  dw.id = 'cwTabPop';
+  dw.innerHTML = '<div class="cw-tabpop-hd"><b id="cwTabPopTitle">面板</b>' +
+    '<button type="button" class="cw-tabpop-x" id="cwTabPopX" title="关闭（Esc）">✕</button></div>' +
+    '<div class="cw-tabpop-body" id="cwTabPopBody"></div>';
+  var x = dw.querySelector('#cwTabPopX');
+  if (x) x.onclick = function () { cwCloseTabPop(); };
+  // 挂 body 级：renderNodes 会重写 #wsFlowBody 的 innerHTML，挂进去会被连根拔掉
+  document.body.appendChild(dw);
+  return dw;
+}
+/* 把搬进来的面板放回原处。任何关闭路径（✕ / Esc / 退出全屏 / 切页）都必须过这里，
+   否则面板永久留在抽屉里 —— 回普通模式点「记忆」只会看到一片空白。 */
+function cwTabPopRestore() {
+  var dw = document.getElementById('cwTabPop');
+  if (!dw || !dw.__node) return;
+  var src = dw.__node, home = dw.__home;
+  dw.__node = null; dw.__home = null;
+  if (home && home.p && src) {
+    try { home.p.insertBefore(src, home.n); } catch (e) { home.p.appendChild(src); }
+    src.style.display = home.disp || 'none';
+  }
+}
+/* 返回 true = 确实关掉了一个打开的抽屉（Esc 靠它决定「先关抽屉」还是「退全屏」） */
+function cwCloseTabPop() {
+  var dw = document.getElementById('cwTabPop');
+  if (!dw) return false;
+  var had = !!dw.__node;
+  cwTabPopRestore();
+  dw.classList.remove('open');
+  return had;
+}
+function cwOpenTab(t) {
+  if (!cwFullOn()) { switchWsTab(t); return; }
+  var map = (typeof TAB_MAP !== 'undefined') ? TAB_MAP : {};
+  var src = document.getElementById(map[t] || '');
+  if (!src) { switchWsTab(t); return; }        // 不认识的标签交回原路径，别静默失败
+  var dw = cwTabPopEl();
+  if (dw.__node === src) { cwCloseTabPop(); return; }   // 再点同一项 = 收起（与下拉菜单同一个手势）
+  cwTabPopRestore();                                    // 先送走上一个
+  var ti = dw.querySelector('#cwTabPopTitle');
+  if (ti) ti.textContent = CW_TABPOP_TITLE[t] || t;
+  var host = dw.querySelector('#cwTabPopBody');
+  dw.__home = { p: src.parentNode, n: src.nextSibling, disp: src.style.display || 'none' };
+  dw.__node = src;
+  if (host) host.appendChild(src);
+  src.style.display = 'block';
+  var b = cwSt.bot || (typeof getBot === 'function' ? getBot(currentId) : null);
+  try { renderWsTabBody(t, b); } catch (e) { console.warn('[cw] 抽屉面板渲染失败：', e); }
+  // 面板刚从 display:none 变可见，此刻才量得到真实内容高度（提示词 / 批量的输入框靠它自动长高）
+  try { if (typeof growAllTAs === 'function') growAllTAs(); } catch (e) { }
+  dw.classList.add('open');
+}
+function cwToggleMore() {
+  var menu = document.getElementById('wsMoreMenu');
+  if (!menu) return;
+  if (menu.classList.contains('open')) { closeWsMore(); return; }
+  var btn = cwSt.root ? cwSt.root.querySelector('[data-act="cwmore"]') : null;
+  if (typeof openWsMore === 'function') openWsMore(btn);
 }
 
 function renderNodes(b) {
@@ -15619,6 +15733,9 @@ function cwToolAct(b, act) {
   if (act === 'zoom100') { cwResetZoom(b); return; }
   if (act === 'fit') { cwFit(b, cwQAReserved()); return; }
   if (act === 'full') { cwToggleFull(); return; }
+  // 全屏画布内的两个信息入口（非全屏时按钮被 CSS 隐藏，逻辑仍走同一套）
+  if (act === 'cwmore') { cwToggleMore(); return; }
+  if (act === 'cwctx') { try { if (window.openCtxPanel) openCtxPanel(); } catch (e) { } return; }
   if (act === 'layout') { cwAutoLayout(b); return; }
   if (act === 'aiplot') { openAiPlot(); return; }
   if (act === 'undo') { cwUndo(b); return; }
@@ -16270,6 +16387,11 @@ function cwOnKey(e) {
   if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); cwDelSel(b); return; }
   if (k === 'Escape') {
     e.preventDefault();
+    /* 层次：先关画布内抽屉 → 再关「更多」菜单 → 最后才是退全屏。
+       反过来的话，按一次 Esc 就把全屏退了，抽屉还开着但没了宿主，用户会以为卡住。 */
+    if (cwCloseTabPop()) return;
+    var _mm = document.getElementById('wsMoreMenu');
+    if (_mm && _mm.classList.contains('open')) { closeWsMore(); return; }
     // 全屏时 Esc 的第一语义是「退出全屏」——先退全屏，再按一次才清空选中
     if (cwFullOn()) { cwToggleFull(false); return; }
     cwSt.sel = []; cwCloseMenu(); cwPaintSel(b); return;
@@ -23241,6 +23363,18 @@ function updateFavPage() {
 // ==================== Tabs ====================
 const TAB_MAP = { flow: 'wsFlowBody', prompt: 'wsPromptBody', kb: 'wsKbBody', plugin: 'wsPluginBody', style: 'wsStyleBody', memory: 'wsMemoryBody', publish: 'wsPublishBody', versions: 'wsVersionBody', batch: 'wsBatchBody' };
 const SECONDARY_TABS = ['style', 'memory', 'versions', 'batch'];
+/* 标签面板的内容渲染（**只渲染，不碰 display**）。
+   switchWsTab（普通模式切标签）与 cwOpenTab（全屏画布的抽屉）共用这一份，
+   以后新增标签只改这里 —— 两处各写一套迟早会漏掉其中一个。 */
+function renderWsTabBody(t, b) {
+  if (t === 'kb' || t === 'plugin') { if (b) renderKbPanel(b); }
+  if (t === 'prompt') { if (b) { renderPromptTpls(); renderExpertisePanel(b); renderGenParamsPanel(b); } }
+  if (t === 'style') { if (b) renderStyleWorkspacePanel(b); }
+  if (t === 'memory') { if (b) renderMemoryPanel(b); }
+  if (t === 'publish') renderChannels();
+  if (t === 'versions') { if (b) renderVersionPanel(b); }
+  if (t === 'batch') { if (b) renderBatchPanel(b); }
+}
 function switchWsTab(t) {
   document.querySelectorAll('.ws-tab').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.ws-more-item').forEach(x => x.classList.remove('active'));
@@ -23256,13 +23390,7 @@ function switchWsTab(t) {
   Object.values(TAB_MAP).forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
   const target = document.getElementById(TAB_MAP[t]); if (target) target.style.display = 'block';
   const b = getBot(currentId);
-  if (t === 'kb' || t === 'plugin') { if (b) renderKbPanel(b); }
-  if (t === 'prompt') { if (b) { renderPromptTpls(); renderExpertisePanel(b); renderGenParamsPanel(b); } }
-  if (t === 'style') { if (b) renderStyleWorkspacePanel(b); }
-  if (t === 'memory') { if (b) renderMemoryPanel(b); }
-  if (t === 'publish') renderChannels();
-  if (t === 'versions') { if (b) renderVersionPanel(b); }
-  if (t === 'batch') { if (b) renderBatchPanel(b); }
+  renderWsTabBody(t, b);
   // 画布：面板刚从 display:none 切成可见，此刻才量得到 root 的真实尺寸。
   // 不在这一步补画一次，切走再切回来连线会按「尺寸 0」画歪。
   if (t === 'flow' && b) cwRefresh();
@@ -23271,8 +23399,11 @@ function switchWsTab(t) {
   // 输入框就活在这些面板里，不在这里补一次，切过来时会停在旧高度上。
   growAllTAs();
 }
-function openWsMore() {
-  const menu = document.getElementById('wsMoreMenu'); const btn = document.getElementById('wsTabMore'); if (!menu || !btn) return;
+function openWsMore(anchor) {
+  const menu = document.getElementById('wsMoreMenu');
+  // anchor：全屏画布工具条上那颗「⋯」也用同一个菜单，位置按传入按钮算
+  const btn = anchor || document.getElementById('wsTabMore');
+  if (!menu || !btn) return;
   menu.classList.add('open');
   const r = btn.getBoundingClientRect();
   const mw = menu.offsetWidth, mh = menu.offsetHeight;
@@ -23288,7 +23419,16 @@ function openWsMore() {
 function closeWsMore() { const menu = document.getElementById('wsMoreMenu'); if (menu) menu.classList.remove('open'); }
 document.querySelectorAll('.ws-tab:not(.ws-tab-more)').forEach(tab => { tab.onclick = () => switchWsTab(tab.dataset.tab); });
 document.getElementById('wsTabMore').onclick = function (e) { e.stopPropagation(); const menu = document.getElementById('wsMoreMenu'); if (menu.classList.contains('open')) closeWsMore(); else openWsMore(); };
-document.querySelectorAll('.ws-more-item').forEach(it => { it.onclick = function (e) { e.stopPropagation(); switchWsTab(it.dataset.tab); }; });
+document.querySelectorAll('.ws-more-item').forEach(it => { it.onclick = function (e) {
+  e.stopPropagation();
+  const t = it.dataset.tab;
+  closeWsMore();
+  /* 全屏画布下绝不能走 switchWsTab：它开头就带着「t !== 'flow' && cwFullOn() → 退全屏」，
+     一调画布当场消失、整页跳到目标标签 —— 就是「展开时显示了别的画面 / 跳转」的来源。
+     改走画布内抽屉：面板原地搬进浮层渲染，画布不重绘。 */
+  if (typeof cwFullOn === 'function' && cwFullOn() && typeof cwOpenTab === 'function') { cwOpenTab(t); return; }
+  switchWsTab(t);
+}; });
 bindOutsideClose('wsMore', {
   getEl: function () { return document.getElementById('wsMoreMenu'); },
   isOpen: function (menu) { return menu.classList.contains('open'); },
@@ -25915,7 +26055,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.31.1';
+var APP_VERSION = '3.32.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
