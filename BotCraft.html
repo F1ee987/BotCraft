@@ -1472,6 +1472,11 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-qa-tab:hover{border-color:var(--brand);color:var(--brand-text)}
 .cw-qa-tab .i{width:13px;height:13px}
 #wsFlowBody.cw-full.cw-qa-off .cw-qa-tab{display:inline-flex}
+/* 全屏画布时顶栏的处理（2026-10-24）：画布是 fixed + z-index:66，而 .topbar 是
+   z-index:50 的整条 100% 宽玻璃条 —— 层级上画布胜出，但 left 只让出了侧栏那 86px，
+   于是顶栏右侧被整片压掉、只在最左边露出 logo 与「BotCraft」的前两个字母（截图上的「Bo」），
+   看起来像被硬切了一刀。全屏场景下页面切换走左侧图标栏，顶栏没有留存价值，整条收起最干净。 */
+body.cw-flow-full .topbar{display:none}
 .cw-qa-hd{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-5) var(--sp-6);
   border-bottom:1px solid var(--line);flex:0 0 auto}
 .cw-qa-hd b{font-size:12.5px;color:var(--txt);font-weight:640}
@@ -14628,6 +14633,9 @@ function cwToggleFull(force) {
     document.body.appendChild(body);
     body.classList.add('cw-full');
     body.classList.remove('cw-qa-off');
+    // 顶栏整条收起（否则会被画布盖成只剩「Bo」）。必须在 cwSyncFullLeft 之前加：
+    // 顶栏一 display:none，.app 会整体上移，侧栏 rect 变了要按新布局重算左边距。
+    document.body.classList.add('cw-flow-full');
     // 先算左边距再渲染问答条：输入条的居中基准是画布实际宽度
     cwSyncFullLeft();
     try { cwRenderQA(b); } catch (e) { console.warn('[cw] 画布内问答渲染失败：', e); }
@@ -14636,6 +14644,7 @@ function cwToggleFull(force) {
   } else {
     body.classList.remove('cw-full');
     body.classList.remove('cw-qa-off');     // 收起状态是全屏专用的，别留到下次
+    document.body.classList.remove('cw-flow-full');   // 顶栏回来
     cwSyncFullLeft();                      // 退出后把变量清回 0（position 已不是 fixed）
     var home = body.__cwHome;
     body.__cwHome = null;
@@ -25906,7 +25915,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.31.0';
+var APP_VERSION = '3.31.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
