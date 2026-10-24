@@ -1407,7 +1407,15 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
    （深 rgba(0,0,0,.24) / 浅 rgba(120,120,128,.13)，是给 300px 侧栏里「压暗一点」用的）。
    全屏铺满时它就成了半透明蒙版 —— 底下的侧栏、顶栏、聊天区整片透上来，
    实测截图里「创作 / 我的机器人 / 导出 Word」全都浮在画布上。 */
-#wsFlowBody.cw-full{position:fixed;inset:0;z-index:300;padding:0;width:auto;height:auto;
+/* ⚠️ z-index 必须卡在「页面框架之上、全局浮层之下」这一段（2026-10-24 修）：
+   原先写的 300 是全站最高的几个值之一，而 .modal 只有 100 —— 于是全屏画布里点
+   「AI 编排」、设置、知识库、确认框、命令面板，弹窗其实都开了，但被全屏层整个盖住，
+   用户看到的就是「点了没反应」（连 .pop-menu 200 / .cmdk 150 也一样）。
+   现值 66：高于 .topbar(50)/.nav(60)/.sidebar(20)（全屏要盖住页面框架），
+   低于 .doc-pick(70)/.slash-menu(80)/.auth-mask(90)/.modal(100)/.cmdk(150)/
+   .pop-menu(200)/.ctx-edit-menu(400)/.confirmModal(500)/#imgViewer(600)。
+   以后再加全局浮层，层级只要 > 66 就能盖住全屏画布；改这里前先看这段清单。 */
+#wsFlowBody.cw-full{position:fixed;inset:0;z-index:66;padding:0;width:auto;height:auto;
   background:var(--bg);border-radius:0;animation:none;overflow:hidden}
 #wsFlowBody.cw-full .cw-root{right:0;background:var(--bg)}
 .cw-qa{position:absolute;right:var(--cw-qa-gap);top:var(--cw-qa-gap);bottom:var(--cw-qa-gap);
@@ -1416,11 +1424,26 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
   border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--lg-shadow);overflow:hidden}
 #wsFlowBody.cw-full:not(.cw-qa-off) .cw-qa{display:flex}
-/* 浮层底部的提问框：全屏时也给一条输入通道 —— 用户在全屏画布里
-   「只能看不能问」等于把画布做成了截图。发送走主链路（见 cwQASend），
-   附件/文档/插件/流式/会话保存全都复用，不另写一套。 */
-.cw-qa-in{flex:0 0 auto;display:flex;gap:var(--sp-3);align-items:flex-end;
-  padding:var(--sp-4) var(--sp-5);border-top:1px solid var(--line);background:var(--fill)}
+/* 提问条（2026-10-24 改）：原来挤在右侧历史浮层的底部那条小格子里（宽 380 减内边距，
+   只能看到半句话），全屏画布上根本不像「输入框」。现在**独立悬浮在画布中下部**：
+     · .cw-qa-bar 是铺满「历史浮层左侧那片区域」的容器（pointer-events:none），
+       内部横向居中 —— 所以浮层展开时它居中于可见画布，浮层收起时居中于整屏；
+     · 本体 min(720px, 100%)，比原来宽一倍，长问题一眼能看全；
+     · 底色与历史浮层同源（--pop-veil + 真模糊 + 折射高光），压在画布上也不透。
+   发送仍走主链路（cwQASend → #msgInput → sendMsg），附件/文档/插件/流式/落盘全复用。 */
+/* bottom 用 16vh（上限 180px、下限 --cw-qa-gap*4）：距底 48px 太贴边，视觉上像页面页脚，
+   调到这里才落在「中下部」。用 vh 是为了窗口越高、留白越多，比例观感一致；
+   下限保证矮窗口（笔记本分屏 ~600px）不会把输入条顶到画布中间挡住节点。 */
+.cw-qa-bar{position:absolute;left:0;right:calc(var(--cw-qa-w) + var(--cw-qa-gap) * 2);
+  bottom:max(calc(var(--cw-qa-gap) * 4), min(16vh, 180px));z-index:8;display:none;
+  justify-content:center;padding:0 var(--cw-qa-gap);pointer-events:none}
+#wsFlowBody.cw-full .cw-qa-bar{display:flex}
+#wsFlowBody.cw-full.cw-qa-off .cw-qa-bar{right:0}    /* 收起历史后回到整屏居中 */
+.cw-qa-in{pointer-events:auto;width:min(720px,100%);display:flex;gap:var(--sp-3);align-items:flex-end;
+  padding:var(--sp-3) var(--sp-4);border:1px solid var(--glass-border);border-radius:var(--r-lg);
+  background:var(--pop-veil);background-image:var(--lg-spec);
+  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  box-shadow:var(--lg-shadow)}
 .cw-qa-in textarea{flex:1 1 auto;min-height:32px;max-height:96px;resize:none;display:block;
   border-radius:var(--r-md);border:1px solid var(--line);background:var(--popover);color:var(--txt);
   font-size:12.5px;line-height:1.55;padding:var(--sp-3) var(--sp-4);font-family:inherit;outline:none;
@@ -14192,10 +14215,7 @@ function cwQABuild(box) {
     + '<span class="cw-qa-acts"><button type="button" data-qa="bottom">滚到底</button>'
     + '<button type="button" data-qa="hide">收起</button></span></div>'
     + '<div class="cw-qa-body" id="cwQABody"></div>'
-    + '<div class="cw-qa-in"><textarea id="cwQAInput" rows="1" spellcheck="false"'
-    + ' placeholder="在这里直接提问（Enter 发送，Shift+Enter 换行）"></textarea>'
-    + '<button type="button" class="cw-qa-send" id="cwQASendBtn">发送</button></div>'
-    + '<div class="cw-qa-ft">与聊天区同一会话 · 在这里提问等于在聊天区提问</div>';
+    + '<div class="cw-qa-ft">只读历史 · 提问用画布下方那条输入条（与聊天区同一会话）</div>';
   // .cw-qa 是 append 到 #wsFlowBody 的兄弟层，不在 .cw-root 里，
   // cwOnClick 的事件委托覆盖不到它 —— 必须自己绑（用 onclick 赋值，重建不累积）
   box.onclick = function (e) {
@@ -14205,6 +14225,20 @@ function cwQABuild(box) {
     if (act === 'bottom') cwQABottom();
     else if (act === 'hide') cwToggleQA();
   };
+}
+
+/* 提问条骨架（2026-10-24 从历史浮层里搬出来）。
+   为什么必须独立成节点、不能留在 .cw-qa 里：历史浮层收起时整块是 display:none，
+   输入框放在里面就会「收起历史 = 连输入也一起没」。而它的定位基准也不是浮层 ——
+   是整块画布的「中下部」（见 .cw-qa-bar 的 left/right/bottom），所以两者只能平级。 */
+function cwQABarBuild(body) {
+  var bar = document.createElement('div');
+  bar.className = 'cw-qa-bar'; bar.id = 'cwQAIn';
+  bar.innerHTML = '<div class="cw-qa-in">'
+    + '<textarea id="cwQAInput" rows="1" spellcheck="false"'
+    + ' placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"></textarea>'
+    + '<button type="button" class="cw-qa-send" id="cwQASendBtn">发送</button></div>';
+  body.appendChild(bar);
   var ta = document.getElementById('cwQAInput');
   if (ta) {
     ta.addEventListener('keydown', function (e) {
@@ -14215,6 +14249,7 @@ function cwQABuild(box) {
   }
   var btn = document.getElementById('cwQASendBtn');
   if (btn) btn.addEventListener('click', cwQASend);
+  return bar;
 }
 function cwQAGrow() {
   var ta = document.getElementById('cwQAInput');
@@ -14251,6 +14286,8 @@ function cwRenderQA(b) {
     body.appendChild(box);
   }
   if (!document.getElementById('cwQABody')) cwQABuild(box);   // 骨架只在缺失时建
+  // 输入条同样只建一次（它被 renderNodes 的 innerHTML 一并清掉，所以每次都要检查）
+  if (!document.getElementById('cwQAIn')) cwQABarBuild(body);
   var hist = (b.history || []);
   var start = Math.max(0, hist.length - CW_QA_MAX);
   var rounds = 0;
@@ -14278,7 +14315,7 @@ function cwRenderQA(b) {
   var keepTop = sc ? sc.scrollTop : 0;
   if (sc) {
     sc.innerHTML = items || '<div class="cw-qa-empty">当前会话还没有对话。<br>'
-      + '直接在下面的输入框问一句，提问和回答都会出现在这里。</div>';
+      + '用画布下方那条输入框问一句，提问与回答都会出现在这里。</div>';
     sc.scrollTop = keepBottom ? sc.scrollHeight : keepTop;
   }
 }
@@ -14350,6 +14387,7 @@ function cwToggleFull(force) {
     // 浮层与胶囊是全屏专用，退出时清掉（否则会跟着回到 300px 侧栏里）
     var q = document.getElementById('cwQA'); if (q && q.parentNode) q.parentNode.removeChild(q);
     var t = document.getElementById('cwQATab'); if (t && t.parentNode) t.parentNode.removeChild(t);
+    var bar = document.getElementById('cwQAIn'); if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
   }
   cwSyncFullBtn();
   /* 容器尺寸变了：ResizeObserver 也会触发，但它要等下一次布局；
@@ -14818,14 +14856,27 @@ function cwZoomCenter(b, f) {
   const r = root.getBoundingClientRect();
   cwZoomAt(b, r.left + root.clientWidth / 2, r.top + root.clientHeight / 2, f);
 }
+/* 全屏时底部被输入条占掉的高度（cwFit 要把这段让出来，否则节点下半截压在输入条底下）。
+   非全屏没有输入条 → 返回 0，行为与旧版完全一致。 */
+function cwBottomPad() {
+  var bar = document.getElementById('cwQAIn');
+  if (!bar || !bar.offsetHeight) return 0;
+  var b = 0;
+  try { b = parseInt(getComputedStyle(bar).bottom, 10); } catch (e) { b = 0; }
+  return bar.offsetHeight + (isFinite(b) ? b : 48) + 12;
+}
 function cwFit(b, rightPad) {
   const root = cwSt.root;
   b = b || cwSt.bot;
   if (!root || !b || !b.nodes || !b.nodes.length) return;
   const v = cwView(b);
   /* rightPad：右侧被遮挡的宽度（全屏时是问答浮层占的那一列）。
-     不扣掉它就会「fit 之后节点整体偏右、被浮层盖住一半」。 */
-  const W = Math.max(200, (root.clientWidth || 420) - (rightPad || 0)), H = root.clientHeight || 320, pad = 40;
+     不扣掉它就会「fit 之后节点整体偏右、被浮层盖住一半」。
+     botPad：底部被输入条占掉的高度，同理要扣；垂直居中也要在「未被遮挡的区域」里算，
+     否则视觉重心会偏上。 */
+  const botPad = cwBottomPad();
+  const W = Math.max(200, (root.clientWidth || 420) - (rightPad || 0));
+  const H = Math.max(160, (root.clientHeight || 320) - botPad), pad = 40;
   let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
   b.nodes.forEach(function (n, i) {
     const bx = cwBox(b, i);
@@ -25488,7 +25539,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.30.0';
+var APP_VERSION = '3.30.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
