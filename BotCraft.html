@@ -1416,6 +1416,22 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
   border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--lg-shadow);overflow:hidden}
 #wsFlowBody.cw-full:not(.cw-qa-off) .cw-qa{display:flex}
+/* 浮层底部的提问框：全屏时也给一条输入通道 —— 用户在全屏画布里
+   「只能看不能问」等于把画布做成了截图。发送走主链路（见 cwQASend），
+   附件/文档/插件/流式/会话保存全都复用，不另写一套。 */
+.cw-qa-in{flex:0 0 auto;display:flex;gap:var(--sp-3);align-items:flex-end;
+  padding:var(--sp-4) var(--sp-5);border-top:1px solid var(--line);background:var(--fill)}
+.cw-qa-in textarea{flex:1 1 auto;min-height:32px;max-height:96px;resize:none;display:block;
+  border-radius:var(--r-md);border:1px solid var(--line);background:var(--popover);color:var(--txt);
+  font-size:12.5px;line-height:1.55;padding:var(--sp-3) var(--sp-4);font-family:inherit;outline:none;
+  transition:border-color .15s}
+.cw-qa-in textarea:focus{border-color:var(--brand)}
+.cw-qa-in textarea::placeholder{color:var(--sub)}
+.cw-qa-send{flex:0 0 auto;height:32px;padding:0 var(--sp-5);border:none;cursor:pointer;
+  border-radius:var(--r-md);background:var(--brand-fill);color:#fff;font-size:12.5px;
+  font-family:inherit;font-weight:600}
+.cw-qa-send:hover{filter:brightness(1.06)}
+.cw-qa-send:active{transform:scale(.97)}
 /* 收起态的展开胶囊：浮层隐藏时必须留一个入口 */
 .cw-qa-tab{position:absolute;right:var(--cw-qa-gap);top:var(--cw-qa-gap);z-index:9;display:none;
   align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-5);cursor:pointer;
@@ -14067,6 +14083,64 @@ function cwQAHtml(b, hist, start) {
   }
   return items;
 }
+/* 建骨架 —— **只在缺失时建一次**。
+   骨架里含提问框：如果每次刷新都重建整块 innerHTML，用户正在打的字会被清掉，
+   而回答是流式的（cwQAWatch 每 600ms 刷一次），那样根本没法输入。
+   所以骨架（头部 / 输入区 / 脚注）建一次，后续只更新计数与 #cwQABody 的内容。 */
+function cwQABuild(box) {
+  box.innerHTML =
+    '<div class="cw-qa-hd"><b>提问与回答</b><span class="cw-qa-n"></span>'
+    + '<span class="cw-qa-acts"><button type="button" data-qa="bottom">滚到底</button>'
+    + '<button type="button" data-qa="hide">收起</button></span></div>'
+    + '<div class="cw-qa-body" id="cwQABody"></div>'
+    + '<div class="cw-qa-in"><textarea id="cwQAInput" rows="1" spellcheck="false"'
+    + ' placeholder="在这里直接提问（Enter 发送，Shift+Enter 换行）"></textarea>'
+    + '<button type="button" class="cw-qa-send" id="cwQASendBtn">发送</button></div>'
+    + '<div class="cw-qa-ft">与聊天区同一会话 · 在这里提问等于在聊天区提问</div>';
+  // .cw-qa 是 append 到 #wsFlowBody 的兄弟层，不在 .cw-root 里，
+  // cwOnClick 的事件委托覆盖不到它 —— 必须自己绑（用 onclick 赋值，重建不累积）
+  box.onclick = function (e) {
+    var t = (e.target && e.target.closest) ? e.target.closest('[data-qa]') : null;
+    if (!t) return;
+    var act = t.getAttribute('data-qa');
+    if (act === 'bottom') cwQABottom();
+    else if (act === 'hide') cwToggleQA();
+  };
+  var ta = document.getElementById('cwQAInput');
+  if (ta) {
+    ta.addEventListener('keydown', function (e) {
+      // Enter 发送、Shift+Enter 换行（与聊天输入框一致；输入法组字期间不拦）
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); cwQASend(); }
+    });
+    ta.addEventListener('input', cwQAGrow);
+  }
+  var btn = document.getElementById('cwQASendBtn');
+  if (btn) btn.addEventListener('click', cwQASend);
+}
+function cwQAGrow() {
+  var ta = document.getElementById('cwQAInput');
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(96, ta.scrollHeight || 32) + 'px';
+}
+function cwQASend() {
+  var ta = document.getElementById('cwQAInput');
+  if (!ta) return;
+  var v = (ta.value || '').trim();
+  if (!v) { ta.focus(); return; }
+  var inp = document.getElementById('msgInput');
+  if (!inp) return;
+  /* 复用主发送链路：把文本填进真正的 #msgInput 再调 sendMsg()。
+     这样附件、附带文档、插件门控、流式渲染、会话落盘全都不用重写一遍，
+     也不会有「画布里发出去的消息不进历史」这类两套逻辑的分叉。 */
+  if (typeof sending !== 'undefined' && sending) {
+    toast('正在回答这一轮，内容已放进聊天输入框，答完会自动发出', 'warn');
+  }
+  inp.value = v;
+  try { autoGrowInput(); } catch (e) { }
+  ta.value = ''; cwQAGrow();
+  try { sendMsg(); } catch (e) { console.warn('[cw] 画布内发送失败：', e); }
+}
 function cwRenderQA(b) {
   var body = document.getElementById('wsFlowBody');
   if (!body) return;
@@ -14077,28 +14151,15 @@ function cwRenderQA(b) {
     box.className = 'cw-qa'; box.id = 'cwQA';
     body.appendChild(box);
   }
+  if (!document.getElementById('cwQABody')) cwQABuild(box);   // 骨架只在缺失时建
   var hist = (b.history || []);
   var start = Math.max(0, hist.length - CW_QA_MAX);
   var rounds = 0;
   for (var i = 0; i < hist.length; i++) { if (hist[i] && hist[i].role === 'me') rounds++; }
   var items = cwQAHtml(b, hist, start);
   var tail = (start > 0) ? ('最近 ' + (hist.length - start) + ' 条') : ('共 ' + hist.length + ' 条');
-  box.innerHTML =
-    '<div class="cw-qa-hd"><b>提问与回答</b><span class="cw-qa-n">' + rounds + ' 轮 · ' + tail + '</span>'
-    + '<span class="cw-qa-acts"><button type="button" data-qa="bottom">滚到底</button>'
-    + '<button type="button" data-qa="hide">收起</button></span></div>'
-    + '<div class="cw-qa-body" id="cwQABody">'
-    + (items || '<div class="cw-qa-empty">当前会话还没有对话。<br>退出全屏到聊天区问一句，这里会同步显示。</div>')
-    + '</div><div class="cw-qa-ft">只读视图 · 与聊天区同源（当前会话）</div>';
-  // .cw-qa 是 append 到 #wsFlowBody 的兄弟层，不在 .cw-root 里，
-  // cwOnClick 的事件委托覆盖不到它 —— 必须自己绑一次（用 onclick 赋值，重渲染不累积）
-  box.onclick = function (e) {
-    var t = (e.target && e.target.closest) ? e.target.closest('[data-qa]') : null;
-    if (!t) return;
-    var act = t.getAttribute('data-qa');
-    if (act === 'bottom') cwQABottom();
-    else if (act === 'hide') cwToggleQA();
-  };
+  var cnt = box.querySelector('.cw-qa-n');
+  if (cnt) cnt.textContent = rounds + ' 轮 · ' + tail + ((typeof sending !== 'undefined' && sending) ? ' · 正在回答…' : '');
   /* 收起态的展开胶囊：不放在 #cwQA 里面 —— 那个盒子收起时是 display:none，
      放里面等于「收起就再也打不开」。它是 #wsFlowBody 的另一个直属子节点，
      所以 renderNodes 清空 innerHTML 后同样要在本函数里重建。 */
@@ -14111,10 +14172,40 @@ function cwRenderQA(b) {
   tab.innerHTML = svgIcon('chat', 'solo') + '<span>对话 · ' + rounds + ' 轮</span>';
   tab.title = '展开画布内的提问与回答';
   tab.onclick = function () { cwToggleQA(); };
+  /* 只换内容，不动骨架：用户正在输入框里打的字不会被流式刷新清掉。
+     滚动位置也要保：原本就在底部才跟着滚，否则保持原位置（否则翻历史会被一直拽到底）。 */
   var sc = document.getElementById('cwQABody');
-  if (sc) sc.scrollTop = sc.scrollHeight;
+  var keepBottom = sc ? (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 60) : true;
+  var keepTop = sc ? sc.scrollTop : 0;
+  if (sc) {
+    sc.innerHTML = items || '<div class="cw-qa-empty">当前会话还没有对话。<br>'
+      + '直接在下面的输入框问一句，提问和回答都会出现在这里。</div>';
+    sc.scrollTop = keepBottom ? sc.scrollHeight : keepTop;
+  }
 }
 function cwQABottom() { var s = document.getElementById('cwQABody'); if (s) s.scrollTop = s.scrollHeight; }
+
+/* 流式回答的跟随刷新：画布浮层是 b.history 的快照，回答是逐字写进历史的，
+   不跟随就只看到一条空回答。用「条数 + 末条长度 + 是否在生成」做指纹，变了才重渲染。 */
+var _cwQAWatchT = null, _cwQASig = '';
+function cwQAWatchStart() {
+  if (_cwQAWatchT) return;
+  _cwQASig = '';
+  _cwQAWatchT = setInterval(function () {
+    var body = document.getElementById('wsFlowBody');
+    if (!body || !body.classList.contains('cw-full')) { cwQAWatchStop(); return; }
+    var b = cwSt.bot || (typeof getBot === 'function' ? getBot(currentId) : null);
+    if (!b) return;
+    var h = b.history || [];
+    var last = h[h.length - 1] || {};
+    var sig = h.length + '|' + String(last.text || '').length
+      + '|' + ((typeof sending !== 'undefined' && sending) ? '1' : '0');
+    if (sig === _cwQASig) return;
+    _cwQASig = sig;
+    try { cwRenderQA(b); } catch (e) { console.warn('[cw] 画布问答刷新失败：', e); }
+  }, 600);
+}
+function cwQAWatchStop() { if (_cwQAWatchT) { clearInterval(_cwQAWatchT); _cwQAWatchT = null; } }
 function cwToggleQA() {
   var body = document.getElementById('wsFlowBody'); if (!body) return;
   body.classList.toggle('cw-qa-off');
@@ -14146,6 +14237,8 @@ function cwToggleFull(force) {
     body.classList.add('cw-full');
     body.classList.remove('cw-qa-off');
     try { cwRenderQA(b); } catch (e) { console.warn('[cw] 画布内问答渲染失败：', e); }
+    // 回答是流式写进 history 的，浮层是快照 → 不跟随刷新就只看到一条空回答
+    try { cwQAWatchStart(); } catch (e) { }
   } else {
     body.classList.remove('cw-full');
     body.classList.remove('cw-qa-off');     // 收起状态是全屏专用的，别留到下次
@@ -14154,6 +14247,7 @@ function cwToggleFull(force) {
     if (home && home.p) {
       try { home.p.insertBefore(body, home.n); } catch (e) { home.p.appendChild(body); }
     }
+    try { cwQAWatchStop(); } catch (e) { }     // 退出全屏就停掉跟随刷新，别在后台空转
     // 浮层与胶囊是全屏专用，退出时清掉（否则会跟着回到 300px 侧栏里）
     var q = document.getElementById('cwQA'); if (q && q.parentNode) q.parentNode.removeChild(q);
     var t = document.getElementById('cwQATab'); if (t && t.parentNode) t.parentNode.removeChild(t);
@@ -14171,7 +14265,7 @@ function cwToggleFull(force) {
       else cwRefresh();
     });
   } catch (e) { cwRefresh(); }
-  toast(on ? '已进入全屏编排（Esc 退出）' : '已退出全屏', 'ok', 2200);
+  toast(on ? '已进入全屏编排（Esc 退出）' : '已退出全屏', 'ok');
 }
 
 function renderNodes(b) {
@@ -24969,7 +25063,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.28.1';
+var APP_VERSION = '3.28.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
