@@ -1460,6 +1460,19 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   background:var(--pop-veil);background-image:var(--lg-spec);
   -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
   box-shadow:var(--lg-shadow)}
+/* ===== 全屏画布内的浮动框：可拖动 + 悬停提亮（2026-10-25） =====
+   全屏画布上叠着好几块浮层（提问框 / 问答历史 / 面板抽屉 / 上下文详情），原先各自钉死
+   在固定位置。现在都能拖：拖动中提亮并浮到最上层；放下后靠 z-index 记「最近操作过的」，
+   即使叠在一起也点得到（用户要的「避免重叠或提供层级处理」取后者，前者靠默认位本身
+   就不重叠来保证）。落点由 cwDraggable 的 clamp 钳在画布可视区内。
+   ⚠️ .cw-qa-in 的 transform 归拖动器写，所以过渡里不能带 transform —— 否则拖起来发飘。 */
+.cw-drag{cursor:grab}
+.cw-drag.cw-dragging{cursor:grabbing;box-shadow:var(--lg-float)}
+/* 闲置压暗、鼠标移上来（或正在输入 / 正在拖）恢复满不透明：不挡画布，又不会看不见它 */
+.cw-qa-in{opacity:.66;transition:opacity var(--dur-3) var(--ease),box-shadow var(--dur-3) var(--ease)}
+.cw-qa-in:hover,.cw-qa-in:focus-within,.cw-qa-in.cw-dragging{opacity:1}
+.cw-qa{opacity:.82;transition:opacity var(--dur-3) var(--ease)}
+.cw-qa:hover,.cw-qa.cw-dragging{opacity:1}
 .cw-qa-in textarea{flex:1 1 auto;min-height:32px;max-height:96px;resize:none;display:block;
   border-radius:var(--r-md);border:1px solid var(--line);background:var(--popover);color:var(--txt);
   font-size:12.5px;line-height:1.55;padding:var(--sp-3) var(--sp-4);font-family:inherit;outline:none;
@@ -13521,9 +13534,20 @@ function dropLeaveEl() {
   el.style.display = 'none';
 }
 function go(p) {
-  // 全屏画布是 position:fixed 覆盖层，离开工作台必须收起（否则回到该页会莫名全屏）
+  /* 全屏画布是 position:fixed 覆盖层，离开工作台必须收起（否则回到该页会莫名全屏）。
+     2026-10-25：收起只是「临时」—— 记住用户本来就是全屏的，回到工作台时自动恢复。
+     不然「切去看一眼知识库再点回来」就把全屏弄丢了，等于每次都要重按一次 Shift+F。
+     keepWanted 那个参数就是为这条路径准备的：只有切页触发的退出才保留意愿，
+     用户自己按 Esc / 再点一次全屏按钮仍然是「真的不想全屏了」。 */
   if (p !== 'workspace' && typeof cwFullOn === 'function' && cwFullOn()) {
-    try { cwToggleFull(false); } catch (e) { }
+    try {
+      if (typeof cwSt === 'object' && cwSt) cwSt.fullWanted = true;
+      cwToggleFull(false, true);
+    } catch (e) { }
+  }
+  if (p === 'workspace') {
+    // 回工作台：等页面真正可见（交叉淡化已铺开）再恢复全屏，否则量到的还是折叠尺寸
+    setTimeout(function () { try { cwRestoreFullWanted(); } catch (e) { } }, 90);
   }
   var _navEl = document.querySelector('.nav'); if (_navEl) _navEl.classList.remove('open');
   /* 侧栏 / 顶栏的选中态立刻更新：点击反馈必须即时，不该等动画 */
@@ -13928,6 +13952,15 @@ function openCtxPanel() {
       '<span class="ctxp-x" onclick="closeCtxPanel()" title="关闭（Esc）">✕</span></div>' +
       '<div class="ctxp-body" id="ctxPanelBody"></div></div>';
     document.body.appendChild(host);
+    /* 上下文详情也可拖（从标题栏）。默认位在提问框上方，但内容长的时候往上一拖就能
+       腾出画布看节点 —— 落点同样钳在画布可视区内。 */
+    if (typeof cwDraggable === 'function') {
+      cwSt.ctxDrag = cwDraggable(host.querySelector('.ctxp-box'), {
+        handle: host.querySelector('.ctxp-hd'),
+        pos: cwSt.ctxDragPos || null,
+        onDrop: function (x2, y2) { cwSt.ctxDragPos = { x: x2, y: y2 }; }
+      });
+    }
     if (!window._ctxEscBound) {
       window._ctxEscBound = true;
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCtxPanel(); });
@@ -14600,6 +14633,95 @@ function cwSyncFullLeftAnim(ms) {
     if (cwSt.roPending) { cwSt.roPending = false; try { cwRefresh(); } catch (e) { } }
   })();
 }
+/* ===== 全屏画布内的浮动框拖动器（2026-10-25）=====
+   为什么不引拖拽库：只有 4 块浮层要拖，规则还各不一样（提问框要排除 textarea、
+   抽屉要跟着宽度走），引库反而多一层适配。
+   三个必须做对的点：
+     ① 落点钳在画布可视区内 —— 拖出画布等于把框弄丢了，用户再也找不回来；
+     ② 按指针「位移增量」算，不是拿 clientX 直接定位 —— 否则一按下框就跳到指针底下；
+     ③ clamp 的基准 rect 必须在 transform:none 下量 —— 带着已有位移量会把边界算错一圈。
+   层级：拖动/悬停时把该框提到最近一层。浮层之间允许重叠，但「刚碰过的永远在最上面」，
+   所以叠起来也点得到（用户给的两个选项里取「层级处理」，不强行挤开 —— 挤开会在
+   用户手底下抢位置，比重叠更烦）。 */
+var _cwZTop = 10;
+function cwRaise(el) {
+  if (!el || !el.style) return;
+  _cwZTop = _cwZTop >= 30 ? 11 : _cwZTop + 1;
+  el.style.zIndex = String(_cwZTop);
+}
+function cwDraggable(el, opt) {
+  if (!el) return null;
+  opt = opt || {};
+  var host = opt.host || document.getElementById('wsFlowBody');
+  var raiseEl = opt.raiseEl || el;
+  /* handle：只有这里按下才拖。面板类必须用它 —— 内容区里有滚动容器，
+     整块可拖会把「滚动看历史」吃掉（pointerdown 被 preventDefault 后滚轮也没了）。
+     输入类（提问框）反过来：整块可拖，靠 skip 把 textarea / 按钮排掉。 */
+  var handle = opt.handle || el;
+  if (!handle) handle = el;
+  var skip = opt.skip || 'textarea,input,button,a,select,label';
+  var st = null;
+  var cur = opt.pos ? { x: opt.pos.x || 0, y: opt.pos.y || 0 } : { x: 0, y: 0 };
+
+  function paint(x, y) {
+    cur.x = Math.round(x); cur.y = Math.round(y);
+    el.style.transform = (cur.x || cur.y) ? 'translate(' + cur.x + 'px,' + cur.y + 'px)' : '';
+  }
+  function baseRect() {
+    var keep = el.style.transform;
+    el.style.transform = 'none';
+    var r = el.getBoundingClientRect();
+    el.style.transform = keep;
+    return r;
+  }
+  function clampTo(x, y, base) {
+    var hr = host ? host.getBoundingClientRect()
+      : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    var lo = hr.left - base.left, hi = hr.right - base.right;
+    var loY = hr.top - base.top, hiY = hr.bottom - base.bottom;
+    // 元素比可视区还宽/高时 lo > hi：此时贴住一边，别把它挤到画布外
+    if (lo > hi) { var t = lo; lo = hi; hi = t; }
+    if (loY > hiY) { var t2 = loY; loY = hiY; hiY = t2; }
+    return { x: Math.min(Math.max(x, lo), hi), y: Math.min(Math.max(y, loY), hiY) };
+  }
+
+  el.classList.add('cw-drag');
+  paint(cur.x, cur.y);
+  el.addEventListener('pointerenter', function () { cwRaise(raiseEl); });
+  handle.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    if (e.target && e.target.closest && e.target.closest(skip)) return;  // 输入/按钮照常工作
+    var base = baseRect();
+    var p = clampTo(cur.x, cur.y, base);       // 窗口可能变小了：先按当前位移校正一次
+    if (p.x !== cur.x || p.y !== cur.y) paint(p.x, p.y);
+    st = { px: e.clientX, py: e.clientY, x0: cur.x, y0: cur.y, base: base, id: e.pointerId, cap: handle };
+    el.classList.add('cw-dragging');
+    cwRaise(raiseEl);
+    try { handle.setPointerCapture(e.pointerId); } catch (err) { }
+    e.preventDefault();                         // 防止拖出一片文字选区
+  });
+  el.addEventListener('pointermove', function (e) {
+    if (!st || e.pointerId !== st.id) return;
+    var p = clampTo(st.x0 + (e.clientX - st.px), st.y0 + (e.clientY - st.py), st.base);
+    paint(p.x, p.y);
+  });
+  function endDrag(e) {
+    if (!st || (e && e.pointerId !== st.id)) return;
+    var moved = Math.abs(cur.x - st.x0) > 2 || Math.abs(cur.y - st.y0) > 2;
+    var cap = st.cap || el;
+    st = null;
+    el.classList.remove('cw-dragging');
+    if (e) { try { cap.releasePointerCapture(e.pointerId); } catch (err) { } }
+    if (moved && opt.onDrop) { try { opt.onDrop(cur.x, cur.y); } catch (err) { } }
+  }
+  el.addEventListener('pointerup', endDrag);
+  el.addEventListener('pointercancel', endDrag);
+  return {
+    pos: function () { return { x: cur.x, y: cur.y }; },
+    reset: function () { paint(0, 0); },
+    reclamp: function () { var p = clampTo(cur.x, cur.y, baseRect()); paint(p.x, p.y); }
+  };
+}
 function cwFullOn() {
   var body = document.getElementById('wsFlowBody');
   return !!(body && body.classList.contains('cw-full'));
@@ -14671,6 +14793,17 @@ function cwQABarBuild(body) {
   }
   var btn = document.getElementById('cwQASendBtn');
   if (btn) btn.addEventListener('click', cwQASend);
+  /* 可拖动（2026-10-25）：容器 .cw-qa-bar 仍负责居中布局（left/right/bottom + flex 居中），
+     位移只加在内层 .cw-qa-in 的 transform 上 —— 不破坏居中基准，也不影响 cwBottomPad()
+     量到的高度。位置只存内存：退出全屏回默认位，切页回来还在原处。 */
+  var inEl = bar.querySelector('.cw-qa-in');
+  if (inEl && typeof cwDraggable === 'function') {
+    cwSt.qaDrag = cwDraggable(inEl, {
+      raiseEl: bar,
+      pos: cwSt.qaDragPos || null,
+      onDrop: function (x, y) { cwSt.qaDragPos = { x: x, y: y }; }
+    });
+  }
   return bar;
 }
 function cwQAGrow() {
@@ -14708,6 +14841,17 @@ function cwRenderQA(b) {
     body.appendChild(box);
   }
   if (!document.getElementById('cwQABody')) cwQABuild(box);   // 骨架只在缺失时建
+  /* 可拖动，但只能从标题栏拖：内容区是滚动容器（看历史），整块可拖会把滚动吃掉。
+     必须排在 cwQABuild 之后 —— 骨架建好才找得到 .cw-qa-hd，否则 handle 落回整块。
+     位置只存内存：切页回来还在原处，退出全屏回默认位。 */
+  if (!box.__cwDragOk && typeof cwDraggable === 'function') {
+    box.__cwDragOk = 1;
+    cwSt.histDrag = cwDraggable(box, {
+      handle: box.querySelector('.cw-qa-hd'),
+      pos: cwSt.histDragPos || null,
+      onDrop: function (x, y) { cwSt.histDragPos = { x: x, y: y }; }
+    });
+  }
   // 输入条同样只建一次（它被 renderNodes 的 innerHTML 一并清掉，所以每次都要检查）
   if (!document.getElementById('cwQAIn')) cwQABarBuild(body);
   var hist = (b.history || []);
@@ -14778,12 +14922,16 @@ function cwSyncFullBtn() {
     btn.setAttribute('title', on ? '退出全屏（Esc / Shift+F）' : '全屏查看编排与对话（Shift+F / Esc 退出）');
   }
 }
-function cwToggleFull(force) {
+function cwToggleFull(force, keepWanted) {
   var body = document.getElementById('wsFlowBody');
   var b = cwSt.bot || getBot(currentId);
   if (!body) return;
   var on = (force === undefined) ? !body.classList.contains('cw-full') : !!force;
   if (on === body.classList.contains('cw-full')) return;     // 状态没变就不做事
+  /* 「用户本来想全屏吗」只在两种情况下保留：进全屏（当然是），
+     以及切页导致的临时收起（keepWanted）。其余退出路径都是用户真的不想全屏了。 */
+  if (on) { try { if (cwSt) cwSt.fullWanted = false; } catch (e) { } }
+  else if (!keepWanted) { try { if (cwSt) cwSt.fullWanted = false; } catch (e) { } }
   if (on) {
     /* 关键：先记原位，再把节点挂到 <body> 下（portal）。
        只切 class 是不够的 —— 祖先 .ws-side 有 backdrop-filter，它会创建包含块，
@@ -14850,6 +14998,21 @@ var CW_TABPOP_TITLE = {
   flow: '编排', prompt: '提示词', kb: '知识库', plugin: '插件', publish: '发布',
   style: '文体', memory: '记忆', versions: '版本', batch: '批量'
 };
+/* 回到工作台时恢复「上次因切页被临时收起」的全屏（cwSt.fullWanted）。
+   只由 go('workspace') 调用，且延迟执行 —— go 里有交叉淡化，页面刚切成可见时
+   量到的尺寸才是最终值（cwSyncFullLeft 与 cwFit 都依赖它）。 */
+function cwRestoreFullWanted() {
+  if (typeof cwSt !== 'object' || !cwSt || !cwSt.fullWanted) return;
+  if (typeof cwFullOn === 'function' && cwFullOn()) { cwSt.fullWanted = false; return; }
+  var body = document.getElementById('wsFlowBody');
+  if (!body) return;
+  cwSt.fullWanted = false;
+  // 画布标签不在前台就先切过去，否则「恢复了全屏却看不到画布」
+  if (body.style.display === 'none') {
+    try { switchWsTab('flow'); } catch (e) { }
+  }
+  try { cwToggleFull(true); } catch (e) { }
+}
 function cwTabPopEl() {
   var dw = document.getElementById('cwTabPop');
   if (dw) return dw;
@@ -14863,6 +15026,15 @@ function cwTabPopEl() {
   if (x) x.onclick = function () { cwCloseTabPop(); };
   // 挂 body 级：renderNodes 会重写 #wsFlowBody 的 innerHTML，挂进去会被连根拔掉
   document.body.appendChild(dw);
+  /* 抽屉可拖：从标题栏拖，内容区留给面板自己滚动。host 用画布矩形，所以拖不出画布，
+     也飘不进左侧图标栏那片。位置只存内存。 */
+  if (typeof cwDraggable === 'function') {
+    cwSt.tabDrag = cwDraggable(dw, {
+      handle: dw.querySelector('.cw-tabpop-hd'),
+      pos: cwSt.tabDragPos || null,
+      onDrop: function (x2, y2) { cwSt.tabDragPos = { x: x2, y: y2 }; }
+    });
+  }
   return dw;
 }
 /* 把搬进来的面板放回原处。任何关闭路径（✕ / Esc / 退出全屏 / 切页）都必须过这里，
@@ -26264,7 +26436,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.34.0';
+var APP_VERSION = '3.35.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
