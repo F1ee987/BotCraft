@@ -1493,6 +1493,16 @@ body.cw-flow-full .topbar{display:none}
 body.cw-flow-full #page-workspace .ws-side,
 body.cw-flow-full #page-workspace .ws-resizer,
 body.cw-flow-full #page-workspace .ws-main{visibility:hidden}
+/* 全屏画布下 .sidebar 必须浮到画布之上(67 > 66)。
+   收起态的悬停提示是侧栏的伪元素，而 `.sidebar{z-index:20}` 自己就是一个层叠上下文 ——
+   伪元素里写的 z-index:300 只在侧栏内部有效，整体仍被画布盖住。于是 tooltip 主体
+   被画布吞掉、只剩那颗三角箭头落在侧栏与画布之间那条缝里(约 11px)，看起来就是一个
+   孤零零的白三角。提到 67 之后整块 tooltip 正常压住画布显示；侧栏本身与画布不重叠，
+   视觉与点击行为都不变。 */
+body.cw-flow-full .sidebar{z-index:67}
+/* 全屏时「更多」菜单里不再列「编排」：它就是眼前这张画布，列进去点了也只是关掉菜单，
+   看着像“没反应”。菜单从 9 项变 8 项，分组标题照旧。 */
+body.cw-flow-full #wsMoreMenu .ws-more-item[data-tab="flow"]{display:none}
 /* ===== 全屏画布内的「更多 / 上下文」抽屉（2026-10-24） =====
    这两个入口原来只存在于 .ws-side 的标签栏和聊天区里，全屏画布一铺开就把它们盖住了；
    即便点到「更多」，switchWsTab 里那句「t !== 'flow' && cwFullOn() → cwToggleFull(false)」
@@ -1583,6 +1593,15 @@ body.cw-flow-full #page-workspace .ws-main{visibility:hidden}
 .cw-tbtn{min-width:28px;height:28px;padding:0 var(--sp-4);border-radius:var(--r-md);border:none;background:transparent;color:var(--sub);font-size:var(--fs-sm);font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .cw-tbtn:hover{background:var(--hover);color:var(--txt)}
 .cw-tbtn.on{background:var(--brand-tint);color:var(--brand-text)}
+/* 「更多」是画布工具条上唯一一条「能进到别的工作台面板」的路，不该和一堆图标按钮
+   长得一模一样（用户反馈找不到）。给品牌色淡底 + 文字标签 + caret。
+   窄画布（cw-narrow，<260px）只留 caret，把宽度让给缩放与撤销这些高频按钮。 */
+.cw-tbtn.cw-tbtn-more{background:var(--brand-tint);color:var(--brand-text);font-weight:600;
+  gap:var(--sp-1);padding:0 var(--sp-3)}
+.cw-tbtn.cw-tbtn-more:hover{background:var(--brand-tint-2);color:var(--brand-text)}
+.cw-tbtn-more .cw-tb-txt{font-size:var(--fs-2xs);line-height:1;letter-spacing:.02em}
+.cw-tbtn-more .cw-tb-caret{width:12px;height:12px;flex:0 0 12px;display:block}
+.cw-root.cw-narrow .cw-tbtn-more .cw-tb-txt{display:none}
 .cw-zval{min-width:54px;font-variant-numeric:tabular-nums}
 .cw-tsep{width:1px;height:16px;background:var(--line);margin:0 var(--sp-2)}
 .cw-mini{position:absolute;right:var(--sp-6);bottom:var(--sp-6);width:168px;height:108px;border-radius:var(--r-lg);background:var(--glass-bg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);overflow:hidden;z-index:6;cursor:pointer}
@@ -2859,6 +2878,12 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .ctx-mini{font-size:11.5px;color:var(--sub);display:flex;gap:var(--sp-5);flex-wrap:wrap}
 /* 上下文详情浮层 */
 .ctxp{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5)}
+/* 全屏画布：上下文详情不居中弹窗（那会把整块画布压暗盖住），改为贴在提问框正上方，
+   像一个上弹的 popover —— 说话的位置就在输入框，看完直接接着问。
+   位置与最大高度由 cwPlaceCtxPanel() 按 #cwQAIn 的实时 rect 写入，输入框长高、
+   窗口缩放、进出全屏都跟得上；遮罩改透明，画布全程可见，点空白处仍然关闭。 */
+.ctxp.cw-ctx-up{align-items:flex-end;background:transparent}
+.ctxp.cw-ctx-up .ctxp-box{width:min(560px,92%)}
 .ctxp.on{display:flex}
 .ctxp-box{width:min(780px,93vw);max-height:86vh;display:flex;flex-direction:column;border-radius:var(--r-2xl);background:var(--glass-bg-hover);border:1px solid var(--glass-border);box-shadow:var(--lg-shadow);overflow:hidden}
 .ctxp-hd{display:flex;align-items:center;gap:var(--sp-5);padding:14px 18px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600;color:var(--txt)}
@@ -13873,6 +13898,25 @@ function renderCtxBar(b) {
   el.innerHTML = html;
 }
 
+/* 全屏画布下把上下文详情摆到提问框正上方（popover 形态）；非全屏仍是居中弹窗。
+   位置不能写死在 CSS 里：提问框高度随输入内容在几十像素之间变，窗口也会缩放，
+   所以每次打开 / 窗口尺寸变化 / 进出全屏都按 #cwQAIn 的实时 rect 重算一次。
+   maxHeight 同步压在提问框上沿之上，面板再高也不会顶出屏幕。 */
+function cwPlaceCtxPanel() {
+  var host = document.getElementById('ctxPanel');
+  if (!host) return;
+  var box = host.querySelector('.ctxp-box');
+  var full = false;
+  try { full = (typeof cwFullOn === 'function') && cwFullOn(); } catch (e) { }
+  host.classList.toggle('cw-ctx-up', !!full);
+  if (!box) return;
+  if (!full) { box.style.marginBottom = ''; box.style.maxHeight = ''; return; }
+  var bar = document.getElementById('cwQAIn');
+  var vh = window.innerHeight || document.documentElement.clientHeight || 600;
+  var top = bar ? Math.round(bar.getBoundingClientRect().top) : Math.round(vh * 0.8);
+  box.style.marginBottom = Math.max(12, vh - top + 12) + 'px';
+  box.style.maxHeight = Math.max(180, top - 24) + 'px';
+}
 function openCtxPanel() {
   var host = document.getElementById('ctxPanel');
   if (!host) {
@@ -13888,8 +13932,14 @@ function openCtxPanel() {
       window._ctxEscBound = true;
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCtxPanel(); });
     }
+    // 窗口缩放要重新贴到提问框上方（面板开着的时候才真正动手，没开就直接 return）
+    if (!window._ctxPlaceBound) {
+      window._ctxPlaceBound = true;
+      window.addEventListener('resize', function () { cwPlaceCtxPanel(); });
+    }
   }
   host.classList.add('on');
+  cwPlaceCtxPanel();        // 必须在 .on 之后：display:none 的盒子量不到位置
   renderCtxPanel();
 }
 function closeCtxPanel() { var h = document.getElementById('ctxPanel'); if (h) h.classList.remove('on'); }
@@ -14415,7 +14465,10 @@ function cwToolsHtml() {
     '<span class="cw-tsep"></span>' +
     /* 这两个只在全屏出现（CSS 里 :not(.cw-full) 隐藏）：非全屏时标签栏、上下文条就在旁边。
        全屏下它们是唯一入口 —— 否则「文体/记忆/版本/批量」和上下文详情在全屏里彻底不可达。 */
-    '<button class="cw-tbtn" data-act="cwmore" aria-label="更多面板" title="更多：文体 / 记忆 / 版本 / 批量（在画布内展开，不离开全屏）">⋯</button>' +
+    '<button class="cw-tbtn cw-tbtn-more" data-act="cwmore" aria-label="更多面板" title="更多：提示词 / 知识库 / 插件 / 发布 / 文体 / 记忆 / 版本 / 批量（在画布内展开，不离开全屏）">'
+      + '<span class="cw-tb-txt">更多</span>'
+      + '<svg class="cw-tb-caret" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 6 8 10.2 12.2 6"/></svg>'
+      + '</button>' +
     '<button class="cw-tbtn" data-act="cwctx" aria-label="上下文详情" title="上下文详情：系统 / 历史 / 本会话占用（在画布内展开）">' + svgIcon('puzzle', 'solo') + '</button>' +
     '<span class="cw-tsep"></span>' +
     '<button class="cw-tbtn" data-act="mode" aria-label="切换选择/平移模式" title="切换：选择模式 / 平移模式（按住空格可临时平移）">' + svgIcon('user','solo') + '</button>' +
@@ -14781,6 +14834,8 @@ function cwToggleFull(force) {
       else cwRefresh();
     });
   } catch (e) { cwRefresh(); }
+  // 上下文详情若正开着：进出全屏后要重新贴到提问框上方（退出时回到居中弹窗）
+  try { if (typeof cwPlaceCtxPanel === 'function') cwPlaceCtxPanel(); } catch (e) { }
   toast(on ? '已进入全屏编排（Esc 退出）' : '已退出全屏', 'ok');
 }
 /* ===== 全屏画布内的「更多」抽屉（2026-10-24） =====
@@ -26209,7 +26264,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.33.0';
+var APP_VERSION = '3.34.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
