@@ -1510,6 +1510,18 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 body.cw-flow-full #page-workspace .ws-side,
 body.cw-flow-full #page-workspace .ws-resizer,
 body.cw-flow-full #page-workspace .ws-main{visibility:hidden}
+/* 「回工作台、且马上就要恢复全屏」的那一小段过渡（2026-10-25）。
+   时序是这样的：go('workspace') → applyPage 让 #page-workspace 可见（此刻画布还是普通模式，
+   聊天列正常显示）→ 等交叉淡化结束（ms+80 ≈ 320ms）→ cwRestoreFullWanted 才进全屏。
+   中间这三百多毫秒里聊天窗口是**真实可见**的，进全屏的一瞬间又被整片盖住 ——
+   用户看到的就是「切回来先闪一下聊天窗口」。
+   修法：在 go() 决定回工作台的那一刻就把普通模式的工作区藏住（visibility 不改变布局，
+   所以后面恢复全屏时 cwSyncFullLeft 量到的 rect 仍然正确）。
+   它只在这一段过渡有效：cwToggleFull 一进来就摘掉，用户离开工作台也会摘 —— 
+   绝不能常驻，否则普通模式会看不到聊天列。 */
+body.cw-hold-chat #page-workspace .ws-side,
+body.cw-hold-chat #page-workspace .ws-resizer,
+body.cw-hold-chat #page-workspace .ws-main{visibility:hidden}
 /* 全屏画布下 .sidebar 必须浮到画布之上(67 > 66)。
    收起态的悬停提示是侧栏的伪元素，而 `.sidebar{z-index:20}` 自己就是一个层叠上下文 ——
    伪元素里写的 z-index:300 只在侧栏内部有效，整体仍被画布盖住。于是 tooltip 主体
@@ -1701,6 +1713,31 @@ body.cw-flow-full #chatFullBtn{display:none}
 .chat-head .ch-id{flex:0 1 auto;min-width:0}
 .chat-head .ch-id > div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-head .btn{white-space:nowrap;flex-shrink:0}
+/* 头部操作按钮（会话 / 全屏画布 / 停止 / ⋯）：2026-10-25 提升辨识度。
+   原来四个都是 btn-ghost —— 透明底 + 透明描边 + 品牌蓝文字，压在玻璃头部上读起来
+   就是「几行蓝字」：既不像按钮，也分不清哪个是当前生效的那个（用户反馈「不够醒目」）。
+   现在改用与画布左上角那颗 (.cw-fullbtn) 同一套「品牌薄片」配方，三处一起变：
+     · 尺寸：30 → 32px 高，字号 12 → 12.5px，命中区与字面都大一圈；
+     · 对比：淡品牌底 + 可见品牌描边（原来是全透明），从「文字」变成「控件」；
+     · 状态：hover 加深描边、按下内阴影、生效/展开时品牌实底 + 白字。
+   ⚠️ 白字必须配 --brand-fill 而不是 --brand：填充面上 --brand 只有 5.5:1 上下
+      （.msg.me 那次掉到 5.52 的教训）。 */
+.chat-head .btn.ch-act{
+  height:32px;padding:0 var(--sp-6);gap:var(--sp-3);
+  background:var(--brand-tint);border:1px solid var(--brand-line);
+  color:var(--brand-text);font-size:var(--fs-sm);font-weight:600;border-radius:var(--r-md)}
+.chat-head .btn.ch-act .ic-btn{width:14px;height:14px}
+.chat-head .btn.ch-act:hover{background:var(--brand-tint-2);border-color:var(--brand)}
+.chat-head .btn.ch-act:active{transform:translateY(1px) scale(.98);box-shadow:inset 0 2px 5px rgba(0,0,0,.18)}
+/* 状态区分：.on = 已生效（全屏中）；.open = 弹出层正开着（⋯ 菜单）。
+   两者都用品牌实底，一眼能看出「这个控件现在是活动的」。 */
+.chat-head .btn.ch-act.on,
+.chat-head .btn.ch-act.open,
+.chat-head .btn.ch-act[aria-pressed="true"]{
+  background:var(--brand-fill);border-color:transparent;color:#fff}
+.chat-head .btn.ch-act.on:hover,
+.chat-head .btn.ch-act.open:hover{background:var(--brand-fill);border-color:transparent;filter:brightness(1.06)}
+.chat-head .btn.ch-act:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 /* 头部「更多」：把次要操作（导出对话 / 清空 / 导出导入工作流）收起来。
    头部最窄也要放得下：头像 + 名字 + 机器人切换 + 会话 / 日志 / ⋯ / 发布，
    8 个按钮并排在任何宽度下都放不下，而不放下的结果就是上面那种竖排塌陷。 */
@@ -3648,21 +3685,21 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
             <div class="bs-list" id="bsList"></div>
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="openSessPanel()" title="切换会话 / 搜索历史对话"><svg class="ic-btn" aria-hidden="true"><use href="#ic-session"/></svg>会话</button>
+        <button class="btn btn-ghost btn-sm ch-act" onclick="openSessPanel()" title="切换会话 / 搜索历史对话"><svg class="ic-btn" aria-hidden="true"><use href="#ic-session"/></svg>会话</button>
         <!-- 全屏查看编排画布与对话（2026-10-25 从画布左上角搬到这条按钮行）。
              放在「会话」之后、「⋯」之前：视图类操作紧邻内容操作，且不抢「发布」的收尾位。
              文案走 cwFullBtnSpec 单一来源（与画布那颗共用），随状态在
              「全屏画布 / 退出全屏」之间切换；窄屏只留图标（见 CSS 的 .cfb-txt）。 -->
-        <button class="btn btn-ghost btn-sm" id="chatFullBtn" type="button" onclick="cwFullFromChat()"
+        <button class="btn btn-ghost btn-sm ch-act" id="chatFullBtn" type="button" onclick="cwFullFromChat()"
           aria-pressed="false" aria-label="全屏查看编排画布与对话" title="全屏查看编排画布与对话（Shift+F）">
           <svg class="ic-btn" aria-hidden="true"><use id="chatFullIco" href="#ic-fullscreen"/></svg><span class="cfb-txt">全屏画布</span>
         </button>
-        <button class="btn btn-ghost btn-sm" id="stopBtn" style="display:none" onclick="stopGenerate()">⏹ 停止</button>
+        <button class="btn btn-ghost btn-sm ch-act" id="stopBtn" style="display:none" onclick="stopGenerate()">⏹ 停止</button>
         <!-- 次要操作收进「⋯」：头部一行 8 个按钮在任何窗口宽度下都放不下，硬放就会把每个
              按钮压成 1 个字宽（竖排）。一级只留 会话 / ⋯ / 发布（生成中多一个停止），
              头部最小宽度由此降到 ~340px —— 可算的宽度才守得住（见 test_wiring.js F 组）。 -->
         <div class="ch-more" id="chMore">
-          <button class="btn btn-ghost btn-sm" id="chMoreBtn" type="button" onclick="toggleChMore(event)" title="更多操作">⋯</button>
+          <button class="btn btn-ghost btn-sm ch-act" id="chMoreBtn" type="button" onclick="toggleChMore(event)" title="更多操作">⋯</button>
           <div class="ch-more-menu" id="chMoreMenu" style="display:none">
             <div class="ch-mi" id="logReopenBtn" onclick="reopenRunLog()" title="查看最近一次工作流每步记录（无记录时给占位提示）"><svg class="ic-btn" aria-hidden="true"><use href="#ic-chart"/></svg>执行日志</div>
             <div class="ch-mi" onclick="exportChatMd()" title="把当前对话导出为 Markdown 文件"><svg class="ic-btn" aria-hidden="true"><use href="#ic-export"/></svg>导出对话</div>
@@ -13606,6 +13643,14 @@ function go(p) {
   var _cwRestoreFullAt = function (delay) {
     setTimeout(function () { try { cwRestoreFullWanted(); } catch (e) { } }, delay);
   };
+  /* 回工作台且「本来是全屏」：从这一帧起就把普通模式的工作区藏住，别等 320ms 后才盖。
+     放在 applyPage 之前 —— 它之后新页就已经可见了，晚一行就会漏出一帧聊天窗口。 */
+  if (p === 'workspace') {
+    if (typeof cwSt === 'object' && cwSt && cwSt.fullWanted) document.body.classList.add('cw-hold-chat');
+  } else if (typeof cwFullOn === 'function' && !cwFullOn()) {
+    // 离开工作台：过渡标记必须摘掉（否则回到工作台会看不到聊天列）
+    document.body.classList.remove('cw-hold-chat');
+  }
   var _navEl = document.querySelector('.nav'); if (_navEl) _navEl.classList.remove('open');
   /* 侧栏 / 顶栏的选中态立刻更新：点击反馈必须即时，不该等动画 */
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === p));
@@ -15092,6 +15137,9 @@ function cwToggleFull(force, keepWanted) {
   var b = cwSt.bot || getBot(currentId);
   if (!body) return;
   var on = (force === undefined) ? !body.classList.contains('cw-full') : !!force;
+  /* 过渡标记的消费点：无论进还是退，走到这里说明全屏状态已经确定，
+     普通模式的可见性由 .cw-full 自己接管，不再需要 cw-hold-chat。 */
+  document.body.classList.remove('cw-hold-chat');
   if (on === body.classList.contains('cw-full')) return;     // 状态没变就不做事
   /* 「用户本来想全屏吗」只在两种情况下保留：进全屏（当然是），
      以及切页导致的临时收起（keepWanted）。其余退出路径都是用户真的不想全屏了。 */
@@ -15175,7 +15223,7 @@ function cwRestoreFullWanted() {
   if (typeof cwSt !== 'object' || !cwSt || !cwSt.fullWanted) return;
   if (typeof cwFullOn === 'function' && cwFullOn()) { cwSt.fullWanted = false; return; }
   var body = document.getElementById('wsFlowBody');
-  if (!body) return;
+  if (!body) { document.body.classList.remove('cw-hold-chat'); return; }
   cwSt.fullWanted = false;
   // 画布标签不在前台就先切过去，否则「恢复了全屏却看不到画布」
   if (body.style.display === 'none') {
@@ -15185,7 +15233,11 @@ function cwRestoreFullWanted() {
      视图状态本来就没丢（CW_VIEWS 按 bot.id 存在全局表里），重新 fit 只会把
      用户的缩放/平移重置成默认值，顺带多一次全节点遍历。 */
   try { if (cwSt) cwSt.quiet = true; } catch (e) { }
-  try { cwToggleFull(true); } catch (e) { } finally { try { if (cwSt) cwSt.quiet = false; } catch (e) { } }
+  try { cwToggleFull(true); } catch (e) { } finally {
+    try { if (cwSt) cwSt.quiet = false; } catch (e) { }
+    // 兜底：不管上面怎么失败的，普通模式绝不能留着一个「看不见聊天列」的状态
+    try { if (!cwFullOn()) document.body.classList.remove('cw-hold-chat'); } catch (e) { }
+  }
 }
 function cwTabPopEl() {
   var dw = document.getElementById('cwTabPop');
@@ -26653,7 +26705,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.38.0';
+var APP_VERSION = '3.38.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
