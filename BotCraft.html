@@ -1603,8 +1603,19 @@ body.cw-flow-full #wsMoreMenu .ws-more-item[data-tab="flow"]{display:none}
   font-size:var(--fs-2xs);font-weight:600;line-height:1;cursor:pointer;
   box-shadow:var(--lg-top);
   transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
-.cw-fullbtn .i{display:block;width:13px;height:13px}
-.cw-fullbtn .i svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.7}
+.cw-fullbtn .ic-btn{width:13px;height:13px}
+/* 两个挂载点，按状态二选一（同一件事只留一个可见入口）：
+   · 普通模式 → 聊天头部那颗（用户指定的位置）；
+   · 全屏态 → 画布左上角那颗（全屏时聊天头部被画布整片盖住，只有它点得到）。 */
+#wsFlowBody:not(.cw-full) .cw-fullbar{display:none}
+body.cw-flow-full #chatFullBtn{display:none}
+.cfb-txt{white-space:nowrap}
+/* 头部再窄就只留图标：6 个一级按钮并排在 900px 以下的窗口里会把机器人名挤没。
+   只藏文字不藏按钮 —— 入口消失了比挤一点更糟。 */
+@media (max-width:900px){
+  .chat-head #chatFullBtn .cfb-txt{display:none}
+  .chat-head #chatFullBtn{padding-left:var(--sp-4);padding-right:var(--sp-4)}
+}
 .cw-fullbtn:hover{background:var(--brand-tint-2)}
 .cw-fullbtn:active{transform:scale(.97)}
 .cw-fullbtn.on{background:var(--brand-fill);color:#fff;border-color:transparent}
@@ -3264,6 +3275,12 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <symbol id="ic-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
   <symbol id="ic-broom" viewBox="0 0 24 24"><path d="M14 4l6 6"/><path d="M17 7l-8 8-4 4 4-4 8-8z"/><path d="M9 12l3 3"/></symbol>
   <symbol id="ic-session" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/><path d="M8 5v4"/></symbol>
+  <!-- 全屏 / 退出全屏。刻意**不用**四角箭头（那是「适配视图」的 expand 图标，
+       v3.28.0 两者同款，用户以为点了没反应）—— 这里用「屏幕 + 斜向放大/缩小箭头」：
+       外框=整块屏幕，箭头朝外=铺满、朝内=收回；13px 下仍是可辨的两笔，
+       内四角那种画法实测会缩成 4 个小点（看不出方向）。 -->
+  <symbol id="ic-fullscreen" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M9.5 14.5L15 9M15 9h-3.6M15 9v3.6"/></symbol>
+  <symbol id="ic-fullscreen-exit" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M14.5 9.5L9 15M9 15h3.6M9 15v-3.6"/></symbol>
   <symbol id="ic-export" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
   <symbol id="ic-edit" viewBox="0 0 24 24"><path d="M4 20h4l11-11a2.5 2.5 0 0 0-3.5-3.5L4 16z"/></symbol>
   <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></symbol>
@@ -3632,6 +3649,14 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           </div>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="openSessPanel()" title="切换会话 / 搜索历史对话"><svg class="ic-btn" aria-hidden="true"><use href="#ic-session"/></svg>会话</button>
+        <!-- 全屏查看编排画布与对话（2026-10-25 从画布左上角搬到这条按钮行）。
+             放在「会话」之后、「⋯」之前：视图类操作紧邻内容操作，且不抢「发布」的收尾位。
+             文案走 cwFullBtnSpec 单一来源（与画布那颗共用），随状态在
+             「全屏画布 / 退出全屏」之间切换；窄屏只留图标（见 CSS 的 .cfb-txt）。 -->
+        <button class="btn btn-ghost btn-sm" id="chatFullBtn" type="button" onclick="cwFullFromChat()"
+          aria-pressed="false" aria-label="全屏查看编排画布与对话" title="全屏查看编排画布与对话（Shift+F）">
+          <svg class="ic-btn" aria-hidden="true"><use id="chatFullIco" href="#ic-fullscreen"/></svg><span class="cfb-txt">全屏画布</span>
+        </button>
         <button class="btn btn-ghost btn-sm" id="stopBtn" style="display:none" onclick="stopGenerate()">⏹ 停止</button>
         <!-- 次要操作收进「⋯」：头部一行 8 个按钮在任何窗口宽度下都放不下，硬放就会把每个
              按钮压成 1 个字宽（竖排）。一级只留 会话 / ⋯ / 发布（生成中多一个停止），
@@ -14558,16 +14583,25 @@ function cwToggleHint() {
    放左上角第一行 —— 编辑器里「视图 / 命令」按钮的惯例位，视线起点、任何宽度都可见；
    快捷键提示条相应下移一行。
    图标必须与「适配视图」的 expand 区分开（v3.28.0 两者同图标，被当成「点了没反应」）。 */
+/* 文案 / 图标 / 无障碍属性的**单一来源**。两颗入口（聊天头部、画布左上角）共用它 ——
+   两处各写一套必然漂移（本项目「同一份文案写两遍」栽过多次：改了文案只有一半更新）。
+   名称取「全屏画布 / 退出全屏」：原来看的是「全屏 / 退出全屏」，但用户并不知道
+   全屏的是哪一块，配上「画布」二字才说清对象；提示文字补上快捷键与范围。 */
+function cwFullBtnSpec(on) {
+  return {
+    txt: on ? '退出全屏' : '全屏画布',
+    aria: on ? '退出全屏，回到普通模式' : '全屏查看编排画布与对话',
+    title: on ? '退出全屏（Esc / Shift+F）' : '全屏查看编排画布与对话（Shift+F / Esc 退出）',
+    ico: on ? '#ic-fullscreen-exit' : '#ic-fullscreen'
+  };
+}
 function cwFullBtnHtml() {
-  var on = cwFullOn();
+  var on = cwFullOn(), sp = cwFullBtnSpec(on);
   return '<button type="button" class="cw-fullbtn' + (on ? ' on' : '') + '" id="cwFullBtn"'
-    + ' data-act="full" aria-label="' + (on ? '退出全屏' : '全屏画布') + '"'
-    + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
-    + ' title="' + (on ? '退出全屏（Esc / Shift+F）' : '全屏查看编排与对话（Shift+F）') + '">'
-    + '<span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24">'
-    + '<rect x="2.5" y="4" width="19" height="16" rx="2.5"/><rect x="8" y="8.5" width="8" height="7" rx="1.5"/>'
-    + '</svg></span>'
-    + '<span class="cw-fullbtn-txt">' + (on ? '退出全屏' : '全屏') + '</span>'
+    + ' data-act="full" aria-pressed="' + (on ? 'true' : 'false') + '"'
+    + ' aria-label="' + sp.aria + '" title="' + sp.title + '">'
+    + '<svg class="ic-btn" aria-hidden="true"><use href="' + sp.ico + '"/></svg>'
+    + '<span class="cw-fullbtn-txt">' + sp.txt + '</span>'
     + '</button>';
 }
 /* 全屏按钮的挂载与接线。
@@ -14587,7 +14621,7 @@ function cwEnsureFullBtn(body) {
   }
   host.innerHTML = cwFullBtnHtml();          // 内容随全屏状态重建（文案 / aria 都在里面）
   var btn = host.querySelector('#cwFullBtn');
-  if (btn) btn.onclick = function (e) { e.stopPropagation(); try { cwToggleFull(); } catch (err) { } };
+  if (btn) btn.onclick = function (e) { e.stopPropagation(); try { cwFullFromChat(); } catch (err) { } };
   return btn;
 }
 function cwHintHtml() {
@@ -15012,19 +15046,46 @@ function cwToggleQA() {
   body.classList.toggle('cw-qa-off');
   // 浮层是覆盖层、不挤占画布宽度，所以收起/展开不需要重绘画布（省一次全量重排）
 }
+/* 同步**两颗**入口。不再依赖 cwSt.root：聊天头部那颗在画布没渲染时也要能显示正确状态。 */
 function cwSyncFullBtn() {
-  var root = cwSt.root; if (!root) return;
-  var on = cwFullOn();
-  // 按钮已搬到 #wsFlowBody 直属层（不在 .cw-root 里），先按 id 找
-  var btn = document.getElementById('cwFullBtn') || root.querySelector('[data-act="full"]');
-  if (!btn) return;
-  btn.classList.toggle('on', on);
-  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-  btn.setAttribute('aria-label', on ? '退出全屏' : '全屏画布');
-  btn.setAttribute('title', on ? '退出全屏（Esc / Shift+F）' : '全屏查看编排与对话（Shift+F / Esc 退出）');
-  // 这颗按钮带文字标签，必须跟着状态换 —— 只换图标的话「再点一下就退出」传达不到
-  var t = btn.querySelector('.cw-fullbtn-txt');
-  if (t) t.textContent = on ? '退出全屏' : '全屏';
+  var on = cwFullOn(), sp = cwFullBtnSpec(on);
+  var pairs = [
+    [document.getElementById('cwFullBtn'), '.cw-fullbtn-txt', null],
+    [document.getElementById('chatFullBtn'), '.cfb-txt', document.getElementById('chatFullIco')]
+  ];
+  for (var i = 0; i < pairs.length; i++) {
+    var btn = pairs[i][0];
+    if (!btn) continue;
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', sp.aria);
+    btn.setAttribute('title', sp.title);
+    // 带文字的按钮必须跟着状态换文案 —— 只换图标的话「再点一下就退出」传达不到
+    var t = btn.querySelector(pairs[i][1]);
+    if (t) t.textContent = sp.txt;
+    // 头部那颗的 <use> 带 id（画布那颗每次重建，不需要）
+    var ico = pairs[i][2];
+    if (ico) ico.setAttribute('href', sp.ico);
+  }
+}
+/* 聊天头部那颗入口（普通模式唯一可见的入口）。
+   画布只在工作台页、且编排标签在前台时才是「看得见」的，所以这里先保证可见再进全屏，
+   否则就是「点了没反应」——按钮不在当前视野里，用户只能得出这个结论。 */
+function cwFullFromChat() {
+  if (cwFullOn()) { cwToggleFull(false); return; }        // 全屏态下这颗是隐藏的，兜底仍给正确行为
+  var ws = document.getElementById('page-workspace');
+  var onWs = !!ws && ws.style.display !== 'none';
+  if (!onWs) {
+    /* 不在工作台：走 fullWanted 这条路 —— go() 会在交叉淡化收尾后调 cwRestoreFullWanted，
+       由它负责切到编排标签并进全屏。直接在这里 cwToggleFull 会因为画布还在 display:none
+       而量不到尺寸（进全屏后节点全挤在左上角）。 */
+    if (typeof cwSt === 'object' && cwSt) cwSt.fullWanted = true;
+    go('workspace');
+    return;
+  }
+  var body = document.getElementById('wsFlowBody');
+  if (body && body.style.display === 'none') { try { switchWsTab('flow'); } catch (e) { } }
+  cwToggleFull(true);
 }
 function cwToggleFull(force, keepWanted) {
   var body = document.getElementById('wsFlowBody');
@@ -16190,7 +16251,7 @@ function cwToolAct(b, act) {
   if (act === 'zoomout') { cwZoomCenter(b, 1 / 1.2); return; }
   if (act === 'zoom100') { cwResetZoom(b); return; }
   if (act === 'fit') { cwFit(b, cwQAReserved()); return; }
-  if (act === 'full') { cwToggleFull(); return; }
+  if (act === 'full') { cwFullFromChat(); return; }   // 入口统一：两颗按钮 + 动作分发都走这一个判据
   // 全屏画布内的两个信息入口（非全屏时按钮被 CSS 隐藏，逻辑仍走同一套）
   if (act === 'cwmore') { cwToggleMore(); return; }
   if (act === 'cwctx') { try { if (window.openCtxPanel) openCtxPanel(); } catch (e) { } return; }
@@ -26592,7 +26653,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.37.0';
+var APP_VERSION = '3.38.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
