@@ -1583,6 +1583,23 @@ body.cw-flow-full #wsMoreMenu .ws-more-item[data-tab="flow"]{display:none}
   color:var(--sub);font-size:12px;font-family:inherit;cursor:pointer;line-height:1}
 .cw-hint-btn:hover{color:var(--brand-text);border-color:var(--brand)}
 .cw-hint-btn.on{background:var(--brand-tint);border-color:var(--brand-tint-2);color:var(--brand-text)}
+/* 全屏按钮（2026-10-25 从工具条抽到画布左上角，见 cwFullBtnHtml 的说明）。
+   胶囊 + 文字，与工具条里那排纯图标按钮区分开：它是「视图级」操作，不是内容操作。
+   .on 态（已全屏）用品牌实底 + 白字 —— 填充面配白字必须走 --brand-fill，
+   用 --brand 会掉到 5.5:1 以下（.msg.me 那次的教训）。 */
+.cw-fullbtn{position:absolute;left:var(--sp-6);top:var(--sp-6);z-index:4;
+  display:inline-flex;align-items:center;gap:var(--sp-2);height:26px;padding:0 var(--sp-4);
+  border-radius:var(--r-full);border:1px solid var(--brand-tint-2);
+  background:var(--brand-tint);color:var(--brand-text);font-family:inherit;
+  font-size:var(--fs-2xs);font-weight:600;line-height:1;cursor:pointer;
+  box-shadow:var(--lg-top);
+  transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
+.cw-fullbtn .i{display:block;width:13px;height:13px}
+.cw-fullbtn .i svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.7}
+.cw-fullbtn:hover{background:var(--brand-tint-2)}
+.cw-fullbtn:active{transform:scale(.97)}
+.cw-fullbtn.on{background:var(--brand-fill);color:#fff;border-color:transparent}
+.cw-fullbtn-txt{white-space:nowrap}
 /* 右键菜单里的对齐组用两列网格：8 项竖排会把菜单拉到 28 行，一屏都放不下 */
 .cw-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-1);padding:var(--sp-1)}
 .cw-mgrid .cw-mi{padding:5px 8px;font-size:var(--fs-2xs);white-space:nowrap}
@@ -1590,8 +1607,9 @@ body.cw-flow-full #wsMoreMenu .ws-more-item[data-tab="flow"]{display:none}
    画布被拖窄到 ~200px 时这个值只剩 10px，8 段文字全部折成竖排，
    纵向铺满整个画布、把节点全遮住 —— 看起来像画布坏了。
    改成只让出左右边距，并加高度上限；画布再窄就整条自动收起（见 .cw-narrow）。 */
-.cw-hint{position:absolute;left:var(--sp-6);top:var(--sp-6);display:flex;flex-wrap:wrap;gap:var(--sp-3);
-  max-width:calc(100% - var(--sp-8) * 2);max-height:calc(100% - 56px);overflow:hidden;
+/* 左上角第一行让给了全屏按钮（.cw-fullbtn，26px + 间距），提示条整体下移一行。 */
+.cw-hint{position:absolute;left:var(--sp-6);top:calc(var(--sp-6) + 34px);display:flex;flex-wrap:wrap;gap:var(--sp-3);
+  max-width:calc(100% - var(--sp-8) * 2);max-height:calc(100% - 90px);overflow:hidden;
   font-size:var(--fs-2xs);color:var(--sub);pointer-events:none;z-index:2}
 /* 画布窄到放不下这些提示时自动收起，只留右上角 ? ；用户主动点 ? 则本次会话内展开
    （cw-hint-force 只在本次会话有效，不进存储 —— 存储里记的是「宽画布下要不要显示」）。 */
@@ -13545,10 +13563,13 @@ function go(p) {
       cwToggleFull(false, true);
     } catch (e) { }
   }
-  if (p === 'workspace') {
-    // 回工作台：等页面真正可见（交叉淡化已铺开）再恢复全屏，否则量到的还是折叠尺寸
-    setTimeout(function () { try { cwRestoreFullWanted(); } catch (e) { } }, 90);
-  }
+  /* 回工作台要恢复全屏，但时机很讲究：必须等交叉淡化铺开。
+     太早恢复会和切换动画抢同一批帧 —— 而恢复全屏要切 `body.cw-flow-full`，
+     那会让 `.topbar` 从 display:none 变回 flex，**整块玻璃条要重建 backdrop-filter
+     合成层**，正是最贵的一下。撞在淡化的头几帧里就是「顶栏闪一下、画布卡半秒」。 */
+  var _cwRestoreFullAt = function (delay) {
+    setTimeout(function () { try { cwRestoreFullWanted(); } catch (e) { } }, delay);
+  };
   var _navEl = document.querySelector('.nav'); if (_navEl) _navEl.classList.remove('open');
   /* 侧栏 / 顶栏的选中态立刻更新：点击反馈必须即时，不该等动画 */
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === p));
@@ -13561,7 +13582,11 @@ function go(p) {
     if (!el || el.style.display === 'none') return;
     if (getComputedStyle(el).display !== 'none') curEl = el;
   });
-  if (!curEl || curEl.id === 'page-' + p) { applyPage(p); return; }
+  if (!curEl || curEl.id === 'page-' + p) {
+    applyPage(p);
+    if (p === 'workspace') _cwRestoreFullAt(80);   // 没有交叉淡化，稍等一拍即可
+    return;
+  }
   /* ⚠️ 冻结背景光晕必须放在这里 —— applyPage（新页 display:none→可见）之前。
      2026-10-18 实测：切页那一下的 48~60ms 卡顿帧发生在切换后 55~85ms，
      正是新页 13 个玻璃面「从零开始 blur」的头几帧。光晕若还在流动，背后内容每帧都变，
@@ -13587,9 +13612,10 @@ function go(p) {
   const ms = sec > 0 ? sec * (raw.indexOf('ms') >= 0 ? 1 : 1000) : 0;
   /* keep 住旧页：applyPage 会把其余页面隐藏，但这一张要留到最后一口气再收获 */
   applyPage(p, curEl);
-  if (!ms) { dropLeaveEl(); return; }   /* 降级用户没有收起动画，不必等 */
+  if (!ms) { dropLeaveEl(); if (p === 'workspace') _cwRestoreFullAt(60); return; }   /* 降级用户没有收起动画，不必等 */
   const seq = ++_goSeq;
   _leaveTimer = setTimeout(function () { if (seq === _goSeq) dropLeaveEl(); }, ms + 40);
+  if (p === 'workspace') _cwRestoreFullAt(ms + 80);   // 等淡化真正走完再恢复
 }
 function toggleNav() { var n = document.querySelector('.nav'); if (n) n.classList.toggle('open'); }
 /* 页面不可见时暂停背景光晕（见 CSS .bg-hidden 注释）：无限循环动画在看不见的窗口里
@@ -14482,12 +14508,10 @@ function cwToolsHtml() {
     '<button class="cw-tbtn" data-act="zoomin" aria-label="放大" title="放大">＋</button>' +
     '<span class="cw-tsep"></span>' +
     '<button class="cw-tbtn" data-act="fit" aria-label="适配视图" title="适配视图，把所有节点框进来看（F）">' + svgIcon('expand','solo') + '</button>' +
-    /* 全屏按钮必须与「适配视图」用**不同**的图标：两者原来都是 svgIcon('expand')，
-     一模一样的两个方块并排，用户根本分不清点了哪个（v3.28.0 就被当成「点了全屏没反应」）。 */
-    '<button class="cw-tbtn" data-act="full" aria-label="全屏" title="全屏查看编排与对话（Shift+F / Esc 退出）">'
-      + '<span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24">'
-      + '<rect x="2.5" y="4" width="19" height="16" rx="2.5"/><rect x="8" y="8.5" width="8" height="7" rx="1.5"/>'
-      + '</svg></span></button>' +
+    /* 全屏按钮 2026-10-25 从工具条里抽走了，见 cwFullBtnHtml() —— 它是「视图级」操作，
+       和缩放/撤销/对齐这些「内容操作」不是一类；挤在工具条中段既难找，
+       窄画布下还会跟着换行被藏起来。图标沿用这里原来那颗（必须与「适配视图」的
+       expand 图标区分开，v3.28.0 就是因为两个一模一样被当成「点了没反应」）。 */
     '<button class="cw-tbtn" data-act="layout" aria-label="按执行次序排列" title="按执行次序（拓扑序）一字排开，有分支也不会把上下游错位">⠿</button>' +
     '<button class="cw-tbtn" data-act="addnode" aria-label="添加节点" title="添加节点（也可以双击 / 右键画布空白处）">' + svgIcon('plus','solo') + '</button>' +
     '<button class="cw-tbtn" data-act="aiplot" aria-label="AI 编排" title="AI 编排：描述需求，自动生成整张流程图，或优化现有画布">' + svgIcon('wand','solo') + '</button>' +
@@ -14520,6 +14544,24 @@ function cwToggleHint() {
   if (rt) rt.classList.toggle('cw-hint-force', !on);
   if (btn) { btn.classList.toggle('on', !on); btn.setAttribute('aria-expanded', on ? 'false' : 'true'); }
   toast(on ? '已收起快捷键提示，点 ? 可再看' : '已显示快捷键提示', 'ok');
+}
+/* 全屏按钮（2026-10-25 从画布工具条里抽出来单独放）。
+   为什么抽：全屏是「视图级」操作，和缩放/撤销/对齐这些「内容操作」不是同一类；
+   挤在工具条中段既难找，窄画布下还会跟着换行被藏起来（工具条有 max-width 换行规则）。
+   放左上角第一行 —— 编辑器里「视图 / 命令」按钮的惯例位，视线起点、任何宽度都可见；
+   快捷键提示条相应下移一行。
+   图标必须与「适配视图」的 expand 区分开（v3.28.0 两者同图标，被当成「点了没反应」）。 */
+function cwFullBtnHtml() {
+  var on = cwFullOn();
+  return '<button type="button" class="cw-fullbtn' + (on ? ' on' : '') + '" id="cwFullBtn"'
+    + ' data-act="full" aria-label="' + (on ? '退出全屏' : '全屏画布') + '"'
+    + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+    + ' title="' + (on ? '退出全屏（Esc / Shift+F）' : '全屏查看编排与对话（Shift+F）') + '">'
+    + '<span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24">'
+    + '<rect x="2.5" y="4" width="19" height="16" rx="2.5"/><rect x="8" y="8.5" width="8" height="7" rx="1.5"/>'
+    + '</svg></span>'
+    + '<span class="cw-fullbtn-txt">' + (on ? '退出全屏' : '全屏') + '</span>'
+    + '</button>';
 }
 function cwHintHtml() {
   var off = cwHintOff();
@@ -14642,12 +14684,19 @@ function cwSyncFullLeftAnim(ms) {
      ③ clamp 的基准 rect 必须在 transform:none 下量 —— 带着已有位移量会把边界算错一圈。
    层级：拖动/悬停时把该框提到最近一层。浮层之间允许重叠，但「刚碰过的永远在最上面」，
    所以叠起来也点得到（用户给的两个选项里取「层级处理」，不强行挤开 —— 挤开会在
-   用户手底下抢位置，比重叠更烦）。 */
-var _cwZTop = 10;
+   用户手底下抢位置，比重叠更烦）。
+   ⚠️ 层级轮转**只服务画布内那几块**（问答历史 vs 提问条），它们共享 #wsFlowBody 这个
+   层叠上下文，需要互相压一压。body 级浮层（面板抽屉 67 / 更多菜单 80 / 上下文 90）
+   本来就整体在画布之上，绝不能碰 —— 早先一起抬的后果是抽屉被压到 11、
+   沉到画布(66)底下凭空消失，看着就是「点了菜单项没反应」。 */
+var _cwZSeq = 8;
 function cwRaise(el) {
   if (!el || !el.style) return;
-  _cwZTop = _cwZTop >= 30 ? 11 : _cwZTop + 1;
-  el.style.zIndex = String(_cwZTop);
+  var cur = 0;
+  try { cur = parseInt(getComputedStyle(el).zIndex, 10) || 0; } catch (e) { cur = 0; }
+  if (cur > 60) return;                  // 已经是 body 级浮层，动它会掉到画布下面
+  _cwZSeq = _cwZSeq >= 12 ? 9 : _cwZSeq + 1;
+  el.style.zIndex = String(Math.max(_cwZSeq, cur));
 }
 function cwDraggable(el, opt) {
   if (!el) return null;
@@ -14916,11 +14965,15 @@ function cwToggleQA() {
 function cwSyncFullBtn() {
   var root = cwSt.root; if (!root) return;
   var on = cwFullOn();
-  var btn = root.querySelector('[data-act="full"]');
-  if (btn) {
-    btn.classList.toggle('cw-on', on);
-    btn.setAttribute('title', on ? '退出全屏（Esc / Shift+F）' : '全屏查看编排与对话（Shift+F / Esc 退出）');
-  }
+  var btn = root.querySelector('#cwFullBtn') || root.querySelector('[data-act="full"]');
+  if (!btn) return;
+  btn.classList.toggle('on', on);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.setAttribute('aria-label', on ? '退出全屏' : '全屏画布');
+  btn.setAttribute('title', on ? '退出全屏（Esc / Shift+F）' : '全屏查看编排与对话（Shift+F / Esc 退出）');
+  // 这颗按钮带文字标签，必须跟着状态换 —— 只换图标的话「再点一下就退出」传达不到
+  var t = btn.querySelector('.cw-fullbtn-txt');
+  if (t) t.textContent = on ? '退出全屏' : '全屏';
 }
 function cwToggleFull(force, keepWanted) {
   var body = document.getElementById('wsFlowBody');
@@ -14975,13 +15028,18 @@ function cwToggleFull(force, keepWanted) {
   /* 尺寸变了要重新取景：进入全屏后空间大得多，不 fit 就还是原来 37% 缩在左上角
      （用户点全屏就是为了「看清」，结果什么都没变大 = 白点）。
      进入时把右侧浮层占用的宽度扣掉，让节点落在真正可见的区域里。 */
+  /* 从切页回来时（cwSt.quiet）不重新取景：视图状态在 CW_VIEWS 里原样留着，
+     重新 cwFit 既多一次全节点遍历，又会把用户当前的缩放/平移重置掉 ——
+     表现就是「切回来画面跳一下」。 */
+  var _quiet = !!(cwSt && cwSt.quiet);
   try {
     requestAnimationFrame(function () {
       if (!cwSt.root) return;
+      if (_quiet) return;
       if (cwSt.bot && (cwSt.bot.nodes || []).length) cwFit(cwSt.bot, cwQAReserved());
       else cwRefresh();
     });
-  } catch (e) { cwRefresh(); }
+  } catch (e) { if (!_quiet) cwRefresh(); }
   // 上下文详情若正开着：进出全屏后要重新贴到提问框上方（退出时回到居中弹窗）
   try { if (typeof cwPlaceCtxPanel === 'function') cwPlaceCtxPanel(); } catch (e) { }
   toast(on ? '已进入全屏编排（Esc 退出）' : '已退出全屏', 'ok');
@@ -15011,7 +15069,11 @@ function cwRestoreFullWanted() {
   if (body.style.display === 'none') {
     try { switchWsTab('flow'); } catch (e) { }
   }
-  try { cwToggleFull(true); } catch (e) { }
+  /* quiet：告诉 cwToggleFull「这次是切页回来，别重新取景」。
+     视图状态本来就没丢（CW_VIEWS 按 bot.id 存在全局表里），重新 fit 只会把
+     用户的缩放/平移重置成默认值，顺带多一次全节点遍历。 */
+  try { if (cwSt) cwSt.quiet = true; } catch (e) { }
+  try { cwToggleFull(true); } catch (e) { } finally { try { if (cwSt) cwSt.quiet = false; } catch (e) { } }
 }
 function cwTabPopEl() {
   var dw = document.getElementById('cwTabPop');
@@ -15123,7 +15185,7 @@ function renderNodes(b) {
     '<path class="cw-arrow-head" d="M0,0.6 L9.4,5 L0,9.4 z"></path></marker></defs>' +
     '<path class="cw-tmp" id="cwTmpPath" d=""></path></svg>' +
     '<div class="cw-stage" id="cwStage">' + nodes.map(function (nd, i) { return cwCard(b, nd, i); }).join('') + '</div>' +
-    mids + mini + cwToolsHtml() + cwHintHtml() + (nodes.length ? '' : cwEmptyHtml()) +
+    mids + mini + cwToolsHtml() + cwFullBtnHtml() + cwHintHtml() + (nodes.length ? '' : cwEmptyHtml()) +
     '<div class="cw-marquee" id="cwMarquee" style="display:none"></div>' +
     '</div>';
   cwSt.root = document.getElementById('cwRoot');
@@ -16703,6 +16765,8 @@ function cwOnClick(e) {
   if (mid) { cwInsertBetween(b, +mid.getAttribute('data-mid')); return; }
   const tbtn = e.target.closest('.cw-tbtn');
   if (tbtn) { cwToolAct(b, tbtn.getAttribute('data-act')); return; }
+  // 全屏按钮已从工具条抽到画布左上角（.cw-fullbtn），单独接一条
+  if (e.target.closest('.cw-fullbtn')) { cwToolAct(b, 'full'); return; }
   if (e.target.closest('.cw-hint-btn')) { cwToolAct(b, 'hint'); return; }
   if (e.target.closest('.cw-empty')) {
     const btn = e.target.closest('[data-act=addnode]');
@@ -26436,7 +26500,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.35.0';
+var APP_VERSION = '3.35.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
