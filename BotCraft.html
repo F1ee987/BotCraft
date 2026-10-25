@@ -1322,6 +1322,9 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .ws-more-item:hover{background:var(--fill)}
 .ws-more-item.active{background:var(--fill);color:var(--brand-text)}
 .ws-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:14px}
+/* 全屏按钮宿主（.cw-fullbar）用 absolute 定位，需要一个定位祖先。
+   全屏时 #wsFlowBody 是 fixed（本身即包含块），非全屏时是流内块 —— 补 relative 让两态一致。 */
+#wsFlowBody{position:relative}
 .node{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px;margin-bottom:0;cursor:grab;position:relative;transition:border-color var(--dur-2) var(--ease),background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
   content-visibility:auto;contain-intrinsic-size:auto 96px}
 .node .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--brand-text);font-weight:600}
@@ -1407,7 +1410,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
      否则底下的节点与网格会透上来（v3.27.3 的教训）。 */
 /* --cw-full-left：全屏画布的左边距（= 左侧工作台占位）。由 cwSyncFullLeft() 按侧栏实际宽度写入，
    这里给初值 0：CSS 变量必须先有定义，否则 verify_css 会把它算成"悬空引用"（靠 fallback 兜底也算违规）。 */
-:root{ --cw-qa-w:380px; --cw-qa-gap:12px; --cw-full-left:0px; }
+:root{ --cw-qa-w:380px; --cw-qa-gap:12px; --cw-full-left:0px; --cw-full-top:0px; }
 /* 背景必须用不透明的 --bg：#wsFlowBody 与 .cw-root 原本都用 --sunken
    （深 rgba(0,0,0,.24) / 浅 rgba(120,120,128,.13)，是给 300px 侧栏里「压暗一点」用的）。
    全屏铺满时它就成了半透明蒙版 —— 底下的侧栏、顶栏、聊天区整片透上来，
@@ -1426,7 +1429,7 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
    现在左边距由 --cw-full-left 决定（JS 按侧栏实际占位写入）：
      侧栏展开 → 232 + 外边距；折叠 → 64；响应式隐藏 → 0（那时才是真·整屏）。
    用变量而不是写死 px：侧栏宽度会随折叠态与主题变化，写死必然对不上。 */
-#wsFlowBody.cw-full{position:fixed;top:0;right:0;bottom:0;left:var(--cw-full-left,0);z-index:66;
+#wsFlowBody.cw-full{position:fixed;top:var(--cw-full-top,0);right:0;bottom:0;left:var(--cw-full-left,0);z-index:66;
   padding:0;width:auto;height:auto;
   background:var(--bg);border-radius:0;animation:none;overflow:hidden}
 #wsFlowBody.cw-full .cw-root{right:0;background:var(--bg)}
@@ -1492,11 +1495,12 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-qa-tab:hover{border-color:var(--brand);color:var(--brand-text)}
 .cw-qa-tab .i{width:13px;height:13px}
 #wsFlowBody.cw-full.cw-qa-off .cw-qa-tab{display:inline-flex}
-/* 全屏画布时顶栏的处理（2026-10-24）：画布是 fixed + z-index:66，而 .topbar 是
-   z-index:50 的整条 100% 宽玻璃条 —— 层级上画布胜出，但 left 只让出了侧栏那 86px，
-   于是顶栏右侧被整片压掉、只在最左边露出 logo 与「BotCraft」的前两个字母（截图上的「Bo」），
-   看起来像被硬切了一刀。全屏场景下页面切换走左侧图标栏，顶栏没有留存价值，整条收起最干净。 */
-body.cw-flow-full .topbar{display:none}
+/* 全屏画布时顶栏**不再隐藏**（2026-10-25 用户要求「全屏下顶部导航栏依然正常显示」）。
+   做法从「藏起顶栏」换成「画布让出顶栏」：--cw-full-top 由 cwSyncFullLeft 按 .topbar
+   的实际下缘写入，画布从那条线往下铺。
+   为什么必须让出来：画布是 fixed + z-index:66，而 .topbar 是 z-index:50 的整条 100% 宽
+   玻璃条 —— 层级上画布胜出，直接把顶栏盖掉，只在最左边露出 logo 与标题前两个字母
+   （v3.31.1 那个「Bo」）。让出 top 之后两者不再重叠，顶栏完整可见可点。 */
 /* 全屏画布期间把工作台那三块整片 visibility:hidden（工作区侧栏 / 拉手 / 聊天区）。
    画布从 --cw-full-left 开始铺，理论上正好盖住它们的左缘；但 left 只要因为任何原因
    大了几像素（窗口缩放、侧栏动画途中量到旧值、拖过 resizer、收起与重算不同步），
@@ -1583,11 +1587,16 @@ body.cw-flow-full #wsMoreMenu .ws-more-item[data-tab="flow"]{display:none}
   color:var(--sub);font-size:12px;font-family:inherit;cursor:pointer;line-height:1}
 .cw-hint-btn:hover{color:var(--brand-text);border-color:var(--brand)}
 .cw-hint-btn.on{background:var(--brand-tint);border-color:var(--brand-tint-2);color:var(--brand-text)}
-/* 全屏按钮（2026-10-25 从工具条抽到画布左上角，见 cwFullBtnHtml 的说明）。
-   胶囊 + 文字，与工具条里那排纯图标按钮区分开：它是「视图级」操作，不是内容操作。
+/* 全屏按钮的宿主（2026-10-25 从 .cw-root 里搬出来）。
+   留在 .cw-root 里的问题：那层是 overflow:hidden + 缩放舞台，按钮虽然 absolute 不受
+   缩放影响，但会跟着画布的裁剪、圆角、背景一起被切；语义上它也属于「画布容器级」的
+   视图开关，不是画布内容。搬到 #wsFlowBody 直属层后与 .cw-tools / .cw-qa 同级，
+   定位与层级都独立于画布内容。 */
+.cw-fullbar{position:absolute;left:var(--sp-6);top:var(--sp-6);z-index:7}
+/* 胶囊 + 文字，与工具条里那排纯图标按钮区分开：它是「视图级」操作，不是内容操作。
    .on 态（已全屏）用品牌实底 + 白字 —— 填充面配白字必须走 --brand-fill，
    用 --brand 会掉到 5.5:1 以下（.msg.me 那次的教训）。 */
-.cw-fullbtn{position:absolute;left:var(--sp-6);top:var(--sp-6);z-index:4;
+.cw-fullbtn{
   display:inline-flex;align-items:center;gap:var(--sp-2);height:26px;padding:0 var(--sp-4);
   border-radius:var(--r-full);border:1px solid var(--brand-tint-2);
   background:var(--brand-tint);color:var(--brand-text);font-family:inherit;
@@ -13981,11 +13990,7 @@ function openCtxPanel() {
     /* 上下文详情也可拖（从标题栏）。默认位在提问框上方，但内容长的时候往上一拖就能
        腾出画布看节点 —— 落点同样钳在画布可视区内。 */
     if (typeof cwDraggable === 'function') {
-      cwSt.ctxDrag = cwDraggable(host.querySelector('.ctxp-box'), {
-        handle: host.querySelector('.ctxp-hd'),
-        pos: cwSt.ctxDragPos || null,
-        onDrop: function (x2, y2) { cwSt.ctxDragPos = { x: x2, y: y2 }; }
-      });
+      cwSt.ctxDrag = cwBindFloatDrag('ctx', host.querySelector('.ctxp-box'), '.ctxp-hd');
     }
     if (!window._ctxEscBound) {
       window._ctxEscBound = true;
@@ -14563,6 +14568,26 @@ function cwFullBtnHtml() {
     + '<span class="cw-fullbtn-txt">' + (on ? '退出全屏' : '全屏') + '</span>'
     + '</button>';
 }
+/* 全屏按钮的挂载与接线。
+   两件事必须在这里做，不能靠画布的点击委托：
+     ① #wsFlowBody 每次 renderNodes 都被 innerHTML 重写，宿主必然丢，所以要兜底重建；
+     ② 按钮已搬出 .cw-root，而委托是 `root.addEventListener('click', cwOnClick)` ——
+        兄弟节点的事件冒泡不到它，必须自己绑（onclick 赋值，重建不累积）。 */
+function cwEnsureFullBtn(body) {
+  if (!body) body = document.getElementById('wsFlowBody');
+  if (!body) return null;
+  var host = document.getElementById('cwFullBar');
+  if (!host) {
+    host = document.createElement('div');
+    host.className = 'cw-fullbar';
+    host.id = 'cwFullBar';
+    body.appendChild(host);
+  }
+  host.innerHTML = cwFullBtnHtml();          // 内容随全屏状态重建（文案 / aria 都在里面）
+  var btn = host.querySelector('#cwFullBtn');
+  if (btn) btn.onclick = function (e) { e.stopPropagation(); try { cwToggleFull(); } catch (err) { } };
+  return btn;
+}
 function cwHintHtml() {
   var off = cwHintOff();
   return '<button class="cw-hint-btn' + (off ? '' : ' on') + '" id="cwHintBtn" type="button"'
@@ -14615,38 +14640,46 @@ function cwQAReserved() {
    画布左边留下一条细缝（侧栏折叠动画中途尤其明显）。
    .ws-side 被收起（display:none）时回落到 .sidebar 的右缘 —— 此时工作台已让位，
    画布应该铺到图标栏右边。 */
+/* 取元素的**有效**矩形：display:none 或尺寸为 0 时返回 null。
+   全屏起铺点（.ws-side / .sidebar / .topbar）都要做同一套判断，抽出来免得每处各写一遍 ——
+   以前就有过「一处判 display、另一处只判 width」的不一致。
+   ⚠️ 刻意**不判 visibility**：本项目里 visibility:hidden 只用于「藏住会被画布露出的残片」，
+   那些元素仍在正常布局中，位置完全有效（判了反而会把起铺点算错）。 */
+function cwRectOf(el) {
+  if (!el) return null;
+  var cs = null;
+  try { cs = getComputedStyle(el); } catch (e) { }
+  if (cs && cs.display === 'none') return null;
+  var r = el.getBoundingClientRect();
+  if (!r || r.width <= 0 || r.height <= 0) return null;
+  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+}
+/* 全屏画布的起铺点：(左侧让出导航/工作区) × (顶部让出顶栏)。
+   左边——优先取工作区 .ws-side 的左缘（画布的家就在它里面，那才是该盖住的第一条像素）；
+   工作区收起时回落到 .sidebar 右缘 + 外边距。
+   顶上——顶栏不再隐藏了，画布必须从它下缘起铺，否则画布(z66) 把顶栏(z50) 整条盖掉。 */
 function cwSyncFullLeft() {
   var body = document.getElementById('wsFlowBody');
   if (!body) return;
-  var left = 0;
+  var left = 0, top = 0;
   if (body.classList.contains('cw-full')) {
-    var side = document.querySelector('.ws-side');
-    var sb = document.querySelector('.sidebar');
-    var pick = null;
+    var side = cwRectOf(document.querySelector('.ws-side'));
     if (side) {
-      try {
-        var cs2 = getComputedStyle(side);
-        if (cs2.display !== 'none' && side.getBoundingClientRect().width > 0) pick = side;
-      } catch (e) { }
-    }
-    if (!pick) pick = sb;
-    if (pick) {
-      var cs = null;
-      try { cs = getComputedStyle(pick); } catch (e) { }
-      var r = pick.getBoundingClientRect();
-      if ((!cs || cs.display !== 'none') && r.width > 0) {
-        if (pick === sb) {
-          // 回落到导航栏时仍按「右缘 + 外边距」，那是工作台让位后的真实起点
-          var mr = 0;
-          try { mr = parseInt(cs.marginRight, 10) || 0; } catch (e) { }
-          left = Math.round(r.right) + mr;
-        } else {
-          left = Math.round(r.left);
-        }
+      left = Math.round(side.left);
+    } else {
+      var sb = document.querySelector('.sidebar');
+      var rs = cwRectOf(sb);
+      if (rs) {
+        var mr = 0;
+        try { mr = parseInt(getComputedStyle(sb).marginRight, 10) || 0; } catch (e) { }
+        left = Math.round(rs.right) + mr;
       }
     }
+    var tb = cwRectOf(document.querySelector('.topbar'));
+    if (tb) top = Math.round(tb.bottom);
   }
   body.style.setProperty('--cw-full-left', left + 'px');
+  body.style.setProperty('--cw-full-top', top + 'px');
 }
 /* 侧栏折叠/展开是 `width .24s` 的 CSS 过渡，而 --cw-full-left 是 JS 写死的 px。
    只在过渡结束后补一次（原来那个 280ms 的 setTimeout），画布会「先纹丝不动、
@@ -14771,6 +14804,31 @@ function cwDraggable(el, opt) {
     reclamp: function () { var p = clampTo(cur.x, cur.y, baseRect()); paint(p.x, p.y); }
   };
 }
+/* 给一块浮层接上拖动，并把「最后停在哪」记在 cwSt 里（只存内存，不进存储）。
+   四块浮层的接线只差「元素 / 把手 / key」，pos 与 onDrop 的装配完全同构 ——
+   原先四处各写一遍，改一处忘三处的风险太高（2026-10-25 合并）。
+   key 决定记忆字段：cwBindFloatDrag('qa', …) → cwSt.qaDragPos。 */
+function cwBindFloatDrag(key, el, handleSel, extra) {
+  if (!el || typeof cwDraggable !== 'function') return null;
+  var posKey = key + 'DragPos';
+  var opt = {
+    pos: cwSt[posKey] || null,
+    onDrop: function (x, y) { cwSt[posKey] = { x: x, y: y }; }
+  };
+  if (handleSel) {
+    var h = el.querySelector(handleSel);
+    if (h) opt.handle = h;            // 找不到把手就让 cwDraggable 回落到整块
+  }
+  if (extra) {
+    for (var k in extra) { if (Object.prototype.hasOwnProperty.call(extra, k)) opt[k] = extra[k]; }
+  }
+  return cwDraggable(el, opt);
+}
+/* 安全调用起铺点重算：跨块调用（这段在画布块、调用方散布在侧栏/工作区那几块），
+   且非全屏时它只是把变量清 0，本身无副作用。三处布局变更统一走它。 */
+function cwSyncLeftSafe() {
+  try { if (typeof cwSyncFullLeft === 'function') cwSyncFullLeft(); } catch (e) { }
+}
 function cwFullOn() {
   var body = document.getElementById('wsFlowBody');
   return !!(body && body.classList.contains('cw-full'));
@@ -14846,13 +14904,7 @@ function cwQABarBuild(body) {
      位移只加在内层 .cw-qa-in 的 transform 上 —— 不破坏居中基准，也不影响 cwBottomPad()
      量到的高度。位置只存内存：退出全屏回默认位，切页回来还在原处。 */
   var inEl = bar.querySelector('.cw-qa-in');
-  if (inEl && typeof cwDraggable === 'function') {
-    cwSt.qaDrag = cwDraggable(inEl, {
-      raiseEl: bar,
-      pos: cwSt.qaDragPos || null,
-      onDrop: function (x, y) { cwSt.qaDragPos = { x: x, y: y }; }
-    });
-  }
+  if (inEl) cwSt.qaDrag = cwBindFloatDrag('qa', inEl, null, { raiseEl: bar });
   return bar;
 }
 function cwQAGrow() {
@@ -14893,13 +14945,9 @@ function cwRenderQA(b) {
   /* 可拖动，但只能从标题栏拖：内容区是滚动容器（看历史），整块可拖会把滚动吃掉。
      必须排在 cwQABuild 之后 —— 骨架建好才找得到 .cw-qa-hd，否则 handle 落回整块。
      位置只存内存：切页回来还在原处，退出全屏回默认位。 */
-  if (!box.__cwDragOk && typeof cwDraggable === 'function') {
+  if (!box.__cwDragOk) {
     box.__cwDragOk = 1;
-    cwSt.histDrag = cwDraggable(box, {
-      handle: box.querySelector('.cw-qa-hd'),
-      pos: cwSt.histDragPos || null,
-      onDrop: function (x, y) { cwSt.histDragPos = { x: x, y: y }; }
-    });
+    cwSt.histDrag = cwBindFloatDrag('hist', box, '.cw-qa-hd');
   }
   // 输入条同样只建一次（它被 renderNodes 的 innerHTML 一并清掉，所以每次都要检查）
   if (!document.getElementById('cwQAIn')) cwQABarBuild(body);
@@ -14965,7 +15013,8 @@ function cwToggleQA() {
 function cwSyncFullBtn() {
   var root = cwSt.root; if (!root) return;
   var on = cwFullOn();
-  var btn = root.querySelector('#cwFullBtn') || root.querySelector('[data-act="full"]');
+  // 按钮已搬到 #wsFlowBody 直属层（不在 .cw-root 里），先按 id 找
+  var btn = document.getElementById('cwFullBtn') || root.querySelector('[data-act="full"]');
   if (!btn) return;
   btn.classList.toggle('on', on);
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -15091,11 +15140,7 @@ function cwTabPopEl() {
   /* 抽屉可拖：从标题栏拖，内容区留给面板自己滚动。host 用画布矩形，所以拖不出画布，
      也飘不进左侧图标栏那片。位置只存内存。 */
   if (typeof cwDraggable === 'function') {
-    cwSt.tabDrag = cwDraggable(dw, {
-      handle: dw.querySelector('.cw-tabpop-hd'),
-      pos: cwSt.tabDragPos || null,
-      onDrop: function (x2, y2) { cwSt.tabDragPos = { x: x2, y: y2 }; }
-    });
+    cwSt.tabDrag = cwBindFloatDrag('tab', dw, '.cw-tabpop-hd');
   }
   return dw;
 }
@@ -15185,9 +15230,11 @@ function renderNodes(b) {
     '<path class="cw-arrow-head" d="M0,0.6 L9.4,5 L0,9.4 z"></path></marker></defs>' +
     '<path class="cw-tmp" id="cwTmpPath" d=""></path></svg>' +
     '<div class="cw-stage" id="cwStage">' + nodes.map(function (nd, i) { return cwCard(b, nd, i); }).join('') + '</div>' +
-    mids + mini + cwToolsHtml() + cwFullBtnHtml() + cwHintHtml() + (nodes.length ? '' : cwEmptyHtml()) +
+    mids + mini + cwToolsHtml() + cwHintHtml() + (nodes.length ? '' : cwEmptyHtml()) +
     '<div class="cw-marquee" id="cwMarquee" style="display:none"></div>' +
     '</div>';
+  // 全屏按钮挂在 #wsFlowBody 直属层（不是 .cw-root 里），见 cwEnsureFullBtn 的说明
+  cwEnsureFullBtn(body);
   cwSt.root = document.getElementById('cwRoot');
   cwSt.grid = document.getElementById('cwGrid');
   cwSt.links = document.getElementById('cwLinks');
@@ -16765,8 +16812,6 @@ function cwOnClick(e) {
   if (mid) { cwInsertBetween(b, +mid.getAttribute('data-mid')); return; }
   const tbtn = e.target.closest('.cw-tbtn');
   if (tbtn) { cwToolAct(b, tbtn.getAttribute('data-act')); return; }
-  // 全屏按钮已从工具条抽到画布左上角（.cw-fullbtn），单独接一条
-  if (e.target.closest('.cw-fullbtn')) { cwToolAct(b, 'full'); return; }
   if (e.target.closest('.cw-hint-btn')) { cwToolAct(b, 'hint'); return; }
   if (e.target.closest('.cw-empty')) {
     const btn = e.target.closest('[data-act=addnode]');
@@ -16859,7 +16904,7 @@ document.addEventListener('keydown', cwOnKey);
 // 窗口尺寸变化：侧栏可能被响应式隐藏，全屏画布的左边距要跟着改（只在全屏态才真写变量）
 try {
   window.addEventListener('resize', function () {
-    if (typeof cwSyncFullLeft === 'function') { try { cwSyncFullLeft(); } catch (e) { } }
+    cwSyncLeftSafe();
   });
 } catch (e) { }
 
@@ -23896,7 +23941,7 @@ bindOutsideClose('wsMore', {
     document.body.classList.toggle('ws-side-collapsed', c);
     // 工作区收起/展开会改变画布该从哪儿起铺（.ws-side 的左缘 / 回落到侧栏右缘），
     // 不同步就左移出一条缝或者多盖一截。跨块调用，运行时解析，函数声明在画布块里。
-    if (typeof cwSyncFullLeft === 'function') { try { cwSyncFullLeft(); } catch (e) { } }
+    cwSyncLeftSafe();
   };
   let initC = storeGetRaw(CKEY, '') === '1';
   applyCollapsed(initC);
@@ -23923,13 +23968,13 @@ bindOutsideClose('wsMore', {
     storeSetRaw(WKEY, String(parseInt(side.style.width, 10) || DEF_W));
     // 拖完工作区宽度，全屏画布的起铺位置跟着变（.ws-side 的左缘没变，但保险起见重算一次；
     // 真正会变的是回落路径：收起后再拖别处仍要对齐）
-    if (typeof cwSyncFullLeft === 'function') { try { cwSyncFullLeft(); } catch (e) { } }
+    cwSyncLeftSafe();
   });
   rz.addEventListener('dblclick', function () {
     if (collapsedNow() || isColumn()) return;
     side.style.width = DEF_W + 'px';
     storeSetRaw(WKEY, String(DEF_W));
-    if (typeof cwSyncFullLeft === 'function') { try { cwSyncFullLeft(); } catch (e) { } }
+    cwSyncLeftSafe();
   });
   if (tg) tg.addEventListener('click', function () {
     applyCollapsed(false);
@@ -26500,7 +26545,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.35.1';
+var APP_VERSION = '3.36.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
