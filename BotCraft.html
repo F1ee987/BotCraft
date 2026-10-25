@@ -1430,6 +1430,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   padding:0;width:auto;height:auto;
   background:var(--bg);border-radius:0;animation:none;overflow:hidden}
 #wsFlowBody.cw-full .cw-root{right:0;background:var(--bg)}
+/* 侧栏折叠过渡期间（cwSyncFullLeftAnim 打的标记）：画布宽度每帧都在变，
+   卡片上那条 transform/border 过渡会跟着做一次插值，看起来像卡片自己抖了一下。
+   过渡期间直接把卡片的过渡关掉 —— 它的 translate 值本来就没变，不需要动画。 */
+#wsFlowBody.cw-anim .cw-card{transition:none}
 .cw-qa{position:absolute;right:var(--cw-qa-gap);top:var(--cw-qa-gap);bottom:var(--cw-qa-gap);
   width:var(--cw-qa-w);max-width:calc(100% - var(--cw-qa-gap) * 2);z-index:9;display:none;flex-direction:column;
   background:var(--pop-veil);background-image:var(--lg-spec);
@@ -15837,14 +15841,16 @@ function cwToolAct(b, act) {
 function cwSpotFree(b, wx, wy, w, h) {
   var PAD = 26;                    // 两张卡之间至少留出的缝（视觉上分得开）
   var taken = function (x, y) {
-    var nodes = b.nodes || [];
-    for (var i = 0; i < nodes.length; i++) {
+    var hit = false;
+    // 用 some 而不是 for + break：命中即短路，且不会与「旧串行调度循环」的写法混淆
+    (b.nodes || []).some(function (_, i) {
       var bx = cwBox(b, i);
-      if (!bx) continue;
+      if (!bx) return false;
       if (x < bx.x + bx.w + PAD && x + w + PAD > bx.x
-        && y < bx.y + bx.h + PAD && y + h + PAD > bx.y) return true;
-    }
-    return false;
+        && y < bx.y + bx.h + PAD && y + h + PAD > bx.y) { hit = true; return true; }
+      return false;
+    });
+    return hit;
   };
   if (!taken(wx, wy)) return { x: wx, y: wy };
   var dx = w + PAD, dy = h + PAD;
