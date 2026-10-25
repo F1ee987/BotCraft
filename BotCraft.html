@@ -14516,6 +14516,33 @@ function cwSyncFullLeft() {
   }
   body.style.setProperty('--cw-full-left', left + 'px');
 }
+/* 侧栏折叠/展开是 `width .24s` 的 CSS 过渡，而 --cw-full-left 是 JS 写死的 px。
+   只在过渡结束后补一次（原来那个 280ms 的 setTimeout），画布会「先纹丝不动、
+   然后突然跳一格」—— 250ms 的位移差，肉眼就是一次闪烁。
+   这里改成过渡期间逐帧重算：getBoundingClientRect 每帧都在变，画布左缘就始终
+   贴着侧栏右缘，等于让画布自己「跟着动画走」。
+   同时给 #wsFlowBody 打 cw-anim 标记：让 ResizeObserver 在过渡期间只记账不重绘 ——
+   宽度每帧变一次，逐帧 cwRefresh（重建全部卡片 + 重画所有连线）会把 240ms 的过渡
+   拖成掉帧，节点还会跟着缩放抖动。 */
+function cwSyncFullLeftAnim(ms) {
+  var body = document.getElementById('wsFlowBody');
+  if (!body) return;
+  var now = function () {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  };
+  if (!body.classList.contains('cw-full')) { cwSyncFullLeft(); return; }
+  if (typeof requestAnimationFrame !== 'function') { cwSyncFullLeft(); return; }
+  var end = now() + (ms || 280);
+  body.classList.add('cw-anim');
+  (function step() {
+    cwSyncFullLeft();
+    if (now() < end) { requestAnimationFrame(step); return; }
+    body.classList.remove('cw-anim');
+    cwSyncFullLeft();
+    // 过渡期间被 ResizeObserver 记下的那次刷新，放到这里统一补
+    if (cwSt.roPending) { cwSt.roPending = false; try { cwRefresh(); } catch (e) { } }
+  })();
+}
 function cwFullOn() {
   var body = document.getElementById('wsFlowBody');
   return !!(body && body.classList.contains('cw-full'));
@@ -15801,12 +15828,59 @@ function cwToolAct(b, act) {
   }
 }
 // 空态按钮 / 首次添加：落在当前视图中心
+/* 在「想放的位置」附近找一块不会盖住现有卡片的空地（世界坐标）。
+   为什么需要：addNodeAtCenter 原先把新卡直接怼在视口中心，连点两次「添加节点」
+   两张卡就完全重合 —— 用户看到的是「只加了一个」，而且拖动时才发现底下还压着一张。
+   搜索方式：以目标点为原点按环向外扩，环内优先右 / 下 —— 流程图里右、下是「下游」
+   方向，新节点挤到左上去会让人误以为它排在流程前面。
+   找不到就退回原点叠加：宁可重合，也不要把新卡甩到几千像素外让视图突然跳走。 */
+function cwSpotFree(b, wx, wy, w, h) {
+  var PAD = 26;                    // 两张卡之间至少留出的缝（视觉上分得开）
+  var taken = function (x, y) {
+    var nodes = b.nodes || [];
+    for (var i = 0; i < nodes.length; i++) {
+      var bx = cwBox(b, i);
+      if (!bx) continue;
+      if (x < bx.x + bx.w + PAD && x + w + PAD > bx.x
+        && y < bx.y + bx.h + PAD && y + h + PAD > bx.y) return true;
+    }
+    return false;
+  };
+  if (!taken(wx, wy)) return { x: wx, y: wy };
+  var dx = w + PAD, dy = h + PAD;
+  for (var ring = 1; ring <= 6; ring++) {
+    var cands = [];
+    for (var a = -ring; a <= ring; a++) { cands.push([a, -ring]); cands.push([a, ring]); }
+    for (var c2 = -ring + 1; c2 <= ring - 1; c2++) { cands.push([-ring, c2]); cands.push([ring, c2]); }
+    // 环内排序：右下 > 右上 > 左下 > 左上，同象限按离原点远近
+    cands.sort(function (m, n) {
+      var wm = (m[0] < 0 ? 2 : 0) + (m[1] < 0 ? 1 : 0);
+      var wn = (n[0] < 0 ? 2 : 0) + (n[1] < 0 ? 1 : 0);
+      if (wm !== wn) return wm - wn;
+      return (Math.abs(m[0]) + Math.abs(m[1])) - (Math.abs(n[0]) + Math.abs(n[1]));
+    });
+    for (var k = 0; k < cands.length; k++) {
+      var x = wx + cands[k][0] * dx, y = wy + cands[k][1] * dy;
+      if (!taken(x, y)) return { x: x, y: y };
+    }
+  }
+  return { x: wx, y: wy };
+}
 function addNodeAtCenter(b) {
   const root = cwSt.root;
   const v = cwView(b);
   const W = root ? root.clientWidth : 420, H = root ? root.clientHeight : 320;
-  cwAddAt(b, NODE_TYPES[(b.nodes || []).length % NODE_TYPES.length],
-    (W / 2 - v.x) / v.s - CW_CARD_W / 2, (H / 2 - v.y) / v.s - 60);
+  const t = NODE_TYPES[(b.nodes || []).length % NODE_TYPES.length];
+  const wxC = (W / 2 - v.x) / v.s - CW_CARD_W / 2;
+  const wyC = (H / 2 - v.y) / v.s - 60;
+  /* 卡片高度按现有节点的实测中位数估，量不到就用 cwBox 的兜底值 132。
+     宽度直接用 CW_CARD_W —— 它与 .cw-card 的 width 同源。 */
+  var hs = [];
+  (b.nodes || []).forEach(function (_, i) { var bx = cwBox(b, i); if (bx) hs.push(bx.h); });
+  hs.sort(function (m, n) { return m - n; });
+  var hEst = hs.length ? hs[Math.floor(hs.length / 2)] : 132;
+  const spot = cwSpotFree(b, wxC, wyC, CW_CARD_W, hEst);
+  cwAddAt(b, t, spot.x, spot.y);
 }
 
 // ==================== AI 编排：自然语言 → 画布 ====================
@@ -16085,7 +16159,15 @@ function cwBind() {
 function cwObserve() {
   if (typeof ResizeObserver === 'undefined' || !cwSt.root) return;
   if (cwSt.ro) { try { cwSt.ro.disconnect(); } catch (e) { } }
-  cwSt.ro = new ResizeObserver(function () { cwRefresh(); });
+  cwSt.ro = new ResizeObserver(function () {
+    /* 侧栏折叠过渡期间 root 的宽度每帧都在变：逐帧 cwRefresh 会把 240ms 的过渡
+       拖成掉帧（全量重建卡片 + 重画连线），节点还会跟着缩放抖一下。
+       过渡期间只记一个「欠一次刷新」，由 cwSyncFullLeftAnim 在收尾时统一补。 */
+    var body = document.getElementById('wsFlowBody');
+    if (body && body.classList.contains('cw-anim')) { cwSt.roPending = true; return; }
+    cwSt.roPending = false;
+    cwRefresh();
+  });
   cwSt.ro.observe(cwSt.root);
 }
 function cwCardAt(cx, cy) {
@@ -20117,8 +20199,14 @@ function toggleSidebar() {
   if (tx) tx.textContent = collapsed ? '展开侧栏' : '收起侧栏';
   storeSetRaw('botcraft.sidebar.collapsed', collapsed ? '1' : '0');
   /* 全屏画布要让出侧栏占位：折叠/展开会改变它。
-     宽度有 .24s 过渡，立刻量到的是中间值，所以过渡结束后再同步一次。 */
-  if (typeof cwSyncFullLeft === 'function') {
+     宽度有 .24s 过渡 —— 逐帧同步（而不是等过渡结束再补一次），画布才能跟着侧栏
+     一起滑，而不是「先不动、然后跳一格」。时长从侧栏自己的 transitionDuration 读，
+     改了 CSS 不用回来改这里。 */
+  if (typeof cwSyncFullLeftAnim === 'function') {
+    var dur = 240;
+    try { dur = (parseFloat(getComputedStyle(sb).transitionDuration) * 1000) || 240; } catch (e) { }
+    cwSyncFullLeftAnim(dur + 60);
+  } else if (typeof cwSyncFullLeft === 'function') {
     cwSyncFullLeft();
     setTimeout(function () { try { cwSyncFullLeft(); } catch (e) { } }, 280);
   }
@@ -26115,7 +26203,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.32.1';
+var APP_VERSION = '3.33.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
