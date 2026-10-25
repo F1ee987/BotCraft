@@ -7,9 +7,11 @@ var FB_DIAG_MIN = 10;       // 总评价样本低于这个数，不下结论（�
 var FB_DIAG_LOW = 70;       // 整体好评率低于此视为偏低
 var FB_DIAG_BOT_LOW = 60;   // 单机器人/模型好评率低于此且样本足够，单独点名
 var FB_DIAG_FB_RATE = 0.3;  // 降级率（降级调用/总调用）高于此提示查主模型额度
-/* ⚠️ 2026-10-19 审计：定义了但**全仓无调用点**（标识符引用数 0）。
-   疑似早期玻璃饱和度调试的残留。保留不删 —— 本项目有「设计判据被误判成
-   死代码删除」的前科（见 isBotOnScreen 注释），删前需人工确认。 */
+/* 好评率百分比（up / (up+down)）。**样本为 0 时返回 null**，调用方自己保证分母>0。
+   2026-10-19 审计时它是「零引用死代码」，同一段 `Math.round(up/n*100)` 却在下面
+   手写了三遍（整体 / 按机器人 / 按模型）。2026-10-25 反向收口：让它成为唯一实现，
+   三处调用点都改成 satPctOf(...) —— 既没有死代码，也不会再有一处漏改（比如将来
+   要改成保留一位小数，只需动这里）。 */
 function satPctOf(o) {
   var n = (o && ((o.up || 0) + (o.down || 0))) || 0;
   return n ? Math.round((o.up || 0) / n * 100) : null;
@@ -22,20 +24,20 @@ function diagnoseFeedback(fb, usage) {
     out.push({ level: 'info', dim: '样本', text: '评价样本不足（' + total + '/' + FB_DIAG_MIN + '），继续在对话里点「有用 / 没用」收集即可', action: '暂无' });
     return out;
   }
-  var pct = Math.round(up / total * 100);
+  var pct = satPctOf(fb);
   if (pct < FB_DIAG_LOW) out.push({ level: 'warn', dim: '整体满意度', text: '整体好评率 ' + pct + '% 偏低', action: '检查全局提示词，给机器人补充知识库，或换更稳的模型' });
   else out.push({ level: 'ok', dim: '整体满意度', text: '整体好评率 ' + pct + '%，表现健康', action: '保持' });
   Object.keys(fb.byBot || {}).forEach(function (nm) {
     var o = fb.byBot[nm], n = (o.up || 0) + (o.down || 0);
     if (n >= 5) {
-      var bp = Math.round((o.up || 0) / n * 100);
+      var bp = satPctOf(o);
       if (bp < FB_DIAG_BOT_LOW) out.push({ level: 'warn', dim: '机器人', text: '「' + nm + '」好评率 ' + bp + '%（' + n + ' 次）偏低', action: '优化该机器人的提示词与知识库' });
     }
   });
   Object.keys(fb.byModel || {}).forEach(function (mk) {
     var o = fb.byModel[mk], n = (o.up || 0) + (o.down || 0);
     if (n >= 5) {
-      var mp = Math.round((o.up || 0) / n * 100);
+      var mp = satPctOf(o);
       if (mp < FB_DIAG_BOT_LOW) out.push({ level: 'warn', dim: '模型', text: '模型 ' + mk + ' 好评率 ' + mp + '%（' + n + ' 次）偏低', action: '考虑在备用链里优先或更换主模型' });
     }
   });
