@@ -96,6 +96,12 @@
   --bg-stack-opacity:1;
   --bg-stack-blur:0px;
   --bg-stack-scale:1;
+  /* 画布的设备像素比与「一条设备像素」的 CSS 宽度（2026-10-26）。
+     网格线写死 1px 时，DPR 1.25 / 1.5 的机器上会被抗锯齿糊成 1.25~1.5 个半透明像素，
+     整块画布看起来发灰发散。用 1px / dpr 才是「真的 1 个设备像素」。
+     JS 在 cwApplyDpr() 里写 --cw-dpr，缩放/换显示器（DPR 变化）时会跟着更新。 */
+  --cw-dpr:1;
+  --cw-hair:calc(1px / var(--cw-dpr,1));
   --glass-blur:26px;
   --glass-sat:190%;
   --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
@@ -1434,7 +1440,11 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
 .cw-root.marqueeing{cursor:crosshair}
 .cw-root.pan-ready{cursor:grab}
 .cw-root.pan-mode{cursor:grab}
-.cw-grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px),linear-gradient(var(--brand-line) 1px,transparent 1px),linear-gradient(90deg,var(--brand-line) 1px,transparent 1px);background-repeat:repeat}
+.cw-grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(var(--line) var(--cw-hair,1px),transparent var(--cw-hair,1px)),linear-gradient(90deg,var(--line) var(--cw-hair,1px),transparent var(--cw-hair,1px)),linear-gradient(var(--brand-line) var(--cw-hair,1px),transparent var(--cw-hair,1px)),linear-gradient(90deg,var(--brand-line) var(--cw-hair,1px),transparent var(--cw-hair,1px));background-repeat:repeat}
+/* 平移/缩放期间把舞台提升成独立合成层：否则每帧改 transform 都要重绘整棵子树
+   （一屏几十张卡片 + 连线）。停手 160ms 后由 cwMarkIdle 摘掉 —— 常驻 will-change
+   会把每一屏都留一张全尺寸图层，内存与合成开销反而更差。 */
+.cw-root.cw-interacting .cw-stage{will-change:transform}
 .cw-stage{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0}
 /* 画布整体不可选中文字：拖动时手一抖就把卡片标题选成蓝色，观感很脏。
    从前靠 pointerdown 的 preventDefault 兜住这件事，但那一下同时掐掉了
@@ -1506,7 +1516,14 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
    用变量而不是写死 px：侧栏宽度会随折叠态与主题变化，写死必然对不上。 */
 #wsFlowBody.cw-full{position:fixed;top:var(--cw-full-top,0);right:0;bottom:0;left:var(--cw-full-left,0);z-index:66;
   padding:0;width:auto;height:auto;
-  background:var(--bg);border-radius:0;animation:none;overflow:hidden}
+  background:var(--bg);border-radius:0;animation:none;overflow:hidden;
+  /* 全屏层自己滚动会被当成「整页可滚」：触控板一划，画布跟着弹一下还会露出底色边。
+     容器内滚动一律不外溢。 */
+  overscroll-behavior:contain}
+/* 全屏时整页不许滚：Windows 上滚轮/触控板会把 documentElement 滚出 1~2px，
+   固定层贴着 top 变量，于是上边缘露出一条缝（「铺不满」的观感就是这么来的）。 */
+body.cw-flow-full{overflow:hidden}
+body.cw-flow-full{overscroll-behavior:none}
 #wsFlowBody.cw-full .cw-root{right:0;background:var(--bg)}
 /* 侧栏折叠过渡期间（cwSyncFullLeftAnim 打的标记）：画布宽度每帧都在变，
    卡片上那条 transform/border 过渡会跟着做一次插值，看起来像卡片自己抖了一下。
@@ -1831,6 +1848,31 @@ body.cw-flow-full #chatFullBtn{display:none}
 #wsFlowBody.cw-full:not(.cw-qa-off) .cw-mini{right:calc(var(--cw-qa-w) + var(--cw-qa-gap) * 2 + var(--sp-6))}
 #wsFlowBody.cw-full:not(.cw-qa-off) .cw-root.cw-cramped .cw-mini{right:auto}
 #wsFlowBody.cw-full .cw-root.cw-qa-squeeze .cw-mini{display:none}
+/* ==================== 快速模式（2026-10-26）====================
+   低配机器 / 集显 / 远程桌面上的画布保底档。关掉的是**纯装饰且昂贵**的四类：
+     ① 浮层 backdrop-filter（模糊要在合成阶段重新采样背后整块，全屏时背后是一条
+        缩放中的舞台，代价最高）；
+     ② 多层 background-image（斑光 / 对角高光 / 厚度渐变，每层都是全尺寸纹理）；
+     ③ 卡片与浮层的阴影（每张卡一圈大半径模糊）；
+     ④ 大格网格（品牌色那两层，视觉上最不重要）。
+   保留：小格网格、卡片描边、连线、层级色差 —— 结构信息一点不少，只掉装饰。
+   ⚠️ 必须带 !important：液态档那几条本身就是 !important，同特异度下比源顺序。 */
+body.cw-fast #wsFlowBody .cw-qa,
+body.cw-fast #wsFlowBody .cw-tools,
+body.cw-fast #wsFlowBody .cw-mini,
+body.cw-fast #wsFlowBody .cw-tabpop,
+body.cw-fast #wsFlowBody .cw-fullbtn,
+body.cw-fast #cwLive .cw-live-chat,
+body.cw-fast #cwLive .chat-input{
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  background-image:none!important;
+  box-shadow:0 0 0 1px var(--line)!important}
+body.cw-fast #wsFlowBody .cw-live-chat,
+body.cw-fast #cwLive .cw-live-chat{background:var(--bg)}
+body.cw-fast .cw-card{box-shadow:0 0 0 1px var(--line)!important;transition:none!important}
+body.cw-fast .cw-stage{will-change:auto}
+body.cw-fast .cw-link{stroke-width:2}
 .cw-mini-node{position:absolute;border-radius:var(--r-2xs);background:var(--brand-line)}
 .cw-mini-node.sel{background:var(--brand-text)}
 .cw-mini-vp{position:absolute;border-radius:var(--r-2xs);border:1px solid var(--brand-text);background:var(--brand-tint)}
@@ -14555,6 +14597,80 @@ const CW_DRAG_T = 4;       // 拖动启动阈值（屏幕 px）：低于它不�
 const CW_CARD_W = 250;     // 卡片宽（与 CSS .cw-card 的 width 保持一致，改一处要同步另一处）
 const CW_LAYOUT_X = 340;   // 自动布局横向步进 = 卡片宽 + 90 间距
 const CW_ZOOM_MIN = 0.3, CW_ZOOM_MAX = 2.5;
+
+/* ==================== 画布渲染基建（2026-10-26 性能批次）====================
+   这一组解决三个每帧都要付的代价，全部**只在确实变化时才写**：
+     · cwRootW/cwRootH：缓存画布尺寸。原先 cwPaint 每帧读 clientWidth/clientHeight，
+       那是一次强制同步布局 —— 平移/缩放期间（每秒 60~120 次）等于每帧把布局重算一遍。
+     · cwSnapPx：把平移量对齐到设备像素网格。DPR 1.25/1.5 下不对齐会让网格线与卡片
+       边缘落在半个像素上（发虚、发灰），对齐后才「脆」。
+     · cwApplyDpr：把 devicePixelRatio 写进 --cw-dpr，供 CSS 算一条设备像素的宽度。 */
+var CW_FAST_KEY = 'botcraft.cw.fast';
+
+function cwDpr() { return Math.max(1, cwSt.dpr || window.devicePixelRatio || 1); }
+function cwSnapPx(x) {
+  var d = cwDpr();
+  return d <= 1 ? Math.round(x) : Math.round(x * d) / d;
+}
+function cwApplyDpr() {
+  var d = Math.max(1, window.devicePixelRatio || 1);
+  if (cwSt.dpr === d) return;                       // 变过才写，避免每帧 touch 根元素样式
+  cwSt.dpr = d;
+  try { document.documentElement.style.setProperty('--cw-dpr', String(d)); } catch (e) { }
+}
+function cwMeasure() {
+  var r = cwSt.root;
+  if (!r || !r.isConnected) return;
+  var w = r.clientWidth, h = r.clientHeight;
+  if (w === cwSt.vw && h === cwSt.vh) return;
+  cwSt.vw = w; cwSt.vh = h;
+}
+function cwRootW() { return cwSt.vw || (cwSt.root ? cwSt.root.clientWidth : 0); }
+function cwRootH() { return cwSt.vh || (cwSt.root ? cwSt.root.clientHeight : 0); }
+
+/* 快速模式：低配机器的画布保底档（样式见 body.cw-fast 那段）。
+   存 localStorage 而不是账号级键 —— 它跟的是「这台机器的显卡」，换账号不该跟着变。 */
+function cwIsFast() { return cwSt.fast === true; }
+function cwSetFast(on, quiet) {
+  on = !!on;
+  cwSt.fast = on;
+  try { document.body.classList.toggle('cw-fast', on); } catch (e) { }
+  try { localStorage.setItem(CW_FAST_KEY, on ? '1' : '0'); } catch (e) { }
+  var root = cwSt.root;
+  if (root) {
+    var fb = root.querySelector('.cw-tools [data-act="fast"]');
+    if (fb) { fb.classList.toggle('on', on); fb.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  }
+  cwSt.gridSig = ''; cwSt.stageSig = '';            // 强制下一帧重写（大格网格要按档位开关）
+  if (cwSt.bot) { try { cwPaint(cwSt.bot); } catch (e) { } }
+  if (!quiet) toast(on ? '快速模式已开启：画布关闭模糊与阴影' : '快速模式已关闭', 'ok');
+}
+function cwInitFast() {
+  var saved = null;
+  try { saved = localStorage.getItem(CW_FAST_KEY); } catch (e) { }
+  cwSt.fast = saved === '1';                        // 默认关闭：装饰留着，低配自己开
+  try { document.body.classList.toggle('cw-fast', cwSt.fast); } catch (e) { }
+  cwApplyDpr();
+}
+/* 交互期标记：平移/缩放/拖动时给 root 挂 cw-interacting，让舞台走独立合成层。
+   停手 160ms 后摘掉，并补画一次 —— 快速模式下交互期间跳过了小地图，
+   不补这一下会停在「小地图没更新」的状态。 */
+var _cwIdleT = 0;
+function cwMarkBusy() {
+  cwSt.busy = true;
+  if (cwSt.root) cwSt.root.classList.add('cw-interacting');
+  if (_cwIdleT) { try { clearTimeout(_cwIdleT); } catch (e) { } _cwIdleT = 0; }
+}
+function cwMarkIdle() {
+  if (_cwIdleT) { try { clearTimeout(_cwIdleT); } catch (e) { } }
+  _cwIdleT = setTimeout(function () {
+    _cwIdleT = 0;
+    cwSt.busy = false;
+    if (cwSt.root) cwSt.root.classList.remove('cw-interacting');
+    if (!cwIsFast()) return;                        // 普通模式期间小地图一直在画，不用补
+    if (cwSt.bot) { try { cwPaint(cwSt.bot); } catch (e) { } }
+  }, 160);
+}
 const CW_VIEWS = {};       // botId -> {x,y,s}：每个机器人记住自己的视角（纯内存）
 const CW_UNDO = {}, CW_REDO = {};   // botId -> [{n,e} 的 JSON 快照]（纯内存：挂 bot 上会被存进 localStorage）
 
@@ -14563,7 +14679,11 @@ const cwSt = {
   stage: null, mini: null, miniKids: null, miniVp: null, miniMap: null,
   mids: null, marquee: null, sel: [], mode: 'select', space: false,
   drag: null, menu: null, clip: null, ro: null,
-  idxMap: null            // { b: nodes 数组引用, map: {nodeId: index} }，见 cwBuildIdxMap
+  idxMap: null,           // { b: nodes 数组引用, map: {nodeId: index} }，见 cwBuildIdxMap
+  /* 渲染缓存（2026-10-26）：尺寸缓存避免每帧读布局，签名避免每帧写同样值 */
+  vw: 0, vh: 0, dpr: 0, gridSig: '', stageSig: '',
+  fast: false,            // 快速模式（装饰降级），持久化在 botcraft.cw.fast
+  busy: false             // 交互期（拖动/平移/缩放），快速模式下跳过小地图重绘
 };
 
 function cwView(b) { if (!CW_VIEWS[b.id]) CW_VIEWS[b.id] = { x: 0, y: 0, s: 1 }; return CW_VIEWS[b.id]; }
@@ -14801,6 +14921,7 @@ function cwToolsHtml() {
       + '</button>' +
     '<button class="cw-tbtn" data-act="cwctx" aria-label="上下文详情" title="上下文详情：系统 / 历史 / 本会话占用（在画布内展开）">' + svgIcon('puzzle', 'solo') + '</button>' +
     '<span class="cw-tsep"></span>' +
+    '<button class="cw-tbtn" data-act="fast" aria-label="快速模式" title="快速模式：关闭画布内的模糊/阴影/大格网格，低配机器更流畅（设置随本机记住）">⚡</button>' +
     '<button class="cw-tbtn" data-act="mode" aria-label="切换选择/平移模式" title="切换：选择模式 / 平移模式（按住空格可临时平移）">' + svgIcon('user','solo') + '</button>' +
     '</div>';
 }
@@ -15994,19 +16115,32 @@ function cwPaint(b) {
   const root = cwSt.root;
   if (!root || !b) return;
   const v = cwView(b);
-  const W = root.clientWidth, H = root.clientHeight;
+  /* 尺寸走缓存：clientWidth 是强制同步布局，平移时每帧读一次等于每帧重排一次。
+     缓存由 cwMeasure() 在 ResizeObserver / resize / cwRefresh 里更新。 */
+  let W = cwSt.vw, H = cwSt.vh;
+  if (!W || !H) { cwMeasure(); W = cwSt.vw; H = cwSt.vh; }
+  /* 设备像素对齐：对齐后的平移量同时用于网格与舞台 —— 两者若各算一份，
+     网格线与卡片边缘会互相错半个像素（看清起来像「卡片在网格上抖」）。 */
+  const sx = cwSnapPx(v.x), sy = cwSnapPx(v.y);
   const step = CW_GRID * v.s, big = step * 5;
   const g = cwSt.grid;
   if (g) {
     // 缩得太小时小格会糊成一片灰，直接把它的 background-size 置 0（该层就不画了）
     const small = step >= 7 ? step : 0;
-    g.style.backgroundSize = small + 'px ' + small + 'px,' + small + 'px ' + small + 'px,' +
-      big + 'px ' + big + 'px,' + big + 'px ' + big + 'px';
-    const px = cwMod(v.x, big), py = cwMod(v.y, big);
-    g.style.backgroundPosition = px + 'px ' + py + 'px,' + px + 'px ' + py + 'px,' +
-      px + 'px ' + py + 'px,' + px + 'px ' + py + 'px';
+    // 快速模式：品牌色大格网格整层关掉（视觉最不重要，却是两层全尺寸纹理）
+    const bigS = cwIsFast() ? 0 : big;
+    const gs = small + '|' + bigS + '|' + sx + '|' + sy;
+    if (cwSt.gridSig !== gs) {                      // 值没变就别写样式（写一次 = 一次样式重算）
+      cwSt.gridSig = gs;
+      g.style.backgroundSize = small + 'px ' + small + 'px,' + small + 'px ' + small + 'px,' +
+        bigS + 'px ' + bigS + 'px,' + bigS + 'px ' + bigS + 'px';
+      const px = cwMod(sx, big), py = cwMod(sy, big);
+      g.style.backgroundPosition = px + 'px ' + py + 'px,' + px + 'px ' + py + 'px,' +
+        px + 'px ' + py + 'px,' + px + 'px ' + py + 'px';
+    }
   }
-  cwSt.stage.style.transform = 'translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.s + ')';
+  const stg = 'translate(' + sx + 'px,' + sy + 'px) scale(' + v.s + ')';
+  if (cwSt.stageSig !== stg) { cwSt.stageSig = stg; cwSt.stage.style.transform = stg; }
   // 按边画线。旧代码是「把相邻两张卡连起来」—— 那是数组顺序模型的残留，
   // 分支、跨节点跳线在这种画法下根本表达不出来。
   // 每条边一个 path（元素池）：单条 path 拼所有边虽然省元素，但**加不了箭头**——
@@ -16042,7 +16176,9 @@ function cwPaint(b) {
   const zv = root.querySelector('.cw-zval');
   if (zv) zv.textContent = Math.round(v.s * 100) + '%';
   cwSyncToolBtns(b);
-  cwPaintMini(b, v, W, H);
+  /* 小地图每画一次就要算全部节点的缩放几何 —— 快速模式下交互期间直接跳过，
+     停手后由 cwMarkIdle 补一次（交互时眼睛盯着主画布，小地图晚 160ms 更新无感）。 */
+  if (!(cwIsFast() && cwSt.busy)) cwPaintMini(b, v, W, H);
 }
 
 // 小地图坐标 → 世界坐标，并把视图中心移过去。按下与拖拽共用这一份几何，
@@ -16192,11 +16328,53 @@ function cwViewGuard(b) {
   return true;
 }
 /* 滚轮/触控板是连发的，收尾再判：每帧判会在用户还在挪的时候抢位置 */
+/* 平移边界钳制（2026-10-26）。缩放/平移本身不设限（用户会主动拉远看全图），
+   但**内容不能被甩出视口**：触控板两指一划、或拖着画布甩一下，很容易把整张图推到
+   屏幕外，接着就是「画布空了」—— 原来只能靠 cwViewGuard 事后用 toast 告诉他
+   「我帮你搬回来了」，体验是「界面自己乱动」。
+   这里改成**渐进约束**：每次手势结束时保证内容包围盒在视口内至少留
+   keep = min(视口一半, max(96px, 内容尺寸一半))。留一半的意义是「还看得见，
+   也还拖得动」，比硬钉在边缘自然。只在越界时才改，不越界一个像素都不碰。 */
+function cwClampPan(b) {
+  var root = cwSt.root;
+  b = b || cwSt.bot;
+  if (!root || !b || !b.nodes || !b.nodes.length) return false;
+  var W = cwRootW(), H = cwRootH();
+  if (!W || !H) return false;
+  var v = cwView(b);
+  var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (var i = 0; i < b.nodes.length; i++) {
+    var bx = cwBox(b, i);
+    if (!bx) continue;
+    if (bx.x < minx) minx = bx.x;
+    if (bx.y < miny) miny = bx.y;
+    if (bx.x + bx.w > maxx) maxx = bx.x + bx.w;
+    if (bx.y + bx.h > maxy) maxy = bx.y + bx.h;
+  }
+  if (!isFinite(minx)) return false;
+  var sw = (maxx - minx) * v.s, sh = (maxy - miny) * v.s;
+  var keepX = Math.min(W * 0.5, Math.max(96, sw * 0.5));
+  var keepY = Math.min(H * 0.5, Math.max(96, sh * 0.5));
+  var left = minx * v.s + v.x, top = miny * v.s + v.y;
+  var right = left + sw, bottom = top + sh;
+  var nx = v.x, ny = v.y;
+  if (right < keepX) nx += keepX - right;
+  else if (left > W - keepX) nx -= left - (W - keepX);
+  if (bottom < keepY) ny += keepY - bottom;
+  else if (top > H - keepY) ny -= top - (H - keepY);
+  if (Math.abs(nx - v.x) < 0.5 && Math.abs(ny - v.y) < 0.5) return false;
+  v.x = nx; v.y = ny;
+  cwPaint(b);
+  return true;
+}
+
 function cwGuardSoon(b) {
   if (_cwGuardT) { try { clearTimeout(_cwGuardT); } catch (e) { } }
   _cwGuardT = setTimeout(function () {
     _cwGuardT = 0;
-    try { cwViewGuard(b || cwSt.bot); } catch (e) { }
+    /* 先做「渐进钳制」：多数情况下它就把内容拉回可见区了（不弹提示、不搬中心）。
+       cwViewGuard 只在「真的几乎全丢」时才出手，两者是递进关系不是重复。 */
+    try { if (!cwClampPan(b || cwSt.bot)) cwViewGuard(b || cwSt.bot); } catch (e) { }
   }, 180);
 }
 /* 全屏时底部被输入条占掉的高度（cwFit 要把这段让出来，否则节点下半截压在输入条底下）。
@@ -16256,8 +16434,25 @@ function cwResetZoom(b) {
 function cwRefresh() {
   const b = cwSt.bot || getBot(currentId);
   if (!b || !cwSt.root || !cwSt.root.isConnected) return;
+  cwApplyDpr();        // 跨显示器拖窗口会改 DPR，resize 是唯一可靠的时机
+  cwMeasure();         // 刷新尺寸缓存 —— cwPaint 之后不再读布局
   cwPaint(b);
   cwFitMini();
+}
+
+/* 合帧刷新（2026-10-26）。原来窗口 resize 直接调 cwRefresh：拖窗口边缘一秒几十次，
+   每次都全量重绘（卡片 DOM 重建 + 连线重算 + cwFitMini 里强制重排）。
+   改成 rAF 合帧 + 120ms 尾部补一次 —— 尾部那次是必要的：resize 事件可能停在
+   「尺寸已变、事件未再触发」的中间态，最后一帧的尺寸才是最终值。 */
+var _cwRefreshRaf = 0, _cwRefreshT = 0;
+function cwRefreshSoon() {
+  if (!_cwRefreshRaf) {
+    var run = function () { _cwRefreshRaf = 0; try { cwRefresh(); } catch (e) { } };
+    if (typeof requestAnimationFrame === 'function') _cwRefreshRaf = requestAnimationFrame(run);
+    else _cwRefreshRaf = setTimeout(run, 16);
+  }
+  if (_cwRefreshT) { try { clearTimeout(_cwRefreshT); } catch (e) { } }
+  _cwRefreshT = setTimeout(function () { _cwRefreshT = 0; try { cwRefresh(); } catch (e) { } }, 120);
 }
 
 // 小地图要不要让位：底部这一行只有 12px 边距 + 实测宽度的余量，画布一窄工具条
@@ -16553,6 +16748,13 @@ function cwSyncToolBtns(b) {
      点下去才发现栈是空的（实测：重建后 zoomout 在 30% 时仍不灰）。
      所以按钮宿主变了就把缓存作废，强制重新写一遍。 */
   if (cwSt.btnHost !== root) { cwSt.btnHost = root; cwSt.btnsig = ''; }
+  /* 快速模式是「开关态」不是「可用态」，不进上面的 disabled 签名表：
+     它要在每次同步时都刷一遍（renderNodes 重建按钮后 on 态会丢）。 */
+  var _fb = root.querySelector('.cw-tools [data-act="fast"]');
+  if (_fb) {
+    _fb.classList.toggle('on', cwIsFast());
+    _fb.setAttribute('aria-pressed', cwIsFast() ? 'true' : 'false');
+  }
   if (sig === cwSt.btnsig) return;
   cwSt.btnsig = sig;
   Object.keys(st).forEach(function (k) {
@@ -16618,6 +16820,7 @@ function cwToolAct(b, act) {
   if (act === 'zoomout') { cwZoomCenter(b, 1 / 1.2); return; }
   if (act === 'zoom100') { cwResetZoom(b); return; }
   if (act === 'fit') { cwFit(b, cwQAReserved()); return; }
+  if (act === 'fast') { cwSetFast(!cwIsFast()); return; }
   if (act === 'full') { cwFullFromChat(); return; }   // 入口统一：两颗按钮 + 动作分发都走这一个判据
   // 全屏画布内的两个信息入口（非全屏时按钮被 CSS 隐藏，逻辑仍走同一套）
   if (act === 'cwmore') { cwToggleMore(); return; }
@@ -17012,6 +17215,9 @@ function cwBind() {
   root.addEventListener('dblclick', cwOnDbl);
   root.addEventListener('click', cwOnClick);
 }
+function cwInitFastBoot() { try { cwInitFast(); } catch (e) { console.warn('[cw] 快速模式初始化失败：', e); } }
+cwInitFastBoot();
+
 function cwObserve() {
   if (typeof ResizeObserver === 'undefined' || !cwSt.root) return;
   if (cwSt.ro) { try { cwSt.ro.disconnect(); } catch (e) { } }
@@ -17022,7 +17228,7 @@ function cwObserve() {
     var body = document.getElementById('wsFlowBody');
     if (body && body.classList.contains('cw-anim')) { cwSt.roPending = true; return; }
     cwSt.roPending = false;
-    cwRefresh();
+    cwRefreshSoon();       // RO 也可能连发（拖分隔线），一样走合帧
   });
   cwSt.ro.observe(cwSt.root);
 }
@@ -17038,6 +17244,7 @@ function cwWorldAt(b, cx, cy) {
 }
 
 function cwOnDown(e) {
+  cwMarkBusy();
   const b = cwSt.bot, root = cwSt.root;
   if (!b || !root) return;
   if (e.button === 2) return;      // 右键交给 contextmenu
@@ -17215,6 +17422,10 @@ function cwOnMove(e) {
 }
 
 function cwOnUp(e) {
+  /* 手势结束：立刻做一次边界钳制（拖甩出屏的情况多数在这里被拉回来），
+     再进入 idle 计时（摘 will-change、快速模式补画小地图）。 */
+  if (cwSt.bot) { try { cwClampPan(cwSt.bot); } catch (err0) { } }
+  cwMarkIdle();
   const d = cwSt.drag, b = cwSt.bot, root = cwSt.root;
   if (!d || !b) return;
   cwSt.drag = null;
@@ -17261,6 +17472,7 @@ function cwOnWheel(e) {
   // 照旧 preventDefault + 平移的话，用户滚的是画布、菜单纹丝不动，看起来像「菜单滚不了」。
   if (e.target && e.target.closest && e.target.closest('.cw-menu')) return;
   e.preventDefault();
+  cwMarkBusy();            // 滚轮同样算交互期（缩放/平移期间提升合成层）
   if (e.ctrlKey || e.metaKey) {
     cwZoomAt(b, e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0022));
     return;
@@ -17269,7 +17481,8 @@ function cwOnWheel(e) {
   if (e.shiftKey) v.x -= e.deltaY;         // Shift = 横向
   else { v.x -= e.deltaX; v.y -= e.deltaY; }
   cwPaintSoon(b);          // 滚轮连发是高频路径，走合帧
-  cwGuardSoon(b);          // 触控板两指一滑就能把节点甩出视口，停下后再判
+  cwGuardSoon(b);          // 触控板两指一滑就能把节点甩出视口，停下后再钳制/判越界
+  cwMarkIdle();            // 重置 idle 计时：滚轮停下 160ms 后才摘合成层
 }
 
 function cwOnMenu(e) {
@@ -17524,7 +17737,9 @@ document.addEventListener('keydown', function (e) {
   try { f(top.arg); } catch (err) { console.warn('[esc] 关闭 ' + top.id + ' 失败：', err); }
 }, true);
 document.addEventListener('keyup', cwOnKeyUp);
-window.addEventListener('resize', function () { cwRefresh(); });
+/* ⚠️ 这里必须是 cwRefreshSoon：原来直连 cwRefresh，拖窗口边缘 = 每个 resize 事件
+   一次全量重绘（实测一秒钟能到 60+ 次）。合帧后再叠加 120ms 尾部补帧。 */
+window.addEventListener('resize', function () { cwRefreshSoon(); });
 
 
 function scrollChatToBottom(force) {
@@ -27063,7 +27278,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.40.0';
+var APP_VERSION = '3.41.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
