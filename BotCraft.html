@@ -17114,8 +17114,16 @@ function closeAiPlot() {
   const m = document.getElementById('aiPlotModal'); if (m) m.classList.remove('on');
   const g = document.getElementById('aiPlotGo'); if (g) { g.disabled = false; g.textContent = '生成'; }
 }
+/* 编排请求的硬超时（2026-10-26）。实测公共端点（如 text.pollinations.ai）会**挂住不返回**：
+   不超时的话「生成中…」能一直转下去，按钮永久禁用 —— 用户看到的就是「AI 编排画布点了没用」。
+   45s 取自实测：正常编排 5~20s，留一倍余量；超时即报错并允许再试。 */
+var CW_PLOT_TIMEOUT = 45000;
 async function aiPlotRun(refine) {
-  const b = cwSt.bot; if (!b) return;
+  const b = cwSt.bot; if (!b) {
+    // 静默 return 是最糟的反馈：按钮点了、什么都没发生
+    toast('画布还没就绪（先切到「编排」标签），稍等一秒再点', 'err');
+    return;
+  }
   if (!(window.BotCraftAI && BotCraftAI.canCall && BotCraftAI.canCall())) {
     toast('AI 编排需要真实模型：请先到「设置」填写 API Key', 'err'); return;
   }
@@ -17150,10 +17158,28 @@ async function aiPlotRun(refine) {
   const btn = document.getElementById('aiPlotGo');
   if (btn) { btn.disabled = true; btn.textContent = '生成中…'; }
   const out = document.getElementById('aiPlotOut');
+  const _cfgModel = (window.BotCraftAI && BotCraftAI.getConfig) ? (BotCraftAI.getConfig().model || '') : '';
+  const _t0 = Date.now();
+  /* 每秒刷一次已等待秒数：编排是 5~20s 的等待，中间不给任何反馈时用户只会以为卡死。
+     模型名也写出来 —— 换模型是这一步最常用的自救手段，先让他看见当前用的是哪个。 */
+  const _tick = setInterval(function () {
+    var o2 = document.getElementById('aiPlotOut');
+    if (!o2 || !document.getElementById('aiPlotGo') || !document.getElementById('aiPlotGo').disabled) return;
+    var sec = Math.round((Date.now() - _t0) / 1000);
+    var tip = o2.querySelector('.plot-tick');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.className = 'hint plot-tick';
+      o2.appendChild(tip);
+    }
+    tip.textContent = '⏳ 正在让模型编排…已等待 ' + sec + 's / 上限 ' + Math.round(CW_PLOT_TIMEOUT / 1000)
+      + 's' + (_cfgModel ? '（模型：' + _cfgModel + '）' : '');
+  }, 1000);
   if (out) {
     out.innerHTML = (_auto
       ? '<div class="hint">未填写需求 → 已按当前机器人的名称 / 描述 / 专长 / 插件生成</div>'
-      : '') + '<div class="hint">⏳ 正在让模型编排…（约 5~20 秒）</div>';
+      : '') + '<div class="hint plot-tick">⏳ 正在让模型编排…已等待 0s / 上限 ' + Math.round(CW_PLOT_TIMEOUT / 1000) + 's'
+      + (_cfgModel ? '（模型：' + _cfgModel + '）' : '') + '</div>';
   }
   try {
     const F = window.BotCraftFlow;
@@ -17162,13 +17188,40 @@ async function aiPlotRun(refine) {
       { role: 'user', content: aiPlotUserPrompt(mode, ask, plotBot) }
     ];
     // 编排要确定性，不要发挥：温度压到 0.2（request 的 gen 覆盖，优先于全局配置）
-    let text = await BotCraftAI.request(msgs, null, false, null, { temperature: 0.2 });
+    /* 超时不靠 AbortController：request 的 signal 参数走的是「thenable → abort」这条语义
+       （见 BotCraftAI.request 里的 signal.then(...)），传 AbortSignal 不生效。
+       这里用 race 兜：超时先让界面恢复并给出可行动提示，底层请求即使还挂着也不会
+       再阻塞用户（它的结果会被丢弃，不写进画布）。 */
+    const _ask = function () {
+      return BotCraftAI.request(msgs, null, false, null, { temperature: 0.2 });
+    };
+    let text = await Promise.race([
+      _ask(),
+      new Promise(function (_, rej) {
+        setTimeout(function () {
+          var e = new Error('编排超时：' + Math.round(CW_PLOT_TIMEOUT / 1000) + 's 内模型没有返回。'
+            + '常见原因：当前端点（' + ((BotCraftAI.getConfig().baseURL || '').replace(/^https?:\/\//, '').split('/')[0] || '未配置')
+            + '）不可达或被限流。可到「设置」换一个模型，或稍后重试。');
+          e.name = 'PlotTimeout';
+          rej(e);
+        }, CW_PLOT_TIMEOUT);
+      })
+    ]);
     let spec = F.aiPlotParse(text);
     if (!spec) {
       // 只对「输出里根本没有 JSON」自动重试一次 —— 模型偶尔会先客套两句；
       // 结构性校验错误（超上限等）重试也没用，直接给理由。
       if (out) out.innerHTML = '<div class="hint">⏳ 输出里没找到 JSON，自动重试一次…</div>';
-      text = await BotCraftAI.request(msgs, null, false, null, { temperature: 0.2 });
+      text = await Promise.race([
+        _ask(),
+        new Promise(function (_, rej) {
+          setTimeout(function () {
+            var e = new Error('编排超时（重试后仍无响应），建议换一个模型或检查网络。');
+            e.name = 'PlotTimeout';
+            rej(e);
+          }, CW_PLOT_TIMEOUT);
+        })
+      ]);
       spec = F.aiPlotParse(text);
     }
     const v = spec ? F.aiPlotValidate(spec, NODE_TYPES)
@@ -17219,9 +17272,21 @@ async function aiPlotRun(refine) {
       + 'onkeydown="if(event.key===\'Enter\')aiPlotRun(1)">'
       + '<button class="btn btn-ghost" onclick="aiPlotRun(1)" style="flex-shrink:0">继续调整</button></div>';
   } catch (e) {
-    if (out) out.innerHTML = '<div class="hint" style="color:var(--danger-text)">调用失败：'
-      + escapeHtml(String((e && e.message) || e)).slice(0, 200) + '</div>';
+    /* 失败必须「可恢复」：给原因 + 一条可行动建议 + 一个再试按钮。
+       以前只留一行红字，用户只能自己猜是网络、Key 还是模型名的问题。 */
+    var _msg = String((e && e.message) || e), _advice = '';
+    if (e && e.name === 'PlotTimeout') _advice = '可以：① 换模型（设置 → 模型）；② 关掉代理直连；③ 稍后重试。';
+    else if (/HTTP 401|HTTP 403|unauthorized|invalid api key/i.test(_msg)) _advice = '鉴权失败：到「设置」重新填 API Key。';
+    else if (/HTTP 429|rate limit|too many/i.test(_msg)) _advice = '被限流：公共免费端点常见，换一个模型或等几分钟。';
+    else if (/网络|Network|Failed to fetch|timeout|abort/i.test(_msg)) _advice = '网络不可达：检查代理设置，或换一个国内可用的端点。';
+    if (out) {
+      out.innerHTML = '<div class="hint" style="color:var(--danger-text)">编排失败：'
+        + escapeHtml(_msg).slice(0, 220) + '</div>'
+        + (_advice ? '<div class="hint">' + escapeHtml(_advice) + '</div>' : '')
+        + '<div style="margin-top:8px"><button class="btn btn-ghost" onclick="aiPlotRun(' + (refine ? 1 : 0) + ')">再试一次</button></div>';
+    }
   } finally {
+    if (typeof _tick === 'number' || _tick) { try { clearInterval(_tick); } catch (err2) { } }
     if (btn) { btn.disabled = false; btn.textContent = '生成'; }
   }
 }
@@ -19724,15 +19789,24 @@ async function runReply(b, opt) {
       const curWho = cur.querySelector('.who');
       const curBody = cur.querySelector('.wf-stream-body');
       var _lastPaint = 0;
+      var _wfBubT0 = 0;      // 当前步骤的开始时刻（进度气泡里的「已用 Ns」）
       const result = await runWorkflow(b, v, imgs, auds, entry.frames || [], imagePromptText, function (st) {
         // 顶部总进度
         var txt = '🔄 工作流执行中（' + (st.done || 0) + '/' + (st.total || aiBot.nodes.length) + '）';
         if (st.phase === 'human') txt = '⏸ 已暂停 · 等待人工审批（' + escapeHtml(st.curName || '审批') + '）— 请在弹窗中通过或驳回';
-        else if (st.curName) txt += ' · 正在执行：' + escapeHtml(st.curName);
+        else if (st.curName) {
+          /* 长节点（尤其非流式的工具/代码节点）可能要十几秒没有任何字节回传，
+             光写「正在执行：X」看起来就是卡死。带上已用秒数，用户才知道在动。
+             _wfBubT0 在进入这一步时重置（见下方 st.phase==='node' 分支）。 */
+          if (!_wfBubT0) _wfBubT0 = Date.now();
+          var _sec = Math.floor((Date.now() - _wfBubT0) / 1000);
+          txt += ' · 正在执行：' + escapeHtml(st.curName) + (_sec >= 2 ? '（已用 ' + _sec + 's）' : '');
+        }
         else if (st.lastDone) txt += ' · ✅ 已完成：' + escapeHtml(st.lastDone);
         prog.innerHTML = _body(escapeHtml(activeBot.n), '<div class="wf-progress">' + txt + '</div>');
         // 流式当前步
         if (st.phase === 'node' && st.role && st.role !== 'start' && st.role !== 'human') {
+          _wfBubT0 = Date.now();
           cur.style.display = '';
           curWho.textContent = activeBot.n + ' · ' + (st.curName || '步骤');
           curBody.textContent = '';
@@ -19745,7 +19819,14 @@ async function runReply(b, opt) {
         }
         _scrollChat();
       }, undefined, imagePromise);
-      _histRef.push({ role: 'bot', text: stripCtxPlaceholders(result.final), who: activeBot.n, t: Date.now(), kbHits: _kbSnap(), model: _curModel() });
+      /* 摘要拼在正文之后（不是前面）：用户先读答案，再核对过程。
+         只对「非快速模式的工作流结果」拼 —— 它有逐节点执行这件事可核对。 */
+      var _wfFinal = stripCtxPlaceholders(result.final);
+      if (window.wfSummaryMd) {
+        try { _wfFinal += window.wfSummaryMd(result.summary); }
+        catch (e) { console.warn('[wf] 运行摘要生成失败：', e); }
+      }
+      _histRef.push({ role: 'bot', text: _wfFinal, who: activeBot.n, t: Date.now(), kbHits: _kbSnap(), model: _curModel() });
       // 增量收尾：清掉 prog/cur（gen-tmp）并只补画新增的消息。
       // 不再整段重绘 —— 那会把全部历史重跑一遍 renderMarkdown，会话越长收尾越贵
       // （每条回答收尾一次，累计 O(N²)）。且流式气泡刚渲染过同一段文本。
@@ -27419,7 +27500,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.42.0';
+var APP_VERSION = '3.43.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -29245,6 +29326,13 @@ function _kbIndexFor(bot) {
     var prev = '', finalText = userMsg;
     var _pi = 0;  // runHumanNode 的驳回重启信号（置 -1 时并行调度递归重跑整条流程）
     var _lastNonEmpty = '', _lastNonEmptyNode = '', _lastNodeName = ''; // 空产出兜底用
+    /* 非快速回复（多节点工作流）的可核对性（2026-10-26）：
+       以前「某一步出错 → callModelFallback 顶上」是**静默**的，用户看到的正文像是模型
+       正常产出的，其实那一步已经降级；被 max_tokens 截断也只在日志面板里有一行小字。
+       没有日志面板（生成结束后就收了）时，这两件事在界面上完全不可见 —— 这正是
+       「未开快速回复时回复不可信」的根源。这里把它们记下来，随结果一起交给调用方，
+       由 wfSummaryMd 决定要不要在回答末尾附一段运行摘要。 */
+    var _wfDeg = [], _wfTrunc = [], _wfT0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     var _imgInjected = false; // 多模态：图片仅注入到第一个处理节点，避免重复
 
     // ---- 审批节点：暂停等待人工确认或修改；驳回 = 重置拓扑游标与变量池，整条流程重跑 ----
@@ -29470,7 +29558,12 @@ function _kbIndexFor(bot) {
           // finish_reason=length 说明这一步没写完就被 max_tokens 掐断了（草稿类节点最容易撞上）
           if (_it && typeof _it.getFinishReason === 'function' && _it.getFinishReason() === 'length') _truncated = true;
         }
-      } catch (e) { console.warn('[runWorkflow] 步骤失败，降级：', e); out = callModelFallback(node, e); }
+      } catch (e) {
+        console.warn('[runWorkflow] 步骤失败，降级：', e);
+        out = callModelFallback(node, e);
+        // 记下「这一步是兜底顶上来的」，以及原因（截断/鉴权/网络各不同）
+        _wfDeg.push({ name: node.h || ('步骤' + (i + 1)), why: String((e && e.message) || e).slice(0, 120) });
+      }
       var t1 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       out = (out || '').toString().trim();
       _lastNodeName = node.h || ('步骤' + (i + 1));
@@ -29482,6 +29575,7 @@ function _kbIndexFor(bot) {
         i: i + 1, role: role, name: node.h || ('步骤' + i), ms: Math.max(0, Math.round(t1 - t0)), output: out,
         note: _truncated ? '⚠️ 本步骤被「最大输出 tokens」截断，内容没写完。建议到「设置」把该值调大。' : ''
       });
+      if (_truncated) _wfTrunc.push(node.h || ('步骤' + (i + 1)));
       if (node.id) _vars[node.id] = { text: out };
       _lastExecNode = node;
       flushLogs(); emit({ total: _order.length, done: i + 1, lastDone: (node.h || ('步骤' + i)), role: role, phase: 'done', text: out });
@@ -29596,8 +29690,38 @@ function _kbIndexFor(bot) {
       }
       finalText = _fin;
     }
-    return { final: finalText, logs: logs };
+    /* summary 是「回答可信度」的元数据，不给模型看、只给界面用：
+       steps 总步数 / degraded 兜底顶上的步骤 / truncated 被截断的步骤 /
+       ms 端到端耗时 / model 实际模型。 */
+    var _wfMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - _wfT0));
+    return {
+      final: finalText, logs: logs,
+      summary: { steps: logs.length, degraded: _wfDeg, truncated: _wfTrunc, ms: _wfMs,
+                 model: (window.BotCraftAI && BotCraftAI.getConfig) ? (BotCraftAI.getConfig().model || '') : '' }
+    };
   }
+
+  /* 运行摘要（2026-10-26）。只在「需要用户知道」时出现，其余情况完全静默：
+       · 有步骤降级（兜底顶上）→ 必须说，否则用户以为那是模型输出；
+       · 有步骤被截断 → 必须说，否则用户以为内容就这么短；
+       · 步数 ≥ 3 → 附一行「N 步 / 耗时」，让长流程可核对。
+     单步、无异常的普通回答不加任何尾巴 —— 摘要本身也是噪音。 */
+  function wfSummaryMd(sm) {
+    if (!sm) return '';
+    var bad = (sm.degraded || []).length, tr = (sm.truncated || []).length;
+    var steps = sm.steps || 0;
+    var pts = [];
+    if (bad) pts.push('⚠️ ' + sm.degraded.map(function (d) { return '「' + d.name + '」'; }).join('、') + ' 这 ' + bad + ' 步以兜底方式完成（模型调用失败），内容可信度低于其它步骤');
+    if (tr) pts.push('⚠️ ' + sm.truncated.map(function (x) { return '「' + x + '」'; }).join('、') + ' 的输出被「最大输出 tokens」截断，建议到「设置」调大该值');
+    if (!pts.length && steps < 3) return '';
+    var head = '> 运行摘要：' + steps + ' 步 · ' + (sm.ms >= 1000 ? (sm.ms / 1000).toFixed(1) + 's' : sm.ms + 'ms')
+      + (sm.model ? ' · ' + sm.model : '') + ' · 非快速模式（逐节点执行）';
+    return '\n\n' + head + (pts.length ? '\n> ' + pts.join('\n> ') : '');
+  }
+  /* ⚠️ 跨 script 块：wfSummaryMd 定义在下游块，而调用方 sendMsg 在上游块（第 2 块）。
+     不挂 window 的话调用处会 ReferenceError，被我那层 try/catch 吞掉 ——
+     表现是「代码都对，摘要就是不出现」（这种静默失败最难查）。 */
+  try { window.wfSummaryMd = wfSummaryMd; } catch (e) { }
   // 暴露给测试：headless e2e 直接驱动工作流（验证分层并行 / 合流 / prev 语义），不改界面行为
   window.runWorkflow = runWorkflow;
 
