@@ -102,6 +102,19 @@
      JS 在 cwApplyDpr() 里写 --cw-dpr，缩放/换显示器（DPR 变化）时会跟着更新。 */
   --cw-dpr:1;
   --cw-hair:calc(1px / var(--cw-dpr,1));
+  /* 全屏画布入场过渡（2026-10-26）。四个参数就是全部的调节旋钮：
+       --cw-in-dur    时长。300ms 是「看得见但不挡路」的上限：再长用户在等动画，
+                      再短（<200ms）就看不出是动画、只像闪了一下。
+       --cw-in-ease   缓动。cubic-bezier(.16,.84,.36,1) 是快起慢收的「玻璃落定」曲线：
+                      前 30% 走完 70% 位移，尾巴拖得很轻 —— 这也是 Apple 那套
+                      fluid 动效的常见口味；换成 ease-out 会显得软、换 ease-in-out 会显得沉。
+       --cw-in-scale  起始缩放。1.015 只有 1.5%，观感是「画布从远处稍稍收进来」；
+                      超过 1.04 就会明显感到「东西在放大」，像 PPT 转场。
+       --cw-in-shift  起始下移 8px，配合缩放给出「落定」的方向感（不要和缩放反向）。 */
+  --cw-in-dur:300ms;
+  --cw-in-ease:cubic-bezier(.16,.84,.36,1);
+  --cw-in-scale:1.015;
+  --cw-in-shift:8px;
   --glass-blur:26px;
   --glass-sat:190%;
   --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
@@ -1522,6 +1535,63 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   overscroll-behavior:contain}
 /* 全屏时整页不许滚：Windows 上滚轮/触控板会把 documentElement 滚出 1~2px，
    固定层贴着 top 变量，于是上边缘露出一条缝（「铺不满」的观感就是这么来的）。 */
+/* ===== 全屏画布入场过渡（2026-10-26）=====
+   分三层，各管一件事：
+     ① 层（#wsFlowBody 自己）只做 opacity —— fixed 层整体缩放会把浮层的描边也拉虚；
+     ② 内容（.cw-root）做 scale + translateY + opacity —— 观感上的「入场」全在这里；
+     ③ 浮层（工具条 / 小地图 / 全屏按钮 / 提问条 / 对话面板）延后 16% 再淡入上浮，
+        避免和画布本体抢同一帧，也顺手做出「玻璃先后落定」的层次。
+   ⚠️ 只用 transform 与 opacity：两者都能走合成线程，不触发布局、不重绘；
+      动宽高/边距会让每帧重新布局，配合画布几十张卡片必掉帧。
+   ⚠️ 动画期间 .cw-root 带 will-change，结束后由脚本摘类，不留常驻图层。 */
+@keyframes cwEnterLayer{from{opacity:0}to{opacity:1}}
+@keyframes cwEnterStage{
+  from{opacity:0;transform:scale(var(--cw-in-scale)) translateY(var(--cw-in-shift))}
+  to{opacity:1;transform:none}}
+@keyframes cwEnterPanel{
+  from{opacity:0;transform:translateY(calc(var(--cw-in-shift) * .6))}
+  to{opacity:1;transform:none}}
+@keyframes cwEnterFade{from{opacity:0}to{opacity:1}}
+#wsFlowBody.cw-enter{animation:cwEnterLayer var(--cw-in-dur) var(--cw-in-ease) both}
+#wsFlowBody.cw-enter .cw-root{
+  will-change:transform,opacity;
+  animation:cwEnterStage var(--cw-in-dur) var(--cw-in-ease) both}
+#wsFlowBody.cw-enter .cw-tools,
+#wsFlowBody.cw-enter .cw-mini,
+#wsFlowBody.cw-enter .cw-fullbar,
+#wsFlowBody.cw-enter .cw-hint,
+#wsFlowBody.cw-enter .cw-qa,
+#wsFlowBody.cw-enter .cw-qa-bar,
+#wsFlowBody.cw-enter .cw-qa-tab{
+  animation:cwEnterPanel calc(var(--cw-in-dur) * .8) var(--cw-in-ease) calc(var(--cw-in-dur) * .16) both}
+/* 快速模式：只留淡入。缩放虽然走合成线程，但一屏几十张卡片同时插值仍然要合成开销，
+   低配机器上那点「质感」不值这几个毫秒。 */
+body.cw-fast{--cw-in-dur:180ms}
+body.cw-fast #wsFlowBody.cw-enter .cw-root,
+body.cw-fast #wsFlowBody.cw-enter .cw-tools,
+body.cw-fast #wsFlowBody.cw-enter .cw-mini,
+body.cw-fast #wsFlowBody.cw-enter .cw-fullbar,
+body.cw-fast #wsFlowBody.cw-enter .cw-hint,
+body.cw-fast #wsFlowBody.cw-enter .cw-qa,
+body.cw-fast #wsFlowBody.cw-enter .cw-qa-bar,
+body.cw-fast #wsFlowBody.cw-enter .cw-qa-tab{animation-name:cwEnterFade}
+/* 窄屏 / 触屏：位移与缩放都收一半。手机上视口小，1.5% 的缩放换算成像素只有两三像素，
+   但同样的位移在竖直方向会被感知成「页面在跳」，所以宁可更克制、时长也更短。 */
+@media (max-width:720px){
+  :root{--cw-in-dur:220ms;--cw-in-scale:1.006;--cw-in-shift:4px}
+}
+/* 系统开了「减少动态效果」：不做动画（无障碍底线，不是可选项）。 */
+@media (prefers-reduced-motion: reduce){
+  #wsFlowBody.cw-enter,
+  #wsFlowBody.cw-enter .cw-root,
+  #wsFlowBody.cw-enter .cw-tools,
+  #wsFlowBody.cw-enter .cw-mini,
+  #wsFlowBody.cw-enter .cw-fullbar,
+  #wsFlowBody.cw-enter .cw-hint,
+  #wsFlowBody.cw-enter .cw-qa,
+  #wsFlowBody.cw-enter .cw-qa-bar,
+  #wsFlowBody.cw-enter .cw-qa-tab{animation:none!important}
+}
 body.cw-flow-full{overflow:hidden}
 body.cw-flow-full{overscroll-behavior:none}
 #wsFlowBody.cw-full .cw-root{right:0;background:var(--bg)}
@@ -13934,7 +14004,12 @@ function go(p) {
   if (!ms) { dropLeaveEl(); if (p === 'workspace') _cwRestoreFullAt(60); return; }   /* 降级用户没有收起动画，不必等 */
   const seq = ++_goSeq;
   _leaveTimer = setTimeout(function () { if (seq === _goSeq) dropLeaveEl(); }, ms + 40);
-  if (p === 'workspace') _cwRestoreFullAt(ms + 80);   // 等淡化真正走完再恢复
+  /* 恢复全屏的时机从「淡化走完 +80ms」改成「淡化尾部 -40ms」（2026-10-26）。
+     当年 +80 是为了躲开「顶栏从 display:none 变回 flex 重建 backdrop 合成层」那一下；
+     而 v3.36.0 起全屏不再隐藏顶栏（画布让出 --cw-full-top），这项开销已经不存在。
+     现在提前 40ms 恢复，让「旧页淡出 → 新页淡入」的最后一段与画布的入场淡入重叠：
+     两段动画交叉溶解，中间不留「空白一帧」。40 就是 CW_ENTER_OVERLAP。 */
+  if (p === 'workspace') _cwRestoreFullAt(Math.max(60, ms - CW_ENTER_OVERLAP));
 }
 function toggleNav() { var n = document.querySelector('.nav'); if (n) n.classList.toggle('open'); }
 /* 页面不可见时暂停背景光晕（见 CSS .bg-hidden 注释）：无限循环动画在看不见的窗口里
@@ -14654,6 +14729,63 @@ function cwInitFast() {
   try { document.body.classList.toggle('cw-fast', cwSt.fast); } catch (e) { }
   cwApplyDpr();
 }
+/* ==================== 全屏画布入场过渡（2026-10-26）====================
+   触发点只有一个：cwToggleFull 的「进入」分支末尾（DOM 都摆好之后）。
+   为什么不在切页那一侧触发：全屏层在切页时还不可见，动画要在它真的上屏之后才开始，
+   否则前半段时长全花在「看不见的元素上」，用户看到的是「等了一会儿才闪出来」。
+
+   与页面切换的衔接：go() 把恢复全屏排在交叉淡化的**尾部**（ms - 40，见那边注释），
+   于是「旧页淡出 → 新页淡入」的最后 40ms 与「画布淡入」重叠 —— 观感是一次交叉溶解，
+   而不是「先空一帧、再冒出画布」。这个重叠量就是 CW_ENTER_OVERLAP。
+   清理走三条路（animationend / 兜底定时器 / 再次进入前先摘），任一条先到就算完成：
+   动画被中断（切页、退出全屏）时不会把 cw-enter 永久留在层上 —— 留着会让
+   will-change 常驻、每次重绘都多一张全尺寸图层。 */
+var CW_ENTER_OVERLAP = 40;      // 与页面淡化的重叠量（ms）
+var _cwEnterT = 0;
+
+function cwEnterReduced() {
+  try {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  } catch (e) { return false; }
+}
+function cwEnterDurMs() {
+  var el = document.getElementById('wsFlowBody');
+  if (!el) return 0;
+  var raw = '';
+  try { raw = String(getComputedStyle(el).getPropertyValue('--cw-in-dur') || ''); } catch (e) { }
+  var v = parseFloat(raw);
+  if (!(v > 0)) return 300;                       // 变量缺失时按默认值兜底
+  return raw.indexOf('ms') >= 0 ? v : v * 1000;
+}
+function cwClearEnter() {
+  var el = document.getElementById('wsFlowBody');
+  if (el) el.classList.remove('cw-enter');
+  if (_cwEnterT) { try { clearTimeout(_cwEnterT); } catch (e) { } _cwEnterT = 0; }
+}
+function cwPlayEnter() {
+  var el = document.getElementById('wsFlowBody');
+  if (!el) return false;
+  cwClearEnter();                                 // 上一轮若没清干净，先摘掉重来
+  if (cwEnterReduced()) return false;             // 减少动效：直接出现，连一帧都不补
+  var dur = cwEnterDurMs();
+  if (!(dur > 0)) return false;
+  void el.offsetWidth;                            // 强制回流：让动画从 from 帧开始播
+  el.classList.add('cw-enter');
+  var done = function () {
+    if (_cwEnterT) { try { clearTimeout(_cwEnterT); } catch (e) { } _cwEnterT = 0; }
+    el.classList.remove('cw-enter');
+  };
+  try {
+    el.addEventListener('animationend', function h(ev) {
+      if (ev.target !== el) return;               // 只认层自己那条，子元素各自结束
+      el.removeEventListener('animationend', h);
+      done();
+    });
+  } catch (e) { }
+  _cwEnterT = setTimeout(done, dur + 160);        // 兜底：动画被跳过/中断也要摘类
+  return true;
+}
+
 /* 交互期标记：平移/缩放/拖动时给 root 挂 cw-interacting，让舞台走独立合成层。
    停手 160ms 后摘掉，并补画一次 —— 快速模式下交互期间跳过了小地图，
    不补这一下会停在「小地图没更新」的状态。 */
@@ -15558,6 +15690,10 @@ function cwToggleFull(force, keepWanted) {
      普通模式的可见性由 .cw-full 自己接管，不再需要 cw-hold-chat。 */
   document.body.classList.remove('cw-hold-chat');
   if (on === body.classList.contains('cw-full')) return;     // 状态没变就不做事
+  /* 状态要变了：先把上一轮的入场类摘掉。放在这里而不是 close 分支里，
+     是因为「进入」也要先清 —— 连点两次全屏按钮时，第二轮的 from 帧才不会被
+     上一轮残留的 both 填充覆盖掉（否则第二次点了没动画）。 */
+  try { cwClearEnter(); } catch (e) { }
   /* 「用户本来想全屏吗」只在两种情况下保留：进全屏（当然是），
      以及切页导致的临时收起（keepWanted）。其余退出路径都是用户真的不想全屏了。 */
   if (on) { try { if (cwSt) cwSt.fullWanted = false; } catch (e) { } }
@@ -15627,6 +15763,9 @@ function cwToggleFull(force, keepWanted) {
   } catch (e) { if (!_quiet) cwRefresh(); }
   // 上下文详情若正开着：进出全屏后要重新贴到提问框上方（退出时回到居中弹窗）
   try { if (typeof cwPlaceCtxPanel === 'function') cwPlaceCtxPanel(); } catch (e) { }
+  /* 入场过渡：只在这一刻播（DOM 已摆好、尺寸已算完、真聊天区已接管）。
+     退出不播 —— 退出是「回到原界面」，用户此时在找聊天窗口，动画只会拖慢这一步。 */
+  try { if (on) cwPlayEnter(); else cwClearEnter(); } catch (e) { }
   toast(on ? '已进入全屏编排（Esc 退出）' : '已退出全屏', 'ok');
 }
 /* ===== 全屏画布内的「更多」抽屉（2026-10-24） =====
@@ -27280,7 +27419,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.41.0';
+var APP_VERSION = '3.42.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
