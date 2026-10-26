@@ -99,6 +99,11 @@
   --glass-blur:26px;
   --glass-sat:190%;
   --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
+  /* 液态玻璃版（画布专用）：在同一滤镜栈上再抬饱和度与亮度，并收一点模糊半径。
+     ⚠️ 这里**没有** url(#...) 置换滤镜 —— 见下方「折射实测结论」，那是实测过的死路。
+     观感差异来自：饱和度 210% 让背后的彩色光晕更「湿」、亮度 1.06 把玻璃提亮一档、
+     模糊收到 20px 让边缘细节还留一点（26px 会把画布网格糊成一片灰）。 */
+  --glass-filter-liq:saturate(210%) brightness(1.06) blur(20px);
   --glass-ridge:none;
   /* 液态玻璃四件套（玻璃珠化）：顶缘亮线 + 顶部内泛光（大片高光斑）、
      底缘暗线 + 底部折射回光、双层外投影（近实远虚）、对角高光渐变 */
@@ -1477,7 +1482,10 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
      否则底下的节点与网格会透上来（v3.27.3 的教训）。 */
 /* --cw-full-left：全屏画布的左边距（= 左侧工作台占位）。由 cwSyncFullLeft() 按侧栏实际宽度写入，
    这里给初值 0：CSS 变量必须先有定义，否则 verify_css 会把它算成"悬空引用"（靠 fallback 兜底也算违规）。 */
-:root{ --cw-qa-w:380px; --cw-qa-gap:12px; --cw-full-left:0px; --cw-full-top:0px; }
+/* --cw-qa-w 2026-10-26：380 → 460。画布里的对话现在就是**真聊天区**（同一份 DOM），
+   380px 列宽下 markdown 表格/代码块被挤成一字一行（实测截图确认），必须给足宽度。
+   这个令牌同时决定 fit 的右侧预留与小地图让位量，改一处三处同步，不用分别调。 */
+:root{ --cw-qa-w:460px; --cw-qa-gap:12px; --cw-full-left:0px; --cw-full-top:0px; }
 /* 背景必须用不透明的 --bg：#wsFlowBody 与 .cw-root 原本都用 --sunken
    （深 rgba(0,0,0,.24) / 浅 rgba(120,120,128,.13)，是给 300px 侧栏里「压暗一点」用的）。
    全屏铺满时它就成了半透明蒙版 —— 底下的侧栏、顶栏、聊天区整片透上来，
@@ -1524,6 +1532,86 @@ body.ws-side-collapsed .ws-resizer::after{left:5px}
   bottom:max(calc(var(--cw-qa-gap) * 4), min(16vh, 180px));z-index:8;display:none;
   justify-content:center;padding:0 var(--cw-qa-gap);pointer-events:none}
 #wsFlowBody.cw-full .cw-qa-bar{display:flex}
+/* ===== 画布玻璃的液态质感（2026-10-26，参照 inspira-ui Liquid Glass 的观感）=====
+   覆盖画布内五种「浮在内容之上」的玻璃：对话面板、输入条、工具条、面板抽屉、全屏按钮。
+   折射位移那一步在本环境不可用（见文件头「实测结论」），这里用的是它的视觉骨架：
+   更高饱和/更亮的模糊 + 边缘光学 + 表面厚度。
+   ⚠️ 每条都写两遍（普通档 → 液态档）：万一以后液态档用到某个引擎不认识的值，
+      前一条会兜住，不至于连模糊一起丢掉。
+   ⚠️ 必须带 !important：.cw-tools / .cw-mini 等早已登记在下方「全局液态玻璃」清单里
+     （那条规则用 !important 强制 var(--glass-filter)），不带就永远被它压住 ——
+     实测发现「写进去却毫无变化」就是这个原因。
+   ⚠️ 小地图与画布节点不挂液态档：它们每帧都在重绘（滚动/拖动），
+      多一层滤镜就多一次全屏重算（.cw-mini 只保留普通模糊）。 */
+body .cw-qa,
+body .cw-live-chat,
+body .cw-live-bar > .chat-input,
+body .cw-tools,
+body .cw-tabpop,
+body .cw-fullbtn{
+  -webkit-backdrop-filter:var(--glass-filter)!important;
+  backdrop-filter:var(--glass-filter)!important;
+  -webkit-backdrop-filter:var(--glass-filter-liq)!important;
+  backdrop-filter:var(--glass-filter-liq)!important}
+/* ===== 全屏画布里的「真·聊天区」（2026-10-26）=====
+   原来画布右侧是 #cwQA 快照（cwRenderQA 拼出来的 HTML）+ 一条自写 textarea，
+   能力是残缺的：附件/图片、附带文档、停止生成、消息上的复制 / 重新生成 / 点赞 / 删除、
+   图片查看器统统用不了 —— 用户说的「两个功能割裂」指的就是这个。
+   现在把**真正的** #chat 与 .chat-input 搬进这个固定层：同一份 DOM、同一套事件、
+   同一份历史，能力天然一致，也不存在两套逻辑各改一半。
+   ⚠️ 必须挂 document.body，不能挂 #wsFlowBody：#wsFlowBody 每次 renderNodes 都整体重写
+      innerHTML，搬进去的 #chat 是活元素，被拔掉就再也拿不回来了。 */
+/* z-index 68：画布 #wsFlowBody.cw-full 自己就是 66 —— 固定层挂在 body 上，
+   层级必须**高于画布**才看得见（原来写 8，整片被画布盖住，实测截图里聊天面板直接消失）。
+   仍低于全局浮层（.doc-pick 70 / .modal 100 / .cmdk 150），弹窗照常压在它上面；
+   抽屉 67 也在它下面，所以打开「更多」抽屉时抽屉会被对话面板盖住 —— 这是有意的：
+   抽屉是从画布工具条打开的面板，用户正看着对话时不该被它整片顶掉。 */
+#cwLive{position:fixed;left:var(--cw-full-left,0);top:var(--cw-full-top,0);right:0;bottom:0;
+  z-index:68;display:none;pointer-events:none}
+body.cw-flow-full #cwLive.on{display:block}
+.cw-live-chat{position:absolute;right:var(--cw-qa-gap);top:var(--cw-qa-gap);bottom:var(--cw-qa-gap);
+  width:var(--cw-qa-w);max-width:calc(100% - var(--cw-qa-gap) * 2);display:flex;flex-direction:column;
+  pointer-events:auto;background:var(--pop-veil);background-image:var(--lg-spec);
+  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--lg-shadow);overflow:hidden}
+/* 收起态与旧面板共用 body.cw-qa-off（cwToggleQA 会同步镜像） */
+body.cw-qa-off .cw-live-chat{display:none}
+.cw-live-hd{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-5) var(--sp-6);
+  border-bottom:1px solid var(--line);font-size:var(--fs-sm);color:var(--sub);flex:0 0 auto;
+  cursor:grab;user-select:none;-webkit-user-select:none}
+.cw-live-hd b{color:var(--txt);font-size:var(--fs-base);font-weight:600}
+.cw-live-acts{margin-left:auto;display:flex;gap:var(--sp-3)}
+.cw-live-btn{padding:3px var(--sp-5);border-radius:var(--r-sm);border:1px solid var(--line);
+  background:var(--fill);color:var(--sub);font-family:inherit;font-size:var(--fs-xs);cursor:pointer}
+.cw-live-btn:hover{background:var(--fill-hover);color:var(--txt)}
+#cwLiveStop{background:var(--brand-tint);border-color:var(--brand-line);color:var(--brand-text)}
+#cwLiveStop:hover{background:var(--brand-tint-2)}
+/* 聊天区搬进来后要撑满这一列：.chat 自己带 flex:1 1 auto / min-height:0，够用；
+   只需把它的内边距收一档，窄列里 22px 太浪费。 */
+.cw-live-chat > #chat{padding:var(--sp-6);gap:var(--sp-6)}
+/* 窄列里的 markdown 表格：主聊天区有 800px+ 宽，画布面板只有 460px ——
+   原来 width:100% + word-break:break-word 会把单元格压成「一字一行」（实测截图确认）。
+   改成保留可读列宽 + 横向滚动：表格不塌，用户滑一下就能看完。只作用于画布面板。 */
+.cw-live-chat .msg.bot table.md-table{display:block;overflow-x:auto;max-width:100%}
+.cw-live-chat .msg.bot table.md-table > thead,
+.cw-live-chat .msg.bot table.md-table > tbody{display:table;width:100%;min-width:420px}
+.cw-live-chat .msg.bot table.md-table th,
+.cw-live-chat .msg.bot table.md-table td{word-break:normal;overflow-wrap:anywhere;min-width:68px}
+/* 长代码行同理：横向滚动，不要硬折 */
+.cw-live-chat .msg pre{max-width:100%}
+.cw-live-bar{position:absolute;left:0;right:calc(var(--cw-qa-w) + var(--cw-qa-gap) * 2);
+  bottom:max(calc(var(--cw-qa-gap) * 4), min(16vh, 180px));
+  display:flex;justify-content:center;padding:0 var(--cw-qa-gap);pointer-events:none}
+body.cw-qa-off .cw-live-bar{right:0}
+/* 真输入框（.chat-input）外壳改成与旧输入条同源的玻璃薄片：它原本是「贴在工作台底部的一行」，
+   搬进画布后需要自己成为一个浮起来的控件。 */
+.cw-live-bar > .chat-input{pointer-events:auto;width:min(720px,100%);padding:var(--sp-3);
+  gap:var(--sp-3);border-top:0;border:1px solid var(--glass-border);border-radius:var(--r-lg);
+  background:var(--pop-veil);background-image:var(--lg-spec);
+  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  box-shadow:var(--lg-shadow)}
+/* 接管期间旧的快照面板与自写输入条整体让位（代码保留，作为拿不到真元素时的兜底路径） */
+body.cw-adopt-chat .cw-qa,body.cw-adopt-chat .cw-qa-bar{display:none!important}
 #wsFlowBody.cw-full.cw-qa-off .cw-qa-bar{right:0}    /* 收起历史后回到整屏居中 */
 .cw-qa-in{pointer-events:auto;width:min(720px,100%);display:flex;gap:var(--sp-3);align-items:flex-end;
   padding:var(--sp-3) var(--sp-4);border:1px solid var(--glass-border);border-radius:var(--r-lg);
@@ -1734,7 +1822,15 @@ body.cw-flow-full #chatFullBtn{display:none}
 .cw-root.cw-narrow .cw-tbtn-more .cw-tb-txt{display:none}
 .cw-zval{min-width:54px;font-variant-numeric:tabular-nums}
 .cw-tsep{width:1px;height:16px;background:var(--line);margin:0 var(--sp-2)}
-.cw-mini{position:absolute;right:var(--sp-6);bottom:var(--sp-6);width:168px;height:108px;border-radius:var(--r-lg);background:var(--glass-bg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);overflow:hidden;z-index:6;cursor:pointer}
+/* z-index 10：对话面板 .cw-qa 是 9 —— 原来小地图 6，两者都停在右下角，
+   面板一展开就把小地图整块盖住（实测 elementFromPoint 命中 cw-qa-ask）。 */
+.cw-mini{position:absolute;right:var(--sp-6);bottom:var(--sp-6);width:168px;height:108px;border-radius:var(--r-lg);background:var(--glass-bg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);overflow:hidden;z-index:10;cursor:pointer}
+/* 全屏且对话面板展开时，小地图让到面板左侧 —— 只抬 z-index 不够：
+   叠在面板上方会挡住消息列表，位置与层级都要让开。
+   画布被挤得太窄（放不下面板 + 小地图 + 工具条）时干脆收起，把空间还给节点。 */
+#wsFlowBody.cw-full:not(.cw-qa-off) .cw-mini{right:calc(var(--cw-qa-w) + var(--cw-qa-gap) * 2 + var(--sp-6))}
+#wsFlowBody.cw-full:not(.cw-qa-off) .cw-root.cw-cramped .cw-mini{right:auto}
+#wsFlowBody.cw-full .cw-root.cw-qa-squeeze .cw-mini{display:none}
 .cw-mini-node{position:absolute;border-radius:var(--r-2xs);background:var(--brand-line)}
 .cw-mini-node.sel{background:var(--brand-text)}
 .cw-mini-vp{position:absolute;border-radius:var(--r-2xs);border:1px solid var(--brand-text);background:var(--brand-tint)}
@@ -3236,12 +3332,15 @@ html[data-glass="off"] body .ch-more-menu, html[data-glass="off"] body .modal, h
 html[data-glass="off"] body .doc-pick, html[data-glass="off"] body .slash-menu,
 html[data-glass="off"] body .ctxp-box,
 html[data-glass="off"] body .stat-card, html[data-glass="off"] body .chart-box, html[data-glass="off"] body .brand-card,
-html[data-glass="off"] body .pub-card, html[data-glass="off"] body .batch-bar, html[data-glass="off"] body .main.scrolled > .page-head,
-html[data-glass="off"] body .cw-tools, html[data-glass="off"] body .cw-mini{
+html[data-glass="off"] body .pub-card, html[data-glass="off"] body .batch-bar, html[data-glass="off"] body .main.scrolled > .page-head{
   -webkit-backdrop-filter:none !important;
   backdrop-filter:none !important;
   background-image:none !important;
 }
+/* 画布内的工具条 / 小地图**不进**这张清单（2026-10-26）：全屏画布是一个独立的
+   「玻璃舞台」—— 它自己的背景、节点、浮层本来就不跟随站内玻璃开关（.cw-live-chat
+   一直无条件挂着 --glass-filter）。把工具条留在清单里，玻璃关掉时画布里会孤零零
+   剩一块磨砂白板，跟满屏玻璃浮层打架。 */
 html[data-glass="off"] body .topbar, html[data-glass="off"] body .sidebar, html[data-glass="off"] body .ws-side,
 html[data-glass="off"] body .main, html[data-glass="off"] body .workspace,
 html[data-glass="off"] body .mbox, html[data-glass="off"] body .cmdk-box, html[data-glass="off"] body .toast,
@@ -3266,6 +3365,21 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 </style>
 </head>
 <body>
+<!-- ==================== 液态玻璃：SVG 置换滤镜的实测结论（2026-10-26）====================
+     inspira-ui 的 Liquid Glass 靠 SVG feDisplacementMap 对背景做光学位移。本机实测
+     （Edge / Chromium 1500×950，逐像素比对，脚本见说明）结论是**在本环境不可用**：
+       · `filter: url(#f)`  —— 生效（同一滤镜挂在元素自身上，条纹会被明显搅乱）；
+       · `backdrop-filter: url(#f)` —— 只被解析、不参与渲染。计算样式里能看到
+         `saturate(1.9) blur(26px) url("#bcLiquidGlass")`，但开关前后整屏像素差最大 1 级
+         （118.8 万像素中超过阈值的为 0 个），即完全无视觉差异。
+       · 顺带排除了排查误区：feTurbulence 的 alpha 会参与预乘，导致 feDisplacementMap
+         的位移量恒为 0；即便补 feColorMatrix 把 alpha 归一化，也只是把画面搅成均匀一片。
+     结论：不在 backdrop-filter 里引用 SVG 滤镜（写了等于没写，还会让 Safari 把整条
+     声明判为无效）。液态玻璃的观感改由**确实能渲染**的三件事承担：
+       ① 高饱和 + 微提亮的模糊（--glass-filter-liq）；
+       ② 边缘光学：顶缘亮线 + 底缘暗线 + 内折射回光（--lg-top / --lg-bottom）；
+       ③ 表面厚度：上亮下暗的渐变 + 角落品牌色泛光（--card-bloom / --card-falloff）。
+     要重新尝试置换滤镜，先做上面那个像素差对照，别只看计算样式就下结论。 -->
 
 <!-- ==================== 顶栏 ==================== -->
 <div class="topbar">
@@ -15094,10 +15208,114 @@ function cwQASend() {
   ta.value = ''; cwQAGrow();
   try { sendMsg(); } catch (e) { console.warn('[cw] 画布内发送失败：', e); }
 }
+/* ===== 画布内「真·聊天区」接管（2026-10-26）=====
+   设计取舍：不做「画布版聊天」的第二套实现，而是把真正的 #chat 与 .chat-input 搬过去。
+   代价是必须记住原位（退出时插回去），收益是附件、附带文档、停止生成、消息级操作
+   （复制 / 重新生成 / 点赞 / 删除 / 看图）全部零成本一致 —— 这正是用户要的「能力一致」。 */
+function cwLiveEl() {
+  var el = document.getElementById('cwLive');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'cwLive';
+  el.innerHTML = '<div class="cw-live-chat" id="cwLiveChat">'
+    + '<div class="cw-live-hd"><b>对话</b><span id="cwLiveCnt"></span>'
+    + '<span class="cw-live-acts">'
+    + '<button type="button" class="cw-live-btn" id="cwLiveStop" style="display:none" onclick="stopGenerate()">⏹ 停止</button>'
+    + '<button type="button" class="cw-live-btn" data-live="hide" title="收起对话（Esc 不退全屏时先收它）">收起</button>'
+    + '</span></div></div>'
+    + '<div class="cw-live-bar" id="cwLiveBar"></div>';
+  document.body.appendChild(el);
+  el.addEventListener('click', function (e) {
+    var b = (e.target && e.target.closest) ? e.target.closest('[data-live]') : null;
+    if (b && b.getAttribute('data-live') === 'hide') cwToggleQA();
+  });
+  return el;
+}
+/* 收起态的展开胶囊：不放在 #cwQA 里面 —— 那个盒子收起时是 display:none，
+   放里面等于「收起就再也打不开」。它是 #wsFlowBody 的直属子节点，
+   所以 renderNodes 清空 innerHTML 后必须在每次渲染里重建。 */
+function cwQATabEnsure(b, body, rounds) {
+  body = body || document.getElementById('wsFlowBody');
+  if (!body) return;
+  var tab = document.getElementById('cwQATab');
+  if (!tab) {
+    tab = document.createElement('button');
+    tab.type = 'button'; tab.id = 'cwQATab'; tab.className = 'cw-qa-tab';
+    body.appendChild(tab);
+    tab.onclick = function () { cwToggleQA(); };
+  }
+  if (rounds === undefined) {
+    var h = (b && b.history) || [];
+    rounds = 0;
+    for (var i = 0; i < h.length; i++) if (h[i] && h[i].role === 'me') rounds++;
+  }
+  tab.innerHTML = svgIcon('chat', 'solo') + '<span>对话 · ' + rounds + ' 轮</span>';
+  tab.title = '展开画布内的提问与回答';
+}
+function cwLiveSync() {
+  var el = document.getElementById('cwLive'); if (!el) return;
+  var st = document.getElementById('cwLiveStop');
+  if (st) st.style.display = (typeof sending !== 'undefined' && sending) ? '' : 'none';
+  var cnt = document.getElementById('cwLiveCnt');
+  if (cnt) {
+    var h = (cwSt.bot && cwSt.bot.history) || [];
+    var rounds = 0;
+    for (var i = 0; i < h.length; i++) if (h[i] && h[i].role === 'me') rounds++;
+    cnt.textContent = rounds + ' 轮' + ((typeof sending !== 'undefined' && sending) ? ' · 正在回答…' : '');
+  }
+}
+function cwAdoptChat() {
+  var el = cwLiveEl();
+  var chat = document.getElementById('chat');
+  var inp = document.querySelector('#page-workspace .chat-input');
+  if (!chat || !inp) { el.classList.add('on'); return; }   // 拿不到真元素：老快照路径兜底
+  if (!cwSt.chatAdopted) {
+    cwSt.chatHome = {
+      c: { p: chat.parentNode, n: chat.nextSibling },
+      i: { p: inp.parentNode, n: inp.nextSibling }
+    };
+    document.getElementById('cwLiveChat').appendChild(chat);
+    document.getElementById('cwLiveBar').appendChild(inp);
+    if (!cwSt.liveDrag) cwSt.liveDrag = cwBindFloatDrag('live', document.getElementById('cwLiveChat'), '.cw-live-hd');
+    cwSt.chatAdopted = true;
+    document.body.classList.add('cw-adopt-chat');
+  }
+  el.classList.add('on');
+  cwLiveSync();
+}
+function cwReleaseChat() {
+  var el = document.getElementById('cwLive');
+  if (el) el.classList.remove('on');
+  document.body.classList.remove('cw-adopt-chat');
+  document.body.classList.remove('cw-qa-off');
+  if (!cwSt.chatAdopted) return;
+  cwSt.chatAdopted = false;
+  var home = cwSt.chatHome || {}; cwSt.chatHome = null;
+  var chat = document.getElementById('chat');
+  var inp = document.querySelector('.chat-input');
+  /* 按记下的原位插回；原位若已不在文档里（极端情况）就退回父节点末尾 ——
+     绝不能把 #chat 丢在固定层里，否则普通模式下聊天区永久空白。 */
+  var put = function (node, h) {
+    if (!node || !h) return;
+    if (h.p && h.p.isConnected) {
+      try { h.p.insertBefore(node, h.n); } catch (e) { h.p.appendChild(node); }
+    }
+  };
+  put(chat, home.c);
+  put(inp, home.i);
+}
 function cwRenderQA(b) {
   var body = document.getElementById('wsFlowBody');
   if (!body) return;
   b = b || { history: [] };          // 还没选机器人也要能画出空态，否则全屏后一片空
+  /* 真聊天区接管时（cwAdoptChat）不再绘快照 —— 只维护「收起胶囊」与计数。
+     胶囊必须在快照之外单独维护：renderNodes 重写 innerHTML 会把它清掉，
+     少了这一步「收起对话」之后就再也展不开。 */
+  if (cwSt.chatAdopted) {
+    cwQATabEnsure(b, body);
+    cwLiveSync();
+    return;
+  }
   var box = document.getElementById('cwQA');
   if (!box) {
     box = document.createElement('div');
@@ -15125,15 +15343,7 @@ function cwRenderQA(b) {
   /* 收起态的展开胶囊：不放在 #cwQA 里面 —— 那个盒子收起时是 display:none，
      放里面等于「收起就再也打不开」。它是 #wsFlowBody 的另一个直属子节点，
      所以 renderNodes 清空 innerHTML 后同样要在本函数里重建。 */
-  var tab = document.getElementById('cwQATab');
-  if (!tab) {
-    tab = document.createElement('button');
-    tab.type = 'button'; tab.id = 'cwQATab'; tab.className = 'cw-qa-tab';
-    body.appendChild(tab);
-  }
-  tab.innerHTML = svgIcon('chat', 'solo') + '<span>对话 · ' + rounds + ' 轮</span>';
-  tab.title = '展开画布内的提问与回答';
-  tab.onclick = function () { cwToggleQA(); };
+  cwQATabEnsure(b, body, rounds);
   /* 只换内容，不动骨架：用户正在输入框里打的字不会被流式刷新清掉。
      滚动位置也要保：原本就在底部才跟着滚，否则保持原位置（否则翻历史会被一直拽到底）。 */
   var sc = document.getElementById('cwQABody');
@@ -15171,6 +15381,8 @@ function cwQAWatchStop() { if (_cwQAWatchT) { clearInterval(_cwQAWatchT); _cwQAW
 function cwToggleQA() {
   var body = document.getElementById('wsFlowBody'); if (!body) return;
   body.classList.toggle('cw-qa-off');
+  /* 固定层 #cwLive 挂在 body 上，读不到 #wsFlowBody 的类 —— 收起态要镜像一份。 */
+  document.body.classList.toggle('cw-qa-off', body.classList.contains('cw-qa-off'));
   // 浮层是覆盖层、不挤占画布宽度，所以收起/展开不需要重绘画布（省一次全量重排）
 }
 /* 同步**两颗**入口。不再依赖 cwSt.root：聊天头部那颗在画布没渲染时也要能显示正确状态。 */
@@ -15243,10 +15455,15 @@ function cwToggleFull(force, keepWanted) {
     // 先算左边距再渲染问答条：输入条的居中基准是画布实际宽度
     cwSyncFullLeft();
     try { cwRenderQA(b); } catch (e) { console.warn('[cw] 画布内问答渲染失败：', e); }
+    /* 把真聊天区与真输入框搬进来（v3.40.0）。排在 cwRenderQA 之后：那一步会建好
+       收起胶囊与兜底骨架，接管失败时仍有一套可用的快照。 */
+    try { cwAdoptChat(); } catch (e) { console.warn('[cw] 接管聊天区失败：', e); }
     // 回答是流式写进 history 的，浮层是快照 → 不跟随刷新就只看到一条空回答
     try { cwQAWatchStart(); } catch (e) { }
   } else {
     body.classList.remove('cw-full');
+    /* 先交还聊天区：它必须回到 .ws-main 里，否则普通模式下聊天区永久空白。 */
+    try { cwReleaseChat(); } catch (e) { console.warn('[cw] 交还聊天区失败：', e); }
     /* 抽屉必须在画布插回原位之前收掉：搬进去的面板要放回 .ws-side，
        否则它永久住在抽屉里，回到普通模式点「记忆」只会看到一片空白。 */
     try { cwCloseTabPop(); } catch (e) { }
@@ -15274,10 +15491,13 @@ function cwToggleFull(force, keepWanted) {
      重新 cwFit 既多一次全节点遍历，又会把用户当前的缩放/平移重置掉 ——
      表现就是「切回来画面跳一下」。 */
   var _quiet = !!(cwSt && cwSt.quiet);
+  /* keepWanted = 这次退出是「切页」引起的，画布随即被隐藏：不排期取景。
+     不加这一条的话，rAF 会落在隐藏当帧，配合 cwFit 的兜底尺寸把视图钳成 30%。 */
+  var _leaving = !!keepWanted;
   try {
     requestAnimationFrame(function () {
       if (!cwSt.root) return;
-      if (_quiet) return;
+      if (_quiet || _leaving) return;
       if (cwSt.bot && (cwSt.bot.nodes || []).length) cwFit(cwSt.bot, cwQAReserved());
       else cwRefresh();
     });
@@ -15992,6 +16212,13 @@ function cwFit(b, rightPad) {
   const root = cwSt.root;
   b = b || cwSt.bot;
   if (!root || !b || !b.nodes || !b.nodes.length) return;
+  /* ⚠️ 容器没有尺寸时**绝不能取景**（2026-10-26 定位到的「切页回来画布缩成 30%」根因）。
+     下面 W/H 各自有 200/160 的兜底，所以 clientWidth=0 不会抛错，而是算出一个极小比例、
+     被 CW_ZOOM_MIN 钳到 30%，然后**写进 CW_VIEWS 长期生效**。实测调用栈：
+     cwToggleFull 里那个 requestAnimationFrame 恰好落在切页当帧（画布已被隐藏），
+     一次就把用户原来的 70.9% 视图毁掉，且此后每次回来都是 30%。
+     取景是「给可见画布做适配」，看不见就没有取景这回事。 */
+  if (!root.clientWidth || !root.clientHeight) return;
   const v = cwView(b);
   /* rightPad：右侧被遮挡的宽度（全屏时是问答浮层占的那一列）。
      不扣掉它就会「fit 之后节点整体偏右、被浮层盖住一半」。
@@ -16050,6 +16277,12 @@ function cwFitMini() {
      设成 420 会把「默认状态」也判成窄、提示条永远不出现；
      260 以下每段文字就开始一字一行了（实测 219px 时 8 段要折十几行）。 */
   root.classList.toggle('cw-narrow', bw < 260);
+  /* 对话面板展开后剩下多少空间？不够放下「面板 + 小地图 + 工具条」就收起小地图。
+     在 cwFitMini 里算而不是写死媒体查询：画布宽度取决于侧栏/面板，与视口宽度没固定关系。 */
+  try {
+    var _qaW = (typeof cwQAReserved === 'function') ? cwQAReserved() : 0;
+    root.classList.toggle('cw-qa-squeeze', _qaW > 0 && (bw - _qaW) < 620);
+  } catch (e) { }
   const sp6 = parseFloat(getComputedStyle(root).getPropertyValue('--sp-6')) || 12;
   // 防抖（拖动分隔线时小地图/工具条「抽搐」的根因）：必须先摘掉 cw-cramped 再量
   // 工具条宽度。否则 cramped 折行后 offsetWidth 变小，need>have 判定跟着翻转 ——
@@ -16482,6 +16715,32 @@ function aiPlotSysPrompt() {
     + '5) 「🔁 循环」用 loopTimes（1~20）；「🔧 代码」用 code（JS，return 结果）；「🧰 工具」用 tool（kb/web/weather/image）加 toolQuery；「🌐 HTTP」用 url 和 method。\n'
     + '6) 节点克制：只建必要的节点（通常 3~8 个），不要为了好看加节点。';
 }
+/* 空输入时的「默认需求」：机器人本身已经带着名称、描述、专长、插件、知识库与角色，
+   这些就是最好的需求来源。原来 `if (!ask.trim())` 直接拦住，用户点了「AI 编排」
+   什么都不发生 —— 而绝大多数人第一次点就是想「按我这个机器人搭一张图」。 */
+function aiPlotAutoBrief(b) {
+  b = b || {};
+  var out = [];
+  var name = String(b.n || '').trim();
+  var desc = String(b.d || '').trim();
+  if (name) out.push('机器人名称：' + name);
+  if (desc) out.push('用途描述：' + desc);
+  var ex = b.expertise || {};
+  if (ex.field) out.push('擅长领域：' + ex.field);
+  if (ex.method) out.push('处理方式：' + ex.method);
+  if (ex.output) out.push('输出要求：' + ex.output);
+  if (ex.avoid) out.push('必须避免：' + ex.avoid);
+  var pl = (b.plugins || []).slice(0, 5);
+  if (pl.length) out.push('可用插件：' + pl.join('、'));
+  var kb = (b.knowledges || []).slice(0, 5);
+  if (kb.length) out.push('可查知识库：' + kb.join('、'));
+  var role = String(b.prompt || '').replace(/\s+/g, ' ').trim();
+  if (role && role.length <= 500) out.push('角色设定：' + role);
+  var nodes = (b.nodes || []).map(function (n) { return String(n.lbl || '').trim(); })
+    .filter(Boolean).slice(0, 8);
+  if (nodes.length) out.push('画布上已有节点（可作为参考）：' + nodes.join(' → '));
+  return out.join('\n');
+}
 function aiPlotUserPrompt(mode, ask, b) {
   var s = '【需求】\n' + (ask || '').trim();
   if (mode === 'improve') {
@@ -16531,12 +16790,27 @@ async function aiPlotRun(refine) {
     plotBot = { nodes: prev.nodes, edges: prev.edges };
     ask = (ask.trim() ? ask.trim() + '\n' : '') + '【调整意见】' + note.trim();
   }
-  if (mode === 'fresh' && !ask.trim()) { toast('先描述你想要的流程', 'err'); return; }
+  /* 空输入不再拦：用机器人自身的设定拼一份默认需求（2026-10-26）。
+     连默认需求都拼不出来（新建的空机器人）才提示，并且给出可行动的说法。 */
+  var _auto = false;
+  if (mode === 'fresh' && !ask.trim()) {
+    var _brief = aiPlotAutoBrief(plotBot || b);
+    if (_brief) { ask = _brief; _auto = true; }
+  }
+  if (mode === 'fresh' && !ask.trim()) {
+    toast('这个机器人还没有名称/描述可用，先写一句你想要的流程', 'err');
+    var _askEl = document.getElementById('aiPlotAsk'); if (_askEl) _askEl.focus();
+    return;
+  }
   if (mode === 'improve' && !((plotBot.nodes || []).length)) { toast('当前画布没有节点，选「从零生成」', 'err'); return; }
   const btn = document.getElementById('aiPlotGo');
   if (btn) { btn.disabled = true; btn.textContent = '生成中…'; }
   const out = document.getElementById('aiPlotOut');
-  if (out) out.innerHTML = '<div class="hint">⏳ 正在让模型编排…（约 5~20 秒）</div>';
+  if (out) {
+    out.innerHTML = (_auto
+      ? '<div class="hint">未填写需求 → 已按当前机器人的名称 / 描述 / 专长 / 插件生成</div>'
+      : '') + '<div class="hint">⏳ 正在让模型编排…（约 5~20 秒）</div>';
+  }
   try {
     const F = window.BotCraftFlow;
     const msgs = [
@@ -19338,6 +19612,8 @@ async function runReply(b, opt) {
 }
 function setSendingUI(sending) {
   const sb = document.getElementById('stopBtn'); if (sb) sb.style.display = sending ? '' : 'none';
+  /* 画布内那颗停止按钮同理 —— 它和主按钮是两个元素，不同步就是「生成中没法停」。 */
+  try { if (typeof cwLiveSync === 'function') cwLiveSync(); } catch (e) { }
   const btn = document.getElementById('sendBtn');
   const inp = document.getElementById('msgInput');
   const serial = getSerialInput();
@@ -26787,7 +27063,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.39.0';
+var APP_VERSION = '3.40.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
