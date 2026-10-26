@@ -14629,13 +14629,15 @@ function cwRootW() { return cwSt.vw || (cwSt.root ? cwSt.root.clientWidth : 0); 
 function cwRootH() { return cwSt.vh || (cwSt.root ? cwSt.root.clientHeight : 0); }
 
 /* 快速模式：低配机器的画布保底档（样式见 body.cw-fast 那段）。
-   存 localStorage 而不是账号级键 —— 它跟的是「这台机器的显卡」，换账号不该跟着变。 */
+   存本机偏好（__storage）而不是账号级键 —— 它跟的是「这台机器的显卡」，换账号不该跟着变。
+   ⚠️ 必须走 __storage：它是带内存兜底的安全层（隐私模式/配额满时 localStorage 会抛），
+      也全站唯一口径；直接 localStorage 会被 test_opt / test_secfix 判成越权直连。 */
 function cwIsFast() { return cwSt.fast === true; }
 function cwSetFast(on, quiet) {
   on = !!on;
   cwSt.fast = on;
   try { document.body.classList.toggle('cw-fast', on); } catch (e) { }
-  try { localStorage.setItem(CW_FAST_KEY, on ? '1' : '0'); } catch (e) { }
+  try { __storage.setItem(CW_FAST_KEY, on ? '1' : '0'); } catch (e) { }
   var root = cwSt.root;
   if (root) {
     var fb = root.querySelector('.cw-tools [data-act="fast"]');
@@ -14647,7 +14649,7 @@ function cwSetFast(on, quiet) {
 }
 function cwInitFast() {
   var saved = null;
-  try { saved = localStorage.getItem(CW_FAST_KEY); } catch (e) { }
+  try { saved = __storage.getItem(CW_FAST_KEY); } catch (e) { }
   cwSt.fast = saved === '1';                        // 默认关闭：装饰留着，低配自己开
   try { document.body.classList.toggle('cw-fast', cwSt.fast); } catch (e) { }
   cwApplyDpr();
@@ -14921,7 +14923,7 @@ function cwToolsHtml() {
       + '</button>' +
     '<button class="cw-tbtn" data-act="cwctx" aria-label="上下文详情" title="上下文详情：系统 / 历史 / 本会话占用（在画布内展开）">' + svgIcon('puzzle', 'solo') + '</button>' +
     '<span class="cw-tsep"></span>' +
-    '<button class="cw-tbtn" data-act="fast" aria-label="快速模式" title="快速模式：关闭画布内的模糊/阴影/大格网格，低配机器更流畅（设置随本机记住）">⚡</button>' +
+    '<button class="cw-tbtn" data-act="fast" aria-label="快速模式" title="快速模式：关闭画布内的模糊/阴影/大格网格，低配机器更流畅（设置随本机记住）">' + svgIcon('zap','solo') + '</button>' +
     '<button class="cw-tbtn" data-act="mode" aria-label="切换选择/平移模式" title="切换：选择模式 / 平移模式（按住空格可临时平移）">' + svgIcon('user','solo') + '</button>' +
     '</div>';
 }
