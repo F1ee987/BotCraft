@@ -13050,7 +13050,13 @@ function accountStorageUsage(username) {
     const suffix = '.' + username;
     for (let i = 0; i < all.length; i++) {
       const k = String(all[i]);
-      if (k.indexOf('botcraft.') !== 0) continue;
+      // 判据必须与导出共用 isUserDataKey：kb./snippets./usage. 是裸键，只认 botcraft.
+      // 前缀会让「本账号占用」少报一大截 —— 而知识库正文恰恰是最占空间的那部分，
+      // 用户看到「才 2 MB」就放心往里塞，直到写盘失败才发现早满了。
+      const mine = (typeof isUserDataKey === 'function')
+        ? isUserDataKey(k)
+        : k.indexOf('botcraft.') === 0;
+      if (!mine) continue;
       if (k.slice(-suffix.length) !== suffix) continue;
       const v = storage.getItem(k) || '';
       bytes += (k.length + v.length) * 2;   // localStorage 按 UTF-16 计，1 字符 2 字节
@@ -14943,7 +14949,11 @@ const cwSt = {
   /* 大图自动降级（2026-11-01）：autoFast = 当前是否因节点数过多而临时降档；
      autoSuppressed = 用户在降档期间手动关过，本次会话不再自动接管；
      fastUser = 用户自己的偏好值，自动档结束后要恢复到这里。 */
-  autoFast: false, autoSuppressed: false, fastUser: false
+  autoFast: false, autoSuppressed: false, fastUser: false,
+  /* 结构指纹（2026-11-01）：renderSig 是上次真正重建时的签名，renderSigBot 记它属于哪个
+     机器人（换机器人时签名可能偶然相同，必须靠 id 拦住）；noReuse 供需要强制重建的调用方
+     置位一次。 */
+  renderSig: '', renderSigBot: '', noReuse: false
 };
 
 function cwView(b) { if (!CW_VIEWS[b.id]) CW_VIEWS[b.id] = { x: 0, y: 0, s: 1 }; return CW_VIEWS[b.id]; }
@@ -16021,6 +16031,57 @@ function cwToggleMore() {
   if (typeof openWsMore === 'function') openWsMore(btn);
 }
 
+/* ---------- 结构指纹（2026-11-01 · P3-10 后续）----------
+   决定「卡片 DOM 是否必须重建」。真浏览器实测（_diag_canvas_perf.py）：
+   800 节点一次完整 renderNodes 119.7ms，而同样数据 cwPaint 只要 5.1ms、布局 0.2ms ——
+   成本全在整块 innerHTML 重建。可切页回来 / 侧栏收展 / 拖窗口 resize 时结构根本没变，
+   却每次都重造 800 张卡片（连续重建还会因 GC 把 P50 推到 282ms）。
+
+   ⚠️ 字段清单不是随手挑的：它必须覆盖 cwCard（含它调的 kindOf）会读的**每一个** nd.*。
+      漏一个 → 那个字段改了界面也不刷新，而且不会报任何错。
+      test_render_reuse.js 有一条守卫把 cwCard 源码里的 `nd.xxx` 全抠出来逐个核对，
+      新增字段忘了加进这里会当场红。
+   ⚠️ 用 JSON.stringify 而不是 join(','')：join 会把 undefined 和 null 都变成空串，
+      于是 nd.x 从 null 改成 undefined 时指纹不变、界面不刷 —— 这类「值变了但签名同」
+      是最难查的一种，宁可多花 stringify 的钱。
+   ⚠️ x/y 也在指纹里：卡片位置的初始值来自这里的渲染，若位置变了却早退，
+      只有被拖过的那些卡是对的、其余停在旧坐标。宁可多重建一次。 */
+function cwStructSig(b) {
+  const ns = (b && b.nodes) || [], es = (b && b.edges) || [];
+  /* undefined 必须与 null 区分：JSON.stringify 在**数组里**会把 undefined 序列化成 null，
+     于是「nd.x 从 null 改成 undefined」签名不变、界面不刷 —— 这类「值变了签名没变」
+     是最难查的一种（本函数第一版就错在这里，守卫测得出来）。哨兵串顶替掉它。 */
+  const u = function (v) { return v === undefined ? '\u0000u' : v; };
+  const parts = [ns.length, es.length];
+  for (let i = 0; i < ns.length; i++) {
+    const nd = ns[i] || {};
+    parts.push(u(nd.id), u(nd.lbl), u(nd.h), u(nd.p), u(nd.bot), u(nd.type), u(nd.role),
+      // 条件节点的分支（label/when）决定端口数量与标题；只有条件节点有，其余为 undefined
+      u(nd.branches === undefined ? undefined : JSON.stringify(nd.branches)),
+      u(nd.x), u(nd.y));
+  }
+  for (let j = 0; j < es.length; j++) {
+    const e = es[j] || {};
+    parts.push(u(e.from), u(e.to), u(e.port));
+  }
+  return JSON.stringify(parts);
+}
+/* 结构没变就只做「尺寸相关」的收尾并重绘，返回 true 表示已处理、调用方直接 return。
+   三个收尾都不能省：尺寸缓存要更新（侧栏宽度变了）、小地图缩放比要重算、
+   全屏按钮的可用态要跟着宽度走。 */
+function cwReuseRender(b) {
+  if (!cwSt.root || !cwSt.stage) return false;            // 骨架还没建过
+  if (!document.getElementById('cwRoot')) return false;   // 骨架被别处清掉了
+  if (cwSt.renderSigBot !== b.id) return false;           // 换机器人：签名可能偶然相同
+  if (cwSt.noReuse) { cwSt.noReuse = false; return false; }
+  if (cwSt.renderSig !== cwStructSig(b)) return false;
+  try { cwMeasure(); } catch (e) { }
+  try { cwFitMini(); } catch (e) { }
+  try { cwPaint(b); } catch (e) { }
+  try { cwSyncFullBtn(); } catch (e) { }
+  return true;
+}
+
 function renderNodes(b) {
   const body = document.getElementById('wsFlowBody') || document.querySelector('.ws-body');
   if (!body || !b) return;
@@ -16031,6 +16092,8 @@ function renderNodes(b) {
   // 自动档要在重建卡片之前定下来：noPaint=true 是必须的 —— renderNodes 自己马上会画，
   // 让 cwSetFast 也画一次就是同一次重建里画两遍（大图上这一下就是 30ms 的白给）。
   try { cwAutoFast(nodes.length, true); } catch (e) { }
+  // 结构指纹没变 = 这次只是「尺寸变了 / 切页回来了」，整棵卡片树不用动（见 cwStructSig）
+  if (cwReuseRender(b)) return;
   cwSt.sel = cwSt.sel.filter(function (i) { return i < nodes.length; });
   // 保证图结构就位（老机器人 / 新建的），并把拓扑次序算给卡片显示
   if (window.BotCraftFlow) {
@@ -16088,6 +16151,10 @@ function renderNodes(b) {
      所以每次重渲染都要在全屏态下重新挂回去；切换机器人/切换会话都会走到这里。 */
   if (cwFullOn()) { try { cwRenderQA(b); } catch (e) { } }
   cwSyncFullBtn();
+  // 签名必须在这里落账（而不是在开头）：中途任何一步抛错，卡片树就是半成品，
+  // 记下签名会让下一次「结构没变」直接早退，把半成品永久留在屏上。
+  cwSt.renderSig = cwStructSig(b);
+  cwSt.renderSigBot = b.id;
 }
 
 // 节点类型：**每一项都必须在执行引擎里真的有对应行为**，否则用户加了个节点，
@@ -27860,7 +27927,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.48.0';
+var APP_VERSION = '3.49.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
