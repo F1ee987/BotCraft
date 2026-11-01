@@ -94,6 +94,12 @@
      玻璃模糊的东西必须是「有结构的」，一片平滑渐变模糊完还是平滑。
      取值很小（.5）：玻璃外只当微妙质感，玻璃内被模糊+饱和后才是可见的流动感。 */
   --bg-texture-opacity:.5;
+  /* 自定义背景图的两个变量（2026-11-01）。必须在这里给默认值：
+     verify_css 不允许「只靠 var(..., fallback) 兜底」的悬空引用，
+     而 JS 只在用户设过之后才会 setProperty 覆盖它们。
+     --bgc-dim 是数值（直接进 rgba 的 alpha 位），--bgc-blur 带单位。 */
+  --bgc-dim:.55;
+  --bgc-blur:0px;
   --bg-blur:0px;
   --bg-grain-opacity:.04;
   --bg-z:-1;
@@ -679,6 +685,30 @@ html[data-bg="off"] body .main,
 html[data-bg="off"] body .workspace{background-image:var(--lg-spec)}
 html[data-bg-blur] body::before,
 html[data-bg-blur] body::after{filter:blur(var(--bg-blur))}
+
+/* ============ 自定义背景图（2026-11-01）============
+   与光斑同层的独立块，不走 --bg-glow-* 令牌 —— 用户的图不该被「光效不透明度 /
+   背景模糊」那两个滑杆连带改掉（那是给程序化光斑用的）。
+   ⚠️ 遮罩 .bg-custom::after 是可读性兜底，不是装饰：verify_contrast 是静态门禁，
+      测不到用户塞进来的任意图片，所以默认值按「纯白图片」标定。
+   ⚠️ transform:scale(1.04) 是给虚化用的：filter:blur 会在边缘露出透明带，
+      放大一点点盖住，否则四周会有一圈白边。 */
+.bg-custom{
+  position:fixed;inset:0;z-index:var(--bg-z);pointer-events:none;display:none;
+  background-position:center center;background-repeat:no-repeat;background-size:cover;
+  filter:blur(var(--bgc-blur,0px));
+  transform:scale(1.04)}
+html[data-bg-custom="on"] .bg-custom{display:block}
+/* 关掉「背景光效」时，自定义图也一起关 —— 它属于背景资源，不是玻璃材质 */
+html[data-bg="off"] .bg-custom{display:none!important}
+.bg-custom::after{
+  content:'';position:absolute;inset:0;
+  background:rgba(0,0,0,var(--bgc-dim,.55))}
+[data-theme="light"] .bg-custom::after{background:rgba(255,255,255,var(--bgc-dim,.55))}
+/* 有自定义图时把程序化光斑压到很淡：两层彩色叠在一起会发脏。
+   纹理层不动 —— 玻璃的模糊/折射需要它。 */
+html[data-bg-custom="on"] body::before,
+html[data-bg-custom="on"] body::after{opacity:calc(var(--bg-opacity) * .18)}
 .bg-stack{
   position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
   border-radius:inherit;opacity:var(--bg-stack-opacity);filter:blur(var(--bg-stack-blur));
@@ -3655,6 +3685,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 </style>
 </head>
 <body>
+<!-- 自定义背景图层（2026-11-01）：放在 body 最前，z-index 取 --bg-z，与光斑同级 -->
+<div class="bg-custom" id="bgCustom" aria-hidden="true"></div>
 <!-- ==================== 液态玻璃：SVG 置换滤镜的实测结论（2026-10-26）====================
      inspira-ui 的 Liquid Glass 靠 SVG feDisplacementMap 对背景做光学位移。本机实测
      （Edge / Chromium 1500×950，逐像素比对，脚本见说明）结论是**在本环境不可用**：
@@ -4743,6 +4775,42 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <label for="set-bg-blur">背景模糊</label>
         <input id="set-bg-blur" type="range" min="0" max="40" step="2" value="0" oninput="onBgParamInput()">
         <span id="set-bg-blur-val" class="rng-val">0px</span>
+      </div>
+      <div class="field" style="margin-top:var(--sp-5);display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap">
+        <label style="margin:0;color:var(--sub)">自定义背景图</label>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('bgcFile').click()">选择图片…</button>
+        <button class="btn btn-ghost btn-sm" id="bgcClearBtn" onclick="clearBgCustom()" style="display:none">清除</button>
+        <input id="bgcFile" type="file" accept="image/*" style="display:none" onchange="onBgCustomFile(this)">
+      </div>
+      <div id="bgcInfo" style="display:none;margin-top:var(--sp-3)">
+        <div style="display:flex;align-items:center;gap:var(--sp-3)">
+          <img id="bgcThumb" alt="" style="width:64px;height:40px;object-fit:cover;border-radius:var(--r-sm);border:1px solid var(--line);flex:0 0 auto">
+          <div style="min-width:0;flex:1">
+            <div id="bgcName" style="font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+            <div id="bgcSize" style="font-size:var(--fs-xs);color:var(--sub)"></div>
+          </div>
+        </div>
+        <div class="field rng-row" style="margin-top:var(--sp-4)">
+          <label for="set-bgc-dim">遮罩浓度</label>
+          <input id="set-bgc-dim" type="range" min="0" max="80" step="5" value="55" oninput="onBgCustomParamInput()">
+          <span id="set-bgc-dim-val" class="rng-val">55%</span>
+        </div>
+        <div class="field" style="margin-top:var(--sp-3);display:flex;align-items:center;gap:var(--sp-3)">
+          <label for="set-bgc-fit" style="margin:0">填充方式</label>
+          <select id="set-bgc-fit" onchange="onBgCustomParamInput()" style="flex:1;padding:5px 8px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--fill);color:var(--txt);font-size:var(--fs-sm);font-family:inherit">
+            <option value="cover">铺满（裁掉多余部分）</option>
+            <option value="contain">完整显示（留边）</option>
+            <option value="repeat">平铺</option>
+          </select>
+        </div>
+        <div class="field rng-row" style="margin-top:var(--sp-3)">
+          <label for="set-bgc-blur">图片虚化</label>
+          <input id="set-bgc-blur" type="range" min="0" max="30" step="2" value="0" oninput="onBgCustomParamInput()">
+          <span id="set-bgc-blur-val" class="rng-val">0px</span>
+        </div>
+        <div class="hint" style="margin:var(--sp-3) 0 0;font-size:var(--fs-xs);line-height:1.5">
+          图片会压到 1600px 以内再存到本机（不联网、不上传）；遮罩浓度默认 55%，是按「高对比彩色图」的最坏情况标定的 —— 图越花，需要越重才压得住。
+        </div>
       </div>
       <div class="hint" style="margin:var(--sp-3) 0 0;font-size:var(--fs-xs);line-height:1.5">
         背景光效（弥散光 + 颗粒）现在独立于玻璃材质：关掉它，玻璃的折射、模糊与交互保持原样，只是背后没有东西可透。
@@ -22675,6 +22743,136 @@ function onBgParamInput() {
   } catch (e) {}
   syncBgUI();
 }
+/* ==================== 自定义背景图（2026-11-01）====================
+   三个取舍，都不是随手定的：
+   ① **存本机不按账号**：一张压缩图 200~500KB，base64 再 ×1.35；按账号存意味着切账号时
+      本地存储翻倍。背景本质是「这台设备的偏好」（与 botcraft.cw.fast 同类）。
+   ② **必须压到 1MB 以内**：桌面版把整个 localStorage 落到 %APPDATA%\BotCraft\data.json，
+      且每次写盘前都做快照 —— 一张 8MB 原图会让每次写盘重写 8MB，还会挤掉历史备份。
+      所以两档压缩（1600/0.72 → 1200/0.6），仍超限就明确拒绝而不是硬塞。
+   ③ **遮罩是兜底不是装饰**：verify_contrast 是静态门禁，测不到用户塞进来的任意图片，
+      所以默认值按「纯白图片」的最坏情况标定。
+   ⚠️ 大字符串必须缓存：_bgcRec 记住解析结果，否则每次同步渲染都 JSON.parse 一个
+      几百 KB 的串（背景参数在设置面板里每次输入都会重算）。 */
+var BGC_KEY = 'botcraft.bg.custom.v1';
+var BGC_MAX_CHARS = 1100000;     // base64 字符上限（≈800KB 图片）
+var _bgcRec = null;              // null=未读过；false=读过但没有
+
+function loadBgCustom() {
+  if (_bgcRec !== null) return _bgcRec;
+  var d = null;
+  try { d = JSON.parse(__storage.getItem(BGC_KEY) || 'null'); } catch (e) { d = null; }
+  _bgcRec = (d && typeof d === 'object' && typeof d.url === 'string'
+    && d.url.indexOf('data:image/') === 0) ? d : false;
+  return _bgcRec;
+}
+function applyBgCustom(rec) {
+  var el = document.getElementById('bgCustom');
+  var r = document.documentElement;
+  if (!el) return;
+  if (!rec || !rec.url) {
+    el.style.backgroundImage = '';
+    r.removeAttribute('data-bg-custom');
+    r.style.removeProperty('--bgc-dim');
+    r.style.removeProperty('--bgc-blur');
+    return;
+  }
+  el.style.backgroundImage = 'url("' + rec.url + '")';
+  var fit = rec.fit || 'cover';
+  if (fit === 'repeat') { el.style.backgroundSize = 'auto'; el.style.backgroundRepeat = 'repeat'; }
+  else { el.style.backgroundSize = fit; el.style.backgroundRepeat = 'no-repeat'; }
+  r.setAttribute('data-bg-custom', 'on');
+  r.style.setProperty('--bgc-dim', String(Math.max(0, Math.min(80, Number(rec.dim) || 0)) / 100));
+  var b = Math.max(0, Math.min(30, Number(rec.blur) || 0));
+  if (b > 0) r.style.setProperty('--bgc-blur', b + 'px');
+  else r.style.removeProperty('--bgc-blur');
+}
+async function onBgCustomFile(input) {
+  var f = input && input.files && input.files[0];
+  if (input) input.value = '';        // 清空才能重复选同一张
+  if (!f) return;
+  if (!/^image\//.test(f.type || '')) { toast('请选择图片文件', 'err'); return; }
+  if (f.size > 12 * 1024 * 1024) { toast('图片超过 12MB，请先压缩后再选', 'err', 6000); return; }
+  toast('正在处理图片…', '');
+  try {
+    var dataURL = await new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onload = function () { res(String(fr.result || '')); };
+      fr.onerror = function () { rej(new Error('读取失败')); };
+      fr.readAsDataURL(f);
+    });
+    var out = await compressImageDataURL(dataURL, 1600, 0.72);
+    if (out.length > BGC_MAX_CHARS) out = await compressImageDataURL(dataURL, 1200, 0.6);
+    if (out.length > BGC_MAX_CHARS) {
+      toast('这张图压缩后仍然太大（' + Math.round(out.length / 1024) + 'KB），请换一张更简单的', 'err', 8000);
+      return;
+    }
+    var rec = { url: out, name: f.name || '背景图', fit: 'cover', dim: 55, blur: 0, at: Date.now() };
+    var ok = false;
+    try { ok = storeSet(BGC_KEY, rec); } catch (e) { ok = false; }
+    if (!ok) { toast('保存失败：本地存储空间不足，请先清理存储', 'err', 8000); return; }
+    _bgcRec = rec;
+    applyBgCustom(rec);
+    syncBgCustomUI();
+    toast('已设为自定义背景（' + Math.round(out.length / 1024) + 'KB）', 'ok');
+  } catch (e) {
+    toast('处理失败：' + ((e && e.message) || e), 'err', 6000);
+  }
+}
+function clearBgCustom() {
+  _bgcRec = false;
+  try { __storage.removeItem(BGC_KEY); } catch (e) { }
+  applyBgCustom(null);
+  syncBgCustomUI();
+  toast('已恢复默认背景光效', 'ok');
+}
+/* 三个参数（遮罩/填充/虚化）共用同一个入口：改一次 → 写回记录 → 立刻生效 */
+function onBgCustomParamInput() {
+  var rec = loadBgCustom();
+  if (!rec) return;
+  var dim = document.getElementById('set-bgc-dim');
+  var fit = document.getElementById('set-bgc-fit');
+  var bl = document.getElementById('set-bgc-blur');
+  if (dim) rec.dim = Math.max(0, Math.min(80, Number(dim.value) || 0));
+  if (fit) rec.fit = fit.value || 'cover';
+  if (bl) rec.blur = Math.max(0, Math.min(30, Number(bl.value) || 0));
+  _bgcRec = rec;
+  try { storeSet(BGC_KEY, rec); } catch (e) { }
+  applyBgCustom(rec);
+  syncBgCustomUI();
+}
+function syncBgCustomUI() {
+  var rec = loadBgCustom();
+  var info = document.getElementById('bgcInfo');
+  var clr = document.getElementById('bgcClearBtn');
+  if (!rec) {
+    if (info) info.style.display = 'none';
+    if (clr) clr.style.display = 'none';
+    return;
+  }
+  if (info) info.style.display = '';
+  if (clr) clr.style.display = '';
+  var th = document.getElementById('bgcThumb');
+  if (th) th.src = rec.url;
+  var nm = document.getElementById('bgcName');
+  if (nm) nm.textContent = rec.name || '背景图';
+  var sz = document.getElementById('bgcSize');
+  if (sz) sz.textContent = Math.round((rec.url.length * 3) / 4 / 1024) + 'KB · 只存在本机';
+  var dim = document.getElementById('set-bgc-dim');
+  if (dim) { dim.value = String(rec.dim == null ? 55 : rec.dim); syncRangeFill(dim); }
+  var dimv = document.getElementById('set-bgc-dim-val');
+  if (dimv) dimv.textContent = (rec.dim == null ? 55 : rec.dim) + '%';
+  var fit = document.getElementById('set-bgc-fit');
+  if (fit) fit.value = rec.fit || 'cover';
+  var bl = document.getElementById('set-bgc-blur');
+  if (bl) { bl.value = String(rec.blur || 0); syncRangeFill(bl); }
+  var blv = document.getElementById('set-bgc-blur-val');
+  if (blv) blv.textContent = (rec.blur || 0) + 'px';
+}
+function initBgCustom() {
+  try { applyBgCustom(loadBgCustom() || null); } catch (e) { console.warn('[bgc] 应用失败：', e); }
+}
+
 function initBg() {
   var saved = null, o = null, b = null;
   try {
@@ -27491,6 +27689,7 @@ function setupSettingsUI() {
   document.getElementById('set-serial').checked = getSerialInput();
   document.getElementById('set-glass').checked = isLiquidGlassOn();
   syncBgUI();   // 背景光效的开关与两个滑杆按真实状态回填
+  try { syncBgCustomUI(); } catch (e) { }   // 自定义背景的缩略图与三个参数
   // 主题三分段：按用户偏好回填（'system' 也要能选中 —— 它是默认值）
   var _tr = document.querySelector('input[name="set-theme"][value="' + themeMode() + '"]');
   if (_tr) _tr.checked = true;
@@ -28072,7 +28271,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.53.0';
+var APP_VERSION = '3.54.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -28298,6 +28497,7 @@ function safeStart() {
   try { applyPreconfiguredLogin(); } catch (e) { console.error('applyPreconfiguredLogin failed', e); }
   try { initLiquidGlass(); } catch (e) { console.error('initLiquidGlass failed', e); }
   try { initBg(); } catch (e) { console.error('initBg failed', e); }
+  try { initBgCustom(); } catch (e) { console.error('initBgCustom failed', e); }
   // 版本检查是设置弹窗底部的手动按钮（用户明确要求：启动不弹窗、不做自动检测）
   // 启动本地提醒检查器（每 20s 检查到点提醒并弹通知；用户隔离）
   try { startReminderChecker(); } catch (e) { console.error('startReminderChecker failed', e); }
