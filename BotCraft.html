@@ -14764,6 +14764,13 @@ const CW_ZOOM_MIN = 0.3, CW_ZOOM_MAX = 2.5;
        边缘落在半个像素上（发虚、发灰），对齐后才「脆」。
      · cwApplyDpr：把 devicePixelRatio 写进 --cw-dpr，供 CSS 算一条设备像素的宽度。 */
 var CW_FAST_KEY = 'botcraft.cw.fast';
+/* 大图自动降级阈值（2026-11-01 · P3-10）。
+   来源是 build_exe/measure_canvas_perf.py 在真浏览器里的实测（1440×900，含强制同步布局）：
+     100 节点 P50 10.2ms / 200 节点 P50 17.0ms / 400 节点 P50 36.7ms。
+   60fps 的单帧预算是 16.7ms，所以 150 是「还没掉帧、但下一档就掉」的位置。
+   取 150 而不是 200：阈值应该落在「开始不舒服」之前，等真卡了再降就已经晚了。
+   注意这个数只影响**装饰**（模糊/阴影/大格网格），结构信息一点不少 —— 所以宁可早降。 */
+var CW_HEAVY_N = 150;
 
 function cwDpr() { return Math.max(1, cwSt.dpr || window.devicePixelRatio || 1); }
 function cwSnapPx(x) {
@@ -14791,24 +14798,53 @@ function cwRootH() { return cwSt.vh || (cwSt.root ? cwSt.root.clientHeight : 0);
    ⚠️ 必须走 __storage：它是带内存兜底的安全层（隐私模式/配额满时 localStorage 会抛），
       也全站唯一口径；直接 localStorage 会被 test_opt / test_secfix 判成越权直连。 */
 function cwIsFast() { return cwSt.fast === true; }
-function cwSetFast(on, quiet) {
+/* opt.persist === false：只改这次会话的档位，不写盘（自动降级走这条，否则会改掉用户偏好）
+   opt.noPaint === true：不在这里重绘（调用方自己会画，避免 renderNodes 里重入绘制） */
+function cwSetFast(on, quiet, opt) {
   on = !!on;
+  opt = opt || {};
   cwSt.fast = on;
+  if (opt.persist !== false) {
+    cwSt.fastUser = on;
+    // heavy 状态下用户主动关掉低画质 = 明确表态，本次会话别再自动给他打开（否则按钮像坏的）
+    if (!on && cwSt.autoFast) cwSt.autoSuppressed = true;
+  }
   try { document.body.classList.toggle('cw-fast', on); } catch (e) { }
-  try { __storage.setItem(CW_FAST_KEY, on ? '1' : '0'); } catch (e) { }
+  if (opt.persist !== false) {
+    try { __storage.setItem(CW_FAST_KEY, on ? '1' : '0'); } catch (e) { }
+  }
   var root = cwSt.root;
   if (root) {
     var fb = root.querySelector('.cw-tools [data-act="fast"]');
     if (fb) { fb.classList.toggle('on', on); fb.setAttribute('aria-pressed', on ? 'true' : 'false'); }
   }
   cwSt.gridSig = ''; cwSt.stageSig = '';            // 强制下一帧重写（大格网格要按档位开关）
-  if (cwSt.bot) { try { cwPaint(cwSt.bot); } catch (e) { } }
+  if (!opt.noPaint && cwSt.bot) { try { cwPaint(cwSt.bot); } catch (e) { } }
   if (!quiet) toast(on ? '低画质模式已开启：画布已关闭模糊与阴影（不影响回复）' : '低画质模式已关闭', 'ok');
+}
+/* 大图自动降级：节点数过阈值时临时切到低画质，回落时恢复用户自己的档位。
+   三条规矩，都是为了「不许显得坏了」：
+     · 不写盘 —— 用户没做选择，偏好不该被改；
+     · 只 toast 一次（同一档位切换才提示），不然每次重绘都弹一遍；
+     · 用户在 heavy 状态下手动关掉，本次会话不再抢（cwSt.autoSuppressed）。 */
+function cwAutoFast(n, noPaint) {
+  const heavy = (Number(n) || 0) >= CW_HEAVY_N;
+  const prev = cwSt.autoFast === true;
+  cwSt.autoFast = heavy;
+  if (heavy === prev) return;
+  if (heavy) {
+    if (cwSt.fast || cwSt.autoSuppressed) return;
+    cwSetFast(true, true, { persist: false, noPaint: !!noPaint });
+    toast('这个画布有 ' + Math.round(n) + ' 个节点，已临时切到低画质模式以保持流畅（工具条 ⚡ 可关）', 'warn', 6000);
+  } else {
+    cwSetFast(cwSt.fastUser === true, true, { persist: false, noPaint: !!noPaint });
+  }
 }
 function cwInitFast() {
   var saved = null;
   try { saved = __storage.getItem(CW_FAST_KEY); } catch (e) { }
   cwSt.fast = saved === '1';                        // 默认关闭：装饰留着，低配自己开
+  cwSt.fastUser = cwSt.fast;                        // 用户偏好基线：自动档结束后要回到这里
   try { document.body.classList.toggle('cw-fast', cwSt.fast); } catch (e) { }
   cwApplyDpr();
 }
@@ -14903,7 +14939,11 @@ const cwSt = {
   busy: false,            // 交互期（拖动/平移/缩放），快速模式下跳过小地图重绘
   /* 触屏双指（2026-11-01）：ptrs 是活跃触点 id -> {x,y}，pinch 是这次捏合的起始快照。
      只在 pointerType==='touch' 时维护；鼠标路径完全不受影响（指针 id 不会进这张表）。 */
-  ptrs: null, pinch: null
+  ptrs: null, pinch: null,
+  /* 大图自动降级（2026-11-01）：autoFast = 当前是否因节点数过多而临时降档；
+     autoSuppressed = 用户在降档期间手动关过，本次会话不再自动接管；
+     fastUser = 用户自己的偏好值，自动档结束后要恢复到这里。 */
+  autoFast: false, autoSuppressed: false, fastUser: false
 };
 
 function cwView(b) { if (!CW_VIEWS[b.id]) CW_VIEWS[b.id] = { x: 0, y: 0, s: 1 }; return CW_VIEWS[b.id]; }
@@ -15988,6 +16028,9 @@ function renderNodes(b) {
   cwSt.bot = b;
   body.classList.add('cw-on');
   const nodes = b.nodes || [];
+  // 自动档要在重建卡片之前定下来：noPaint=true 是必须的 —— renderNodes 自己马上会画，
+  // 让 cwSetFast 也画一次就是同一次重建里画两遍（大图上这一下就是 30ms 的白给）。
+  try { cwAutoFast(nodes.length, true); } catch (e) { }
   cwSt.sel = cwSt.sel.filter(function (i) { return i < nodes.length; });
   // 保证图结构就位（老机器人 / 新建的），并把拓扑次序算给卡片显示
   if (window.BotCraftFlow) {
@@ -27817,7 +27860,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.47.0';
+var APP_VERSION = '3.48.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
