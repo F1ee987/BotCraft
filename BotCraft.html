@@ -2362,6 +2362,19 @@ body.cw-fast .cw-link{stroke-width:2}
 .chat-input button:active{filter:brightness(.94);transform:scale(.97)}
 .chat-input button:disabled{opacity:.4;cursor:not-allowed;filter:none}
 .chat-input .attach-btn{padding:0;width:44px;height:44px;border-radius:var(--r-lg);background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--dur-3) var(--ease),transform var(--dur-1) var(--ease)}
+/* 聊天「回到底部」悬浮按钮：作为 .chat-input 的绝对定位子元素悬浮于聊天区右下角，
+   不占布局（absolute 脱离 flex 流），且永远贴着输入框上方、随其高度自动上移。
+   用 .chat-input 前缀提权，压过 .chat-input button 的通用样式（背景/内边距/圆角）。 */
+.chat-input .chat-to-bottom{position:absolute;right:16px;bottom:calc(100% + 12px);z-index:8;
+  width:42px;height:42px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:var(--glass-bg-hover);border:1px solid var(--glass-border);box-shadow:0 6px 18px rgba(0,0,0,.28);
+  color:var(--txt);cursor:pointer;touch-action:manipulation;filter:none;
+  opacity:0;visibility:hidden;transform:translateY(8px);pointer-events:none;
+  transition:opacity var(--dur-3) var(--ease),transform var(--dur-3) var(--ease),visibility var(--dur-3),background var(--dur-3) var(--ease)}
+.chat-input .chat-to-bottom svg{width:22px;height:22px;display:block}
+.chat-input .chat-to-bottom:hover{background:var(--brand-fill);color:#fff;border-color:transparent;filter:none}
+.chat-input .chat-to-bottom:active{transform:scale(.94)}
+.chat-input .chat-to-bottom.show{opacity:1;visibility:visible;transform:none;pointer-events:auto}
 /* 提示词库 + 斜杠指令 */
 .input-wrap{position:relative}
 .slash-menu{position:absolute;left:0;right:0;bottom:calc(100% + 10px);max-height:300px;overflow:auto;z-index:80;
@@ -4319,6 +4332,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
           </label>
         </div>
         <div class="chat-input">
+        <button class="chat-to-bottom" id="chatToBottom" type="button" aria-label="回到底部" title="回到底部" onclick="chatJumpToBottom()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
         <button class="attach-btn" id="attachBtn" type="button" title="发送图片（也可粘贴 / 拖拽）" onclick="document.getElementById('imgInput').click()"><span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 11.5l-8 8a4.5 4.5 0 0 1-6.4-6.4l8.5-8.5a3 3 0 0 1 4.3 4.3l-8.4 8.4a1.5 1.5 0 0 1-2.2-2.1l7.8-7.8"/></svg></span></button>
         <input type="file" id="imgInput" accept="image/*" multiple style="display:none" onchange="onImageSelect(event)">
         <button class="attach-btn" id="recBtn" type="button" title="录音（再次点击停止）" onclick="toggleRecord()"><span class="i i--solo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9.5" y="3" width="5" height="10" rx="2.5"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6"/></svg></span></button>
@@ -18564,6 +18578,41 @@ function scrollChatToBottom(force) {
   });
 }
 
+// 聊天「回到底部」悬浮按钮：仅在用户上翻离开底部时显示，回到贴底自动隐藏
+function updateChatToBottomBtn() {
+  var chat = document.getElementById('chat');
+  var btn = document.getElementById('chatToBottom');
+  if (!chat || !btn) return;
+  var gap = chat.scrollHeight - chat.scrollTop - chat.clientHeight;
+  // 阈值 80：滚上去超过约两行就露出按钮；贴底自动隐藏。与 scrollChatToBottom 的 140 区分开，
+  // 这里只管「按钮该不该出现」，不介入任何滚动行为。
+  btn.classList.toggle('show', gap > 80);
+}
+function chatJumpToBottom() {
+  var chat = document.getElementById('chat'); if (!chat) return;
+  // 平滑滚到底部；流式输出 / 图片异步加载会让底部继续变长，连钉几次补上（与 scrollChatToBottom 思路一致）
+  var pin = function () { chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' }); };
+  pin();
+  var n = 0, iv = setInterval(function () {
+    if (++n > 6) { clearInterval(iv); return; }
+    pin();
+  }, 220);
+  setTimeout(function () { clearInterval(iv); }, 1500);
+  // 点击按钮不抢走输入框焦点，方便用户继续打字
+  var ta = document.getElementById('msgInput');
+  if (ta) setTimeout(function () { try { ta.focus(); } catch (e) {} }, 0);
+}
+// 一次性绑定（#chat 容器本身不被 renderHistory 重建，监听挂容器上不会丢失）：
+// 滚动时更新按钮显隐；内容高度变化（新消息、图片加载）用 ResizeObserver 兜底，避免「滚上去时来新消息却没出按钮」。
+(function bindChatToBottomBtn() {
+  var chat = document.getElementById('chat');
+  var btn = document.getElementById('chatToBottom');
+  if (!chat || !btn) { document.addEventListener('DOMContentLoaded', bindChatToBottomBtn); return; }
+  chat.addEventListener('scroll', updateChatToBottomBtn, { passive: true });
+  if (window.ResizeObserver) { try { new ResizeObserver(updateChatToBottomBtn).observe(chat); } catch (e) {} }
+  updateChatToBottomBtn();
+})();
+
 function _body(who,inner){return '<div class="msg-body"><div class="who">'+who+'</div>'+inner+'</div>';}
 // 内联媒体（data:URI）超过该长度就懒加载：base64 音频/图片直接写进 src 会让浏览器在解析
 // innerHTML 时就开始解码，实测一条 268,884 字符的 base64 音频足以让渲染线程停摆（界面卡死）。
@@ -28398,7 +28447,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.57.0';
+var APP_VERSION = '3.58.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
