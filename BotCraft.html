@@ -16648,6 +16648,34 @@ function cwZoomAt(b, cx, cy, f) {
       累乘会把每帧的浮点误差和边界钳制一起累积，捏到最小/最大再张开回不到原比例。
    2) 缩放锚点用两指中点，中点移动同时算平移。只缩放不平移的话，两指一边捏一边挪，
       内容会「粘在原点」，手感像被拽住。 */
+/* 取消正在进行的那次拖动，并把卡片坐标还原到拖动之前。
+   两处调用，语义都是「这次手势不是拖动，用户要的是别的东西」：
+     · cwStartPinch —— 第二根手指落下 = 要缩放，不是要挪卡；
+     · cwOnMenu    —— 触屏长按 = 要菜单，不是要挪卡。
+   桌面右键不会走到这里（cwOnDown 里 button===2 直接早退），所以这整块只影响触屏。
+   刻意不 saveBots：坐标已还原成磁盘上的值，再写一次盘只是多一次 IO。 */
+function cwAbortDrag(paint) {
+  const d = cwSt.drag, b = cwSt.bot;
+  if (!d || !b) return false;
+  if (d.mode === 'node' && d.moved && d.init) {
+    d.init.forEach(function (o) {
+      const nd = b.nodes[o.i];
+      if (nd) { nd.x = o.x; nd.y = o.y; }
+    });
+    // 那一步撤销快照记的是「拖到一半」的位置，留着会让 Ctrl+Z 先跳一个中间态
+    if (typeof cwUL === 'function') { const st = cwUL(b); if (st.length) st.pop(); }
+  }
+  if (d.mode === 'marquee' && cwSt.marquee) cwSt.marquee.style.display = 'none';
+  cwSt.drag = null;
+  cwSt.grabId = 0;
+  if (cwSt.root) cwSt.root.classList.remove('panning', 'marqueeing');
+  if (cwSt.stage) {
+    for (let i = 0; i < cwSt.stage.children.length; i++) cwSt.stage.children[i].classList.remove('dragging');
+  }
+  if (paint) cwPaint(b);
+  return true;
+}
+
 function cwStartPinch() {
   const b = cwSt.bot;
   if (!b || !cwSt.ptrs || cwSt.ptrs.size < 2) return;
@@ -16660,26 +16688,9 @@ function cwStartPinch() {
     cx: (it[0].x + it[1].x) / 2,
     cy: (it[0].y + it[1].y) / 2
   };
-  const d = cwSt.drag;
-  if (d) {
-    // 单指那一下必须整个撤掉：卡片已跟随移动过就把坐标还原，框选就把框藏起来。
-    // 不还原的话，用户捏合缩放的副产物是「有张卡被拖到了别处」，而且那一刻他正盯着缩放。
-    if (d.mode === 'node' && d.moved && d.init) {
-      d.init.forEach(function (o) {
-        const nd = b.nodes[o.i];
-        if (nd) { nd.x = o.x; nd.y = o.y; }
-      });
-      if (typeof cwUL === 'function') { const st = cwUL(b); if (st.length) st.pop(); }
-      b.updatedAt = Date.now(); saveBots();
-    }
-    if (d.mode === 'marquee' && cwSt.marquee) cwSt.marquee.style.display = 'none';
-  }
-  cwSt.drag = null;
-  cwSt.grabId = 0;
-  if (cwSt.root) cwSt.root.classList.remove('panning', 'marqueeing');
-  if (cwSt.stage) {
-    for (let i = 0; i < cwSt.stage.children.length; i++) cwSt.stage.children[i].classList.remove('dragging');
-  }
+  // 单指那一下必须整个撤掉：卡片已跟随移动过就把坐标还原，框选就把框藏起来。
+  // 不还原的话，用户捏合缩放的副产物是「有张卡被拖到了别处」，而且那一刻他正盯着缩放。
+  cwAbortDrag(false);
   cwMarkBusy();
   cwPaint(b);
 }
@@ -18000,6 +18011,11 @@ function cwOnMenu(e) {
   if (!b) return;
   e.preventDefault();
   if (e.target.closest('.cw-tools') || e.target.closest('.cw-mini')) return;
+  /* 触屏长按：浏览器先派 pointerdown→pointermove（手指按下去总会微动），等 contextmenu
+     触发时卡片已经被挪了几像素，而松手还会把这次误挪 saveBots 存下来。
+     长按的语义是「我要菜单」，所以整次拖动在这里作废。桌面右键走不到这里
+     （cwOnDown 里 button===2 已早退），不受影响。 */
+  cwAbortDrag(false);
   cwOpenMenu(b, e.clientX, e.clientY);
 }
 
@@ -27927,7 +27943,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.49.0';
+var APP_VERSION = '3.50.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
