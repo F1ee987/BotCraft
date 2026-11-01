@@ -93,7 +93,7 @@
   /* 玻璃背后的「纹理层」浓度（2026-11-01）。这一层是玻璃感成立的前提：
      玻璃模糊的东西必须是「有结构的」，一片平滑渐变模糊完还是平滑。
      取值很小（.5）：玻璃外只当微妙质感，玻璃内被模糊+饱和后才是可见的流动感。 */
-  --bg-texture-opacity:.5;
+  --bg-texture-opacity:.62;   /* 低频云斑：单层无交叉，强度可以比原斜纹高一点仍不显图案 */
   /* 自定义背景图的两个变量（2026-11-01）。必须在这里给默认值：
      verify_css 不允许「只靠 var(..., fallback) 兜底」的悬空引用，
      而 JS 只在用户设过之后才会 setProperty 覆盖它们。
@@ -345,7 +345,7 @@
     radial-gradient(72% 66% at 14% 92%, rgba(94,234,212,.11), transparent 68%);
   --bg-grain-opacity:.025;
   /* 浅色下纹理压到 .28：白底上同样的浓度会显得发灰发脏 */
-  --bg-texture-opacity:.28;          /* 浅色颗粒更淡（原为 html::after 硬值 .025） */
+  --bg-texture-opacity:.30;          /* 浅色：白底上同一浓度会发灰，压到 .30（v3.55.0 云斑）*/
   --popover:#ffffff;                /* 弹出菜单（浅色）：纯白浮层 */
   --pop-veil:rgba(255,255,255,.95); /* 液态玻璃浮层基色（浅色）：留 5% 让背后的薄荷光晕透出来 */
   --panel:rgba(255,255,255,.52);    /* 玻璃层（浅色玻璃是「白色提亮」而非变暗） */
@@ -645,13 +645,15 @@ html.bg-hidden body::before, html.bg-hidden body::after{animation-play-state:pau
 html::before{
   content:'';position:fixed;inset:0;z-index:var(--bg-z);pointer-events:none;
   opacity:var(--bg-texture-opacity);
+  /* 低频随机云斑（v3.55.0）。v3.53.0 这里是两条 135°/45° 的 repeating-linear-gradient，
+     正好 90° 交叉 → 交叉点连成规则菱形网格，用户直接看到了「格子」。而且它违反了
+     test_bg.js 里 2026-10-20 就写下的原始规格：大块柔和 / 主色 1-2 种 / 避开细碎杂乱。
+     现改为低频 fractalNoise（空间尺度 ~170px）：无方向、无周期 → 不会被读成图案，
+     但起伏足够大，玻璃模糊后才看得出「底下有东西」。色相只用品牌青一种。
+     size 用 100% 100% 单块铺满 —— 平铺会产生可拼接的重复节奏。 */
   background-image:
-    repeating-linear-gradient(135deg,rgba(140,225,255,.16) 0 2px,transparent 2px 13px),
-    repeating-linear-gradient(45deg,rgba(180,160,255,.12) 0 3px,transparent 3px 19px),
-    radial-gradient(circle at 30% 40%,rgba(125,240,228,.30) 0 9px,transparent 9px),
-    radial-gradient(circle at 78% 68%,rgba(150,205,255,.24) 0 7px,transparent 7px);
-  background-size:100% 100%,100% 100%,260px 240px,320px 280px;
-  background-position:0 0,0 0,0 0,140px 90px;
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.006' numOctaves='4' seed='11' stitchTiles='stitch' result='t'/%3E%3CfeColorMatrix in='t' type='matrix' values='0 0 0 0 0.42  0 0 0 0 0.92  0 0 0 0 0.90  0.9 0.7 0.5 0 -0.35'/%3E%3C/filter%3E%3Crect width='900' height='900' filter='url(%23c)'/%3E%3C/svg%3E");
+  background-size:100% 100%;
 }
 html[data-bg="off"]::before{opacity:0}
 
@@ -28271,7 +28273,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.54.0';
+var APP_VERSION = '3.55.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
