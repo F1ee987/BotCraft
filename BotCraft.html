@@ -180,6 +180,7 @@
      此前只有颜色与阴影做了令牌，字阶 21 个散点值、圆角 24 种取值、动效时长 17 个
      散点值全靠手写 —— 改一处配色要翻遍全文件，也无从判断「这个 13px 是不是有意的」。
      下面这套阶梯由**现有实际用值**归纳而来（不是另造一套），所以视觉漂移在 1px 以内。 */
+  --fs-3xs:9.5px;   /* 极小字号：角标数字、密排圆点里的字符（原 9 / 9.5） */
   --fs-2xs:10.5px;  /* 极小徽标、角标（原 10 / 10.5） */
   --fs-xs:11.5px;   /* 次要说明、时间戳（原 11 / 11.5） */
   --fs-sm:12.5px;   /* 密集列表、提示（原 12 / 12.5） */
@@ -973,7 +974,7 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 .accent-opt:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
 .accent-opt.on{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-tint-2)}
 .accent-opt.on::after{content:'✓';position:absolute;right:-3px;bottom:-3px;width:15px;height:15px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;font-size:var(--fs-3xs);font-weight:800;
   color:#111114;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 .accent-opt[data-accent="cyan"] i{background:#22d3ee}
 .accent-opt[data-accent="indigo"] i{background:#818cf8}
@@ -1052,9 +1053,9 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
   background:conic-gradient(from 210deg,#8b5cf6,#ec4899,#f59e0b,#22d3ee,#8b5cf6);
   box-shadow:0 8px 24px rgba(0,0,0,.26);display:flex;align-items:center;justify-content:center}
 .acct-avatar-lg{width:82px;height:82px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-  font-size:32px;font-weight:600;color:#fff;background:linear-gradient(180deg,#0e7490,#0b4d5b);
+  font-size:var(--fs-6xl);font-weight:600;color:#fff;background:linear-gradient(180deg,#0e7490,#0b4d5b);
   background-size:cover;background-position:center}
-.acct-hero-name{font-size:19px;font-weight:700;line-height:1.2;margin-top:6px;
+.acct-hero-name{font-size:var(--fs-3xl);font-weight:700;line-height:1.2;margin-top:6px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .acct-hero-sub{font-size:var(--fs-xs);color:var(--sub);line-height:1.5;word-break:break-all;max-width:100%}
 /* 分段：一条细线代替整块底色 */
@@ -1084,7 +1085,7 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
       若把白勾直接放在透明伪元素上，会被判定「白对白 1.00:1」（verify_contrast 实测报红）。
       白底 + #111114 对勾 = 约 19:1，深浅主题都成立。 */
 .swatch.on::after{content:'✓';position:absolute;right:-3px;bottom:-3px;width:15px;height:15px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;font-size:var(--fs-3xs);font-weight:800;
   color:#111114;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 /* 图案：定宽网格（旧版 flex-wrap 把 11 个排成 10+1，最后一行落单） */
 .emoji-pick{display:grid;grid-template-columns:repeat(auto-fill,44px);gap:var(--sp-3);margin-top:2px}
@@ -1136,7 +1137,7 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 .auth-art-svg{position:relative;z-index:1;width:100%;height:100%;display:block}
 .auth-panel{flex:1;min-width:0;padding:44px 46px;display:flex;flex-direction:column;justify-content:center}
 .auth-panel .logo{justify-content:flex-start}
-.auth-panel h2{margin:0;font-size:26px;font-weight:680;letter-spacing:-.4px;color:var(--txt);font-family:var(--font-display)}
+.auth-panel h2{margin:0;font-size:var(--fs-5xl);font-weight:680;letter-spacing:-.4px;color:var(--txt);font-family:var(--font-display)}
 .auth-panel .auth-lede{color:var(--sub);font-size:13.5px;line-height:1.75;margin:9px 0 0}
 .auth-panel .auth-entry{display:flex;flex-direction:column;gap:var(--sp-3);margin-top:26px}
 .auth-panel .auth-entry .btn{width:100%;padding:12px 18px;font-size:14px;border-radius:var(--r-lg);justify-content:center}
@@ -1312,7 +1313,7 @@ body.embed-mode #wsName{font-size:15px}
   /* 瓦片是一块「实心彩色玻璃」：顶部一道 1px 高光 + 底部一圈内折射回光，
      再配一层同色落影 —— 原来纯色方块贴在玻璃卡上，像贴纸而不是材质。 */
   box-shadow:inset 0 1px 0 rgba(255,255,255,.34),inset 0 -6px 12px -8px rgba(255,255,255,.28),0 6px 14px -8px rgba(0,0,0,.55)}
-.bot-card h3{font-size:16.5px;font-weight:600;letter-spacing:-.2px;margin-bottom:5px}
+.bot-card h3{font-size:var(--fs-xl);font-weight:600;letter-spacing:-.2px;margin-bottom:5px}
 .bot-card p{font-size:12.5px;color:var(--sub);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .bot-meta{display:flex;gap:var(--sp-6);margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--sub)}
 /* 卡片 meta / 收藏角标：内嵌 SVG（2026-10-11）——emoji 在部分渲染环境缺字形显示为横线 */
@@ -1918,7 +1919,9 @@ body.cw-flow-full #chatFullBtn{display:none}
 #wsFlowBody.cw-full:not(.cw-qa-off) .cw-mini{right:calc(var(--cw-qa-w) + var(--cw-qa-gap) * 2 + var(--sp-6))}
 #wsFlowBody.cw-full:not(.cw-qa-off) .cw-root.cw-cramped .cw-mini{right:auto}
 #wsFlowBody.cw-full .cw-root.cw-qa-squeeze .cw-mini{display:none}
-/* ==================== 快速模式（2026-10-26）====================
+/* ==================== 低画质模式 body.cw-fast（2026-10-26；2026-11-01 改名）====================
+   ⚠️ 命名：这里以前叫「快速模式」，与设置里的「快速回复」（fastReply，决定走单轮还是工作流）
+      撞名。两者完全无关：一个管画布渲染开销，一个管回复链路。已改为「低画质模式」。
    低配机器 / 集显 / 远程桌面上的画布保底档。关掉的是**纯装饰且昂贵**的四类：
      ① 浮层 backdrop-filter（模糊要在合成阶段重新采样背后整块，全屏时背后是一条
         缩放中的舞台，代价最高）；
@@ -1943,6 +1946,21 @@ body.cw-fast #cwLive .cw-live-chat{background:var(--bg)}
 body.cw-fast .cw-card{box-shadow:0 0 0 1px var(--line)!important;transition:none!important}
 body.cw-fast .cw-stage{will-change:auto}
 body.cw-fast .cw-link{stroke-width:2}
+/* 未连分支的出口（2026-11-01）：不能只靠颜色差一点 —— 它必须「一眼看出是问题」。
+   红色描边 + 外扩光圈 + 2s 呼吸；prefers-reduced-motion 下只保留静态红环。 */
+.cw-port.out.unlinked{
+  border-color:var(--danger-text)!important;
+  box-shadow:0 0 0 3px rgba(220,38,38,.18);
+  animation:cwUnlinkedPulse 2s var(--ease) infinite}
+@keyframes cwUnlinkedPulse{
+  0%,100%{box-shadow:0 0 0 3px rgba(220,38,38,.18)}
+  50%{box-shadow:0 0 0 6px rgba(220,38,38,.06)}}
+@media (prefers-reduced-motion: reduce){.cw-port.out.unlinked{animation:none!important}}
+.node-unlinked{
+  display:flex;align-items:center;gap:var(--sp-2);margin-top:5px;
+  font-size:var(--fs-2xs);font-weight:600;color:var(--danger-text);
+  background:var(--danger-bg,rgba(220,38,38,.10));border-radius:var(--r-2xs);
+  padding:2px 6px;line-height:1.5}
 .cw-mini-node{position:absolute;border-radius:var(--r-2xs);background:var(--brand-line)}
 .cw-mini-node.sel{background:var(--brand-text)}
 .cw-mini-vp{position:absolute;border-radius:var(--r-2xs);border:1px solid var(--brand-text);background:var(--brand-tint)}
@@ -2167,7 +2185,7 @@ body.cw-fast .cw-link{stroke-width:2}
 .msg code{background:var(--bg);padding:1px 5px;border-radius:var(--r-2xs);font-size:12px;font-family:var(--font-mono)}
 /* markdown 富文本（renderMarkdown 输出） */
 .msg.bot h1,.msg.bot h2,.msg.bot h3,.msg.bot h4,.msg.bot h5,.msg.bot h6{margin:8px 0 5px;line-height:1.35;font-weight:600;letter-spacing:-.2px}
-.msg.bot h1{font-size:18px}.msg.bot h2{font-size:16.5px}.msg.bot h3{font-size:15px}.msg.bot h4,.msg.bot h5,.msg.bot h6{font-size:13.5px}
+.msg.bot h1{font-size:18px}.msg.bot h2{font-size:var(--fs-xl)}.msg.bot h3{font-size:15px}.msg.bot h4,.msg.bot h5,.msg.bot h6{font-size:13.5px}
 .msg.bot p{margin:5px 0;line-height:1.72}
 .msg.bot ul.md-list,.msg.bot ol.md-list{margin:6px 0;padding-left:22px}
 .msg.bot ul.md-list li,.msg.bot ol.md-list li{margin:3px 0;line-height:1.62}
@@ -2219,7 +2237,7 @@ img.md-img{max-width:100%;height:auto}
 #kbPrevBody>:first-child,.kb-prev>:first-child{margin-top:0}
 #kbPrevBody>:last-child,.kb-prev>:last-child{margin-bottom:0}
 #kbPrevBody h1,#kbPrevBody h2,#kbPrevBody h3,#kbPrevBody h4,#kbPrevBody h5,#kbPrevBody h6,.kb-prev h1,.kb-prev h2,.kb-prev h3,.kb-prev h4,.kb-prev h5,.kb-prev h6{margin:16px 0 8px;line-height:1.34;font-weight:680;letter-spacing:-.2px;color:var(--txt)}
-#kbPrevBody h1,.kb-prev h1{font-size:19px}#kbPrevBody h2,.kb-prev h2{font-size:17px}#kbPrevBody h3,.kb-prev h3{font-size:15px}#kbPrevBody h4,#kbPrevBody h5,#kbPrevBody h6,.kb-prev h4,.kb-prev h5,.kb-prev h6{font-size:13.5px}
+#kbPrevBody h1,.kb-prev h1{font-size:var(--fs-3xl)}#kbPrevBody h2,.kb-prev h2{font-size:var(--fs-xl)}#kbPrevBody h3,.kb-prev h3{font-size:15px}#kbPrevBody h4,#kbPrevBody h5,#kbPrevBody h6,.kb-prev h4,.kb-prev h5,.kb-prev h6{font-size:13.5px}
 #kbPrevBody p,.kb-prev p{margin:9px 0;line-height:1.85}
 #kbPrevBody ul.md-list,#kbPrevBody ol.md-list,.kb-prev ul.md-list,.kb-prev ol.md-list{margin:9px 0;padding-left:22px}
 #kbPrevBody ul.md-list li,#kbPrevBody ol.md-list li,.kb-prev ul.md-list li,.kb-prev ol.md-list li{margin:5px 0;line-height:1.75}
@@ -2370,7 +2388,7 @@ img.md-img{max-width:100%;height:auto}
 .chat-input .attach-btn.doc-on{background:var(--brand-tint);border-color:var(--brand-tint-2);color:var(--brand-text)}
 .chat-input .attach-btn.doc-off{opacity:.55}
 .chat-input .attach-btn .dp-badge{position:absolute;top:2px;right:2px;min-width:15px;height:15px;padding:0 4px;box-sizing:border-box;
-  border-radius:var(--r-full);background:var(--brand-fill);color:#fff;font-size:9.5px;line-height:15px;text-align:center;font-weight:700}
+  border-radius:var(--r-full);background:var(--brand-fill);color:#fff;font-size:var(--fs-3xs);line-height:15px;text-align:center;font-weight:700}
 /* 背景必须用实色 --popover，不能用 --glass-bg-hover（2026-10-24 用户反馈「显示与背景重叠」）。
    --glass-bg-hover 只有 56~60% 不透明度，而本浮层**没有遮罩、也没有 backdrop-filter**，
    直接压在聊天正文上 → 底下的文字一层层透过来，列表根本读不清。
@@ -2482,7 +2500,7 @@ img.md-img{max-width:100%;height:auto}
 /* Token 用量卡片 */
 .usage-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--sp-6);margin-bottom:14px}
 .usage-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-xl);padding:14px 16px}
-.usage-card .val{font-size:21px;font-weight:700;letter-spacing:-.02em;line-height:1.2;font-variant-numeric:tabular-nums}
+.usage-card .val{font-size:var(--fs-3xl);font-weight:700;letter-spacing:-.02em;line-height:1.2;font-variant-numeric:tabular-nums}
 .usage-card .lbl{font-size:12px;color:var(--sub);margin-top:5px}
 .usage-card .trend{font-size:11px;color:var(--sub);margin-top:6px;opacity:.85}
 .usage-bar{display:flex;height:9px;border-radius:var(--r-full);overflow:hidden;background:var(--fill);margin:4px 0 12px}
@@ -3265,7 +3283,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
 .ctxp.on{display:flex}
 .ctxp-box{width:min(780px,93vw);max-height:86vh;display:flex;flex-direction:column;border-radius:var(--r-2xl);background:var(--glass-bg-hover);border:1px solid var(--glass-border);box-shadow:var(--lg-shadow);overflow:hidden}
 .ctxp-hd{display:flex;align-items:center;gap:var(--sp-5);padding:14px 18px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600;color:var(--txt)}
-.ctxp-x{margin-left:auto;cursor:pointer;color:var(--sub);font-size:17px;line-height:1}
+.ctxp-x{margin-left:auto;cursor:pointer;color:var(--sub);font-size:var(--fs-xl);line-height:1}
 .ctxp-x:hover{color:var(--txt)}
 .ctxp-body{padding:14px 18px 20px;overflow:auto;display:flex;flex-direction:column;gap:var(--sp-6)}
 .ctxp-bar{display:flex;height:10px;border-radius:var(--r-full);background:var(--fill);overflow:hidden}
@@ -4025,9 +4043,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <div class="quick-bar" id="quickBar"></div>
         <div class="ctx-bar" id="ctxBar"></div>
         <div class="fast-bar" id="fastBar">
-          <label class="fast-toggle" title="开启后，编排型机器人也只走一次直接对话，跳过串行分步工作流，首字更快；需要多步推理时关闭">
+          <label class="fast-toggle" title="快速回复：编排型机器人也只走一次直接对话，跳过串行分步工作流，首字更快；需要多步推理时关闭。注意：它与画布里的「低画质模式」是两件不同的事——后者只管画布的模糊/阴影开销，不影响回答内容">
             <span class="fast-ico"><span class="i i--ok" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 3L5.5 13.5H11l-1 7.5 8-11H12l1-7z"/></svg></span></span>
-            <span class="fast-txt">快速模式</span>
+            <span class="fast-txt">快速回复</span>
             <span class="switch"><input type="checkbox" id="fastToggle" onchange="BotCraftAI.updateConfig({ fastReply: this.checked })"><span class="slider"></span></span>
           </label>
           <label class="fast-toggle" title="上下文超出预算时，把超长区块压成要点摘要再发送，而不是直接截断丢弃。压缩结果会缓存，同一份内容只压一次；关闭后完全回退到旧的截断行为，不产生任何额外调用">
@@ -5611,6 +5629,37 @@ var __storage = (function () {
 })();
 // 暴露给后续主 script 块复用（同一安全层，避免 AI 配置读写也抛错）
 window.__storage = __storage;
+
+/* ==================== 输出长度上限（2026-11-01）====================
+   原来全局只有一个 maxTokens（默认 2048），不区分模型：
+     · 推理模型 / 长文模型的实际上限远高于此，2048 会把回答拦腰截断
+       （工作流里已经能看到「被最大输出 tokens 截断」的告警）；
+     · 反过来，小模型上限可能只有 4096，填大了直接 400。
+   这里按模型名前缀给一个保守上限，取值一律 ≥ 常用默认值，宁可少钳也不误伤。
+   ⚠️ 表只做「上限兜底」，不是「推荐值」—— 用户仍可自由调小。 */
+var MODEL_OUT_LIMITS = [
+  { re: /(^|\/)(o1|o3|o4-mini|gpt-5)/i, out: 32768 },   // 推理模型，输出预算大
+  { re: /claude|anthropic/i,              out: 8192 },
+  { re: /gemini/i,                        out: 8192 },
+  { re: /deepseek|qwen|glm|moonshot|kimi/i, out: 8192 },
+  { re: /gpt-4o|gpt-4\.1|gpt-4-turbo/i,   out: 16384 },
+  { re: /gpt-3\.5|gpt-4($|[^-])/i,        out: 4096 }
+];
+var DEFAULT_OUT_LIMIT = 8192;
+function outLimitOf(model) {
+  var m = String(model || '');
+  for (var i = 0; i < MODEL_OUT_LIMITS.length; i++) {
+    if (MODEL_OUT_LIMITS[i].re.test(m)) return MODEL_OUT_LIMITS[i].out;
+  }
+  return DEFAULT_OUT_LIMIT;
+}
+/* 钳制到 [256, 该模型上限]。返回整数；非法输入回落 2048。 */
+function clampOutTokens(model, v) {
+  var lim = outLimitOf(model);
+  var x = Number(v);
+  if (!isFinite(x) || x <= 0) x = 2048;
+  return Math.max(256, Math.min(lim, Math.round(x)));
+}
 
 /* ==================== 基础工具层 ====================
    全局最底层的公共设施，四个 script 块共用。放在这里（而非主逻辑块）是因为
@@ -7453,7 +7502,8 @@ function buildCtxSections(bot, toolCtx, imagePrompt, opts) {
     // 但只靠兜底会白打一次请求，所以能预判的要预判。
     var _mkBody = function (model, url) {
       var mf = modelFeatures(model);
-      var mt = Number(cfg.maxTokens) || 2048;
+      // 按**当前端点模型**钳制（不是全局配置的模型名：降级端点可能换成别的模型）
+      var mt = clampOutTokens(model, cfg.maxTokens);
       var body = {
         model: model,
         messages: messages,
@@ -13453,6 +13503,7 @@ function updateStats() {
   if (tag) {
     const model = BotCraftAI.getConfig().model;
     tag.textContent = (typeof resolveModelLabel === 'function' ? resolveModelLabel(model) : model) || model || '未配置';
+    try { if (typeof syncModelTagHealth === 'function') syncModelTagHealth(); } catch (e) { }
   }
 }
 
@@ -14720,7 +14771,7 @@ function cwSetFast(on, quiet) {
   }
   cwSt.gridSig = ''; cwSt.stageSig = '';            // 强制下一帧重写（大格网格要按档位开关）
   if (cwSt.bot) { try { cwPaint(cwSt.bot); } catch (e) { } }
-  if (!quiet) toast(on ? '快速模式已开启：画布关闭模糊与阴影' : '快速模式已关闭', 'ok');
+  if (!quiet) toast(on ? '低画质模式已开启：画布已关闭模糊与阴影（不影响回复）' : '低画质模式已关闭', 'ok');
 }
 function cwInitFast() {
   var saved = null;
@@ -14991,13 +15042,27 @@ function cwCard(b, nd, i) {
   // 条件节点有几路分支就开几个口；其余节点一个口。
   // 多口是「分支」这件事在界面上的唯一表达 —— 一个口是画不出分叉的。
   const nBranch = cwBranchCount(nd);
-  let ports = '';
+  /* 分支覆盖检查（2026-11-01）。条件节点每多一个分支就多一个出口，但**出边是可以缺的**：
+     AI 生成画布时经常只连前两路（实测用户画布 n6 三个分支只连了两条），而调度器按边走，
+     落到没连的那一路就直接停 —— 界面上却毫无标记，用户只能跑完发现「结果不对」。
+     这里按 port 逐条查边（port 缺省 0），没边的出口标红 + 卡片上给一行提示。 */
+  const _edges = (b && b.edges) || [];
+  const _linked = {};
+  for (let e2 = 0; e2 < _edges.length; e2++) {
+    const ed = _edges[e2];
+    if (!ed || ed.from !== nd.id) continue;
+    _linked[Number(ed.port) || 0] = 1;
+  }
+  let ports = '', unlinked = [];
   for (let k = 0; k < nBranch; k++) {
     const yPct = nBranch <= 1 ? 50 : Math.round((k + 1) * 100 / (nBranch + 1));
     const bl = (kind === 'cond' && nd.branches && nd.branches[k]) ? (nd.branches[k].label || ('分支' + (k + 1))) : '';
-    ports += '<span class="cw-port out" data-port="' + k + '" data-i="' + i + '"' +
+    const miss = nBranch > 1 && !_linked[k];
+    if (miss) unlinked.push(bl || ('分支' + (k + 1)));
+    ports += '<span class="cw-port out' + (miss ? ' unlinked' : '') + '" data-port="' + k + '" data-i="' + i + '"' +
       ' style="top:' + yPct + '%;transform:translateY(-50%)"' +
-      ' title="拖到另一张卡：把这条线连过去' + (bl ? '（' + escapeAttr(bl) + '）' : '') + '"></span>';
+      ' title="拖到另一张卡：把这条线连过去' + (bl ? '（' + escapeAttr(bl) + '）' : '') +
+      (miss ? ' ⚠ 这条分支还没有连到下一个节点，流程走到这里会停' : '') + '"></span>';
   }
   // 输出变量名直接写在卡面上：下游就是靠这个名字取值，省得用户翻配置去猜
   const outName = F ? F.outOf(nd) : 'text';
@@ -15011,6 +15076,10 @@ function cwCard(b, nd, i) {
     '<span class="node-edit" data-i="' + i + '" title="编辑节点（标题 / 描述小字）">' + svgIcon('pencil','solo') + '</span>' +
     '<span class="node-ic">' + nodeIcon(lbl, h) + '</span>' +
     '<div class="lbl">' + escapeHtml(lbl) + kindTag + '</div><h4>' + escapeHtml(h) + '</h4><p>' + escapeHtml(p) + '</p>' + hint +
+    (unlinked.length
+      ? '<div class="node-unlinked" title="这些分支没有出边：条件命中对应分支时流程会在这里停止，请把出口拖到下一个节点">'
+        + svgIcon('warn', 'danger') + ' ' + unlinked.length + ' 个分支未连（' + escapeHtml(unlinked.join('、')) + '）</div>'
+      : '') +
     '<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:3px;word-break:break-all">输出 ' + escapeHtml('{{' + (nd.id || '') + '.' + outName + '}}') + '</div>' +
     '<div class="node-edit-save"><button class="ok" data-act="save">保存</button><button class="cancel" data-act="cancel">取消</button></div>' +
     ports +
@@ -15055,7 +15124,7 @@ function cwToolsHtml() {
       + '</button>' +
     '<button class="cw-tbtn" data-act="cwctx" aria-label="上下文详情" title="上下文详情：系统 / 历史 / 本会话占用（在画布内展开）">' + svgIcon('puzzle', 'solo') + '</button>' +
     '<span class="cw-tsep"></span>' +
-    '<button class="cw-tbtn" data-act="fast" aria-label="快速模式" title="快速模式：关闭画布内的模糊/阴影/大格网格，低配机器更流畅（设置随本机记住）">' + svgIcon('zap','solo') + '</button>' +
+    '<button class="cw-tbtn" data-act="fast" aria-label="低画质模式" title="低画质模式：关闭画布内的模糊/阴影/大格网格，降低显卡开销（不影响回复速度；设置在「更多」里随本机记住）">' + svgIcon('zap','solo') + '</button>' +
     '<button class="cw-tbtn" data-act="mode" aria-label="切换选择/平移模式" title="切换：选择模式 / 平移模式（按住空格可临时平移）">' + svgIcon('user','solo') + '</button>' +
     '</div>';
 }
@@ -17279,6 +17348,10 @@ async function aiPlotRun(refine) {
     else if (/HTTP 401|HTTP 403|unauthorized|invalid api key/i.test(_msg)) _advice = '鉴权失败：到「设置」重新填 API Key。';
     else if (/HTTP 429|rate limit|too many/i.test(_msg)) _advice = '被限流：公共免费端点常见，换一个模型或等几分钟。';
     else if (/网络|Network|Failed to fetch|timeout|abort/i.test(_msg)) _advice = '网络不可达：检查代理设置，或换一个国内可用的端点。';
+    /* 上一次连接测试就失败过 → 直接把那条结论抬出来，省掉「先怀疑代码」的那一轮排查。 */
+    var _hh = '';
+    try { if (typeof aiHealthHint === 'function') _hh = aiHealthHint(); } catch (e) { }
+    if (_hh) _advice = _hh + '。' + (_advice ? ' ' + _advice : '请先修好连接再重试。');
     if (out) {
       out.innerHTML = '<div class="hint" style="color:var(--danger-text)">编排失败：'
         + escapeHtml(_msg).slice(0, 220) + '</div>'
@@ -21921,9 +21994,14 @@ function accentName(id) {
   for (var i = 0; i < ACCENTS.length; i++) if (ACCENTS[i].id === id) return ACCENTS[i].name;
   return '青蓝';
 }
+/* 配色是用户级偏好，必须按账号隔离（2026-11-01）。原来用本机键 botcraft.accent，
+   切账号后「上一个账号的紫罗兰还在」—— 与其它用户级数据（bots/sessions/收藏）口径不一致。
+   迁移策略：先读带用户名的键；没有则回落旧的本机键（认领一次），并在写入时销毁旧键。 */
+function accentKey() { return (typeof userScopedKey === 'function') ? userScopedKey(ACCENT_KEY) : ACCENT_KEY; }
 function accentId() {
   var s = null;
-  try { s = __storage.getItem(ACCENT_KEY); } catch (e) {}
+  try { s = __storage.getItem(accentKey()); } catch (e) {}
+  if (!s) { try { s = __storage.getItem(ACCENT_KEY); } catch (e) {} }   // 旧本机键：仅作迁移兜底
   for (var i = 0; i < ACCENTS.length; i++) if (ACCENTS[i].id === s) return s;
   return 'cyan';
 }
@@ -21947,7 +22025,9 @@ function setAccent(id, quiet) {
      于是无论点哪套配色都存成 cyan，刷新后永远回到默认（实测踩到过）。
      这里取 applyAccent 校验后写在 DOM 上的属性，非法输入已被它回落。 */
   var real = document.documentElement.getAttribute('data-accent') || 'cyan';
-  try { __storage.setItem(ACCENT_KEY, real); } catch (e) {}
+  try { __storage.setItem(accentKey(), real); } catch (e) {}
+  /* 认领一次就销毁源：留着旧本机键会让「下个账号」也继承这个配色（正是本次要修的问题）。 */
+  try { if (accentKey() !== ACCENT_KEY) __storage.removeItem(ACCENT_KEY); } catch (e) {}
   if (!quiet) toast('配色：' + accentName(real), 'ok');
 }
 function initAccent() { applyAccent(accentId()); }
@@ -27293,6 +27373,32 @@ function setConnStatus(msg, type = '') {
   const el = document.getElementById('connStatus'); if (!el) return;
   el.textContent = msg || '';
   el.style.color = type === 'err' ? 'var(--danger)' : (type === 'ok' ? 'var(--ok)' : 'var(--sub)');
+  /* 结果落盘（2026-11-01）。原先这个状态只活在设置面板里：关掉面板就没了，
+     于是「AI 编排失败」时用户手上没有任何上下文 —— 明明上次拉模型列表就已经连不通。
+     现在只记结论（ok/err + 一句原因），不记 Key；标签与失败提示都会引用它。 */
+  if (type === 'ok' || type === 'err') {
+    try {
+      BotCraftAI.updateConfig({ health: { t: Date.now(), ok: type === 'ok', err: type === 'err', msg: String(msg || '').slice(0, 120) } });
+    } catch (e) { }
+    syncModelTagHealth();
+  }
+}
+/* 最近一次连接测试的结论（24 小时内才算有效；过期不提示，避免拿旧结论误导）。 */
+function aiHealthHint() {
+  try {
+    const h = BotCraftAI.getConfig().health;
+    if (!h || !h.t) return '';
+    if (Date.now() - h.t > 24 * 3600 * 1000) return '';
+    if (!h.err) return '';
+    return '上次连接测试失败：' + (h.msg || '端点不可达');
+  } catch (e) { return ''; }
+}
+function syncModelTagHealth() {
+  const tag = document.getElementById('topModelTag');
+  if (!tag) return;
+  const hint = aiHealthHint();
+  const base = '点击切换模型';
+  tag.title = hint ? (base + '｜⚠ ' + hint) : base;
 }
 function renderSettingsPreview() {
   var host = document.getElementById('settingsPreview'); if (!host) return;
@@ -27327,7 +27433,17 @@ function saveSettings() {
   // 于是「温度设为 0 = 最确定性输出」永远存不进去，静默退回默认（既有 bug，本次修掉）。
   var _tempParsed = parseFloat(document.getElementById('set-temp').value);
   const temperature = isFinite(_tempParsed) ? _tempParsed : 0.7;
-  const maxTokens = parseInt(document.getElementById('set-maxtokens').value, 10) || 2048;
+  /* 保存时按当前模型钳制，并把钳制后的值回写输入框 —— 否则用户以为存的是自己填的数，
+     下次发请求才被悄悄改掉。真被钳了给一次提示（不刷屏：只在值确实变化时）。 */
+  const _mtRaw = parseInt(document.getElementById('set-maxtokens').value, 10) || 2048;
+  const maxTokens = clampOutTokens(model, _mtRaw);
+  {
+    const _mtEl = document.getElementById('set-maxtokens');
+    if (_mtEl && String(maxTokens) !== String(_mtRaw)) {
+      _mtEl.value = String(maxTokens);
+      try { toast('输出上限已按模型能力调整为 ' + maxTokens + '（' + model + ' 的上限为 ' + outLimitOf(model) + '）', 'warn'); } catch (e) { }
+    }
+  }
   const directCall = document.getElementById('set-direct').checked;
   const proxyURL = document.getElementById('set-proxy').value.trim();
   const imageBaseURL = document.getElementById('set-img-base').value.trim();
@@ -27398,6 +27514,7 @@ function saveSettings() {
   if (_tg) {
     var _m = BotCraftAI.getConfig().model;
     _tg.textContent = (typeof resolveModelLabel === 'function' ? resolveModelLabel(_m) : _m) || _m || '未配置';
+    try { syncModelTagHealth(); } catch (e) { }
   }
   // 保存后刷新「即将使用」：否则那行还停在打开面板时的旧快照，与刚存进去的配置对不上
   renderSettingsPreview();
@@ -27500,7 +27617,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.43.0';
+var APP_VERSION = '3.44.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
