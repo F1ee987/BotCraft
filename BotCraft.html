@@ -1831,6 +1831,37 @@ body.cw-flow-full #wsMoreMenu .ws-more-item[data-tab="flow"]{display:none}
    等于「先骗一下再解释」。直接灰掉更诚实；button[disabled] 本身也不会派发 click。 */
 .cw-tbtn:disabled{opacity:.34;cursor:default}
 .cw-tbtn:disabled:hover{background:transparent;color:var(--sub)}
+
+/* ==================== 触屏 / 粗指针（2026-11-01 · P2-7） ====================
+   桌面版的交互热区是按鼠标设计的：工具按钮 28px、连线端口 13px、卡片 ✕/✎ 与会话行操作
+   是「悬停才 opacity:1」。触屏没有悬停态，于是：
+     · 小目标点不中（端口 13px，手指落点误差 ~10px）；
+     · 悬停隐藏的元素**看不见但仍在**（opacity:0 不阻止点击）—— 用户不知道那儿有按钮，
+       误触却会真的删掉卡片，这是最坏的一种「看不见的可点击」。
+   两档分开写是有意为之：触控笔/带触摸屏的笔电同时满足 coarse 与 hover:hover，
+   它们需要大热区，但不需要把悬停元素常显（常显会让界面显得吵）。
+   数值取 40px 而非 44px：画布空间按像素算，40 已高于 iOS 触控下限的 80% 且不挤占连线。 */
+@media (pointer: coarse) {
+  .cw-tbtn{min-width:40px;min-height:40px}
+  .cw-port{width:18px;height:18px;margin-top:-9px}
+  .cw-port.in{left:-9px}
+  .cw-port.out{right:-9px}
+  .cw-mid{min-width:30px;min-height:30px}
+  .node-del,.node-edit{min-width:34px;min-height:30px;display:inline-flex;align-items:center;justify-content:center}
+  /* 会话行操作的真实子元素是 em（重命名/删除），不是 .sess-act —— 写错选择器不会报错，
+     只会安静地什么都不做，所以这里按 .sess-acts em 选。 */
+  .sess-acts em{min-width:34px;min-height:30px;display:inline-flex;align-items:center;justify-content:center}
+}
+/* 没有悬停能力 = 悬停态永远不会触发，把「悬停才现」改成「常显」。
+   注意只提到 1 与 .85，不做描边/底色变化：常显是为了「找得到」，不是为了醒目。 */
+@media (hover: none) {
+  .node-del,.node-edit,.sess-acts,.doc-preview .dp-chip i{opacity:1}
+  .cw-mid{opacity:.85}
+  /* 悬停才变色的控件在触屏上永远停在默认色，用 :active 补一个按下反馈，
+     否则点下去界面毫无回应（用户会以为没点中，于是连点）。 */
+  .cw-tbtn:active{background:var(--brand-tint);border-color:var(--brand-tint-2);color:var(--brand-text)}
+  .node-del:active{color:var(--danger-text)}
+}
 /* 卡片层级：选中/拖动中的卡要浮到同伴上面。没有这条时，拖一张被后渲染卡片压住的卡，
    它自己会钻到别人底下（DOM 顺序决定层级），看起来像「拖着拖着卡被吞了」。 */
 .cw-card.sel{z-index:3}
@@ -14869,7 +14900,10 @@ const cwSt = {
   /* 渲染缓存（2026-10-26）：尺寸缓存避免每帧读布局，签名避免每帧写同样值 */
   vw: 0, vh: 0, dpr: 0, gridSig: '', stageSig: '',
   fast: false,            // 快速模式（装饰降级），持久化在 botcraft.cw.fast
-  busy: false             // 交互期（拖动/平移/缩放），快速模式下跳过小地图重绘
+  busy: false,            // 交互期（拖动/平移/缩放），快速模式下跳过小地图重绘
+  /* 触屏双指（2026-11-01）：ptrs 是活跃触点 id -> {x,y}，pinch 是这次捏合的起始快照。
+     只在 pointerType==='touch' 时维护；鼠标路径完全不受影响（指针 id 不会进这张表）。 */
+  ptrs: null, pinch: null
 };
 
 function cwView(b) { if (!CW_VIEWS[b.id]) CW_VIEWS[b.id] = { x: 0, y: 0, s: 1 }; return CW_VIEWS[b.id]; }
@@ -16497,6 +16531,67 @@ function cwZoomAt(b, cx, cy, f) {
   // Ctrl+滚轮缩放同样是高频路径（触控板捏合 = 每秒几十次 wheel）
   cwPaintSoon(b);
 }
+
+/* ---------- 双指捏合缩放（2026-11-01 · P7 触屏） ----------
+   两个要点，都是踩过才写下的：
+   1) 目标缩放按「当前两指距离 / 起始距离 × 起始 scale」重算，**不是**每帧按当前 scale 累乘。
+      累乘会把每帧的浮点误差和边界钳制一起累积，捏到最小/最大再张开回不到原比例。
+   2) 缩放锚点用两指中点，中点移动同时算平移。只缩放不平移的话，两指一边捏一边挪，
+      内容会「粘在原点」，手感像被拽住。 */
+function cwStartPinch() {
+  const b = cwSt.bot;
+  if (!b || !cwSt.ptrs || cwSt.ptrs.size < 2) return;
+  const it = [];
+  cwSt.ptrs.forEach(function (p) { it.push(p); });
+  const v = cwView(b);
+  cwSt.pinch = {
+    d0: Math.max(1, Math.hypot(it[0].x - it[1].x, it[0].y - it[1].y)),
+    s0: v.s,
+    cx: (it[0].x + it[1].x) / 2,
+    cy: (it[0].y + it[1].y) / 2
+  };
+  const d = cwSt.drag;
+  if (d) {
+    // 单指那一下必须整个撤掉：卡片已跟随移动过就把坐标还原，框选就把框藏起来。
+    // 不还原的话，用户捏合缩放的副产物是「有张卡被拖到了别处」，而且那一刻他正盯着缩放。
+    if (d.mode === 'node' && d.moved && d.init) {
+      d.init.forEach(function (o) {
+        const nd = b.nodes[o.i];
+        if (nd) { nd.x = o.x; nd.y = o.y; }
+      });
+      if (typeof cwUL === 'function') { const st = cwUL(b); if (st.length) st.pop(); }
+      b.updatedAt = Date.now(); saveBots();
+    }
+    if (d.mode === 'marquee' && cwSt.marquee) cwSt.marquee.style.display = 'none';
+  }
+  cwSt.drag = null;
+  cwSt.grabId = 0;
+  if (cwSt.root) cwSt.root.classList.remove('panning', 'marqueeing');
+  if (cwSt.stage) {
+    for (let i = 0; i < cwSt.stage.children.length; i++) cwSt.stage.children[i].classList.remove('dragging');
+  }
+  cwMarkBusy();
+  cwPaint(b);
+}
+function cwPinchMove() {
+  const p = cwSt.pinch, b = cwSt.bot;
+  if (!p || !b || !cwSt.ptrs || cwSt.ptrs.size < 2) return;
+  const it = [];
+  cwSt.ptrs.forEach(function (q) { it.push(q); });
+  if (it.length < 2) return;
+  const d = Math.max(1, Math.hypot(it[0].x - it[1].x, it[0].y - it[1].y));
+  const cx = (it[0].x + it[1].x) / 2, cy = (it[0].y + it[1].y) / 2;
+  const v = cwView(b);
+  // 比率先算成绝对目标再交给 cwZoomAt：钳制在这一次里发生，不会被累乘放大
+  const want = Math.min(CW_ZOOM_MAX, Math.max(CW_ZOOM_MIN, p.s0 * (d / p.d0)));
+  if (Math.abs(want / v.s - 1) > 1e-4) cwZoomAt(b, cx, cy, want / v.s);
+  if (p.cx != null) {
+    v.x += cx - p.cx;
+    v.y += cy - p.cy;
+    p.cx = cx; p.cy = cy;
+    cwPaintSoon(b);
+  }
+}
 function cwZoomCenter(b, f) {
   const root = cwSt.root;
   if (!root) return;
@@ -17528,6 +17623,17 @@ function cwOnDown(e) {
   const b = cwSt.bot, root = cwSt.root;
   if (!b || !root) return;
   if (e.button === 2) return;      // 右键交给 contextmenu
+  // 触屏：登记活跃触点。第二根手指落下就整条切到「捏合缩放」——
+  // 单指那次拖动立即作废（见 cwStartPinch），否则手指一多卡片会跟着其中一根乱跑，
+  // 而用户以为自己只是在缩放，松手后才发现卡片被拖歪了。
+  if (e.pointerType === 'touch') {
+    if (!cwSt.ptrs) cwSt.ptrs = new Map();
+    // 兜底清账：正常路径会在 pointerup/cancel 里删，但触屏上事件偶尔会整条丢失
+    //（来电、切后台、系统手势中断），残留的表会让下一次单指被误判成捏合。
+    if (cwSt.ptrs.size >= 3) cwSt.ptrs.clear();
+    cwSt.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (cwSt.ptrs.size >= 2) { cwStartPinch(); return; }
+  }
   // 卡片右上角的删除按钮：必须在**按下阶段**就早退。否则会走进卡片拖动分支，
   // 那一支会 setPointerCapture + preventDefault —— 之后浏览器把 click 的目标
   // 派给捕获元素（画布 root）而不是按钮，cwOnClick 里 closest('.node-del') 落空，
@@ -17606,6 +17712,11 @@ function cwGrab(e) {
 }
 
 function cwOnMove(e) {
+  // 捏合优先级最高：双指期间不碰卡片 / 框选 / 连线（drag 已被 cwStartPinch 置空）
+  if (cwSt.ptrs && cwSt.ptrs.has(e.pointerId)) {
+    cwSt.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (cwSt.pinch) { cwPinchMove(); return; }
+  }
   const d = cwSt.drag, b = cwSt.bot;
   if (!d || !b) return;
   // 小地图拖拽：视口连续跟随，不受拖动阈值约束（阈值防的是手抖挪卡，
@@ -17702,6 +17813,15 @@ function cwOnMove(e) {
 }
 
 function cwOnUp(e) {
+  // 注销触点。剩不到两根手指 = 这次捏合结束：必须清掉 pinch，
+  // 否则「两指松开一指、再单指拖动」会被继续当成捏合，画布卡死不跟手。
+  // 不在这里 return：下面的钳制与 idle 计时对捏合收尾同样需要。
+  let pinchEnded = false;
+  if (cwSt.ptrs && cwSt.ptrs.size) {
+    cwSt.ptrs.delete(e.pointerId);
+    if (cwSt.pinch && cwSt.ptrs.size < 2) { cwSt.pinch = null; pinchEnded = true; }
+  }
+  if (pinchEnded && cwSt.bot) { try { cwClampPan(cwSt.bot); } catch (errP) { } }
   /* 手势结束：立刻做一次边界钳制（拖甩出屏的情况多数在这里被拉回来），
      再进入 idle 计时（摘 will-change、快速模式补画小地图）。 */
   if (cwSt.bot) { try { cwClampPan(cwSt.bot); } catch (err0) { } }
@@ -27697,7 +27817,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.45.0';
+var APP_VERSION = '3.46.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
