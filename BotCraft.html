@@ -5073,7 +5073,8 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
 <div class="modal" id="dataMigrateModal">
   <div class="mbox" style="width:520px">
     <h2><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5V4z"/><path d="M8 4v5h7M8 20v-6h8v6"/></svg></span> 数据备份与迁移</h2>
-    <div class="hint">把本机所有 BotCraft 配置（机器人、知识库、收藏、账号、AI 设置）打包成文件，方便换浏览器或换源（file:// ↔ localhost）时恢复。<b style="color:var(--txt)">导入前请务必先登录</b>，数据会自动合并到当前登录账号。</div>
+    <div class="hint">把本机所有 BotCraft 数据（机器人、<b style="color:var(--txt)">知识库正文、提示词</b>、收藏、账号、提醒、定时任务、用量、插件、AI 设置）打包成文件，方便换浏览器、换机器或换源（file:// ↔ localhost）时恢复。<b style="color:var(--txt)">导入前请务必先登录</b>，数据会自动合并到当前登录账号。</div>
+    <div class="hint" id="dmOverview" style="font-size:var(--fs-xs);margin-top:6px"></div>
     <div style="display:flex;gap:12px;margin:18px 0">
       <button class="btn btn-primary" style="flex:1" onclick="exportAllConfig()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></span> 导出全部配置</button>
       <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('importConfigFile').click()"><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span> 从文件导入</button>
@@ -20829,13 +20830,64 @@ function _maskCfgSecrets(cfg) {
   }
   return cfg;
 }
-function exportAllConfig() {
-  const data = {};
-  const keys = storage.keys();
+// ---------- 用户数据键：唯一判据（导出 / 应急清空 / 概览统计共用） ----------
+// 别用「botcraft. 前缀」筛数据：按账号隔离的键里 kb / snippets / usage 是**裸键**
+// （userScopedKey('kb') 拼出来是 'kb.<用户名>'），只认前缀会把知识库正文、提示词、
+// 用量一起漏掉 —— 症状是「导出成功、恢复后知识库空了」，且全程不报任何错。
+// 导出、应急清空、概览三处必须共用本判据，任何一处单写前缀就是同一个 bug 换了个入口。
+const USER_DATA_BARE = ['kb', 'snippets', 'usage'];
+function isUserDataKey(k) {
+  k = String(k == null ? '' : k);
+  if (!k) return false;
+  if (k.indexOf('botcraft.') === 0) return true;
+  for (let i = 0; i < USER_DATA_BARE.length; i++) {
+    const b = USER_DATA_BARE[i];
+    if (k === b || k.indexOf(b + '.') === 0) return true;
+  }
+  return false;
+}
+// 收集本机全部用户数据（键 -> 原始字符串）：导出与概览共用一份实现，口径不会漂
+function collectUserData() {
+  const out = {};
+  let keys = [];
+  try { keys = (storage.keys ? storage.keys() : []) || []; } catch (e) { keys = []; }
   for (let i = 0; i < keys.length; i++) {
     const k = keys[i];
-    if (k.indexOf('botcraft.') === 0) data[k] = storage.getItem(k);
+    if (!isUserDataKey(k)) continue;
+    let v = null;
+    try { v = storage.getItem(k); } catch (e) { v = null; }
+    if (v == null) continue;
+    out[k] = v;
   }
+  return out;
+}
+// 概览：导出前先让用户看见「到底会带走什么」，而不是只看到「已导出 N 项配置」
+function userDataCounts(data) {
+  const c = { bots: 0, kb: 0, snippets: 0, keys: 0 };
+  Object.keys(data || {}).forEach(function (k) {
+    c.keys++;
+    let arr = null;
+    try { arr = JSON.parse(data[k]); } catch (e) { return; }
+    if (!Array.isArray(arr)) return;
+    if (k.indexOf('botcraft.bots.v2') === 0) c.bots += arr.length;
+    else if (k === 'kb' || k.indexOf('kb.') === 0 || k.indexOf('botcraft.kb.') === 0) c.kb += arr.length;
+    else if (k === 'snippets' || k.indexOf('snippets.') === 0 || k.indexOf('botcraft.snippets.') === 0) c.snippets += arr.length;
+  });
+  return c;
+}
+function userDataSummaryMd() {
+  const c = userDataCounts(collectUserData());
+  return '本机现有 <b style="color:var(--txt)">' + c.keys + '</b> 项数据：'
+    + '<b style="color:var(--txt)">' + c.bots + '</b> 个机器人 · '
+    + '<b style="color:var(--txt)">' + c.kb + '</b> 篇知识库 · '
+    + '<b style="color:var(--txt)">' + c.snippets + '</b> 条提示词';
+}
+window.isUserDataKey = isUserDataKey;
+window.collectUserData = collectUserData;
+window.userDataCounts = userDataCounts;
+window.userDataSummaryMd = userDataSummaryMd;
+function exportAllConfig() {
+  const data = collectUserData();
   // 敏感键统一脱敏（含备用模型链逐项 Key）。解析失败 = 内容不可信：fail-closed 直接跳过
   // 该键并计数明示，绝不「按原样导出」——异常路径恰恰是最不能泄密的路径。
   let skippedSecret = 0;
@@ -20846,44 +20898,57 @@ function exportAllConfig() {
       data[k] = JSON.stringify(_maskCfgSecrets(cfg));
     } catch (e) { delete data[k]; skippedSecret++; }
   });
+  const counts = userDataCounts(data);
   const payload = {
     app: 'BotCraft', version: 1,
     exportedAt: new Date().toISOString(),
-    note: 'BotCraft 全量配置：机器人 / 知识库 / 收藏 / 账号 / AI 设置（API Key 已脱敏为 ***，不在文件内）',
+    // account 不是给程序用的，是给「恢复时」看的：跨账号导入必须能说出「这份备份属于谁」
+    account: (currentUser && currentUser.username) || '',
+    counts: counts,
+    note: 'BotCraft 全量数据：机器人 / 知识库正文 / 提示词 / 收藏 / 账号 / 提醒 / 定时任务 / 用量 / 插件 / AI 设置（API Key 已脱敏为 ***，不在文件内）',
     data: data,
   };
   const filename = 'botcraft-config-' + new Date().toISOString().slice(0, 10) + '.json';
-  let botCount = 0;
-  Object.keys(data).forEach(function (k) { if (k.indexOf('botcraft.bots.v2.') === 0) { try { botCount += JSON.parse(data[k]).length; } catch (e) {} } });
+  const botCount = counts.bots;
+  const countsText = counts.bots + ' 个机器人 · ' + counts.kb + ' 篇知识库 · ' + counts.snippets + ' 条提示词';
   if (hasSubtle()) {
     openNameInput('加密口令（可选）', '', function (pass) {
       pass = (pass || '').trim();
       if (!pass) {
         _downloadJson(filename, payload);
-        toast('已导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人，未加密）'
+        toast('已导出 ' + Object.keys(data).length + ' 项数据（' + countsText + '，未加密）'
           + (skippedSecret ? '；' + skippedSecret + ' 项 AI 配置解析失败已跳过' : '') + '。API Key 已脱敏，不在文件内', 'ok');
         return;
       }
       bcEncrypt(crypto.subtle, JSON.stringify(payload), pass).then(function (env) {
         _downloadJson(filename, env);
-        toast('已加密导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人）'
+        toast('已加密导出 ' + Object.keys(data).length + ' 项数据（' + countsText + '）'
           + (skippedSecret ? '；' + skippedSecret + ' 项 AI 配置解析失败已跳过' : ''), 'ok');
       }).catch(function (e) { toast('加密失败：' + e.message, 'err'); });
     }, '留空则不加密（明文 JSON，API Key 已脱敏）；填写则用 AES-GCM 加密，导入时需同一口令。');
   } else {
     _downloadJson(filename, payload);
-    toast('已导出 ' + Object.keys(data).length + ' 项配置（含 ' + botCount + ' 个机器人，未加密）'
+    toast('已导出 ' + Object.keys(data).length + ' 项数据（' + countsText + '，未加密）'
       + (skippedSecret ? '；' + skippedSecret + ' 项 AI 配置解析失败已跳过' : '') + '。API Key 已脱敏，不在文件内', 'ok');
   }
 }
-// 将导入文件中「按旧用户名分键」的机器人/知识库/收藏合并到当前登录账号，避免换用户名后看不到数据
+// 跨账号恢复要搬的键前缀（_mergeUserKey 只处理「数组 + 元素带 id」的列表型数据）
+const CROSS_ACCOUNT_MERGE = [
+  'botcraft.bots.v2.', 'botcraft.favorites.v1.', 'botcraft.kb.',
+  'kb.', 'snippets.', 'botcraft.snippets.',
+  'botcraft.schedules.v1.', 'botcraft.reminders.v1.', 'botcraft.plugins.installed.v1.',
+];
+// 将导入文件中「按旧用户名分键」的机器人/知识库/收藏/提示词/定时/提醒/插件合并到当前登录账号，
+// 避免换用户名后看不到数据
 function _mergeUserKey(prefix, targetUser) {
   const targetKey = prefix + targetUser;
   const bareKey = prefix.slice(0, -1); // 不带用户名的兜底键，如 botcraft.bots.v2 / botcraft.kb
   let out = [];
   try { const cur = JSON.parse(storage.getItem(targetKey) || '[]'); if (Array.isArray(cur)) out = cur; } catch (e) {}
   storage.keys().forEach(function (k) {
-    if (k.indexOf('botcraft.') !== 0) return;
+    // 这里必须用 isUserDataKey，不能写 botcraft. 前缀：kb./snippets./usage. 是裸键，
+    // 写前缀会把它们全部 return 掉 —— 表现为「导入成功、合并也调了，但当前账号里还是空的」。
+    if (!isUserDataKey(k)) return;
     if (k === targetKey) return;
     if (k === bareKey || k.indexOf(prefix) === 0) {
       try { const arr = JSON.parse(storage.getItem(k) || '[]'); if (Array.isArray(arr)) out = out.concat(arr); } catch (e) {}
@@ -20915,6 +20980,14 @@ async function importAllConfig(file) {
         try { payload = JSON.parse(dec.text); } catch (e) { toast('解密后内容不是合法 JSON', 'err'); return; }
       }
       const data = (payload && payload.data && typeof payload.data === 'object') ? payload.data : payload;
+      // 备份来自别的账号时必须说清楚：合并是「新增到当前账号」，文件里那些按旧用户名分键的
+      // 键并不会消失。不明示的话，用户会以为旧账号的数据应该被搬走／清掉。
+      const fromAcct = (payload && typeof payload.account === 'string') ? payload.account : '';
+      const nowAcct = (currentUser && currentUser.username) || '';
+      if (fromAcct && nowAcct && fromAcct !== nowAcct) {
+        const go = await confirmDialog('这份备份属于账号「' + fromAcct + '」，当前登录的是「' + nowAcct + '」。\n\n继续导入会把备份里的机器人、知识库、提示词、提醒、定时任务**合并**到「' + nowAcct + '」下（同 id 只保留一份）；本机原有数据不受影响。\n\n确定继续？', { title: '跨账号恢复', okText: '合并到当前账号' });
+        if (!go) return;
+      }
       // 导出侧 Key 已脱敏为 '***'（见 _maskCfgSecrets）：导入时 '***' 字段保留本机现值
       //（本机没有则留空），绝不能把 '***' 当真 Key 写进配置——否则导入后所有调用直接 401。
       // 备用模型链逐项 Key 按 label+baseURL+model 匹配本机对应项找回。
@@ -20953,7 +21026,7 @@ async function importAllConfig(file) {
       });
       let count = 0, failed = [];
       Object.keys(data).forEach(function (k) {
-        if (k.indexOf('botcraft.') !== 0) return;
+        if (!isUserDataKey(k)) return;
         const v = data[k];
         // **不能无差别 String(v)**：备份里的值多数已经是 JSON 字符串（导出时序列化过），
         // 但也可能是对象/数组/数字。一律 String() 会把对象写成字面量 "[object Object]" ——
@@ -20973,10 +21046,11 @@ async function importAllConfig(file) {
         toast('导入失败：备份里没有任何可识别的 botcraft.* 配置项', 'err', 8000);
         return;
       }
+      // 合并清单 = 「带用户名后缀的列表型数据」。漏一类的表现是「导入成功，但那个功能里是空的」：
+      // 数据其实已写进本机，只是躺在旧用户名后缀下，当前账号永远读不到。
+      // usage 不在此列：它是对象型统计，跨账号相加会让用量凭空翻倍。
       if (currentUser && currentUser.username) {
-        _mergeUserKey('botcraft.bots.v2.', currentUser.username);
-        _mergeUserKey('botcraft.kb.', currentUser.username);
-        _mergeUserKey('botcraft.favorites.v1.', currentUser.username);
+        CROSS_ACCOUNT_MERGE.forEach(function (p) { _mergeUserKey(p, currentUser.username); });
       }
       loadBots(); renderGrid(); updateStats(); renderBotSwitcher(); syncEmptyHome();
       const botNow = bots.length;
@@ -21102,8 +21176,14 @@ function importBotFromFile(file) {
   reader.readAsArrayBuffer(file);
 }
 // 顶栏「💾 备份」专用弹窗
+function renderDataMigrateOverview() {
+  const el = document.getElementById('dmOverview');
+  if (!el) return;
+  try { el.innerHTML = userDataSummaryMd(); } catch (e) { el.innerHTML = ''; }
+}
 function openDataMigrate() {
   document.getElementById('dataMigrateModal').classList.add('on');
+  try { renderDataMigrateOverview(); } catch (e) { }
   try { bkRefresh(); } catch (e) { }
   try { renderStorageUsage(); } catch (e) { }
   try { renderStorageTrim(); } catch (e) { }
@@ -27617,7 +27697,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.44.0';
+var APP_VERSION = '3.45.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -27656,7 +27736,12 @@ async function emergencyReset() {
     var ks = [];
     try { ks = __storage.keys() || []; } catch (e) { ks = []; }
     for (var i = 0; i < ks.length; i++) {
-      if (String(ks[i]).indexOf('botcraft.') === 0) __storage.removeItem(ks[i]);
+      // 判据必须与导出共用 isUserDataKey：kb./snippets./usage. 不带 botcraft. 前缀，
+      // 只认前缀的「清空全部数据」会把知识库正文、提示词、用量留在原地（「清了但还在」）。
+      const userData = (typeof isUserDataKey === 'function')
+        ? isUserDataKey(ks[i])
+        : String(ks[i]).indexOf('botcraft.') === 0;
+      if (userData) __storage.removeItem(ks[i]);
     }
   } catch (e) {}
   location.reload();
