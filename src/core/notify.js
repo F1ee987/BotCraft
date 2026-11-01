@@ -103,6 +103,5 @@ if (typeof module !== "undefined" && module.exports) {
     notifyStateText: typeof notifyStateText !== "undefined" ? notifyStateText : undefined,
     notifyReminder: typeof notifyReminder !== "undefined" ? notifyReminder : undefined,
     askNotificationPermission: typeof askNotificationPermission !== "undefined" ? askNotificationPermission : undefined,
-    manualCheckUpdate: typeof manualCheckUpdate !== "undefined" ? manualCheckUpdate : undefined,
   };
 }

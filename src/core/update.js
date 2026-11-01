@@ -165,7 +165,6 @@ if (typeof module !== "undefined" && module.exports) {
     setUpdateStatusHTML: typeof setUpdateStatusHTML !== "undefined" ? setUpdateStatusHTML : undefined,
     openReleasePage: typeof openReleasePage !== "undefined" ? openReleasePage : undefined,
     checkForUpdate: typeof checkForUpdate !== "undefined" ? checkForUpdate : undefined,
-    showAnaTab: typeof showAnaTab !== "undefined" ? showAnaTab : undefined,
     manualCheckUpdate: typeof manualCheckUpdate !== "undefined" ? manualCheckUpdate : undefined,
   };
 }

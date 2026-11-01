@@ -24631,7 +24631,7 @@ let _reminderTimer=null;
 // 不可用（浏览器没这个 API、桌面壳未授权）或被拒时回退应用内 toast。
 // 之前的实现只有 toast —— 面板文案却写着「到点弹出通知」，等于承诺了没做的事：
 // 应用不在前台时提醒等于没提醒。
-/* ===== MODULE: core/notify exports:_notifySupported,_isDesktop,setNotifyState,notifyStateText,notifyReminder,askNotificationPermission,manualCheckUpdate ===== */
+/* ===== MODULE: core/notify exports:_notifySupported,_isDesktop,setNotifyState,notifyStateText,notifyReminder,askNotificationPermission ===== */
 function _notifySupported() {
   try { return (typeof Notification !== 'undefined') && Notification; } catch (e) { return null; }
 }
@@ -27817,7 +27817,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.46.0';
+var APP_VERSION = '3.47.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -27873,7 +27873,7 @@ async function emergencyReset() {
 // 构建期由 build_exe.py 把打包时的 commit sha 写进 __BC_BUILD_COMMIT__ 占位符；
 // 点按钮时与 GitHub main 最新 commit 比对，结果显示在按钮旁的状态栏。
 // 浏览器直开时占位符不会被替换（非 hex 即视为开发态），检查直接跳过。
-/* ===== MODULE: core/update exports:setUpdateStatus,setUpdateStatusHTML,openReleasePage,checkForUpdate,showAnaTab,manualCheckUpdate ===== */
+/* ===== MODULE: core/update exports:setUpdateStatus,setUpdateStatusHTML,openReleasePage,checkForUpdate,manualCheckUpdate ===== */
 var BC_BUILD_COMMIT = '__BC_BUILD_COMMIT__';
 // 构建期由 build_exe.py 从源码的 APP_VERSION 注入（与 Release tag 同源）。
 // 浏览器直开时占位符不被替换 → 非语义化版本串 → 更新检查自动跳过。
