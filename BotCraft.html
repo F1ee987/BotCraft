@@ -2362,19 +2362,27 @@ body.cw-fast .cw-link{stroke-width:2}
 .chat-input button:active{filter:brightness(.94);transform:scale(.97)}
 .chat-input button:disabled{opacity:.4;cursor:not-allowed;filter:none}
 .chat-input .attach-btn{padding:0;width:44px;height:44px;border-radius:var(--r-lg);background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--dur-3) var(--ease),transform var(--dur-1) var(--ease)}
-/* 聊天「回到底部」悬浮按钮：作为 .chat-input 的绝对定位子元素悬浮于聊天区右下角，
-   不占布局（absolute 脱离 flex 流），且永远贴着输入框上方、随其高度自动上移。
-   用 .chat-input 前缀提权，压过 .chat-input button 的通用样式（背景/内边距/圆角）。 */
-.chat-input .chat-to-bottom{position:absolute;right:16px;bottom:calc(100% + 12px);z-index:8;
+/* 聊天「回到底部」悬浮按钮：两个宿主 —— 普通模式在 .chat-input 内，画布接管态在
+   .cw-live-chat 内（按钮会被搬进聊天面板，见 cwAdoptChat）。
+   定位不再是「输入框上方」（那会压住 quick/ctx/fast 三条快捷栏，且输入框变高时按钮乱飘），
+   而是由 placeChatToBottomBtn() 按「聊天可视区底边 + 12px」算出 bottom 写到行内样式。
+   这里 80px 只是 JS 尚未跑时的兜底值。
+   用 .chat-input/.cw-live-chat 前缀提权，压过 .chat-input button 的通用样式（背景/内边距/圆角）。 */
+.chat-input .chat-to-bottom,
+.cw-live-chat .chat-to-bottom{position:absolute;right:16px;bottom:80px;z-index:8;
   width:42px;height:42px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
   background:var(--glass-bg-hover);border:1px solid var(--glass-border);box-shadow:0 6px 18px rgba(0,0,0,.28);
   color:var(--txt);cursor:pointer;touch-action:manipulation;filter:none;
   opacity:0;visibility:hidden;transform:translateY(8px);pointer-events:none;
   transition:opacity var(--dur-3) var(--ease),transform var(--dur-3) var(--ease),visibility var(--dur-3),background var(--dur-3) var(--ease)}
-.chat-input .chat-to-bottom svg{width:22px;height:22px;display:block}
-.chat-input .chat-to-bottom:hover{background:var(--brand-fill);color:#fff;border-color:transparent;filter:none}
-.chat-input .chat-to-bottom:active{transform:scale(.94)}
-.chat-input .chat-to-bottom.show{opacity:1;visibility:visible;transform:none;pointer-events:auto}
+.chat-input .chat-to-bottom svg,
+.cw-live-chat .chat-to-bottom svg{width:22px;height:22px;display:block}
+.chat-input .chat-to-bottom:hover,
+.cw-live-chat .chat-to-bottom:hover{background:var(--brand-fill);color:#fff;border-color:transparent;filter:none}
+.chat-input .chat-to-bottom:active,
+.cw-live-chat .chat-to-bottom:active{transform:scale(.94)}
+.chat-input .chat-to-bottom.show,
+.cw-live-chat .chat-to-bottom.show{opacity:1;visibility:visible;transform:none;pointer-events:auto}
 /* 提示词库 + 斜杠指令 */
 .input-wrap{position:relative}
 .slash-menu{position:absolute;left:0;right:0;bottom:calc(100% + 10px);max-height:300px;overflow:auto;z-index:80;
@@ -15975,12 +15983,19 @@ function cwAdoptChat() {
     };
     document.getElementById('cwLiveChat').appendChild(chat);
     document.getElementById('cwLiveBar').appendChild(inp);
+    /* 「回到底部」按钮跟着**聊天面板**走：留在 .chat-input 里会被一并搬到左下的
+       .cw-live-bar，与右侧对话面板脱节（实测按钮在 x=764，面板在 x=939~1397，
+       用户看起来就是「画布里没这个功能」）。 */
+    var tb = document.getElementById('chatToBottom');
+    if (tb) document.getElementById('cwLiveChat').appendChild(tb);
     if (!cwSt.liveDrag) cwSt.liveDrag = cwBindFloatDrag('live', document.getElementById('cwLiveChat'), '.cw-live-hd');
     cwSt.chatAdopted = true;
     document.body.classList.add('cw-adopt-chat');
   }
   el.classList.add('on');
   cwLiveSync();
+  /* 位置必须在面板真正可见（.on）之后再算 —— 之前 offsetParent 为 null 会直接 return。 */
+  try { placeChatToBottomBtn(); updateChatToBottomBtn(); } catch (e) {}
 }
 function cwReleaseChat() {
   var el = document.getElementById('cwLive');
@@ -16000,8 +16015,13 @@ function cwReleaseChat() {
       try { h.p.insertBefore(node, h.n); } catch (e) { h.p.appendChild(node); }
     }
   };
+  /* 「回到底部」按钮放回输入框内（普通模式的宿主）；必须在 inp 归位之前插，
+     这样它跟着输入框一起回到 .ws-main，不会留在已隐藏的固定层里。 */
+  var tb = document.getElementById('chatToBottom');
+  if (tb && inp) inp.appendChild(tb);
   put(chat, home.c);
   put(inp, home.i);
+  try { placeChatToBottomBtn(); updateChatToBottomBtn(); } catch (e) {}
 }
 function cwRenderQA(b) {
   var body = document.getElementById('wsFlowBody');
@@ -18578,6 +18598,41 @@ function scrollChatToBottom(force) {
   });
 }
 
+/* 把按钮钉到「聊天可视区」的右下角 —— 位置由几何量算，不靠 CSS 猜。
+   为什么不能纯 CSS：普通模式下 .chat-input 上面还压着 quick-bar / ctx-bar / fast-bar 三条
+   （合计 110~180px，且随状态显隐），用 bottom:100% 会把按钮顶到快捷栏上（实测压住 fast-bar 39px）；
+   画布接管态下 .chat-input 又被搬到左下的 .cw-live-bar，离右侧对话面板更远（实测按钮在 x=764，
+   而对话面板在 x=939~1397）。
+   算法：host 底边到 #chat 底边的距离 + 12 = 按钮相对 host 的 bottom。
+   host 取 offsetParent（普通模式是 .chat-input，接管态是 .cw-live-chat），两种模式同一套算法。 */
+function placeChatToBottomBtn() {
+  var chat = document.getElementById('chat');
+  var btn = document.getElementById('chatToBottom');
+  if (!chat || !btn) return;
+  var host = btn.offsetParent;
+  if (!host || host === document.body || host === document.documentElement) return;
+  /* 画布接管态：按钮就住在对话面板里，#chat 铺满面板 → 直接贴面板底 12px。
+     刻意不在这里量 rect：刚接管/刚显示的那几帧布局还在稳定，#chat 的底边会来回变，
+     按瞬时差值算会留下 5~7px 的偏差（实测就是这么飘的）。 */
+  if (host.id === 'cwLiveChat') { btn.style.bottom = '12px'; return; }
+  var cr = chat.getBoundingClientRect();
+  var hr = host.getBoundingClientRect();
+  if (!cr || !hr || !cr.height) return;
+  var b = Math.round(hr.bottom - cr.bottom) + 12;
+  if (!isFinite(b) || b < 8) b = 12;      // 异常布局兜底：至少不要贴死底边
+  btn.style.bottom = b + 'px';
+}
+/* 「追底」的运行态：点击回到底部后会在短窗口内反复补钉（覆盖流式输出 / 图片异步加载）。
+   但这有个坑：用户点完立刻往上翻，补钉会把他拽回底部（实测确实会「抢滚动」）。
+   取消判据用**用户输入事件**（wheel / touchstart），不要用「gap 变大」——
+   后者会被平滑动画重新定时时的瞬时值误判成「用户上翻」，实测提前取消、落点差 21px。 */
+var _chatJump = { active: false, iv: 0, timer: 0 };
+function _cancelChatJump() {
+  var j = _chatJump;
+  j.active = false;
+  if (j.iv) { clearInterval(j.iv); j.iv = 0; }
+  if (j.timer) { clearTimeout(j.timer); j.timer = 0; }
+}
 // 聊天「回到底部」悬浮按钮：仅在用户上翻离开底部时显示，回到贴底自动隐藏
 function updateChatToBottomBtn() {
   var chat = document.getElementById('chat');
@@ -18590,26 +18645,60 @@ function updateChatToBottomBtn() {
 }
 function chatJumpToBottom() {
   var chat = document.getElementById('chat'); if (!chat) return;
-  // 平滑滚到底部；流式输出 / 图片异步加载会让底部继续变长，连钉几次补上（与 scrollChatToBottom 思路一致）
-  var pin = function () { chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' }); };
-  pin();
-  var n = 0, iv = setInterval(function () {
-    if (++n > 6) { clearInterval(iv); return; }
-    pin();
+  _cancelChatJump();
+  var exact = function () { try { chat.scrollTop = chat.scrollHeight; } catch (e) {} };
+  var smooth = function () {
+    try { chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' }); }
+    catch (e) { exact(); }
+  };
+  var j = _chatJump;
+  j.active = true;
+  smooth();
+  /* 流式输出 / 图片异步加载会让底部继续变长 → 短窗口内连追几次 */
+  var n = 0;
+  j.iv = setInterval(function () {
+    if (!j.active) return;
+    if (++n > 7) { exact(); _cancelChatJump(); updateChatToBottomBtn(); return; }
+    smooth();
   }, 220);
-  setTimeout(function () { clearInterval(iv); }, 1500);
+  /* 平滑结束时做一次**瞬时精确对齐**：长距离下反复 smooth 会在末尾留几像素残差，
+     表现就是「差半行 / 底部露一条空白 / 最后一条被截掉一半」。
+     支持 scrollend 就用它，否则 1.8s 兜底；两者都走同一个 finish，只执行一次。 */
+  var finish = function () {
+    if (!j.active) return;
+    exact();
+    _cancelChatJump();
+    updateChatToBottomBtn();
+  };
+  if ('onscrollend' in chat) {
+    chat.addEventListener('scrollend', function onEnd() {
+      chat.removeEventListener('scrollend', onEnd);
+      finish();
+    });
+  }
+  j.timer = setTimeout(finish, 1800);
   // 点击按钮不抢走输入框焦点，方便用户继续打字
   var ta = document.getElementById('msgInput');
   if (ta) setTimeout(function () { try { ta.focus(); } catch (e) {} }, 0);
 }
 // 一次性绑定（#chat 容器本身不被 renderHistory 重建，监听挂容器上不会丢失）：
-// 滚动时更新按钮显隐；内容高度变化（新消息、图片加载）用 ResizeObserver 兜底，避免「滚上去时来新消息却没出按钮」。
+// 滚动只更新显隐；位置在**布局变化**时重算（ResizeObserver 覆盖快捷栏显隐、输入框增高、进出全屏）。
 (function bindChatToBottomBtn() {
   var chat = document.getElementById('chat');
   var btn = document.getElementById('chatToBottom');
   if (!chat || !btn) { document.addEventListener('DOMContentLoaded', bindChatToBottomBtn); return; }
   chat.addEventListener('scroll', updateChatToBottomBtn, { passive: true });
-  if (window.ResizeObserver) { try { new ResizeObserver(updateChatToBottomBtn).observe(chat); } catch (e) {} }
+  /* 用户一旦自己滚动（滚轮 / 触摸），立刻取消可能还在跑的「追底」补钉 ——
+     否则点完按钮后的 1.5s 内想往上翻会被反复拉回底部（实测会「抢滚动」）。 */
+  chat.addEventListener('wheel', function () { _cancelChatJump(); }, { passive: true });
+  chat.addEventListener('touchstart', function () { _cancelChatJump(); }, { passive: true });
+  if (window.ResizeObserver) {
+    try {
+      new ResizeObserver(function () { updateChatToBottomBtn(); placeChatToBottomBtn(); }).observe(chat);
+    } catch (e) {}
+  }
+  window.addEventListener('resize', placeChatToBottomBtn);
+  placeChatToBottomBtn();
   updateChatToBottomBtn();
 })();
 
@@ -28447,7 +28536,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.0';
+var APP_VERSION = '3.58.1';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
