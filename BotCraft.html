@@ -830,7 +830,7 @@ body #page-workspace .ws-main{animation:bcRise .56s var(--ease-out) var(--dur-2)
    ⚠️ 收起时长以这条 CSS 为准 —— JS 读 computed animation-duration 决定何时切换，
    改这里 JS 自动跟着走；降级用户这条是 animation:none → 时长 0 → 立即切不等动画。 */
 @keyframes bcPageIn{from{opacity:0;transform:scale(.984) translateY(6px)}to{opacity:1;transform:none}}
-@keyframes bcPageOut{from{opacity:1;transform:none}to{opacity:0;transform:scale(.988) translateY(-4px)}}
+@keyframes bcPageOut{from{opacity:1;transform:none;filter:none}to{opacity:0;transform:scale(.99) translateY(-3px);filter:blur(2px)}}
 body main.main, body .workspace{animation:bcPageIn .32s var(--ease-out) backwards}
 body main.bc-leaving, body .workspace.bc-leaving{position:fixed;z-index:2;pointer-events:none;animation:bcPageOut .24s var(--ease) forwards}
 /* 全局兜底只压 duration、不清 delay；backwards + delay 会让元素在延迟期保持 opacity:0，
@@ -2297,7 +2297,11 @@ body.cw-fast .cw-link{stroke-width:2}
 .bs-name{max-width:128px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-caret{font-size:10px;color:var(--sub);flex-shrink:0;transition:var(--dur-3) var(--ease)}
 .bot-switch-btn.open .bs-caret{transform:rotate(180deg)}
-.bot-switch-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:50;width:290px;max-width:82vw;background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--glass-shadow);padding:6px}
+.bot-switch-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:50;width:290px;max-width:82vw;background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--glass-shadow);padding:6px;
+  /* 开合走 transition，不走 keyframes：中途反向操作可平滑接续，不必从头重放。
+     关闭态＝短距离位移 + 淡出 + 轻微模糊（不飞出屏幕）。 */
+  opacity:0;transform:scale(.96) translateY(-6px);filter:blur(3px);pointer-events:none;transform-origin:top right;
+  transition:opacity var(--dur-4) var(--ease-out),transform var(--dur-4) var(--ease-out),filter var(--dur-4) var(--ease-out)}
 .bs-search input{width:100%;box-sizing:border-box;padding:8px 10px;border-radius:var(--r-sm);background:var(--fill);border:1px solid transparent;color:var(--txt);font-size:13px;outline:none}
 .bs-search input:focus{border-color:var(--brand);background:transparent}
 .bs-list{max-height:300px;overflow-y:auto;margin-top:6px;display:flex;flex-direction:column;gap:var(--sp-1)}
@@ -2372,9 +2376,9 @@ body.cw-fast .cw-link{stroke-width:2}
 .cw-live-chat .chat-to-bottom{position:absolute;right:16px;bottom:80px;z-index:8;
   width:42px;height:42px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
   background:var(--glass-bg-hover);border:1px solid var(--glass-border);box-shadow:0 6px 18px rgba(0,0,0,.28);
-  color:var(--txt);cursor:pointer;touch-action:manipulation;filter:none;
-  opacity:0;visibility:hidden;transform:translateY(8px);pointer-events:none;
-  transition:opacity var(--dur-3) var(--ease),transform var(--dur-3) var(--ease),visibility var(--dur-3),background var(--dur-3) var(--ease)}
+  color:var(--txt);cursor:pointer;touch-action:manipulation;
+  opacity:0;visibility:hidden;transform:translateY(8px);filter:blur(2px);pointer-events:none;
+  transition:opacity var(--dur-3) var(--ease),transform var(--dur-3) var(--ease),filter var(--dur-3) var(--ease),visibility var(--dur-3),background var(--dur-3) var(--ease)}
 .chat-input .chat-to-bottom svg,
 .cw-live-chat .chat-to-bottom svg{width:22px;height:22px;display:block}
 .chat-input .chat-to-bottom:hover,
@@ -2382,7 +2386,7 @@ body.cw-fast .cw-link{stroke-width:2}
 .chat-input .chat-to-bottom:active,
 .cw-live-chat .chat-to-bottom:active{transform:scale(.94)}
 .chat-input .chat-to-bottom.show,
-.cw-live-chat .chat-to-bottom.show{opacity:1;visibility:visible;transform:none;pointer-events:auto}
+.cw-live-chat .chat-to-bottom.show{opacity:1;visibility:visible;transform:none;filter:none;pointer-events:auto}
 /* 提示词库 + 斜杠指令 */
 .input-wrap{position:relative}
 .slash-menu{position:absolute;left:0;right:0;bottom:calc(100% + 10px);max-height:300px;overflow:auto;z-index:80;
@@ -2820,7 +2824,7 @@ img.md-img{max-width:100%;height:auto}
 
 /* ============ 弹窗 ============ */
 .modal{display:none;position:fixed;inset:0;background:var(--scrim);z-index:100;align-items:center;justify-content:center;padding:20px;will-change:transform}
-.modal.on{display:flex;animation:modalMaskIn .26s ease both}
+.modal.on{display:flex;animation:modalMaskIn .26s var(--ease-out) both}
 /* 快捷键总览（2026-10-24）：键位一律左列定宽、右列说明，扫一眼就能对上号 */
 .kbd-grid{display:flex;flex-direction:column;gap:var(--sp-5)}
 .kbd-grp-t{font-size:var(--fs-2xs);color:var(--sub);font-weight:640;letter-spacing:.02em;margin-bottom:var(--sp-2)}
@@ -2839,18 +2843,17 @@ img.md-img{max-width:100%;height:auto}
 @keyframes modalMaskIn{from{opacity:0}to{opacity:1}}
 @keyframes modalMaskOut{from{opacity:1}to{opacity:0}}
 @keyframes acctSheetIn{from{opacity:0;transform:scale(.9) translateY(14px)}to{opacity:1;transform:scale(1) translateY(0)}}
-@keyframes acctSheetOut{from{opacity:1;transform:scale(1) translateY(0)}to{opacity:0;transform:scale(.94) translateY(10px)}}
+@keyframes acctSheetOut{from{opacity:1;transform:scale(1) translateY(0);filter:none}to{opacity:0;transform:scale(.94) translateY(10px);filter:blur(4px)}}
 @keyframes dropdownIn{from{opacity:0;transform:scale(.96) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}
-@keyframes dropdownOut{from{opacity:1;transform:scale(1) translateY(0)}to{opacity:0;transform:scale(.97) translateY(-4px)}}
+@keyframes dropdownOut{from{opacity:1;transform:scale(1) translateY(0);filter:none}to{opacity:0;transform:scale(.97) translateY(-4px);filter:blur(3px)}}
 /* 账号面板 */
 .modal.on .acct-sheet{animation:acctSheetIn .44s var(--ease-out) both}
 .modal.closing .acct-sheet{animation:acctSheetOut .3s var(--ease) both}
-/* 机器人切换菜单（从按钮下方展开的 dropdown） */
-.bot-switch-menu.bs-open{animation:dropdownIn .26s var(--ease-out) both;transform-origin:top right}
-.bot-switch-menu.bs-closing{animation:dropdownOut .2s var(--ease) both;transform-origin:top right}
+/* 机器人切换菜单（从按钮下方展开的 dropdown）：开合由 .bs-open 的 transition 驱动，可随时打断 */
+.bot-switch-menu.bs-open{opacity:1;transform:none;filter:none;pointer-events:auto}
 @media (prefers-reduced-motion: reduce){
-  .modal.on,.modal.closing,.modal.on .acct-sheet,.modal.closing .acct-sheet,
-  .bot-switch-menu.bs-open,.bot-switch-menu.bs-closing{animation:none}
+  .modal.on,.modal.closing,.modal.on .acct-sheet,.modal.closing .acct-sheet{animation:none}
+  .bot-switch-menu,.toast,.chat-input .chat-to-bottom,.cw-live-chat .chat-to-bottom{transition:none}
 }
 /* ============ 图标体系与交互态补齐（2026-09-23 视觉打磨） ============
    1) 图标统一为 24×24 描边 SVG（见 body 里的 symbol 库），不再用 emoji 充当图标：
@@ -2974,7 +2977,7 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
 .set-nav-desc{font-size:11px;font-weight:400;color:var(--sub);line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set-nav-item.active .set-nav-desc{color:var(--brand-text)}
 .set-panels{flex:1;min-width:0}
-.set-panels>.ssec{animation:setPanelIn .22s ease}
+.set-panels>.ssec{animation:setPanelIn .22s var(--ease-out)}
 /* P0-3 运行计划 / P1-1 入站 API 两个编辑器的字段类。这两个类此前只有 HTML 在用、
    CSS 从未定义（2026-10-13 用户截图实测：空 textarea 的基线是其底边，59px 高的框
    按 inline-block 与文字基线对齐时整体上跳、脱离 label 悬在表单中部；input/select
@@ -3126,12 +3129,16 @@ html[data-theme='light'] #anaSettings .field select:focus{
 /* ============ Toast ============ */
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);
   border:1px solid var(--glass-border);color:var(--txt);padding:11px 20px;border-radius:var(--r-lg);
-  font-size:13px;z-index:300;opacity:0;transition:opacity var(--dur-5) var(--ease),transform var(--dur-5) var(--ease);pointer-events:none;max-width:80vw;text-align:center;
+  font-size:13px;z-index:300;opacity:0;filter:blur(3px);
+  transition:opacity var(--dur-5) var(--ease),transform var(--dur-5) var(--ease),filter var(--dur-5) var(--ease);pointer-events:none;max-width:80vw;text-align:center;
   background:var(--glass-bg-hover);
   -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
 .toast.ok{border-color:rgba(48,209,88,.5)}
 .toast.err{border-color:rgba(255,69,58,.5)}
 .toast.warn{border-color:rgba(255,159,10,.55)}
+/* ⚠️ 此前缺 .toast.on：JS 靠加 .on 类显示，样式里却从未定义它 → toast 永远 opacity:0（不可见）。
+   补上；进出场都是「短距离位移 + 淡入淡出 + 轻微模糊」，不飞出屏幕。 */
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0);filter:none}
 
 /* ============ 拖拽 / 节点 ============ */
 .node.dragging{opacity:.4}
@@ -13723,7 +13730,12 @@ function toggleFavorite(id) {
 let toastTimer = null;
 function toast(msg, type = '') {
   const t = document.getElementById('toast'); if (!t) return;
-  t.textContent = msg; t.className = 'toast on ' + type;
+  t.textContent = msg;
+  /* 首次显示前先把「变化前样式」（基础态 opacity:0）计算一次。
+     浏览器在没有 before-change style 时不会启动过渡 —— 表现就是**第一次 toast 直接弹出**、
+     后续才有淡入（实测：首次调用 getAnimations 里没有 opacity 过渡，加这一行后才注册）。 */
+  if (!t.__bcSeen) { void t.offsetWidth; t.__bcSeen = true; }
+  t.className = 'toast on ' + type;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.className = 'toast ' + type; }, 2400);
 }
@@ -14561,14 +14573,18 @@ function buildBotSwitchList(kw) {
   }).join('');
 }
 let _bsCloseTimer = null;
+/* 开合改成 transition 驱动（不再用 keyframes）：
+   · 可打断 —— 关闭过渡还没结束就再点开，直接反向接续，不会「先播完关闭再从头展开」；
+   · 关闭 = 短距离位移 + 淡出 + 轻微模糊，不飞出屏幕。
+   display 从 none 变 block 后必须强制一帧，否则起点样式丢失、transition 不触发。 */
 window.toggleBotSwitch = function () {
   const menu = document.getElementById('botSwitchMenu');
   const btn = document.getElementById('botSwitchBtn');
   if (!menu) return;
-  if (menu.style.display !== 'none') { closeBotSwitch(); return; }
+  if (menu.classList.contains('bs-open')) { closeBotSwitch(); return; }
   if (_bsCloseTimer) { clearTimeout(_bsCloseTimer); _bsCloseTimer = null; }
   menu.style.display = 'block';
-  menu.classList.remove('bs-closing');
+  void menu.offsetWidth;                 // 强制一帧：让「关闭态」先落地，再加 .bs-open
   menu.classList.add('bs-open');
   if (btn) btn.classList.add('open');
   const inp = document.getElementById('bsSearch');
@@ -14578,15 +14594,14 @@ window.closeBotSwitch = function () {
   const menu = document.getElementById('botSwitchMenu');
   const btn = document.getElementById('botSwitchBtn');
   if (!menu || menu.style.display === 'none') return;
-  if (_bsCloseTimer) clearTimeout(_bsCloseTimer);
-  menu.classList.remove('bs-open');
-  menu.classList.add('bs-closing');
+  if (_bsCloseTimer) { clearTimeout(_bsCloseTimer); _bsCloseTimer = null; }
+  menu.classList.remove('bs-open');       // 过渡到关闭态；此时再点开可平滑反向
   if (btn) btn.classList.remove('open');
   _bsCloseTimer = setTimeout(function () {
-    menu.style.display = 'none';
-    menu.classList.remove('bs-closing');
     _bsCloseTimer = null;
-  }, 220);
+    /* 期间若已被重新打开，绝不能把 display 置 none（否则菜单瞬间消失） */
+    if (!menu.classList.contains('bs-open')) menu.style.display = 'none';
+  }, 240);                                // 略大于 --dur-4（200ms）
 };
 window.filterBotSwitch = function () { const inp = document.getElementById('bsSearch'); buildBotSwitchList(inp ? inp.value : ''); };
 window.selectBotFromSwitch = function (id) {
@@ -16104,6 +16119,59 @@ function cwToggleQA() {
   document.body.classList.toggle('cw-qa-off', body.classList.contains('cw-qa-off'));
   // 浮层是覆盖层、不挤占画布宽度，所以收起/展开不需要重绘画布（省一次全量重排）
 }
+/* 图标切换：交叉淡化 + 缩放 + 轻微模糊（不是生硬改 href）。
+   做法：把旧图标克隆一层盖在原位淡出放大，新图标从缩小模糊淡入 —— 两层同时交叉。
+   只动 opacity/transform/filter（合成器友好），结束后立刻移除克隆。 */
+function crossFadeIcon(useEl, href) {
+  if (!useEl || !href) return;
+  var oldHref = useEl.getAttribute('href');
+  if (href === oldHref) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    useEl.setAttribute('href', href); return;
+  }
+  var svg = useEl.ownerSVGElement || (useEl.closest ? useEl.closest('svg') : null);
+  if (!svg || !svg.parentNode) { useEl.setAttribute('href', href); return; }
+  var host = svg.parentNode;
+  try { if (getComputedStyle(host).position === 'static') host.style.position = 'relative'; } catch (e) { }
+  var sr = null, hr = null;
+  try { sr = svg.getBoundingClientRect(); hr = host.getBoundingClientRect(); } catch (e) { }
+  if (!sr || !sr.width) { useEl.setAttribute('href', href); return; }
+  var TR = 'opacity var(--dur-4) var(--ease-out),transform var(--dur-4) var(--ease-out),filter var(--dur-4) var(--ease-out)';
+  var ghost = svg.cloneNode(true);
+  var gu = ghost.querySelector('use');
+  if (gu) { gu.removeAttribute('id'); gu.setAttribute('href', oldHref); }
+  ghost.setAttribute('aria-hidden', 'true');
+  /* 专属类名：真实 <svg> 本身也带 aria-hidden，光靠属性认不出哪颗是克隆层 */
+  ghost.classList.add('icon-xf-ghost');
+  ghost.style.cssText = 'position:absolute;margin:0;pointer-events:none;z-index:1;' +
+    'left:' + (sr.left - hr.left) + 'px;top:' + (sr.top - hr.top) + 'px;' +
+    'width:' + sr.width + 'px;height:' + sr.height + 'px;transform-origin:50% 50%;' +
+    'transition:' + TR + ';opacity:1;transform:none;filter:none';
+  host.insertBefore(ghost, svg.nextSibling);
+  svg.style.transition = TR;
+  svg.style.transformOrigin = '50% 50%';
+  svg.style.opacity = '0';
+  svg.style.transform = 'scale(.8)';
+  svg.style.filter = 'blur(2px)';
+  useEl.setAttribute('href', href);
+  /* ⚠️ 必须用 getBoundingClientRect() 强制一帧：offsetWidth 是 HTMLElement 的属性，
+     SVGElement 上没有它（结果是 undefined），`void undefined` 不会触发重排 ——
+     起始态没被采纳，两层都会「瞬移」而不是过渡（实测克隆层 opacity 停在 1）。 */
+  void ghost.getBoundingClientRect();
+  ghost.style.opacity = '0';
+  ghost.style.transform = 'scale(1.2)';
+  ghost.style.filter = 'blur(2px)';
+  svg.style.opacity = '1';
+  svg.style.transform = 'none';
+  svg.style.filter = 'none';
+  setTimeout(function () {
+    if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+    svg.style.transition = '';
+    svg.style.transform = '';
+    svg.style.filter = '';
+    svg.style.opacity = '';
+  }, 260);
+}
 /* 同步**两颗**入口。不再依赖 cwSt.root：聊天头部那颗在画布没渲染时也要能显示正确状态。 */
 function cwSyncFullBtn() {
   var on = cwFullOn(), sp = cwFullBtnSpec(on);
@@ -16123,7 +16191,7 @@ function cwSyncFullBtn() {
     if (t) t.textContent = sp.txt;
     // 头部那颗的 <use> 带 id（画布那颗每次重建，不需要）
     var ico = pairs[i][2];
-    if (ico) ico.setAttribute('href', sp.ico);
+    if (ico) crossFadeIcon(ico, sp.ico);
   }
 }
 /* 聊天头部那颗入口（普通模式唯一可见的入口）。
@@ -28536,7 +28604,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.1';
+var APP_VERSION = '3.58.2';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
