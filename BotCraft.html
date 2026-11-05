@@ -781,7 +781,7 @@ html[data-bg-custom="on"] body::after{opacity:calc(var(--bg-opacity) * .18)}
 @keyframes bcSlideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
 body .topbar{animation:bcFade .5s var(--ease-out) backwards}
 body .sidebar{animation:bcSlideIn .56s var(--ease-out) .06s backwards}
-body #page-home .page-head{animation:bcRise .56s var(--ease-out) var(--dur-1) backwards}
+body #page-home .page-head{animation:bcPageIn .56s var(--ease-out) var(--dur-1) backwards}
 body #page-home .toolbar{animation:bcRise .56s var(--ease-out) var(--dur-3) backwards}
 body #page-home .grid, body #page-home .empty-home{animation:bcRise .6s var(--ease-out) .24s backwards}
 /* 页级入场推广（2026-09-21）：此前只有 #page-home 有错峰入场，其余页面切页是硬切，
@@ -791,7 +791,7 @@ body #page-home .grid, body #page-home .empty-home{animation:bcRise .6s var(--ea
    工作台（.workspace）单独配：侧栏沿用全局侧栏的 bcSlideIn 左滑入，主区 bcRise。
    ⚠️ 已核实这两个容器内没有 position:fixed 后代（弹层/toast/悬浮面板都挂 body），
    transform 动画不会劫持浮层定位；切页后若还有新 fixed 节点加进来，先查这条。 */
-body main.main > .page-head{animation:bcRise .5s var(--ease-out) backwards}
+body main.main > .page-head{animation:bcPageIn .5s var(--ease-out) backwards}
 body main.main > *:not(.page-head){animation:bcRise .54s var(--ease-out) .1s backwards}
 /* 标签面板不参与入场动画（2026-10-20）
    上面那条给 .main 的每个直接子代都挂了 bcRise，而**分析页的七个标签面板都是直接子代**。
@@ -820,17 +820,26 @@ body main.main > *:not(.page-head):nth-child(3){animation-delay:.15s}
 body main.main > *:not(.page-head):nth-child(4){animation-delay:.2s}
 body main.main > *:not(.page-head):nth-child(5){animation-delay:.25s}
 body main.main > *:not(.page-head):nth-child(n+6){animation-delay:.3s}
-body #page-workspace .ws-side{animation:bcSlideIn .56s var(--ease-out) var(--dur-1) backwards}
-body #page-workspace .ws-main{animation:bcRise .56s var(--ease-out) var(--dur-2) backwards}
+body #page-workspace .ws-side{animation:bcPageIn .56s var(--ease-out) var(--dur-1) backwards}
+body #page-workspace .ws-main{animation:bcPageIn .56s var(--ease-out) var(--dur-2) backwards}
 /* 页面级「收起 / 展开」过场（2026-09-21）：此前只有进页动画，离页是硬切（内容瞬间消失）。
    做成**顺序式**而不是交叉淡化：所有 page 都是 .app 的 flex 子项，两个同时在场会互相
    挤开宽度（互相压缩成半屏），所以必须「旧页先收起 → 切可见性 → 新页展开」。
-   展开 bcPageIn 挂在页面容器本身（微放大 + 淡入），与既有子元素的错位上浮叠加，
-   出场就是「从中展开」；收起 bcPageOut 反向、更短（180ms），让等待感不明显。
+   展开 bcPageIn 挂在页面容器本身（**只淡入**，见下条注释为何不能带 transform），
+   与既有子元素的错位上浮叠加；收起 bcPageOut 反向、更短（240ms），让等待感不明显。
    ⚠️ 收起时长以这条 CSS 为准 —— JS 读 computed animation-duration 决定何时切换，
    改这里 JS 自动跟着走；降级用户这条是 animation:none → 时长 0 → 立即切不等动画。 */
-@keyframes bcPageIn{from{opacity:0;transform:scale(.984) translateY(6px)}to{opacity:1;transform:none}}
-@keyframes bcPageOut{from{opacity:1;transform:none;filter:none}to{opacity:0;transform:scale(.99) translateY(-3px);filter:blur(2px)}}
+/* ⚠️⚠️ 切页链路里，页面容器及其玻璃后代**只允许动 opacity**（2026-11-05 实测）。
+   transform / filter 动画跑在玻璃面的自身或祖先上时，玻璃的 backdrop 相对位置每帧都在变
+   → 每个 backdrop-filter 面每帧重跑一次全半径 blur，且跨帧缓存全部作废。实测：
+   go('analytics') 23 个面在 0~300ms 内全部逐帧重采样；go('workspace') 34 个面重采样到 860ms。
+   用户看到的就是「模糊在来回重复加载 / 忽明忽暗」。
+   所以：bcPageIn 只淡入（不再 scale+translate）；bcPageOut 不再动画 filter
+   （filter 是**逐帧重算**的渲染属性，作用对象是整棵旧页子树，240ms 每帧一次全页重滤镜）。
+   退场柔和靠「淡出 + 3px 位移」，两者都走合成器，一次模糊都不产生。
+   想要位移/缩放感，请加到**不含玻璃面**的元素上（卡片、文本块），别加到页面容器。 */
+@keyframes bcPageIn{from{opacity:0}to{opacity:1}}
+@keyframes bcPageOut{from{opacity:1;transform:none}to{opacity:0;transform:scale(.99) translateY(-3px)}}
 body main.main, body .workspace{animation:bcPageIn .32s var(--ease-out) backwards}
 body main.bc-leaving, body .workspace.bc-leaving{position:fixed;z-index:2;pointer-events:none;animation:bcPageOut .24s var(--ease) forwards}
 /* 全局兜底只压 duration、不清 delay；backwards + delay 会让元素在延迟期保持 opacity:0，
@@ -886,9 +895,15 @@ body .cw-tools, body .cw-mini{
    ⚠️ 位置有讲究：必须放在上面那条全局玻璃规则**之后**。两条都带 !important、
    特异性又相同（都是 0,1,1），CSS 对等特异性比的是源顺序 —— 放前面会被全局规则
    压回去，等于没写（第一版就踩了这个坑：单测全绿、实测照卡）。
-   ⚠️ 移不动的话退而求其次：把选择器加成 body main.bc-leaving *（0,1,3）提高特异性，
-   但那样一旦全局清单以后加了更长的选择器又会失效，跟着源顺序走更稳。 */
-body .bc-leaving, body .bc-leaving *{
+   ⚠️⚠️ 只靠「源顺序在后」不够 —— 2026-11-05 实测发现两个漏网面：`.cw-tools` 与 `.cw-fullbtn`。
+   它们被第 1861 行那条画布液态玻璃规则（body .cw-tools{...!important}）重新加回了模糊：
+   特异性同为 (0,1,1)、同为 !important，而那条**源位置在后** → 它赢。结果是旧页淡出的
+   240ms 里这两个面照旧逐帧全半径重算法（单测看不见，只有 getAnimations + 计算值能抓到）。
+   → 现在把选择器提到 (0,1,2)：多一个 html 元素类型。这样无论后面再写多少条同层级的
+   `!important` 玻璃规则，都不可能靠源顺序把旧页的模糊加回来。
+   再加玻璃规则时的自检：凡是给「可能在旧页里的元素」写 !important backdrop-filter，
+   特异性别超过 (0,1,2)，否则旧页摘除会再次失效。 */
+html body .bc-leaving, html body .bc-leaving *{
   backdrop-filter:none !important;
   -webkit-backdrop-filter:none !important;
 }
@@ -28672,7 +28687,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.4';
+var APP_VERSION = '3.58.5';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
