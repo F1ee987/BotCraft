@@ -3064,10 +3064,19 @@ textarea.ipt{resize:vertical;min-height:64px;line-height:1.5}
 .field{margin:0 0 var(--sp-5);padding-bottom:var(--sp-3)}
 .field:last-child{margin-bottom:0;padding-bottom:0}
 .field>label{display:block;margin:0 0 var(--sp-2);font-size:var(--fs-xs);font-weight:600;color:var(--sub);letter-spacing:.01em}
-.field input,.field textarea,.field select{width:100%;padding:10px 12px;border-radius:var(--r-md);background:var(--fill);border:1px solid var(--line);color:var(--txt);font-size:var(--fs-base)}
-.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--brand);background:var(--card);box-shadow:0 0 0 3px var(--brand-tint);outline:none}
+/* ⚠️ 只作用于「文本类」输入。不能写成 .field input —— 那会把 range / checkbox / radio / file
+   一起改成通栏：滑杆被撑满一行、开关的隐藏 checkbox 变宽，界面设置页直接横向溢出到 2415px
+   （2026-11-05 实测）。 */
+.field input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.field textarea,.field select{width:100%;padding:10px 12px;border-radius:var(--r-md);background:var(--fill);border:1px solid var(--line);color:var(--txt);font-size:var(--fs-base)}
+.field input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+.field textarea:focus,.field select:focus{border-color:var(--brand);background:var(--card);box-shadow:0 0 0 3px var(--brand-tint);outline:none}
 /* 危险操作单独成组：标题与主字走危险色，与常规设置拉开语义 */
 .ssec.danger .ssec-head,.ssec.danger .ssec-head .i{color:var(--danger-text)}
+/* 旧规则 `.field input{width:100%}` 同样命中 radio / checkbox / range / file —— 必须显式复位，
+   否则主题单选按钮被撑成整屏宽、滑杆占满一行，界面设置页横向溢出到 2415px（实测）。 */
+.field input[type="radio"],.field input[type="checkbox"],
+.field input[type="range"],.field input[type="file"]{width:auto;padding:0;border:0;background:none;box-shadow:none}
 /* 分区直系的说明文字（不在行内时）：统一小号灰字与下间距 */
 .ssec-body>.hint{margin:0 0 var(--sp-5);font-size:var(--fs-xs);color:var(--sub);line-height:1.6}
 /* 行后面紧跟自己的说明时，不要那条分隔线（否则像把说明和它的设置项切开） */
@@ -28537,6 +28546,11 @@ function saveSettings() {
   } catch (e) { _kbp = {}; }
   if (apiKey) _kbp[provider] = apiKey; else delete _kbp[provider];
   BotCraftAI.updateConfig({ provider, apiKey, baseURL, noAuth, model, temperature, maxTokens, directCall, proxyURL, imageBaseURL, imageAPIKey, imageModel, imageSize, searchProvider, searchApiKey, searchEndpoint, searchEngine: 'search_std', sttEndpoint, sttModel, sttAPIKey, embBaseURL, embModel, embAPIKey, keyByProvider: _kbp });
+  /* 保存后必须用**新配置**刷新「已配置」徽标。
+     此前只有 loadSettings 里刷新，保存路径没有 —— 于是填完语义检索的 endpoint+模型，
+     谓词已经是 true，但分区头的「已配置」徽标一直不亮（badge-emb 长期亮不起来的真因；
+     search / stt / image 同样受影响）。 */
+  try { if (window.refreshSettingsSecBadges) refreshSettingsSecBadges(BotCraftAI.getConfig()); } catch (e) { }
   closeSettings();
   // 免鉴权（显式勾选 / 免 Key 端点）且地址填了，就是真的能调，别再报「本地降级回复」
   const head = (apiKey || (noAuth && baseURL))
@@ -28658,7 +28672,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.3';
+var APP_VERSION = '3.58.4';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
