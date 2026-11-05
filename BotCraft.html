@@ -3026,6 +3026,57 @@ textarea.ipt{resize:vertical;min-height:64px;line-height:1.5}
 .set-update-row{display:flex;gap:var(--sp-4);align-items:center;margin:0 0 var(--sp-5)}
 .set-update-row .btn{white-space:nowrap;flex:none}
 .set-preview{display:flex;gap:var(--sp-4);align-items:baseline;padding:var(--sp-5) var(--sp-6);background:var(--glass-bg);border:1px solid var(--glass-border);border-left:3px solid var(--brand);border-radius:var(--r-sm);font-size:var(--fs-md);color:var(--sub)}
+
+/* ============ 设置页：浅色极简重做（2026-11-05 用户要求） ============
+   四条要求：① 设置项单条一行、标签居左控件居右；② 去掉外层大卡片描边/底色/阴影；
+   ③ 分组靠标题 + 大留白，组内紧凑；④ 无多余装饰（去玻璃、去高光、去竖条）。
+   放在这里是因为同特异性「后写覆盖」即可生效，不必改动上面那些旧规则。 */
+.set-head{display:block;padding:0;margin:0 0 var(--sp-7);background:none;border:0;border-radius:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+.set-head-txt h2{font-size:var(--fs-2xl);font-weight:650;letter-spacing:-.02em}
+.set-head-txt p{margin:var(--sp-2) 0 0;max-width:66ch;line-height:1.6}
+.set-layout{gap:var(--sp-8);margin:0}
+/* 左导航：平面化，只留文字层级；激活态用品牌淡底，不用竖条 */
+.set-nav{width:208px;margin:0;padding:0;background:none;border:0;border-radius:0;background-image:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+.set-nav-glabel{padding:0 var(--sp-3);margin:0 0 var(--sp-2);letter-spacing:.06em}
+.set-nav-item{padding:8px 10px;border:0;border-radius:var(--r-md)}
+.set-nav-item.active{border:0;background:var(--brand-tint)}
+.set-nav-item.active::before{display:none}
+.set-nav-ic{width:26px;height:26px;background:transparent}
+.set-nav-item:hover .set-nav-ic{background:transparent}
+.set-nav-item.active .set-nav-ic{background:transparent;color:var(--brand-text)}
+/* 分组：不再是一张卡片 —— 没有描边/底色/阴影/圆角，靠标题与间距分组 */
+.ssec{margin:0 0 var(--sp-7);padding:0;border:0;border-radius:0;background:none;box-shadow:none;overflow:visible}
+.ssec:last-child{margin-bottom:0}
+.ssec-head{padding:0 0 var(--sp-3);background:none;border:0;font-size:var(--fs-md);font-weight:650;letter-spacing:-.01em}
+.ssec-head .i{color:var(--sub);opacity:.85}
+.ssec-sub{font-weight:400;font-size:var(--fs-xs)}
+.ssec-body{padding:0}
+/* 行式设置项：标签居左、控件居右，单条一行；组内紧凑（发丝线分隔） */
+.srow{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-6);padding:var(--sp-4) 0;border-bottom:1px solid var(--line)}
+.srow:last-child{border-bottom:0}
+.srow>.switch{order:2;flex:none}
+.srow>label{order:1;min-width:0;margin:0}
+.srow>.hint{order:3;flex-basis:100%}
+.srow-t{font-size:var(--fs-base);color:var(--txt);line-height:1.45}
+.srow-d{margin-top:2px;font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.srow-ctl{flex:none;display:flex;align-items:center;gap:var(--sp-3)}
+/* 表单：标签在上、输入通栏，下方预留一行错误提示位 */
+.field{margin:0 0 var(--sp-5);padding-bottom:var(--sp-3)}
+.field:last-child{margin-bottom:0;padding-bottom:0}
+.field>label{display:block;margin:0 0 var(--sp-2);font-size:var(--fs-xs);font-weight:600;color:var(--sub);letter-spacing:.01em}
+.field input,.field textarea,.field select{width:100%;padding:10px 12px;border-radius:var(--r-md);background:var(--fill);border:1px solid var(--line);color:var(--txt);font-size:var(--fs-base)}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--brand);background:var(--card);box-shadow:0 0 0 3px var(--brand-tint);outline:none}
+/* 危险操作单独成组：标题与主字走危险色，与常规设置拉开语义 */
+.ssec.danger .ssec-head,.ssec.danger .ssec-head .i{color:var(--danger-text)}
+/* 分区直系的说明文字（不在行内时）：统一小号灰字与下间距 */
+.ssec-body>.hint{margin:0 0 var(--sp-5);font-size:var(--fs-xs);color:var(--sub);line-height:1.6}
+/* 行后面紧跟自己的说明时，不要那条分隔线（否则像把说明和它的设置项切开） */
+.srow:has(+ .hint){border-bottom:0;padding-bottom:var(--sp-2)}
+.srow+.hint{margin-top:calc(var(--sp-2) * -1)}
+@media (max-width:720px){
+  .srow{flex-wrap:wrap;gap:var(--sp-3)}
+  .set-layout{gap:var(--sp-5)}
+}
 .set-preview b{color:var(--txt);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set-preview-label{font-size:var(--fs-sm);flex:none}
 .set-final-actions{display:flex;justify-content:flex-end;gap:var(--sp-5);margin-top:var(--sp-5)}
@@ -4611,11 +4662,11 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         本项目已在阿里云百炼 / 智谱接口上自动关闭思考；若你的网关不支持，请把这里调到 2000 以上。
       </div>
     </div>
-    <div class="field" style="display:flex;align-items:center;gap:8px">
+    <div class="srow">
       <span class="switch"><input type="checkbox" id="set-direct" checked><span class="slider"></span></span>
       <label for="set-direct" style="margin:0;cursor:pointer">浏览器直连模型接口（关闭则走下方代理地址）</label>
     </div>
-    <div class="field" style="display:flex;align-items:center;gap:8px">
+    <div class="srow">
       <span class="switch"><input type="checkbox" id="set-serial" checked><span class="slider"></span></span>
       <label for="set-serial" style="margin:0;cursor:pointer">串行输入（回复期间锁定输入框）</label>
       <div class="hint" style="margin:6px 0 0;font-size:var(--fs-xs);line-height:1.5">开启：必须等上一条完成才能发下一条。关闭：回复期间可预输入，消息自动排队依次发送。</div>
@@ -4851,7 +4902,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ic-droplet"/></svg></span> 液态玻璃视觉效果</span><span class="ssec-sub">折射模糊 + 高光流动</span>
     </div>
     <div class="ssec-body">
-      <div class="field" style="display:flex;align-items:center;gap:8px">
+      <div class="srow">
         <span class="switch"><input type="checkbox" id="set-glass" checked onchange="toggleLiquidGlass()"><span class="slider"></span></span>
         <label for="set-glass" style="margin:0;cursor:pointer">开启液态玻璃材质</label>
       </div>
@@ -4866,7 +4917,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
     <div class="ssec-head"><span><span class="i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5"/></svg></span> 背景光效</span><span class="ssec-sub">独立于玻璃材质</span>
     </div>
     <div class="ssec-body">
-      <div class="field" style="display:flex;align-items:center;gap:8px">
+      <div class="srow">
         <span class="switch"><input type="checkbox" id="set-bg" checked onchange="toggleBg()"><span class="slider"></span></span>
         <label for="set-bg" style="margin:0;cursor:pointer">显示背景光效</label>
       </div>
@@ -4880,7 +4931,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <input id="set-bg-blur" type="range" min="0" max="40" step="2" value="0" oninput="onBgParamInput()">
         <span id="set-bg-blur-val" class="rng-val">0px</span>
       </div>
-      <div class="field" style="margin-top:var(--sp-5);display:flex;align-items:center;gap:8px">
+      <div class="srow">
         <span class="switch"><input type="checkbox" id="set-bgd" checked onchange="toggleBgDefault()"><span class="slider"></span></span>
         <label for="set-bgd" style="margin:0;cursor:pointer">使用内置背景图</label>
       </div>
@@ -28607,7 +28658,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.2';
+var APP_VERSION = '3.58.3';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
