@@ -99,6 +99,9 @@
      而 JS 只在用户设过之后才会 setProperty 覆盖它们。
      --bgc-dim 是数值（直接进 rgba 的 alpha 位），--bgc-blur 带单位。 */
   --bgc-dim:.55;
+  /* 自定义壁纸下的内容面加厚（见下方 [data-bg-custom="on"] 规则）：.86 是实测读数，
+     .80~.92 之间都成立；--veil-rgb 跟主题走。 */
+  --veil-a:.86; --veil-rgb:28,28,33;
   --bgc-blur:0px;
   /* 内置默认背景图（2026-11-01）。用 CSS 变量而不是直接写在 .bg-default 上：
      换图只需替换这一个值，浅色主题想换另一张也只覆盖它。
@@ -386,6 +389,7 @@
   --rng-track:rgba(0,0,0,.10);  /* 浅色下用暗色底：白色半透明在浅玻璃上等于看不见 */
   --fill-hover:rgba(0,0,0,.055);    /* 浅色下悬浮=压暗一档（白上提白几乎不可见），Apple 同款手法 */
   --glass-bg:rgba(255,255,255,.46);
+  --veil-rgb:255,255,255;
   --glass-bg-hover:rgba(255,255,255,.58);
   --glass-bg-active:var(--brand-tint-2);
   --glass-border:rgba(255,255,255,.70);
@@ -750,6 +754,20 @@ html[data-bg-default="on"]::before{opacity:calc(var(--bg-texture-opacity) * .45)
   filter:blur(var(--bgc-blur,0px));
   transform:scale(1.04)}
 html[data-bg-custom="on"] .bg-custom{display:block}
+/* ============ 自定义壁纸下把内容面加厚（2026-11-08） ============
+   实测：`.main` / `.sidebar` 底色 rgba(255,255,255,.58)，意味着**整页 42% 透出壁纸**；
+   配上高饱和壁纸，内容区读起来就是「壁纸叠在内容上 / 发糊」，越花哨越明显
+   （用户录屏里正是这种观感）。这不是状态残留（像素比对 8 轮 0 变化），是材质配比问题。
+   这里只在「有自定义壁纸」时把大块阅读面加厚到 .86；默认壁纸用户与程序化光斑场景
+   完全不受影响。要调就改 --veil-a（.80 更透 / .92 更实）。
+   ⚠️ 只动 background-color，不动 background-image：.main 上的 Bloom 渐变与
+      --lg-spec 折射高光仍照常叠在上面。 */
+html[data-bg-custom="on"] body .main,
+html[data-bg-custom="on"] body .workspace,
+html[data-bg-custom="on"] body .sidebar,
+html[data-bg-custom="on"] body .ws-side,
+html[data-bg-custom="on"] body .ws-main{
+  background-color:rgba(var(--veil-rgb),var(--veil-a))}
 /* 关掉「背景光效」时，自定义图也一起关 —— 它属于背景资源，不是玻璃材质 */
 html[data-bg="off"] .bg-custom{display:none!important}
 .bg-custom::after{
@@ -14431,6 +14449,9 @@ function dropLeaveEl() {
    ⚠️ 为什么不用一条关键帧 + 固定起点：玻璃令牌有四种形态，滤镜函数的个数/顺序/单位
       都不同（saturate(1.8) blur(16px) / … brightness(1.06) …）。固定起点会因列表不匹配
       而离散跳变。这里按元素自己的 computed 值生成同构起点（逐函数换恒等值）。
+   ⚠️⚠️ **blur 半径全程恒定**（不参与渐变，见 _PG_GLASS_IDENT 的注释）：浮现只渐变
+      saturate/brightness 的颜色密度。否则「浮现」＝「面板背后越来越糊」，每切一次页
+      就糊一遍，正是用户报的「越切越糊」。
    ⚠️ 代价：blur 半径变化的每一帧都要重算全半径模糊。所以
       · 只在切页落定后跑一次，绝不与交叉淡化窗口重叠（那正是 v3.58.5 修掉的重灾区）；
       · 面上限 PG_GLASS_IN_MAX，分 4 批错峰，避免 30+ 个面同帧起跑；
@@ -14439,9 +14460,15 @@ function dropLeaveEl() {
       所以任何时刻最多一批在跑，不会叠出「越点越慢」，也不会残留行内样式。 */
 var _pgGlassIn = { raf: 0, seq: 0, els: [] };
 var PG_GLASS_IN_MAX = 48;
-/* 计算值里滤镜都是数值形态（saturate(180%) 归一成 saturate(1.8)），恒等值按此写。 */
+/* 计算值里滤镜都是数值形态（saturate(180%) 归一成 saturate(1.8)），恒等值按此写。
+   ⚠️⚠️ `blur` **故意不在表里**：它在插值环节被跳过，全程保持令牌值。
+   原因（2026-11-08 实测定位）：把 blur 半径从 0 渐变到 44px 意味着「面板背后的东西
+   真的越来越糊」——配合高饱和壁纸，每切一次页就肉眼可见地糊一遍，连点时反复重启，
+   用户报的就是「来回切换界面越切越糊」。玻璃的「浮现」应该靠**颜色密度**
+   （saturate/brightness，不改变几何涂抹）而不是靠加大模糊半径。
+   → 放进这张表的函数才会被渐变；不放的原样保留。 */
 var _PG_GLASS_IDENT = {
-  blur: '0px', saturate: '1', brightness: '1', contrast: '1',
+  saturate: '1', brightness: '1', contrast: '1',
   grayscale: '0', sepia: '0', invert: '0', opacity: '1', 'hue-rotate': '0deg'
 };
 function _pgFns(v) {
@@ -28855,7 +28882,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.6';
+var APP_VERSION = '3.58.7';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
