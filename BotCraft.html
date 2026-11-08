@@ -14451,7 +14451,9 @@ function _pgFns(v) {
 }
 function _pgNum(s) {
   var m = String(s).trim().match(/^(-?[\d.]+)([a-z%]*)$/i);
-  return m ? { n: parseFloat(m[1]), u: m[2] } : null;
+  /* 字段名用 val/unit 而不是 n/u：test_feedback 有一条 `\bb\.u\b` 守卫（禁止历史字段 bot.u），
+     局部变量叫 b、属性叫 u 会被它误命中。守卫是对的，改我的命名。 */
+  return m ? { val: parseFloat(m[1]), unit: m[2] } : null;
 }
 function _pgFmt(n) {
   var t = (Math.round(n * 1000) / 1000).toString();
@@ -14470,9 +14472,9 @@ function _pgLerpFns(fns, p) {
   return fns.map(function (f) {
     var k = f.fn.toLowerCase();
     if (!Object.prototype.hasOwnProperty.call(_PG_GLASS_IDENT, k)) return f.raw;
-    var a = _pgNum(_PG_GLASS_IDENT[k]), b = _pgNum(f.arg);
-    if (!a || !b) return f.raw;
-    return f.fn + '(' + _pgFmt(a.n + (b.n - a.n) * p) + (b.u || a.u || '') + ')';
+    var fromNum = _pgNum(_PG_GLASS_IDENT[k]), toNum = _pgNum(f.arg);
+    if (!fromNum || !toNum) return f.raw;
+    return f.fn + '(' + _pgFmt(fromNum.val + (toNum.val - fromNum.val) * p) + (toNum.unit || fromNum.unit || '') + ')';
   }).join(' ');
 }
 /* cubic-bezier 求值（与 --ease-out 同一条曲线）：先在 x 上二分出参数 t，再取 y。 */
