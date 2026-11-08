@@ -145,7 +145,10 @@
   --cw-in-shift:8px;
   /* 26px → 20px：背景现在有纹理了，糊太狠会把结构完全抹平（参考 demo 只用 3px，
      我们取 20px 是因为玻璃面积比它大、要保住「磨砂」而不是「透明玻璃」）。 */
-  --glass-blur:20px;
+  /* 2026-11-08 用户要求「背景保持清晰」：玻璃不再模糊背后的内容（原 20px / 液态档 44px）。
+     只保留 saturate（色彩增艳），它是纯颜色运算，不涂抹几何细节。
+     要恢复模糊就改这一个值（液态档在下方「增强态」里另有同名覆盖）。 */
+  --glass-blur:0px;
   --glass-sat:190%;
   --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
   /* 液态玻璃版（画布专用）：在同一滤镜栈上再抬饱和度与亮度，并收一点模糊半径。
@@ -153,7 +156,7 @@
      观感差异来自：饱和度 210% 让背后的彩色光晕更「湿」、亮度 1.06 把玻璃提亮一档、
      模糊收到 20px 让边缘细节还留一点（26px 会把画布网格糊成一片灰）。 */
   /* 20px → 14px：配合纹理层，让画布玻璃里也能看出底下的流动（原值是为「平滑背景」调的） */
-  --glass-filter-liq:saturate(210%) brightness(1.06) blur(14px);
+  --glass-filter-liq:saturate(210%) brightness(1.06) blur(0px);   /* 画布液态档去模糊（原 14px） */
   --glass-ridge:none;
   /* 液态玻璃四件套（玻璃珠化）：顶缘亮线 + 顶部内泛光（大片高光斑）、
      底缘暗线 + 底部折射回光、双层外投影（近实远虚）、对角高光渐变 */
@@ -223,11 +226,11 @@
      两者都用 background-image 叠在 --card-spec 之上，不新增元素、不碰布局。 */
   --card-bloom:radial-gradient(130% 92% at 9% 0%,var(--brand-tint),transparent 62%);
   --card-falloff:linear-gradient(180deg,rgba(255,255,255,0) 46%,rgba(0,0,0,.10) 100%);
-  --card-glass-blur:9px;   /* 有纹理后不必糊那么狠，留着结构才像玻璃 */
+  --card-glass-blur:0px;   /* 卡片同样不糊背景（原 9px） */
   /* 饱和度 135% → 148% 并轻微提亮：背景是平滑渐变，**模糊提不出玻璃感**（此前实测），
      但「把背后的品牌色光斑搅得更浓」是有效的 —— 玻璃的「湿」来自这一项，不是来自 blur。 */
   --card-glass-filter:saturate(148%) brightness(1.04) blur(var(--card-glass-blur));
-  --bubble-glass-filter:saturate(130%) blur(8px);
+  --bubble-glass-filter:saturate(130%) blur(0px);   /* 气泡去模糊（原 8px） */
   /* 深色界面里「高度」主要靠面更亮 + 边缘更利，投影只能加一点点：
      所以浮阴影 = 一圈 1px 暗发丝线（把亮边和背景隔开，是锐利感的关键）
      + 一层深投影（贴地感）。纯投影在深色底上几乎看不见，实测确认。 */
@@ -712,8 +715,8 @@ html[data-bg="off"]::after{opacity:0}
    特异性 (0,2,2) 高于 [data-theme="dark"] body .main 的 (0,2,1)，压得住。 */
 html[data-bg="off"] body .main,
 html[data-bg="off"] body .workspace{background-image:var(--lg-spec)}
-html[data-bg-blur] body::before,
-html[data-bg-blur] body::after{filter:blur(var(--bg-blur))}
+/* 2026-11-08 移除：原来的 html[data-bg-blur] 会让光斑按滑杆值挂全屏 filter blur。
+   背景统一保持清晰后这条已删；老数据里的 data-bg-blur 属性也不再有任何效果。 */
 
 /* ============ 内置默认背景图（2026-11-01）============
    出厂自带的背景图：页面加载即生效，不需要用户做任何设置。
@@ -1340,7 +1343,7 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 .acct-pass-msg{font-size:var(--fs-sm);margin-top:9px;display:none}
 
 /* ============ 登录 ============ */
-.auth-mask{display:none;position:fixed;inset:0;z-index:90;background:rgba(13,13,16,.78);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);align-items:center;justify-content:center;flex-direction:column;gap:var(--sp-5);text-align:center;padding:20px}
+.auth-mask{display:none;position:fixed;inset:0;z-index:90;background:rgba(13,13,16,.78);/* 去背景模糊（原 18px）：遮罩靠 .78 的黑底压暗即可，背后内容保持清晰 */backdrop-filter:blur(0px) saturate(160%);-webkit-backdrop-filter:blur(0px) saturate(160%);align-items:center;justify-content:center;flex-direction:column;gap:var(--sp-5);text-align:center;padding:20px}
 .auth-mask.on{display:flex}
 .auth-brand .logo{justify-content:center}
 .auth-brand p{color:var(--sub);font-size:13px;margin-top:12px}
@@ -2600,7 +2603,7 @@ img.md-img{max-width:100%;height:auto}
 #imgViewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:600;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none}
 #imgViewer.on{display:flex}
 #imgViewer img{max-width:92vw;max-height:88vh;transform-origin:center center;box-shadow:0 12px 48px rgba(0,0,0,.5);border-radius:var(--r-sm)}
-.iv-bar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:var(--sp-2);align-items:center;padding:8px 12px;border-radius:var(--r-lg);background:rgba(30,30,38,.9);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(8px)}
+.iv-bar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:var(--sp-2);align-items:center;padding:8px 12px;border-radius:var(--r-lg);background:rgba(30,30,38,.9);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(0px)}
 .iv-btn{min-width:34px;height:30px;padding:0 8px;border:1px solid rgba(255,255,255,.16);border-radius:var(--r-sm);background:transparent;color:#fff;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 .iv-btn:hover{background:rgba(255,255,255,.14)}
 .iv-pct{color:rgba(255,255,255,.75);font-size:12px;min-width:44px;text-align:center}
@@ -3792,7 +3795,7 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
    自定义属性的替换发生在「使用它的元素」上，而这里与 :root 是同一个元素（html），
    属性选择器特异性更高，所以覆盖生效。 */
 html[data-glass="on"]{
-  --glass-blur:44px;
+  --glass-blur:0px;   /* 增强态也不再加深模糊（原 44px）：背景统一保持清晰 */
   --glass-sat:280%;
   /* 开启态 = 同一套边缘语言再加一档（模糊 44px 已经把背景化成一片了，
      边缘必须更利才立得住）。前缀三个值原样保留，只在末尾追加。 */
@@ -4974,11 +4977,6 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
         <label for="set-bg-opacity">不透明度</label>
         <input id="set-bg-opacity" type="range" min="0" max="100" step="5" value="100" oninput="onBgParamInput()">
         <span id="set-bg-opacity-val" class="rng-val">100%</span>
-      </div>
-      <div class="field rng-row" style="margin-top:var(--sp-3)">
-        <label for="set-bg-blur">背景模糊</label>
-        <input id="set-bg-blur" type="range" min="0" max="40" step="2" value="0" oninput="onBgParamInput()">
-        <span id="set-bg-blur-val" class="rng-val">0px</span>
       </div>
       <div class="srow">
         <span class="switch"><input type="checkbox" id="set-bgd" checked onchange="toggleBgDefault()"><span class="slider"></span></span>
@@ -23249,58 +23247,40 @@ function setBgOn(on, quiet) {
   if (!quiet) toast(on ? '背景光效已开启' : '背景光效已关闭', 'ok');
 }
 function toggleBg() { setBgOn(!isBgOn()); }
-/* 不透明度 / 模糊强度：只写 CSS 变量与属性，不碰任何玻璃令牌。
-   模糊为 0 时不挂 data-bg-blur —— 免得为了 0 像素白挂一个全屏 filter。 */
-function applyBgParams(opacity, blur) {
+/* 不透明度：只写 CSS 变量，不碰任何玻璃令牌。
+   2026-11-08 起**不再处理模糊**：背景统一保持清晰，第二参数保留只为兼容旧调用点。 */
+function applyBgParams(opacity) {
   var r = document.documentElement;
   if (opacity !== undefined && opacity !== null && opacity !== '') {
     var o = Math.max(0, Math.min(100, Number(opacity))) / 100;
     if (isNaN(o)) o = 1;
     r.style.setProperty('--bg-opacity', String(o));
   }
-  if (blur !== undefined && blur !== null && blur !== '') {
-    var b = Math.max(0, Math.min(60, Number(blur)));
-    if (isNaN(b)) b = 0;
-    if (b > 0) {
-      r.style.setProperty('--bg-blur', b + 'px');
-      r.setAttribute('data-bg-blur', '');
-    } else {
-      r.style.removeProperty('--bg-blur');
-      r.removeAttribute('data-bg-blur');
-    }
-  }
+  /* 老版本可能已经把 data-bg-blur 挂上去了 —— 进来就摘掉，保证背景清爽 */
+  r.removeAttribute('data-bg-blur');
+  r.style.removeProperty('--bg-blur');
 }
 function syncBgUI() {
   var cb = document.getElementById('set-bg');
   if (cb) cb.checked = isBgOn();
-  var so = '100', sb = '0';
+  var so = '100';
   try {
     so = __storage.getItem(BG_OPACITY_KEY) || '100';
-    sb = __storage.getItem(BG_BLUR_KEY) || '0';
   } catch (e) {}
   var o = document.getElementById('set-bg-opacity');
-  var b = document.getElementById('set-bg-blur');
   var ov = document.getElementById('set-bg-opacity-val');
-  var bv = document.getElementById('set-bg-blur-val');
   if (o) o.value = so;
-  if (b) b.value = sb;
   if (ov) ov.textContent = so + '%';
-  if (bv) bv.textContent = sb + 'px';
   /* 直接赋值 value 不触发 input 事件 → 滑杆的填充比例不会自己更新，
      结果就是「滑块停在 65%、填充色却还是满格」（实测踩到过，浅色主题才暴露，
      因为深色那轮恰好是初始值）。这里显式重算一次。 */
   if (o) syncRangeFill(o);
-  if (b) syncRangeFill(b);
 }
 function onBgParamInput() {
   var o = document.getElementById('set-bg-opacity');
-  var b = document.getElementById('set-bg-blur');
-  if (!o || !b) return;
-  applyBgParams(o.value, b.value);
-  try {
-    __storage.setItem(BG_OPACITY_KEY, String(o.value));
-    __storage.setItem(BG_BLUR_KEY, String(b.value));
-  } catch (e) {}
+  if (!o) return;
+  applyBgParams(o.value);
+  try { __storage.setItem(BG_OPACITY_KEY, String(o.value)); } catch (e) {}
   syncBgUI();
 }
 /* ==================== 自定义背景图（2026-11-01）====================
@@ -28883,7 +28863,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.8';
+var APP_VERSION = '3.58.9';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
