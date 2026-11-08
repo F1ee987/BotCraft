@@ -287,6 +287,12 @@
   --dur-1:120ms; --dur-2:150ms; --dur-3:180ms; --dur-4:200ms;
   --dur-5:250ms; --dur-6:300ms; --dur-7:640ms;
   --ease-out:cubic-bezier(.16,1,.3,1);       /* 入场缓动；出场用既有的 --ease */
+  /* 切页落定后「内容块液态玻璃浮现」的节奏：560ms 走完，分 4 批 × 24ms 错峰
+     （最晚一批 +72ms ≈ 632ms 全部凝住）。JS 读这两个值，改这里即可整体调快/调慢。 */
+  /* 浮现单配一条缓动：--ease-out 是 aggressive 的入场曲线（10% 时间就走完 ~70% 进度），
+     拿它跑 560ms 会「前半段猛地凝住、后半段几乎不动」。这条 (.25,.65,.3,1) 起步柔和、
+     尾段收得轻，才是「慢慢渗上来」的观感。 */
+  --pg-glass-in:560ms; --pg-glass-in-step:24ms; --pg-glass-in-ease:cubic-bezier(.25,.65,.3,1);
   /* ===== 主色拆成三态 =====
      原来只有一个 --brand，既当填充面又当文字色。它的填充面压不住白字（4.23:1），
      文字态压玻璃面也不够（3.45–4.30:1）—— 一个值不可能同时满足两种用途。 */
@@ -14409,6 +14415,158 @@ function dropLeaveEl() {
   el.style.left = el.style.top = el.style.width = el.style.height = '';
   el.style.display = 'none';
 }
+/* ============ 内容块液态玻璃「浮现」（v3.58.6） ============
+   切页窗口结束（旧页已收干净、光晕已解冻）之后，让新页里的每个玻璃面把
+   backdrop-filter 从「恒等值」平滑推到它自己的令牌值 —— 玻璃是慢慢凝上来的，
+   而不是切页那一瞬间就已经糊好了。节奏：--pg-glass-in（560ms）走完，
+   分 4 批 × --pg-glass-in-step（24ms）错峰，缓动走专用的 --pg-glass-in-ease。
+   ⚠️⚠️ 为什么必须自己逐帧写 inline !important，而不是一条 CSS 动画/过渡：
+      全局玻璃规则是 `backdrop-filter: var(--glass-filter) !important`，而 CSS 级联里
+      **作者 !important 声明优先于 CSS 动画与过渡**。所以动画会「在跑但无效」——
+      实测 playState=running、currentTime 正常推进，computed 却一直是终值。
+      而 inline 的 !important 在作者 origin 内优先级高于任何样式表 important，
+      所以这一条路能在**完全不动既有玻璃级联**的前提下真正插值。
+      → 以后凡是给「带 !important 的属性」做过渡/浮现，先问这一句：
+        这个声明是 important 吗？是的话 CSS 动画不会生效。
+   ⚠️ 为什么不用一条关键帧 + 固定起点：玻璃令牌有四种形态，滤镜函数的个数/顺序/单位
+      都不同（saturate(1.8) blur(16px) / … brightness(1.06) …）。固定起点会因列表不匹配
+      而离散跳变。这里按元素自己的 computed 值生成同构起点（逐函数换恒等值）。
+   ⚠️ 代价：blur 半径变化的每一帧都要重算全半径模糊。所以
+      · 只在切页落定后跑一次，绝不与交叉淡化窗口重叠（那正是 v3.58.5 修掉的重灾区）；
+      · 面上限 PG_GLASS_IN_MAX，分 4 批错峰，避免 30+ 个面同帧起跑；
+      · reduced-motion / 玻璃已关（computed 为 none）直接跳过。
+   ⚠️ 连点：每次 go() 先 pgGlassInCancel() —— 取消 rAF、清掉全部 inline 声明，
+      所以任何时刻最多一批在跑，不会叠出「越点越慢」，也不会残留行内样式。 */
+var _pgGlassIn = { raf: 0, seq: 0, els: [] };
+var PG_GLASS_IN_MAX = 48;
+/* 计算值里滤镜都是数值形态（saturate(180%) 归一成 saturate(1.8)），恒等值按此写。 */
+var _PG_GLASS_IDENT = {
+  blur: '0px', saturate: '1', brightness: '1', contrast: '1',
+  grayscale: '0', sepia: '0', invert: '0', opacity: '1', 'hue-rotate': '0deg'
+};
+function _pgFns(v) {
+  var out = [], re = /([a-zA-Z-]+)\(([^()]*)\)/g, m;
+  while ((m = re.exec(String(v)))) out.push({ raw: m[0], fn: m[1], arg: m[2] });
+  return out;
+}
+function _pgNum(s) {
+  var m = String(s).trim().match(/^(-?[\d.]+)([a-z%]*)$/i);
+  return m ? { n: parseFloat(m[1]), u: m[2] } : null;
+}
+function _pgFmt(n) {
+  var t = (Math.round(n * 1000) / 1000).toString();
+  return t;
+}
+/* 恒等起点：函数名/顺序/个数与终值完全一致，只把参数换成恒等值 —— 这是能插值的前提。 */
+function _pgNeutralOf(fns) {
+  return fns.map(function (f) {
+    var k = f.fn.toLowerCase();
+    return Object.prototype.hasOwnProperty.call(_PG_GLASS_IDENT, k)
+      ? f.fn + '(' + _PG_GLASS_IDENT[k] + ')' : f.raw;
+  }).join(' ');
+}
+/* 逐函数线性插值。未知函数 / 非数值参数原样保留（不参与渐变，也不会被写坏）。 */
+function _pgLerpFns(fns, p) {
+  return fns.map(function (f) {
+    var k = f.fn.toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(_PG_GLASS_IDENT, k)) return f.raw;
+    var a = _pgNum(_PG_GLASS_IDENT[k]), b = _pgNum(f.arg);
+    if (!a || !b) return f.raw;
+    return f.fn + '(' + _pgFmt(a.n + (b.n - a.n) * p) + (b.u || a.u || '') + ')';
+  }).join(' ');
+}
+/* cubic-bezier 求值（与 --ease-out 同一条曲线）：先在 x 上二分出参数 t，再取 y。 */
+function _pgBezier(x1, y1, x2, y2) {
+  function cx(t) { return 3 * x1 * t * (1 - t) * (1 - t) + 3 * x2 * t * t * (1 - t) + t * t * t; }
+  function cy(t) { return 3 * y1 * t * (1 - t) * (1 - t) + 3 * y2 * t * t * (1 - t) + t * t * t; }
+  return function (x) {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    var lo = 0, hi = 1, t = x, i = 0;
+    for (; i < 24; i++) {
+      var v = cx(t);
+      if (Math.abs(v - x) < 1e-4) break;
+      if (v < x) lo = t; else hi = t;
+      t = (lo + hi) / 2;
+    }
+    return cy(t);
+  };
+}
+function _pgParseEase(str) {
+  var m = String(str).match(/cubic-bezier\(([^)]+)\)/);
+  if (m) {
+    var n = m[1].split(',').map(parseFloat);
+    if (n.length === 4 && n.every(function (x) { return isFinite(x); })) return _pgBezier(n[0], n[1], n[2], n[3]);
+  }
+  return _pgBezier(.16, 1, .3, 1);        /* 兜底 = --ease-out 的常量形式 */
+}
+function pgGlassInCancel() {
+  _pgGlassIn.seq++;
+  if (_pgGlassIn.raf) { cancelAnimationFrame(_pgGlassIn.raf); _pgGlassIn.raf = 0; }
+  var list = _pgGlassIn.els; _pgGlassIn.els = [];
+  for (var i = 0; i < list.length; i++) {
+    try {
+      list[i].el.style.removeProperty('backdrop-filter');
+      list[i].el.style.removeProperty('-webkit-backdrop-filter');
+    } catch (e) { }
+  }
+}
+function pgGlassInPlay(pageEl) {
+  pgGlassInCancel();
+  if (!pageEl) return;
+  try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) { }
+  var root = getComputedStyle(document.documentElement);
+  var rawDur = String(root.getPropertyValue('--pg-glass-in') || '').trim();
+  var dur = parseFloat(rawDur) || 560;
+  if (rawDur && rawDur.indexOf('ms') < 0 && rawDur.indexOf('s') > 0) dur *= 1000;   /* 写成 .56s 也认 */
+  var step = parseFloat(String(root.getPropertyValue('--pg-glass-in-step') || '').trim()) || 24;
+  var easeTok = String(root.getPropertyValue('--pg-glass-in-ease') || '').trim()
+    || String(root.getPropertyValue('--ease-out') || '');
+  var ease = _pgParseEase(easeTok);
+  var all = pageEl.querySelectorAll('*'), els = [];
+  for (var i = 0; i < all.length && els.length < PG_GLASS_IN_MAX; i++) {
+    var el = all[i], c = getComputedStyle(el);
+    var bf = c.backdropFilter || c.webkitBackdropFilter || 'none';
+    if (!bf || bf === 'none') continue;          /* 玻璃关闭 / 本来就没糊 */
+    if (!el.getClientRects().length) continue;   /* 隐藏子树、零尺寸，别白算 */
+    els.push({ el: el, fns: _pgFns(bf) });
+  }
+  if (!els.length) return;
+  var groupSize = Math.max(1, Math.ceil(els.length / 4));
+  els.forEach(function (it, idx) {
+    it.batch = Math.min(3, Math.floor(idx / groupSize));
+    it.start = it.batch * step;
+  });
+  var total = dur + 3 * step;
+  var t0 = 0;
+  var seq = _pgGlassIn.seq;
+  _pgGlassIn.els = els;
+  function frame(now) {
+    if (seq !== _pgGlassIn.seq) return;         /* 期间被取消 / 又切页了 */
+    if (!t0) t0 = now;
+    var el = now - t0, done = true;
+    for (var k = 0; k < els.length; k++) {
+      var it = els[k];
+      var local = el - it.start;
+      if (local < 0) {                           /* 还没轮到这一批：先保持平面 */
+        if (!it.wrote) { it.wrote = 1; _pgWrite(it.el, _pgNeutralOf(it.fns)); }
+        done = false; continue;
+      }
+      var p = local >= dur ? 1 : ease(local / dur);
+      if (p < 1) done = false;
+      _pgWrite(it.el, _pgLerpFns(it.fns, p));
+    }
+    if (done || el > total + 120) { pgGlassInCancel(); return; }   /* 收尾：撤掉 inline，回到令牌值 */
+    _pgGlassIn.raf = requestAnimationFrame(frame);
+  }
+  _pgGlassIn.raf = requestAnimationFrame(frame);
+}
+/* 写 inline !important —— 这是唯一能压过样式表 !important 的写法（见上方说明）。 */
+function _pgWrite(el, value) {
+  el.style.setProperty('backdrop-filter', value, 'important');
+  el.style.setProperty('-webkit-backdrop-filter', value, 'important');
+}
+window.pgGlassInPlay = pgGlassInPlay;
 function go(p) {
   /* 全屏画布是 position:fixed 覆盖层，离开工作台必须收起（否则回到该页会莫名全屏）。
      2026-10-25：收起只是「临时」—— 记住用户本来就是全屏的，回到工作台时自动恢复。
@@ -14441,6 +14599,7 @@ function go(p) {
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === p));
   document.querySelectorAll('.sidebar .side-item').forEach(x => x.classList.toggle('active', x.dataset.page === p));
   dropLeaveEl();   /* 上一次交叉淡化还没收干净就又点了：先把上一位送走 */
+  pgGlassInCancel();   /* 同理：上一次的玻璃浮现还在跑就先掐掉，绝不叠加（v3.58.6） */
   let curEl = null;
   pages.forEach(function (pg) {
     if (curEl) return;
@@ -14478,9 +14637,16 @@ function go(p) {
   const ms = sec > 0 ? sec * (raw.indexOf('ms') >= 0 ? 1 : 1000) : 0;
   /* keep 住旧页：applyPage 会把其余页面隐藏，但这一张要留到最后一口气再收获 */
   applyPage(p, curEl);
-  if (!ms) { dropLeaveEl(); if (p === 'workspace') _cwRestoreFullAt(60); return; }   /* 降级用户没有收起动画，不必等 */
+  /* 降级用户没有收起动画，不必等 —— 收场后同样要跑玻璃浮现 */
+  if (!ms) { dropLeaveEl(); pgGlassInPlay(document.getElementById('page-' + p)); if (p === 'workspace') _cwRestoreFullAt(60); return; }
   const seq = ++_goSeq;
-  _leaveTimer = setTimeout(function () { if (seq === _goSeq) dropLeaveEl(); }, ms + 40);
+  /* 交叉淡化收尾 = 「页面切换完成」：这时旧页已收干净、光晕已解冻，才轮到玻璃浮现。
+     早于此点跑，就会和旧页淡出抢同一批帧（v3.58.5 修掉的正是那个窗口）。 */
+  _leaveTimer = setTimeout(function () {
+    if (seq !== _goSeq) return;
+    dropLeaveEl();
+    pgGlassInPlay(document.getElementById('page-' + p));
+  }, ms + 40);
   /* 恢复全屏的时机从「淡化走完 +80ms」改成「淡化尾部 -40ms」（2026-10-26）。
      当年 +80 是为了躲开「顶栏从 display:none 变回 flex 重建 backdrop 合成层」那一下；
      而 v3.36.0 起全屏不再隐藏顶栏（画布让出 --cw-full-top），这项开销已经不存在。
@@ -28687,7 +28853,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.5';
+var APP_VERSION = '3.58.6';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
