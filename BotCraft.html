@@ -99,9 +99,10 @@
      而 JS 只在用户设过之后才会 setProperty 覆盖它们。
      --bgc-dim 是数值（直接进 rgba 的 alpha 位），--bgc-blur 带单位。 */
   --bgc-dim:.55;
-  /* 自定义壁纸下的内容面加厚（见下方 [data-bg-custom="on"] 规则）：.86 是实测读数，
-     .80~.92 之间都成立；--veil-rgb 跟主题走。 */
-  --veil-a:.86; --veil-rgb:28,28,33;
+  /* 自定义壁纸下的内容面加厚（见下方 [data-bg-custom="on"] 规则）。
+     0.74 是「仍能看见壁纸纹理、但内容读得清」的折中档（2026-11-08 用户要求更通透后定值）；
+     越接近 1 越实，.58 就是加厚前的原值。--veil-rgb 跟主题走。 */
+  --veil-a:.74; --veil-rgb:28,28,33;
   --bgc-blur:0px;
   /* 内置默认背景图（2026-11-01）。用 CSS 变量而不是直接写在 .bg-default 上：
      换图只需替换这一个值，浅色主题想换另一张也只覆盖它。
@@ -759,7 +760,7 @@ html[data-bg-custom="on"] .bg-custom{display:block}
    配上高饱和壁纸，内容区读起来就是「壁纸叠在内容上 / 发糊」，越花哨越明显
    （用户录屏里正是这种观感）。这不是状态残留（像素比对 8 轮 0 变化），是材质配比问题。
    这里只在「有自定义壁纸」时把大块阅读面加厚到 .86；默认壁纸用户与程序化光斑场景
-   完全不受影响。要调就改 --veil-a（.80 更透 / .92 更实）。
+   完全不受影响。要调就改 --veil-a（.68 更透 / .86 更实，当前 .74）。
    ⚠️ 只动 background-color，不动 background-image：.main 上的 Bloom 渐变与
       --lg-spec 折射高光仍照常叠在上面。 */
 html[data-bg-custom="on"] body .main,
@@ -28882,7 +28883,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.7';
+var APP_VERSION = '3.58.8';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
