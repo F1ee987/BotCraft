@@ -299,7 +299,12 @@
   /* 浮现单配一条缓动：--ease-out 是 aggressive 的入场曲线（10% 时间就走完 ~70% 进度），
      拿它跑 560ms 会「前半段猛地凝住、后半段几乎不动」。这条 (.25,.65,.3,1) 起步柔和、
      尾段收得轻，才是「慢慢渗上来」的观感。 */
-  --pg-glass-in:560ms; --pg-glass-in-step:24ms; --pg-glass-in-ease:cubic-bezier(.25,.65,.3,1);
+  /* 2026-11-14：材质渐变默认**关闭**（0ms）。
+     原因：v3.58.9 移除 blur 后，浮现唯一还能动的维度只剩 saturate —— 而 saturate 就是「质感」。
+     录屏实测切页后内容区饱和度 41.8 → 66.0（0.5s 内 +58%），观感是「材质突然变了一下」。
+     想恢复「玻璃慢慢凝上来」：把这一个值改回 560ms 即可（其余代码与令牌都在）。
+     ⚠️ 0 必须真的等于 0 —— 解析处不许用 `parseFloat(...) || 默认`。 */
+  --pg-glass-in:0ms; --pg-glass-in-step:24ms; --pg-glass-in-ease:cubic-bezier(.25,.65,.3,1);
   /* ===== 主色拆成三态 =====
      原来只有一个 --brand，既当填充面又当文字色。它的填充面压不住白字（4.23:1），
      文字态压玻璃面也不够（3.45–4.30:1）—— 一个值不可能同时满足两种用途。 */
@@ -14602,9 +14607,15 @@ function pgGlassInPlay(pageEl) {
   try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) { }
   var root = getComputedStyle(document.documentElement);
   var rawDur = String(root.getPropertyValue('--pg-glass-in') || '').trim();
-  var dur = parseFloat(rawDur) || 560;
+  /* ⚠️ 不能写 parseFloat(rawDur) || 560：0 是 falsy，会被吞成 560 ——
+     「把时长设成 0ms 关掉它」会静默失效（2026-11-14 实测踩到，这是本项目的老坑）。
+     只有「没定义 / 解析不出来」才回落默认。 */
+  var dur = parseFloat(rawDur);
+  if (!isFinite(dur)) dur = 560;
   if (rawDur && rawDur.indexOf('ms') < 0 && rawDur.indexOf('s') > 0) dur *= 1000;   /* 写成 .56s 也认 */
-  var step = parseFloat(String(root.getPropertyValue('--pg-glass-in-step') || '').trim()) || 24;
+  if (!(dur > 0)) return;                    /* 0 = 关闭：切页不改玻璃材质 */
+  var step = parseFloat(String(root.getPropertyValue('--pg-glass-in-step') || '').trim());
+  if (!isFinite(step)) step = 24;
   var easeTok = String(root.getPropertyValue('--pg-glass-in-ease') || '').trim()
     || String(root.getPropertyValue('--ease-out') || '');
   var ease = _pgParseEase(easeTok);
@@ -29007,7 +29018,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.11';
+var APP_VERSION = '3.58.12';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
