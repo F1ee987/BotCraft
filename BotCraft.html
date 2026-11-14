@@ -14787,12 +14787,25 @@ function sideHlSync() {
 }
 window.sideHlSync = sideHlSync;
 window.sideHlRefresh = sideHlRefresh;
-/* 布局变化（折叠 / 展开、窗口尺寸）后重新就位，不给动效 */
-window.addEventListener('resize', function () { requestAnimationFrame(sideHlRefresh); });
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function () { requestAnimationFrame(sideHlRefresh); });
+/* 布局变化（折叠 / 展开、窗口尺寸）后重新就位，不给动效。
+   ⚠️ 这里的引导必须防御式：文件里的主脚本块会被测试用 vm + 精简 DOM 跑（test_wiring
+      就是），那里没有 requestAnimationFrame / addEventListener。顶层直接调会让整块
+      脚本中断，后面所有定义（例如 NODE_TYPES）全都不存在 —— 表现为「接线测试找不到
+      符号」，而功能本身其实没坏。 */
+function _sideHlBoot() {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(sideHlRefresh);
+  else { try { sideHlRefresh(); } catch (e) { } }
+}
+if (window && typeof window.addEventListener === 'function') {
+  window.addEventListener('resize', function () {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(sideHlRefresh);
+    else { try { sideHlRefresh(); } catch (e) { } }
+  });
+}
+if (document && typeof document.addEventListener === 'function' && document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _sideHlBoot);
 } else {
-  requestAnimationFrame(sideHlRefresh);
+  _sideHlBoot();
 }
 
 document.querySelectorAll('.nav a').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.page); });
