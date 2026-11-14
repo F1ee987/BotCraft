@@ -3615,6 +3615,32 @@ body .sidebar:not(.collapsed) .side-item.active{
   box-shadow:inset 3px 0 0 0 var(--brand-fill),var(--lg-top) !important;
 }
 body .side-item.active .ic{background:var(--brand-fill)}
+/* ============ 侧栏选中高亮：组内滑动 / 跨组淡入淡出（v3.58.10） ============
+   为什么按分组给独立的 view-transition-name（--sideHlCreate / --sideHlResource）：
+     同一个名字的高亮会在两个分组之间被当成「同一个元素在移动」，于是从上一组的位置
+     横跨整段菜单滑过去、扫过无关项 —— 这正是要禁止的。名字分开后，跨组天然变成
+     「旧的高亮退出 + 新的高亮进入」，也就是淡入淡出。
+   时长 200ms（要求区间 150~250ms）；只动 transform / opacity，不触发布局。
+   ⚠️ .side-item 不能加 position:relative（折叠态 tooltip 的 ::before 以 .sidebar 为
+      定位参照，一改就漂），所以滑块用 z-index:-1 压到文字下面、由 .side-group 的
+      stacking context 兜住，而不是给菜单项加定位。
+   ⚠️ 指示条（inset 品牌色竖条 + 顶缘泛光）从菜单项搬到了滑块上，否则它会在切项时
+      瞬间跳过去，与滑动的滑块错位。菜单项自身的 active 背景在 html.side-hl-on 下让位。 */
+.side-group{position:relative;z-index:0}
+.side-hl{position:absolute;left:0;right:0;top:0;height:0;z-index:-1;
+  border-radius:var(--r-sm);
+  background:var(--glass-bg-active);
+  box-shadow:inset 3px 0 0 0 var(--brand-fill),var(--lg-top);
+  opacity:0;pointer-events:none;
+  transition:transform .2s var(--ease),opacity .16s var(--ease)}
+/* 跨组：只保留透明度过渡 —— 位移会变成「从上一组滑过来」 */
+.side-hl.fade-only{transition:opacity .16s var(--ease)}
+html.side-hl-on body .side-item.active{background:transparent !important;box-shadow:none !important}
+.side-group[data-group="create"] .side-hl{view-transition-name:--sideHlCreate}
+.side-group[data-group="resource"] .side-hl{view-transition-name:--sideHlResource}
+/* 折叠态：菜单项只剩图标，滑块宽度跟着组走，无需特殊处理；这里只收窄内边距对齐 */
+.sidebar.collapsed .side-hl{right:0}
+@media (prefers-reduced-motion:reduce){.side-hl,.side-hl.fade-only{transition:none}}
 /* 用户气泡：蓝色玻璃，加顶缘高光与柔和蓝投影 */
 body .msg.me{box-shadow:var(--lg-top),0 6px 18px var(--brand-tint-2)}
 /* 玻璃上的「下沉」层：代码块 / 引用 / 表格头改用半透明黑，
@@ -4232,15 +4258,21 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   <aside class="sidebar">
     <div class="side-toggle" onclick="toggleSidebar()" title="收起/展开侧边栏"><span class="tt-ic"><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.8 5.8 8l4.2 4.2"/></svg></span><span class="tt-txt">收起侧栏</span></div>
     <div class="side-section">创作</div>
+    <div class="side-group" data-group="create">
+      <div class="side-hl" aria-hidden="true"></div>
     <div class="side-item active" data-page="home" data-tip="我的机器人"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4"/><circle cx="9.5" cy="13.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="14.5" cy="13.5" r="1.2" fill="currentColor" stroke="none"/><path d="M9 19v2M15 19v2"/></svg></span><span class="side-txt">我的机器人</span> <span class="badge">0</span></div>
     <div class="side-item" data-page="workspace" data-tip="工作流编排"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M7.6 7.6 10.4 16M16.4 7.6 13.6 16M8.4 6h7.2"/></svg></span><span class="side-txt">工作流编排</span></div>
     <div class="side-item" data-page="knowledge" data-tip="知识库"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h6v14H5zM13 5h6v14h-6z"/><path d="M6.5 8.5h3M14.5 8.5h3M6.5 12h3M14.5 12h3"/></svg></span><span class="side-txt">知识库</span></div>
     <div class="side-item" data-page="plugins" data-tip="插件中心"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/><path d="M11 7.5h2a2 2 0 0 1 2 2V13M7.5 11v2a2 2 0 0 0 2 2H13"/></svg></span><span class="side-txt">插件中心</span></div>
+    </div>
     <div class="side-section">资源</div>
+    <div class="side-group" data-group="resource">
+      <div class="side-hl" aria-hidden="true"></div>
     <div class="side-item" data-page="styles" data-tip="文体模板"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg></span><span class="side-txt">文体模板</span></div>
     <div class="side-item" data-page="templates" data-tip="模板库"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span class="side-txt">模板库</span></div>
     <div class="side-item" data-page="favorites" data-tip="我的收藏"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v16l-5-4-5 4z"/></svg></span><span class="side-txt">我的收藏</span></div>
     <div class="side-item" data-page="analytics" data-tip="设置与数据"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V11M10 19V6M15 19V13M20 19V9"/></svg></span><span class="side-txt">数据分析</span></div>
+    </div>
     <div class="side-create" data-tip="新建机器人" onclick="openCreate()"><span class="sc-ic">＋</span><span class="sc-txt">新建机器人</span></div>
   </aside>
 
@@ -14626,6 +14658,7 @@ function go(p) {
   /* 侧栏 / 顶栏的选中态立刻更新：点击反馈必须即时，不该等动画 */
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === p));
   document.querySelectorAll('.sidebar .side-item').forEach(x => x.classList.toggle('active', x.dataset.page === p));
+  if (typeof sideHlSync === 'function') sideHlSync();   /* 组内滑动 / 跨组淡入淡出（v3.58.10） */
   dropLeaveEl();   /* 上一次交叉淡化还没收干净就又点了：先把上一位送走 */
   pgGlassInCancel();   /* 同理：上一次的玻璃浮现还在跑就先掐掉，绝不叠加（v3.58.6） */
   let curEl = null;
@@ -14688,6 +14721,79 @@ function toggleNav() { var n = document.querySelector('.nav'); if (n) n.classLis
 document.addEventListener('visibilitychange', function () {
   document.documentElement.classList.toggle('bg-hidden', document.hidden);
 });
+
+/* ============ 侧栏选中高亮：组内滑动 / 跨组淡入淡出（v3.58.10） ============
+   每组一个滑块（.side-hl），组内切换用 transform 过渡滑动（200ms），跨组只做
+   透明度过渡（160ms）——**不给位移**，所以永远不会从上一组的位置滑过来扫过无关项。
+   位置用 translateY(item.offsetTop) + height，offsetParent 就是 .side-group（它带
+   position:relative），坐标系天然对齐；不碰 .side-item 的定位（折叠态 tooltip 依赖
+   .sidebar 作定位参照，那条约束见上面的注释）。
+   ⚠️ 跨组时必须先加 .fade-only（只保留 opacity 过渡）再改 transform —— 否则
+      transform 会带着过渡从旧位置滑到新位置，正是要禁止的「长距离扫过」。
+   ⚠️ prefers-reduced-motion 下 CSS 把过渡关掉，这里不必再判断（行为自动退化为瞬切）。 */
+var _sideHl = { group: '', timer: 0 };
+function _sideHlItem() { return document.querySelector('.sidebar .side-item.active'); }
+function _sideHlPaint(hl, item) {
+  hl.style.height = item.offsetHeight + 'px';
+  hl.style.transform = 'translateY(' + item.offsetTop + 'px)';
+}
+/* 就位但不滑动：用于首次渲染、侧栏折叠/展开、窗口尺寸变化（这些不是"切换"，不该有动效） */
+function sideHlRefresh() {
+  var item = _sideHlItem();
+  if (!item) return;
+  var group = item.parentElement;
+  if (!group || !group.classList || !group.classList.contains('side-group')) return;
+  var hl = group.querySelector('.side-hl');
+  if (!hl) return;
+  hl.classList.add('fade-only');
+  _sideHlPaint(hl, item);
+  hl.style.opacity = '1';
+  _sideHl.group = group.getAttribute('data-group') || '';
+  document.documentElement.classList.add('side-hl-on');
+  clearTimeout(_sideHl.timer);
+  _sideHl.timer = setTimeout(function () { hl.classList.remove('fade-only'); }, 220);
+}
+function sideHlSync() {
+  var item = _sideHlItem();
+  if (!item) return;
+  var group = item.parentElement;
+  if (!group || !group.classList || !group.classList.contains('side-group')) return;
+  var hl = group.querySelector('.side-hl');
+  if (!hl) return;
+  var gk = group.getAttribute('data-group') || '';
+  var prev = _sideHl.group
+    ? document.querySelector('.side-group[data-group="' + _sideHl.group + '"] .side-hl')
+    : null;
+  clearTimeout(_sideHl.timer);
+  if (prev && prev !== hl && gk !== _sideHl.group) {
+    /* 跨组：旧滑块淡出 + 新滑块瞬时就位后淡入，全程零位移 */
+    prev.classList.add('fade-only');
+    prev.style.opacity = '0';
+    hl.classList.add('fade-only');
+    _sideHlPaint(hl, item);
+    void hl.offsetWidth;              /* 先把新位置落定，再开淡入 */
+    hl.style.opacity = '1';
+    _sideHl.timer = setTimeout(function () {
+      hl.classList.remove('fade-only');
+      prev.classList.remove('fade-only');
+    }, 220);
+  } else {
+    /* 组内：transform 过渡 = 平滑滑动 */
+    _sideHlPaint(hl, item);
+    hl.style.opacity = '1';
+  }
+  _sideHl.group = gk;
+  document.documentElement.classList.add('side-hl-on');
+}
+window.sideHlSync = sideHlSync;
+window.sideHlRefresh = sideHlRefresh;
+/* 布局变化（折叠 / 展开、窗口尺寸）后重新就位，不给动效 */
+window.addEventListener('resize', function () { requestAnimationFrame(sideHlRefresh); });
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { requestAnimationFrame(sideHlRefresh); });
+} else {
+  requestAnimationFrame(sideHlRefresh);
+}
 
 document.querySelectorAll('.nav a').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.page); });
 document.querySelectorAll('.sidebar .side-item').forEach(item => {
@@ -28863,7 +28969,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.9';
+var APP_VERSION = '3.58.10';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
