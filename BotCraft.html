@@ -766,12 +766,24 @@ html[data-bg-custom="on"] .bg-custom{display:block}
    完全不受影响。要调就改 --veil-a（.68 更透 / .86 更实，当前 .74）。
    ⚠️ 只动 background-color，不动 background-image：.main 上的 Bloom 渐变与
       --lg-spec 折射高光仍照常叠在上面。 */
+/* ⚠️ 2026-11-14 修正：这层底色**必须画在不参与切页动画的元素上**。
+   切页是给页面容器（main.main#page-*）做 opacity 淡入淡出，而底色原本就画在它身上 ——
+   于是淡入的同时把底色一起淡掉，壁纸整片泛上来（实测：区域纹理量 +83%、饱和度 +105%），
+   再被玻璃面的 saturate(280%) 放大约 2.8 倍，观感就是「内容区发花 / 闪烁 / 错乱」。
+   用户反复切换时这个窗口反复出现，正是他录屏里看到的现象。
+
+   → 底色统一由 .app（全屏容器，永不参与动画）承担，下面这些「会动的大面」置空。
+     落定态与改动前逐像素一致（实测 70.0/21.4/47.4 vs 70.0/21.4/47.4），
+     但淡入中途不再泛白（纹理 +17.7 → -3.8）。
+   ⚠️ 新增会动画的大面时，别再把底色加回它身上；加在 .app 或其它静止层。 */
+html[data-bg-custom="on"] body .app{
+  background-color:rgba(var(--veil-rgb),var(--veil-a))}
 html[data-bg-custom="on"] body .main,
 html[data-bg-custom="on"] body .workspace,
 html[data-bg-custom="on"] body .sidebar,
 html[data-bg-custom="on"] body .ws-side,
 html[data-bg-custom="on"] body .ws-main{
-  background-color:rgba(var(--veil-rgb),var(--veil-a))}
+  background-color:transparent}
 /* 关掉「背景光效」时，自定义图也一起关 —— 它属于背景资源，不是玻璃材质 */
 html[data-bg="off"] .bg-custom{display:none!important}
 .bg-custom::after{
@@ -14469,6 +14481,7 @@ function dropLeaveEl() {
    backdrop-filter 从「恒等值」平滑推到它自己的令牌值 —— 玻璃是慢慢凝上来的，
    而不是切页那一瞬间就已经糊好了。节奏：--pg-glass-in（560ms）走完，
    分 4 批 × --pg-glass-in-step（24ms）错峰，缓动走专用的 --pg-glass-in-ease。
+   起点只走恒等距离的 45%（_PG_GLASS_RAMP）：退回满恒等值会让全页褪色一半（见该常量注）。
    ⚠️⚠️ 为什么必须自己逐帧写 inline !important，而不是一条 CSS 动画/过渡：
       全局玻璃规则是 `backdrop-filter: var(--glass-filter) !important`，而 CSS 级联里
       **作者 !important 声明优先于 CSS 动画与过渡**。所以动画会「在跑但无效」——
@@ -14517,12 +14530,24 @@ function _pgFmt(n) {
   var t = (Math.round(n * 1000) / 1000).toString();
   return t;
 }
-/* 恒等起点：函数名/顺序/个数与终值完全一致，只把参数换成恒等值 —— 这是能插值的前提。 */
+/* 浮现起点到恒等值之间只走这么远（1 = 完全退回恒等值，0 = 直接就是终值）。
+   2026-11-14：原来用 1（起点 saturate(1)），等于每切一次页就把全页增艳一次拉到 0
+   —— 实测区域饱和度 45.5 → 22.3（-51%），观感是「褪色再染回来」，反复切换时就是闪。
+   0.45 把幅度砍掉一多半，仍保留「玻璃慢慢凝上来」，但不再有褪色感。 */
+var _PG_GLASS_RAMP = 0.45;
+/* 单个函数的起点值：终值 + (恒等值 − 终值) × RAMP。非数值参数退回恒等值。 */
+function _pgRampStart(f) {
+  var k = f.fn.toLowerCase();
+  var fromNum = _pgNum(_PG_GLASS_IDENT[k]), toNum = _pgNum(f.arg);
+  if (!fromNum || !toNum) return _PG_GLASS_IDENT[k];
+  return _pgFmt(toNum.val + (fromNum.val - toNum.val) * _PG_GLASS_RAMP) + (toNum.unit || fromNum.unit || '');
+}
+/* 起点：函数名/顺序/个数与终值完全一致，只把参数换成分段起点 —— 这是能插值的前提。 */
 function _pgNeutralOf(fns) {
   return fns.map(function (f) {
     var k = f.fn.toLowerCase();
     return Object.prototype.hasOwnProperty.call(_PG_GLASS_IDENT, k)
-      ? f.fn + '(' + _PG_GLASS_IDENT[k] + ')' : f.raw;
+      ? f.fn + '(' + _pgRampStart(f) + ')' : f.raw;
   }).join(' ');
 }
 /* 逐函数线性插值。未知函数 / 非数值参数原样保留（不参与渐变，也不会被写坏）。 */
@@ -28982,7 +29007,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.58.10';
+var APP_VERSION = '3.58.11';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
