@@ -1132,6 +1132,7 @@ input[type="range"]:disabled{opacity:.45;cursor:not-allowed}
 /* ===== 按钮：Apple 双层级（填充灰次按钮 / 实心蓝主按钮） ===== */
 .btn{
   padding:8px 15px;border-radius:var(--r-md);font-size:var(--fs-base);font-weight:590;display:inline-flex;align-items:center;gap:var(--sp-3);
+  white-space:nowrap;   /* 被挤压时中文会在任意字符处断行（窄屏顶栏出现过「备 份」「+ 创 建」） */
   background:var(--fill);color:var(--txt);
   border:1px solid transparent;
   transition:background var(--dur-3) var(--ease),transform var(--dur-1) var(--ease),filter var(--dur-3) var(--ease),box-shadow var(--dur-2) var(--ease);
@@ -1322,6 +1323,25 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 .acct-hint{font-size:var(--fs-xs);color:var(--sub);line-height:1.65;margin-top:10px}
 .acct-two{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-6);text-align:left}
 @media (max-width:520px){.acct-two{grid-template-columns:1fr}}
+/* 窄屏顶栏：按钮已 white-space:nowrap（否则中文断行），这里收紧内边距与间距，
+   让「备份 / 创建」在 490px 附近仍能单行放下且不产生横向溢出。 */
+/* 顶栏按钮一律不收缩：它们被 flex 挤压时会压到 7px 宽、文字溢出按钮框
+   （实测 560px 时「＋ 创建」只剩 42px，内容需要 65px）。 */
+.topbar .btn{flex:0 0 auto}
+/* 761–860px：已容不下「⌘K」快捷提示（实测 820px 时溢出 3px），只收这一个。 */
+@media (max-width:860px){
+  .topbar .tb-kbd{display:none}
+}
+/* ≤760px（平板竖屏及以下）：收紧内边距 + 收起两个次要项换来空间。
+   ⌘K 有快捷键、备份有图标与 title，功能入口都不消失。 */
+@media (max-width:760px){
+  .topbar{padding:0 var(--sp-6);gap:var(--sp-4)}
+  .topbar .btn{padding:6px 10px}
+  .topbar .btn .ic-btn{margin:0}
+  .topbar #themeBtn{flex:0 0 36px;justify-content:center}
+  .topbar .tb-kbd{display:none}
+  .topbar .tb-label{display:none}
+}
 /* 配色：选中态 = 品牌描边 + 外环 + 白色对勾（旧版只有 --txt 细边，浅底上看不出来） */
 .swatch-row{display:flex;gap:var(--sp-5);flex-wrap:wrap;align-items:center}
 .swatch{position:relative;width:30px;height:30px;border-radius:50%;border:2px solid transparent;
@@ -3954,9 +3974,9 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
   </nav>
   <div class="spacer"></div>
   <span class="model-tag model-tag-click" id="topModelTag" title="点击切换模型" onclick="openSettings()">gpt-4o-mini</span>
-  <button class="btn btn-ghost btn-sm" onclick="toggleCmdK()" title="命令面板 (Cmd/Ctrl + K)">⌘K</button>
+  <button class="btn btn-ghost btn-sm tb-kbd" onclick="toggleCmdK()" title="命令面板 (Cmd/Ctrl + K)">⌘K</button>
   <button id="themeBtn" class="btn btn-ghost btn-sm" onclick="toggleTheme()" title="切换深色/浅色主题" aria-label="切换主题"><span class="orb"></span></button>
-  <button class="btn btn-ghost btn-sm" onclick="openDataMigrate()" title="数据备份与迁移（导入 / 导出配置）"><svg class="ic-btn" aria-hidden="true"><use href="#ic-save"/></svg>备份</button>
+  <button class="btn btn-ghost btn-sm" onclick="openDataMigrate()" title="数据备份与迁移（导入 / 导出配置）"><svg class="ic-btn" aria-hidden="true"><use href="#ic-save"/></svg><span class="tb-label">备份</span></button>
   <button class="btn btn-primary btn-sm" onclick="if(requireLogin())openCreate()">＋ 创建</button>
   <div id="userMenuWrap"></div>
 </div>
