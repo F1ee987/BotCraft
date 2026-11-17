@@ -1500,7 +1500,7 @@ body.embed-mode #wsName{font-size:var(--fs-lg)}
      观感就是「左右切标签时背景来回渲染」。固定槽位后宽度恒定，背景不再重画。
      代价是常驻 11px 槽位（本来滚动时也占着），换来切换零跳动。 */
   scrollbar-gutter:stable;
-  margin:0 12px 12px 0;border-radius:var(--r-xl);background:var(--glass-bg-hover);border:1px solid var(--glass-border)}
+  margin:0 12px 12px 12px;border-radius:var(--r-xl);background:var(--glass-bg-hover);border:1px solid var(--glass-border)}
 .page-head{display:flex;align-items:center;margin-bottom:18px;gap:var(--sp-6);flex-wrap:wrap}
 .page-head h1{font-size:var(--fs-5xl);font-weight:700;letter-spacing:-.5px;font-family:var(--font-display)}
 .page-head .sub{color:var(--sub);font-size:var(--fs-md);margin-top:2px}
@@ -1603,7 +1603,7 @@ body.embed-mode #wsName{font-size:var(--fs-lg)}
 /* 工作台 = 悬浮圆角玻璃珠：与侧栏同款圆角/边距/光影，收掉 height:100%（改由 .app stretch
    自动扣掉上下 margin，否则会溢出 12px 顶到窗口底）；overflow:hidden 让内部色带裁进圆角 */
 .workspace{display:none;flex:1;min-width:0;min-height:0;
-  margin:0 12px 12px 0;border-radius:var(--r-xl);background:var(--glass-bg-hover);border:1px solid var(--glass-border);overflow:hidden}
+  margin:0 12px 12px 12px;border-radius:var(--r-xl);background:var(--glass-bg-hover);border:1px solid var(--glass-border);overflow:hidden}
 .workspace.on{display:flex}
 .ws-side{width:300px;min-width:0;overflow-x:hidden;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column}
 /* 左侧工作区调宽拉手：夹在 ws-side 与 ws-main 之间，拖拽调宽、双击复位、按钮收起 */
