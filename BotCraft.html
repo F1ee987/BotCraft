@@ -148,15 +148,13 @@
   /* 2026-11-08 用户要求「背景保持清晰」：玻璃不再模糊背后的内容（原 20px / 液态档 44px）。
      只保留 saturate（色彩增艳），它是纯颜色运算，不涂抹几何细节。
      要恢复模糊就改这一个值（液态档在下方「增强态」里另有同名覆盖）。 */
-  --glass-blur:0px;
-  --glass-sat:190%;
-  --glass-filter:saturate(var(--glass-sat)) blur(var(--glass-blur));
+
   /* 液态玻璃版（画布专用）：在同一滤镜栈上再抬饱和度与亮度，并收一点模糊半径。
      ⚠️ 这里**没有** url(#...) 置换滤镜 —— 见下方「折射实测结论」，那是实测过的死路。
      观感差异来自：饱和度 210% 让背后的彩色光晕更「湿」、亮度 1.06 把玻璃提亮一档、
      模糊收到 20px 让边缘细节还留一点（26px 会把画布网格糊成一片灰）。 */
   /* 20px → 14px：配合纹理层，让画布玻璃里也能看出底下的流动（原值是为「平滑背景」调的） */
-  --glass-filter-liq:saturate(210%) brightness(1.06) blur(0px);   /* 画布液态档去模糊（原 14px） */
+
   --glass-ridge:none;
   /* 液态玻璃四件套（玻璃珠化）：顶缘亮线 + 顶部内泛光（大片高光斑）、
      底缘暗线 + 底部折射回光、双层外投影（近实远虚）、对角高光渐变 */
@@ -167,23 +165,15 @@
        · inset 0 -2px 5px -4px 底缘回光（光穿过玻璃从下沿折回来）
        · inset 1px 0 / -1px 0  左右极淡的青 / 品红折射线 —— 真实玻璃边缘的色散是
          左右异色；alpha 超过 .12 就会像渲染错误，这里刻意压在 .10 以下 */
-  --lg-top:inset 0 1px 0 rgba(255,255,255,.40),inset 0 10px 18px -8px rgba(255,255,255,.18),inset 0 0 0 1px rgba(255,255,255,.16),
-    inset 0 2px 1px -1px rgba(255,255,255,.34),
-    inset 0 -2px 5px -4px rgba(255,255,255,.20),
-    inset 1px 0 0 rgba(140,215,255,.13),
-    inset -1px 0 0 rgba(255,165,238,.09),
-    inset 2px 2px 1px 0 rgba(255,255,255,.16),
-    inset -1px -1px 1px 1px rgba(255,255,255,.10);
-  --lg-bottom:inset 0 -1px 0 rgba(0,0,0,.28),inset 0 -10px 22px -12px rgba(255,255,255,.16),
-    inset 0 -2px 7px -5px rgba(0,0,0,.34);
+  --lg-top:inset 0 1px 0 rgba(255,255,255,.42),inset 0 0 0 1px rgba(255,255,255,.14),
+    inset 1px 0 0 rgba(140,215,255,.10),inset -1px 0 0 rgba(255,165,238,.07);
+  --lg-bottom:inset 0 -1px 0 rgba(0,0,0,.28);
   /* 投影从「单层浓黑」改三层：近处贴地硬影 + 中距 + 远距。
      原来那层 -16px 扩散在卡片四周糊了一圈黑气，越看越脏，而且没把卡片抬起来。 */
   --lg-float:0 1px 2px rgba(0,0,0,.26),0 10px 26px -16px rgba(0,0,0,.50),0 20px 44px -28px rgba(0,0,0,.36);
   /* 追加两团径向：左上曲面反射（大面积、弱）+ 右下环境色返光（更弱、偏冷）。
      线性渐变给不出「弧面」，径向才有曲面感。 */
-  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.26),rgba(255,255,255,.08) 34%,rgba(255,255,255,0) 58%,rgba(255,255,255,.10) 100%),
-    radial-gradient(72% 118% at 26% -10%,rgba(255,255,255,.13),transparent 62%),
-    radial-gradient(58% 88% at 84% 112%,rgba(150,220,255,.09),transparent 70%);
+  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.20),rgba(255,255,255,.05) 40%,rgba(255,255,255,0) 60%);
   /* ===== 磨砂卡片层（2026-10-20 玻璃拟态规格）=====
      卡片是内容的主角，必须比结构面更像玻璃：
        · --card-ridge：整圈 1px 白内亮边 + 顶部高光 + 底部折射回光
@@ -198,16 +188,9 @@
      玻璃珠的环是「左上受光、右下折返」，只有上半边亮时会显得像被切开的平面。
      参考实现用的是 `inset 2px 2px` + `inset -1px -1px`，这里照此补齐并降 alpha
      （我们已有多层，同值会过曝）。整圈白环同时再压一档：均匀环越亮，对角方向性越弱。 */
-  --card-ridge:inset 0 1px 0 rgba(255,255,255,.42),inset 0 0 0 1px rgba(255,255,255,.14),inset 0 -16px 30px -22px rgba(255,255,255,.22),
-    inset 0 2px 1px -1px rgba(255,255,255,.34),
-    inset 0 -1px 0 rgba(255,255,255,.15),
-    inset 1px 0 0 rgba(150,225,255,.14),
-    inset -1px 0 0 rgba(255,175,240,.10),
-    inset 2px 2px 1px 0 rgba(255,255,255,.22),
-    inset -1px -1px 1px 1px rgba(255,255,255,.14);
-  --card-spec:linear-gradient(140deg,rgba(255,255,255,.26) 0%,rgba(255,255,255,.06) 26%,rgba(255,255,255,0) 48%,rgba(255,255,255,.08) 76%,rgba(255,255,255,.20) 100%),
-    radial-gradient(130% 78% at 50% -16%,rgba(255,255,255,.17),transparent 58%),
-    radial-gradient(84% 58% at 76% 116%,rgba(170,225,255,.09),transparent 66%);
+  --card-ridge:inset 0 1px 0 rgba(255,255,255,.42),inset 0 0 0 1px rgba(255,255,255,.14),
+    inset 1px 0 0 rgba(150,225,255,.12),inset -1px 0 0 rgba(255,175,240,.09);
+  --card-spec:linear-gradient(140deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,.05) 40%,rgba(255,255,255,0) 60%);
   /* 第三档材质 · 内容卡玻璃（2026-10-25）：
      卡片不是浮层 —— 浮层那套（26px 模糊 + 深浮投影）用在「一屏 8 张卡」上只会让整片
      网格发脏、边界糊在一起。12px / 135% 饱和 / 薄浮投影是实测下来「看得出是玻璃、
@@ -226,11 +209,10 @@
      两者都用 background-image 叠在 --card-spec 之上，不新增元素、不碰布局。 */
   --card-bloom:radial-gradient(130% 92% at 9% 0%,var(--brand-tint),transparent 62%);
   --card-falloff:linear-gradient(180deg,rgba(255,255,255,0) 46%,rgba(0,0,0,.10) 100%);
-  --card-glass-blur:0px;   /* 卡片同样不糊背景（原 9px） */
+
   /* 饱和度 135% → 148% 并轻微提亮：背景是平滑渐变，**模糊提不出玻璃感**（此前实测），
      但「把背后的品牌色光斑搅得更浓」是有效的 —— 玻璃的「湿」来自这一项，不是来自 blur。 */
-  --card-glass-filter:saturate(148%) brightness(1.04) blur(var(--card-glass-blur));
-  --bubble-glass-filter:saturate(130%) blur(0px);   /* 气泡去模糊（原 8px） */
+
   /* 深色界面里「高度」主要靠面更亮 + 边缘更利，投影只能加一点点：
      所以浮阴影 = 一圈 1px 暗发丝线（把亮边和背景隔开，是锐利感的关键）
      + 一层深投影（贴地感）。纯投影在深色底上几乎看不见，实测确认。 */
@@ -403,30 +385,15 @@
   --glass-ridge:none;
   /* 浅色玻璃的难处：白上叠白，亮边天然看不见 → 厚度只能靠**暗线**表达。
      所以这里的追加层是「顶白 1px 加强 + 底/左右极淡冷灰线」，与暗色正好相反。 */
-  --lg-top:inset 0 1px 0 rgba(255,255,255,.95),inset 0 10px 20px -10px rgba(255,255,255,.65),inset 0 0 0 1px rgba(255,255,255,.80),
-    inset 0 2px 1px -1px rgba(255,255,255,1),
-    inset 0 -1px 0 rgba(31,41,71,.06),
-    inset 1px 0 0 rgba(31,41,71,.035),
-    inset -1px 0 0 rgba(31,41,71,.035),
-    inset 2px 2px 1px 0 rgba(255,255,255,.88),
-    inset -1px -1px 1px 1px rgba(255,255,255,.55);
-  --lg-bottom:inset 0 -1px 0 rgba(31,41,71,.07),inset 0 -10px 22px -12px rgba(255,255,255,.70),
-    inset 0 -2px 10px -8px rgba(31,41,71,.09);
+  --lg-top:inset 0 1px 0 rgba(255,255,255,.95),inset 0 0 0 1px rgba(255,255,255,.80),
+    inset 1px 0 0 rgba(31,41,71,.035),inset -1px 0 0 rgba(31,41,71,.035);
+  --lg-bottom:inset 0 -1px 0 rgba(31,41,71,.07);
   --lg-float:0 1px 2px rgba(31,41,71,.08),0 8px 22px -14px rgba(31,41,71,.16),0 18px 40px -26px rgba(31,41,71,.12);
-  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.80),rgba(255,255,255,.28) 42%,rgba(255,255,255,.06) 62%),
-    radial-gradient(70% 116% at 24% -8%,rgba(255,255,255,.88),transparent 58%),
-    radial-gradient(58% 88% at 86% 114%,rgba(110,185,230,.07),transparent 70%);
+  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.80),rgba(255,255,255,.28) 42%,rgba(255,255,255,.06) 62%);
   /* 浅色磨砂卡片：白上叠白，亮边靠「顶部白高光 + 整圈白描边」撑起来 */
-  --card-ridge:inset 0 1px 0 rgba(255,255,255,.98),inset 0 0 0 1px rgba(255,255,255,.80),inset 0 -16px 30px -24px rgba(255,255,255,.80),
-    inset 0 2px 1px -1px rgba(255,255,255,1),
-    inset 0 -1px 0 rgba(31,41,71,.07),
-    inset 1px 0 0 rgba(31,41,71,.045),
-    inset -1px 0 0 rgba(110,185,230,.06),
-    inset 2px 2px 1px 0 rgba(255,255,255,.90),
-    inset -1px -1px 1px 1px rgba(255,255,255,.62);
-  --card-spec:linear-gradient(140deg,rgba(255,255,255,.92) 0%,rgba(255,255,255,.32) 26%,rgba(255,255,255,0) 48%,rgba(255,255,255,.14) 76%,rgba(255,255,255,.70) 100%),
-    radial-gradient(130% 76% at 50% -16%,rgba(255,255,255,.80),transparent 56%),
-    radial-gradient(84% 58% at 76% 116%,rgba(110,185,230,.06),transparent 66%);
+  --card-ridge:inset 0 1px 0 rgba(255,255,255,.98),inset 0 0 0 1px rgba(255,255,255,.80),
+    inset 1px 0 0 rgba(31,41,71,.045),inset -1px 0 0 rgba(110,185,230,.06);
+  --card-spec:linear-gradient(140deg,rgba(255,255,255,.92) 0%,rgba(255,255,255,.32) 26%,rgba(255,255,255,0) 48%);
   /* .78 → .68：浅色玻璃的「透」靠让底下的薄荷/翡翠光斑透上来。
      再低就会让深色正文压在彩色背景上、对比度掉下来（verify_contrast 会拦）。 */
   --card-glass-bg:rgba(255,255,255,.68);
@@ -923,8 +890,7 @@ body .ctxp-box,
 body .stat-card, body .chart-box, body .brand-card,
 body .pub-card, body .batch-bar, body .main.scrolled > .page-head,
 body .cw-tools, body .cw-mini{
-  backdrop-filter: var(--glass-filter) !important;
-  -webkit-backdrop-filter: var(--glass-filter) !important;
+
 }
 /* ============ 旧页淡化期摘掉 backdrop-filter（2026-10-18 实测定位） ============
    切页掉帧的真正主因不是背景光晕，而是**旧页本身**：它被抬成 position:fixed 做
@@ -1000,8 +966,7 @@ body .mbox,body .cmdk-box,body .toast,body .cmd-panel{box-shadow:var(--lg-shadow
   background-color:var(--card-glass-bg);
   background-image:var(--card-spec),var(--card-bloom),var(--card-falloff);
   border-color:var(--card-glass-line);
-  -webkit-backdrop-filter:var(--card-glass-filter);
-  backdrop-filter:var(--card-glass-filter);
+
   box-shadow:var(--card-ridge),var(--card-float)}
 /* 画布节点：只加浮阴影，不加模糊（理由见上）。 */
 :where(html[data-glass="on"]) body .node{box-shadow:var(--card-ridge-lite),var(--card-float-lite)}
@@ -1376,7 +1341,7 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
 .acct-pass-msg{font-size:var(--fs-sm);margin-top:9px;display:none}
 
 /* ============ 登录 ============ */
-.auth-mask{display:none;position:fixed;inset:0;z-index:90;background:rgba(13,13,16,.78);/* 去背景模糊（原 18px）：遮罩靠 .78 的黑底压暗即可，背后内容保持清晰 */backdrop-filter:blur(0px) saturate(160%);-webkit-backdrop-filter:blur(0px) saturate(160%);align-items:center;justify-content:center;flex-direction:column;gap:var(--sp-5);text-align:center;padding:20px}
+.auth-mask{display:none;position:fixed;inset:0;z-index:90;background:rgba(13,13,16,.78);/* 去背景模糊（原 18px）：遮罩靠 .78 的黑底压暗即可，背后内容保持清晰 */align-items:center;justify-content:center;flex-direction:column;gap:var(--sp-5);text-align:center;padding:20px}
 .auth-mask.on{display:flex}
 .auth-brand .logo{justify-content:center}
 .auth-brand p{color:var(--sub);font-size:var(--fs-base);margin-top:12px}
@@ -1395,7 +1360,7 @@ html[data-theme-mode="system"] #themeBtn .orb{background:linear-gradient(135deg,
    当成第二处定义，报「id 重复」，这次就踩了一次。） */
 .auth-card{display:flex;width:940px;max-width:94vw;height:min(560px,86vh);border-radius:var(--r-2xl);overflow:hidden;
   background:var(--glass-bg-hover);border:1px solid var(--glass-border);box-shadow:0 32px 80px rgba(0,0,0,.42);
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);text-align:left}
+  text-align:left}
 .auth-art{flex:0 0 47%;position:relative;overflow:hidden;
   background:linear-gradient(158deg,#0e7490 0%,#0a5f74 46%,#083b47 100%);
   display:flex;align-items:center;justify-content:center}
@@ -1897,7 +1862,7 @@ body.cw-flow-full{overscroll-behavior:none}
 .cw-qa{position:absolute;right:var(--cw-qa-gap);top:var(--cw-qa-gap);bottom:var(--cw-qa-gap);
   width:var(--cw-qa-w);max-width:calc(100% - var(--cw-qa-gap) * 2);z-index:9;display:none;flex-direction:column;
   background:var(--pop-veil);background-image:var(--lg-spec);
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  
   border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--lg-shadow);overflow:hidden}
 #wsFlowBody.cw-full:not(.cw-qa-off) .cw-qa{display:flex}
 /* 提问条（2026-10-24 改）：原来挤在右侧历史浮层的底部那条小格子里（宽 380 减内边距，
@@ -1921,7 +1886,7 @@ body.cw-flow-full{overscroll-behavior:none}
    ⚠️ 每条都写两遍（普通档 → 液态档）：万一以后液态档用到某个引擎不认识的值，
       前一条会兜住，不至于连模糊一起丢掉。
    ⚠️ 必须带 !important：.cw-tools / .cw-mini 等早已登记在下方「全局液态玻璃」清单里
-     （那条规则用 !important 强制 var(--glass-filter)），不带就永远被它压住 ——
+     （那条规则用 !important 强制玻璃模糊），不带就永远被它压住 ——
      实测发现「写进去却毫无变化」就是这个原因。
    ⚠️ 小地图与画布节点不挂液态档：它们每帧都在重绘（滚动/拖动），
       多一层滤镜就多一次全屏重算（.cw-mini 只保留普通模糊）。 */
@@ -1931,10 +1896,7 @@ body .cw-live-bar > .chat-input,
 body .cw-tools,
 body .cw-tabpop,
 body .cw-fullbtn{
-  -webkit-backdrop-filter:var(--glass-filter)!important;
-  backdrop-filter:var(--glass-filter)!important;
-  -webkit-backdrop-filter:var(--glass-filter-liq)!important;
-  backdrop-filter:var(--glass-filter-liq)!important}
+}
 /* ===== 全屏画布里的「真·聊天区」（2026-10-26）=====
    原来画布右侧是 #cwQA 快照（cwRenderQA 拼出来的 HTML）+ 一条自写 textarea，
    能力是残缺的：附件/图片、附带文档、停止生成、消息上的复制 / 重新生成 / 点赞 / 删除、
@@ -1954,7 +1916,7 @@ body.cw-flow-full #cwLive.on{display:block}
 .cw-live-chat{position:absolute;right:var(--cw-qa-gap);top:var(--cw-qa-gap);bottom:var(--cw-qa-gap);
   width:var(--cw-qa-w);max-width:calc(100% - var(--cw-qa-gap) * 2);display:flex;flex-direction:column;
   pointer-events:auto;background:var(--pop-veil);background-image:var(--lg-spec);
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  
   border:1px solid var(--glass-border);border-radius:var(--r-lg);box-shadow:var(--lg-shadow);overflow:hidden}
 /* 收起态与旧面板共用 body.cw-qa-off（cwToggleQA 会同步镜像） */
 body.cw-qa-off .cw-live-chat{display:none}
@@ -1990,7 +1952,7 @@ body.cw-qa-off .cw-live-bar{right:0}
 .cw-live-bar > .chat-input{pointer-events:auto;width:min(720px,100%);padding:var(--sp-3);
   gap:var(--sp-3);border-top:0;border:1px solid var(--glass-border);border-radius:var(--r-lg);
   background:var(--pop-veil);background-image:var(--lg-spec);
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  
   box-shadow:var(--lg-shadow)}
 /* 接管期间旧的快照面板与自写输入条整体让位（代码保留，作为拿不到真元素时的兜底路径） */
 body.cw-adopt-chat .cw-qa,body.cw-adopt-chat .cw-qa-bar{display:none!important}
@@ -1998,7 +1960,7 @@ body.cw-adopt-chat .cw-qa,body.cw-adopt-chat .cw-qa-bar{display:none!important}
 .cw-qa-in{pointer-events:auto;width:min(720px,100%);display:flex;gap:var(--sp-3);align-items:flex-end;
   padding:var(--sp-3) var(--sp-4);border:1px solid var(--glass-border);border-radius:var(--r-lg);
   background:var(--pop-veil);background-image:var(--lg-spec);
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  
   box-shadow:var(--lg-shadow)}
 /* ===== 全屏画布内的浮动框：可拖动 + 悬停提亮（2026-10-25） =====
    全屏画布上叠着好几块浮层（提问框 / 问答历史 / 面板抽屉 / 上下文详情），原先各自钉死
@@ -2081,7 +2043,7 @@ body.cw-flow-full #wsMoreMenu .ws-more-item[data-tab="flow"]{display:none}
   width:min(380px,86vw);display:none;flex-direction:column;z-index:67;
   border:1px solid var(--glass-border);border-radius:var(--r-xl);
   background:var(--pop-veil);background-image:var(--lg-spec);
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);
+  
   box-shadow:var(--lg-shadow);overflow:hidden}
 .cw-tabpop.open{display:flex}
 .cw-tabpop-hd{flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-4);
@@ -2520,8 +2482,7 @@ body.cw-fast .cw-link{stroke-width:2}
    没有模糊、没有高光、没有投影，压在彩色光晕上就是「发灰的一坨」。
    气泡比卡片更小更密，所以模糊降到 8px（一屏可能有十几条，用 12px 会明显变卡）。 */
 :where(html[data-glass="on"]) body .msg.bot{
-  -webkit-backdrop-filter:var(--bubble-glass-filter);
-  backdrop-filter:var(--bubble-glass-filter);
+
   background-color:var(--card-glass-bg);
   background-image:var(--card-spec),var(--card-bloom),var(--card-falloff);
   border-color:var(--card-glass-line);
@@ -2636,7 +2597,7 @@ img.md-img{max-width:100%;height:auto}
 #imgViewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:600;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none}
 #imgViewer.on{display:flex}
 #imgViewer img{max-width:92vw;max-height:88vh;transform-origin:center center;box-shadow:0 12px 48px rgba(0,0,0,.5);border-radius:var(--r-sm)}
-.iv-bar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:var(--sp-2);align-items:center;padding:8px 12px;border-radius:var(--r-lg);background:rgba(30,30,38,.9);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(0px)}
+.iv-bar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:var(--sp-2);align-items:center;padding:8px 12px;border-radius:var(--r-lg);background:rgba(30,30,38,.9);border:1px solid rgba(255,255,255,.14);}
 .iv-btn{min-width:34px;height:30px;padding:0 8px;border:1px solid rgba(255,255,255,.16);border-radius:var(--r-sm);background:transparent;color:#fff;font-size:var(--fs-base);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 .iv-btn:hover{background:rgba(255,255,255,.14)}
 .iv-pct{color:rgba(255,255,255,.75);font-size:var(--fs-sm);min-width:44px;text-align:center}
@@ -2761,7 +2722,7 @@ img.md-img{max-width:100%;height:auto}
 
    视觉表现（四层，缺一层就只是「半透明色块」）：
      ① 基色 var(--pop-veil)：94~95% 不透明 —— 保证正文不透上来（v3.27.3 的教训）；
-     ② 背后真模糊 var(--glass-filter)：基色留的那 4~6% 透光在这里被糊开，
+     ② 背后真模糊（旧玻璃滤镜）：基色留的那 4~6% 透光在这里被糊开，
         观感是「浮在页面上的磨砂片」而不是「一块实心贴纸」；
      ③ 折射高光 var(--lg-spec)：150° 斜向高光带，随 [data-glass="on"] 一起增强；
      ④ 外阴影 + 内描边 var(--lg-shadow)：与全站其余 21 个玻璃面同一套四件套。
@@ -2771,8 +2732,7 @@ img.md-img{max-width:100%;height:auto}
 .doc-pick, .slash-menu, .ch-more-menu, .bot-switch-menu{
   background:var(--pop-veil);
   background-image:var(--lg-spec);
-  -webkit-backdrop-filter:var(--glass-filter);
-  backdrop-filter:var(--glass-filter);
+
   box-shadow:var(--lg-shadow),inset 0 0 0 1px var(--glass-border);
 }
 .doc-pick-hd{display:flex;align-items:center;gap:var(--sp-4);padding:10px 12px;border-bottom:1px solid var(--line);font-size:var(--fs-sm);color:var(--sub)}
@@ -2911,7 +2871,7 @@ img.md-img{max-width:100%;height:auto}
   padding:2px var(--sp-3);text-align:center}
 .kbd-row span{font-size:var(--fs-sm);color:var(--txt);line-height:1.5}
 .mbox{background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-2xl);padding:24px;width:520px;max-width:92vw;box-shadow:0 24px 60px rgba(0,0,0,.36);max-height:90vh;overflow-y:auto;transform:translateZ(0);position:relative;
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
+  }
 .mbox .hint{font-size:var(--fs-sm);color:var(--sub);margin-bottom:18px}
 /* ============ Apple 风「展开」动效（账号弹窗 + 机器人切换菜单共用） ============
    （2026-09-24 打磨：settingsModal 弹窗已删——设置并入「设置与数据」常驻页，
@@ -3003,7 +2963,7 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
   padding:var(--sp-5) var(--sp-6);margin:var(--sp-4) 0 var(--sp-5);
   background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--r-xl);
   box-shadow:var(--lg-shadow);
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
+  }
 .set-head-txt{flex:1;min-width:0}
 .set-head-txt h2{margin:0;font-size:var(--fs-3xl);font-weight:700;color:var(--txt);letter-spacing:-.2px;line-height:1.25}
 .set-head-txt p{margin:var(--sp-2) 0 0;font-size:var(--fs-sm);color:var(--sub);line-height:1.55}
@@ -3013,7 +2973,7 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
    原先左栏是一排裸浮动的按钮，右侧却是卡片堆 —— 两栏完全不对称。现在把左栏
    整块抬成玻璃面板，与模块头、侧栏同一套语言，四样东西逐条对应用户要求：
      ① 半透明磨砂背景  → background:var(--glass-bg)
-     ② 背景模糊        → backdrop-filter:var(--glass-filter)
+     ② 背景模糊        → backdrop-filter（旧玻璃滤镜）
      ③ 高光边缘        → box-shadow:var(--lg-shadow)（内含 --lg-top/--lg-bottom 的
                           上下内描边：顶缘亮线 + 底缘暗线）
      ④ 轻微折射质感    → background-image:var(--lg-spec)（150° 对角高光渐变）
@@ -3025,7 +2985,7 @@ h1 .ic-btn,h2 .ic-btn,h3 .ic-btn{width:18px;height:18px;margin-right:7px;vertica
   margin:10px 0;padding:var(--sp-4);
   background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--r-xl);
   background-image:var(--lg-spec);box-shadow:var(--lg-shadow);
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
+  }
 /* ⚠️ 左栏**不做 sticky**（2026-10-16 用户截图反馈）：原先 position:sticky 把左栏钉在
    滚动容器顶部，右侧内容继续上移 —— 一滚动两栏顶部就错位（截图正是这个状态）。
    去掉 sticky 让两栏在同一个滚动容器里**同流滚动**，顶部在任意滚动位置都齐平。
@@ -3267,7 +3227,7 @@ html[data-theme='light'] #anaSettings .field select:focus{
   font-size:var(--fs-base);z-index:300;opacity:0;filter:blur(3px);
   transition:opacity var(--dur-5) var(--ease),transform var(--dur-5) var(--ease),filter var(--dur-5) var(--ease);pointer-events:none;max-width:80vw;text-align:center;
   background:var(--glass-bg-hover);
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
+  }
 .toast.ok{border-color:rgba(48,209,88,.5)}
 .toast.err{border-color:rgba(255,69,58,.5)}
 .toast.warn{border-color:rgba(255,159,10,.55)}
@@ -3304,7 +3264,7 @@ html[data-theme='light'] #anaSettings .field select:focus{
 .cmdk{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:150;align-items:center;justify-content:center;padding:20px}
 .cmdk.on{display:flex}
 .cmdk-box{background:var(--glass-bg-hover);border:1px solid var(--glass-border);border-radius:var(--r-xl);width:560px;max-width:92vw;box-shadow:0 24px 60px rgba(0,0,0,.36);overflow:hidden;
-  -webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter)}
+  }
 .cmdk-box input{width:100%;padding:15px 18px;background:transparent;border:none;color:var(--txt);font-size:var(--fs-lg);outline:none;border-bottom:1px solid var(--line)}
 .cmdk-list{max-height:340px;overflow-y:auto;padding:6px}
 .cmdk-item{display:flex;align-items:center;gap:var(--sp-6);padding:10px 12px;border-radius:var(--r-sm);cursor:pointer;font-size:var(--fs-base);transition:background var(--dur-1) var(--ease)}
@@ -3847,22 +3807,13 @@ body .msg.bot pre.md-code .md-copy{background:var(--fill);box-shadow:var(--lg-to
    自定义属性的替换发生在「使用它的元素」上，而这里与 :root 是同一个元素（html），
    属性选择器特异性更高，所以覆盖生效。 */
 html[data-glass="on"]{
-  --glass-blur:0px;   /* 增强态也不再加深模糊（原 44px）：背景统一保持清晰 */
-  --glass-sat:280%;
+
   /* 开启态 = 同一套边缘语言再加一档（模糊 44px 已经把背景化成一片了，
      边缘必须更利才立得住）。前缀三个值原样保留，只在末尾追加。 */
-  --lg-top:inset 0 1px 0 rgba(255,255,255,.42),inset 0 12px 22px -8px rgba(255,255,255,.26),inset 0 0 0 1px rgba(255,255,255,.16),
-    inset 0 2px 1px -1px rgba(255,255,255,.40),
-    inset 0 -2px 5px -4px rgba(255,255,255,.26),
-    inset 1px 0 0 rgba(140,215,255,.12),
-    inset -1px 0 0 rgba(255,165,238,.08),
-    inset 2px 2px 1px 0 rgba(255,255,255,.24),
-    inset -1px -1px 1px 1px rgba(255,255,255,.15);
-  --lg-bottom:inset 0 -1px 0 rgba(0,0,0,.32),inset 0 -10px 22px -12px rgba(255,255,255,.18),
-    inset 0 -2px 7px -5px rgba(0,0,0,.38);
-  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.30),rgba(255,255,255,.11) 34%,rgba(255,255,255,.03) 56%,rgba(255,255,255,.16) 78%,rgba(255,255,255,.24) 100%),
-    radial-gradient(72% 118% at 26% -10%,rgba(255,255,255,.18),transparent 60%),
-    radial-gradient(58% 88% at 84% 112%,rgba(150,220,255,.12),transparent 70%);
+  --lg-top:inset 0 1px 0 rgba(255,255,255,.42),inset 0 0 0 1px rgba(255,255,255,.16),
+    inset 1px 0 0 rgba(140,215,255,.12),inset -1px 0 0 rgba(255,165,238,.08);
+  --lg-bottom:inset 0 -1px 0 rgba(0,0,0,.32);
+  --lg-spec:linear-gradient(150deg,rgba(255,255,255,.30),rgba(255,255,255,.11) 34%,rgba(255,255,255,.03) 56%);
 }
 /* 流动特效：一道柔光缓慢扫过玻璃面。用 background-position 驱动，**不用伪元素 + transform**
    —— 这些面里加 overflow:hidden 会剪掉内部 fixed 浮层（.topbar 里就有 .modal），
@@ -3870,37 +3821,19 @@ html[data-glass="on"]{
    ⚠️ 刻意不含 .main / .workspace：它们是大面积滚动容器，逐帧重画背景等于整页重绘，
    与顶部那份「.main 不挂 backdrop-filter」的既有结论同一理由。卡片也不进 ——
    数量不设上限，每张都动就是一场重绘风暴。 */
-html[data-glass="on"] body .topbar,
-html[data-glass="on"] body .sidebar,
-html[data-glass="on"] body .ws-side,
-html[data-glass="on"] body .mbox,
-html[data-glass="on"] body .cmdk-box,
-html[data-glass="on"] body .toast,
-html[data-glass="on"] body .cmd-panel,
-html[data-glass="on"] body .pop-menu,
-html[data-glass="on"] body .ctxp-box{
-  background-size:240% 240%;
-  animation:lgSheen 9s linear infinite;
-}
+
 /* 名字必须独一份：lgFlow / lgFlow2 已被 body::before / body::after 的背景光晕占用，
    重名会让后定义的覆盖前面的 —— 那两团光晕会悄悄换成这套 background-position 关键帧。
    （2026-10-15 差点踩上：第一版就叫 lgFlow。） */
-@keyframes lgSheen{0%{background-position:0% 0%}50%{background-position:100% 100%}100%{background-position:0% 0%}}
+
 /* ⚠️ 顶栏 / 侧栏有首屏入场动画（bcFade / bcSlideIn，见样式表前部「首屏入场序列」）。
    一条 animation 属性只能有一份声明，而这条规则的特异性更高、位置更靠后 ——
    只写 lgSheen 会把入场动画整个顶掉，首屏那一下淡入/滑入就没了（2026-10-15 自查发现）。
    所以这里把两者**并列**写全；改前部那两行 boot 动画时，这两行必须同步。
    减动效时上面那个媒体查询会用同特异性把它们一并归零，不受影响。 */
-html[data-glass="on"] body .topbar{animation:bcFade .5s var(--ease-out) backwards,lgSheen 9s linear infinite}
-html[data-glass="on"] body .sidebar{animation:bcSlideIn .56s var(--ease-out) .06s backwards,lgSheen 9s linear infinite}
+
 /* 减弱动态效果：流动停掉，静态玻璃照旧（玻璃是材质、不是动画，不该被一起关掉） */
-@media (prefers-reduced-motion: reduce){
-  html[data-glass="on"] body .topbar, html[data-glass="on"] body .sidebar, html[data-glass="on"] body .ws-side,
-  html[data-glass="on"] body .mbox, html[data-glass="on"] body .cmdk-box, html[data-glass="on"] body .toast,
-  html[data-glass="on"] body .cmd-panel, html[data-glass="on"] body .pop-menu, html[data-glass="on"] body .ctxp-box{
-    animation:none;
-  }
-}
+
 html[data-glass="off"] body .topbar, html[data-glass="off"] body .sidebar, html[data-glass="off"] body .ws-side,
 html[data-glass="off"] body .mbox, html[data-glass="off"] body .toast, html[data-glass="off"] body .cmd-panel,
 html[data-glass="off"] body .pop-menu, html[data-glass="off"] body .ws-more-menu, html[data-glass="off"] body .bot-switch-menu,
@@ -3949,7 +3882,7 @@ textarea[data-grow]{resize:none;box-sizing:border-box}
      inspira-ui 的 Liquid Glass 靠 SVG feDisplacementMap 对背景做光学位移。本机实测
      （Edge / Chromium 1500×950，逐像素比对，脚本见说明）结论是**在本环境不可用**：
        · `filter: url(#f)`  —— 生效（同一滤镜挂在元素自身上，条纹会被明显搅乱）；
-       · `backdrop-filter: url(#f)` —— 只被解析、不参与渲染。计算样式里能看到
+       · `backdrop-filter 引用 url(#f)` —— 只被解析、不参与渲染。计算样式里能看到
          `saturate(1.9) blur(26px) url("#bcLiquidGlass")`，但开关前后整屏像素差最大 1 级
          （118.8 万像素中超过阈值的为 0 个），即完全无视觉差异。
        · 顺带排除了排查误区：feTurbulence 的 alpha 会参与预乘，导致 feDisplacementMap
@@ -28843,7 +28776,7 @@ async function testConnection() {
 // ==================== 初始化 ====================
 // 版本化存储：结构升级时自动迁移；损坏数据自动重置，避免「卡在启动页进不去」。
 // 与发版号同源：build_exe/release_exe.py 直接读本常量推导 Release tag，改版本只改这一处。
-var APP_VERSION = '3.59.0';
+var APP_VERSION = '3.60.0';
 function ensureVersion() {
   try {
     var v = __storage.getItem('botcraft.version');
@@ -31079,7 +31012,7 @@ function _kbIndexFor(bot) {
     if (document.getElementById('runLogPanel')) return;
     var panel = document.createElement('div');
     panel.id = 'runLogPanel';
-    panel.style.cssText = 'position:fixed;right:18px;bottom:18px;width:360px;max-height:60vh;overflow:auto;z-index:60;background:var(--log-bg);backdrop-filter:var(--glass-filter);-webkit-backdrop-filter:var(--glass-filter);border:1px solid var(--log-border);border-radius:var(--r-xl);box-shadow:var(--glass-ridge),var(--log-shadow);color:var(--log-fg);font-size:var(--fs-sm);display:none';
+    panel.style.cssText = 'position:fixed;right:18px;bottom:18px;width:360px;max-height:60vh;overflow:auto;z-index:60;background:var(--log-bg);border:1px solid var(--log-border);border-radius:var(--r-xl);box-shadow:var(--glass-ridge),var(--log-shadow);color:var(--log-fg);font-size:var(--fs-sm);display:none';
     panel.innerHTML = '<div id="runLogHead" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--log-border);font-weight:600;position:sticky;top:0;background:var(--log-head-bg);cursor:move;user-select:none;white-space:nowrap"><span class="rl-grip" title="拖动我" style="opacity:.55;margin-right:5px">⠿</span><span style="font-size:var(--fs-md);line-height:1">' + svgIcon('empty','solo') + '</span><span class="rl-title" style="margin-left:6px">执行日志</span><span id="runLogMin" class="rl-min" style="cursor:pointer;opacity:.7;padding:0 6px;margin-left:auto" title="收起 / 展开">—</span><span id="runLogClose" class="rl-close" style="cursor:pointer;opacity:.7;padding:0 6px;margin-left:6px">✕</span></div><div id="runLogBody" style="padding:10px 14px"></div>';
     document.body.appendChild(panel);
     var close = document.getElementById('runLogClose');
